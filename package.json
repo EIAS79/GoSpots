@@ -1,0 +1,22 @@
+{
+  "name": "venueflow",
+  "version": "0.1.0",
+  "private": true,
+  "packageManager": "pnpm@10.12.1",
+  "scripts": {
+    "kill-ports": "powershell -NoProfile -ExecutionPolicy Bypass -File ./scripts/kill-ports.ps1",
+    "dev": "pnpm kill-ports && concurrently -n api,web -c cyan,magenta \"pnpm dev:api\" \"pnpm dev:web\"",
+    "dev:api": "pnpm --filter @venueflow/api run start:dev",
+    "dev:web": "pnpm --filter @venueflow/web run dev",
+    "build": "pnpm --filter @venueflow/api run build && pnpm --filter @venueflow/web run build",
+    "build:api": "pnpm --filter @venueflow/api run build",
+    "build:web": "pnpm --filter @venueflow/web run build",
+    "lint": "pnpm --filter @venueflow/api run lint && pnpm --filter @venueflow/web run lint"
+  },
+  "devDependencies": {
+    "concurrently": "^9.2.1"
+  },
+  "engines": {
+    "node": ">=20"
+  }
+}

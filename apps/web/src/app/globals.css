@@ -1,0 +1,208 @@
+@import "tailwindcss";
+@import "@heroui/react/styles";
+
+@theme {
+  --color-background: #07080a;
+  --color-foreground: #f4f4f5;
+  --color-accent: #10b981;
+  --color-accent-2: #f59e0b;
+  --color-accent-3: #f43f5e;
+  --color-surface: #0e1013;
+  --color-surface-2: #15181c;
+  --color-border: rgba(255, 255, 255, 0.08);
+  --font-sans: var(--font-geist-sans), system-ui, sans-serif;
+  --font-mono: var(--font-geist-mono), ui-monospace, monospace;
+  --shadow-glow: 0 0 80px -10px rgba(16, 185, 129, 0.45);
+}
+
+html,
+body {
+  background: var(--color-background);
+  color: var(--color-foreground);
+  font-family: var(--font-sans);
+  -webkit-font-smoothing: antialiased;
+}
+
+::selection {
+  background: rgba(52, 211, 153, 0.35);
+  color: #fff;
+}
+
+/* ─────── Aurora background — billiard/gaming bar palette ───────
+   emerald (pool felt) · amber (warm bar light) · rose (cue tip/neon)  */
+.aurora-mesh {
+  background:
+    conic-gradient(
+      from 0deg at 50% 50%,
+      rgba(16, 185, 129, 0.20) 0deg,    /* billiard felt */
+      rgba(245, 158, 11, 0.18) 110deg,  /* warm amber bar */
+      rgba(244, 63, 94, 0.16) 220deg,   /* rose neon */
+      rgba(56, 189, 248, 0.12) 310deg,  /* subtle cyan */
+      rgba(16, 185, 129, 0.20) 360deg
+    );
+  filter: blur(80px) saturate(135%);
+  animation: aurora-spin 45s linear infinite;
+  will-change: transform;
+}
+
+.aurora-blob {
+  position: absolute;
+  border-radius: 9999px;
+  filter: blur(90px);
+  mix-blend-mode: screen;
+  will-change: transform;
+}
+.aurora-blob-a {
+  width: 44rem;
+  height: 44rem;
+  left: -12%;
+  top: -10%;
+  background: radial-gradient(circle, rgba(16, 185, 129, 0.6), transparent 70%);
+  animation: aurora-drift-a 26s ease-in-out infinite;
+}
+.aurora-blob-b {
+  width: 36rem;
+  height: 36rem;
+  right: -8%;
+  top: 6%;
+  background: radial-gradient(circle, rgba(245, 158, 11, 0.5), transparent 70%);
+  animation: aurora-drift-b 32s ease-in-out infinite;
+}
+.aurora-blob-c {
+  width: 38rem;
+  height: 38rem;
+  left: 18%;
+  top: 55%;
+  background: radial-gradient(circle, rgba(244, 63, 94, 0.42), transparent 70%);
+  animation: aurora-drift-c 28s ease-in-out infinite;
+}
+.aurora-blob-d {
+  width: 30rem;
+  height: 30rem;
+  right: 10%;
+  bottom: 2%;
+  background: radial-gradient(circle, rgba(217, 119, 6, 0.4), transparent 70%);
+  animation: aurora-drift-d 34s ease-in-out infinite;
+}
+
+@keyframes aurora-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+@keyframes aurora-drift-a {
+  0%, 100% { transform: translate3d(0, 0, 0) scale(1); }
+  50% { transform: translate3d(8%, 6%, 0) scale(1.08); }
+}
+@keyframes aurora-drift-b {
+  0%, 100% { transform: translate3d(0, 0, 0) scale(1); }
+  50% { transform: translate3d(-6%, 8%, 0) scale(1.1); }
+}
+@keyframes aurora-drift-c {
+  0%, 100% { transform: translate3d(0, 0, 0) scale(1); }
+  50% { transform: translate3d(7%, -6%, 0) scale(1.06); }
+}
+@keyframes aurora-drift-d {
+  0%, 100% { transform: translate3d(0, 0, 0) scale(1); }
+  50% { transform: translate3d(-8%, -4%, 0) scale(1.12); }
+}
+
+.aurora-grid {
+  background-image:
+    linear-gradient(rgba(255, 255, 255, 0.06) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(255, 255, 255, 0.06) 1px, transparent 1px);
+  background-size: 64px 64px;
+  -webkit-mask-image: radial-gradient(
+    ellipse at center,
+    black 30%,
+    transparent 75%
+  );
+  mask-image: radial-gradient(ellipse at center, black 30%, transparent 75%);
+  animation: aurora-grid-drift 60s linear infinite;
+  will-change: background-position;
+}
+@keyframes aurora-grid-drift {
+  to {
+    background-position: 64px 64px, 64px 64px;
+  }
+}
+
+.aurora-stars {
+  background-image:
+    radial-gradient(1px 1px at 12% 18%, rgba(255, 255, 255, 0.55), transparent 60%),
+    radial-gradient(1px 1px at 28% 72%, rgba(255, 255, 255, 0.45), transparent 60%),
+    radial-gradient(1.2px 1.2px at 44% 32%, rgba(255, 255, 255, 0.6), transparent 60%),
+    radial-gradient(1px 1px at 62% 84%, rgba(255, 255, 255, 0.5), transparent 60%),
+    radial-gradient(1px 1px at 78% 22%, rgba(255, 255, 255, 0.55), transparent 60%),
+    radial-gradient(1px 1px at 90% 60%, rgba(255, 255, 255, 0.4), transparent 60%),
+    radial-gradient(1px 1px at 8% 88%, rgba(255, 255, 255, 0.45), transparent 60%),
+    radial-gradient(1.2px 1.2px at 54% 12%, rgba(255, 255, 255, 0.55), transparent 60%);
+  animation: aurora-twinkle 8s ease-in-out infinite;
+}
+@keyframes aurora-twinkle {
+  0%, 100% { opacity: 0.45; }
+  50% { opacity: 0.85; }
+}
+
+.bg-grid {
+  background-image:
+    linear-gradient(rgba(255, 255, 255, 0.04) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(255, 255, 255, 0.04) 1px, transparent 1px);
+  background-size: 56px 56px;
+}
+
+.bg-noise {
+  background-image: radial-gradient(
+    rgba(255, 255, 255, 0.045) 1px,
+    transparent 1px
+  );
+  background-size: 4px 4px;
+}
+
+.text-gradient {
+  background: linear-gradient(120deg, #10b981 0%, #f59e0b 55%, #f43f5e 100%);
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+}
+
+.glow-emerald {
+  box-shadow:
+    0 0 0 1px rgba(52, 211, 153, 0.25),
+    0 30px 60px -20px rgba(52, 211, 153, 0.5);
+}
+
+.scrollbar-hide::-webkit-scrollbar {
+  display: none;
+}
+
+@keyframes shine {
+  to {
+    background-position: 200% center;
+  }
+}
+
+@keyframes pulse-soft {
+  0%, 100% { opacity: 0.7; }
+  50% { opacity: 1; }
+}
+
+.animate-shine {
+  background-size: 200% auto;
+  animation: shine 6s linear infinite;
+}
+.animate-pulse-soft {
+  animation: pulse-soft 2.4s ease-in-out infinite;
+}
+
+/* Honor user's reduced-motion preference */
+@media (prefers-reduced-motion: reduce) {
+  .aurora-mesh,
+  .aurora-blob,
+  .aurora-grid,
+  .aurora-stars,
+  .animate-shine,
+  .animate-pulse-soft {
+    animation: none !important;
+  }
+}
