@@ -12,3 +12,7 @@ coverage
 .DS_Store
 Thumbs.db
 apps/api/uploads
+apps/api/prisma/*.db
+apps/api/prisma/*.db-journal
+.vercel
+.env.production

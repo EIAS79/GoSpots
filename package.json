@@ -11,6 +11,7 @@
     "dev:api": "pnpm --filter @venueflow/api run start:dev",
     "dev:web": "pnpm --filter @venueflow/web run dev",
     "build": "pnpm --filter @venueflow/api run build && pnpm --filter @venueflow/web run build",
+    "build:vercel": "pnpm --filter @venueflow/web run build",
     "build:api": "pnpm --filter @venueflow/api run build",
     "build:web": "pnpm --filter @venueflow/web run build",
     "lint": "pnpm --filter @venueflow/api run lint && pnpm --filter @venueflow/web run lint"

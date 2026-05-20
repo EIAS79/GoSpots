@@ -17,6 +17,8 @@
     "seed": "tsx prisma/seed.ts",
     "start:debug": "nest start --debug --watch",
     "start:prod": "node dist/main",
+    "migrate:deploy": "prisma migrate deploy",
+    "postbuild": "prisma generate",
     "lint": "eslint \"{src,apps,libs,test}/**/*.ts\" --fix",
     "test": "jest",
     "test:watch": "jest --watch",

@@ -25,8 +25,6 @@ services:
         sync: false
       - key: JWT_ACCESS_SECRET
         generateValue: true
-      - key: JWT_REFRESH_SECRET
-        generateValue: true
       - key: WEB_ORIGIN
         sync: false
       - key: CORS_ORIGIN
@@ -34,4 +32,4 @@ services:
       - key: COOKIE_SECURE
         value: "true"
       - key: COOKIE_SAME_SITE
-        value: none
+        value: lax
