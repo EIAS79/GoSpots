@@ -47,8 +47,9 @@ After Render deploy, each start runs `prisma migrate deploy` then `prisma db pus
 1. Push the repo to **GitHub** (private is fine).
 2. [Render Dashboard](https://dashboard.render.com) → **New** → **Blueprint** → connect repo (uses root `render.yaml`),  
    **or** **New Web Service** → root directory `.` with:
-   - **Build:** `corepack enable && pnpm install --frozen-lockfile && pnpm --filter @venueflow/api exec prisma generate && pnpm --filter @venueflow/api run build`
-   - **Start:** `cd apps/api && pnpm exec prisma migrate deploy && pnpm exec prisma db push --skip-generate && node dist/main.js`
+   - **Build:** `npm install -g pnpm@10.12.1 && pnpm install --frozen-lockfile && pnpm --filter @venueflow/api exec prisma generate && pnpm --filter @venueflow/api run build`  
+     (Do **not** use `corepack enable` on Render — it fails with `EROFS` on `/usr/bin/pnpm`.)
+   - **Start:** `cd apps/api && npx prisma migrate deploy && npx prisma db push --skip-generate && node dist/main.js`
    - **Health check path:** `/api/v1/health`
 
 3. Environment variables (Render → Environment):
@@ -70,8 +71,8 @@ After Render deploy, each start runs `prisma migrate deploy` then `prisma db pus
 ## 3. Web on Vercel
 
 1. [vercel.com](https://vercel.com) → **Add New Project** → import the GitHub repo.
-2. **Root Directory:** `apps/web` (important).
-3. Framework should detect **Next.js**; `apps/web/vercel.json` sets install/build for the monorepo.
+2. **Root Directory:** **`apps/web`** (required). If this is empty (repo root), the build fails with “No Next.js version detected”.
+3. Framework should detect **Next.js**; `apps/web/vercel.json` installs dependencies from the monorepo root and runs `pnpm --filter @venueflow/web run build`.
 
 4. Environment variables (Vercel → Settings → Environment Variables):
 
@@ -131,6 +132,7 @@ pnpm build
 
 **API build fails on Render**
 
+- **`EROFS: read-only file system, unlink '/usr/bin/pnpm'`** — remove `corepack enable` from the build command; use `npm install -g pnpm@10.12.1` instead (see root `render.yaml`).
 - Ensure `DATABASE_URL` is set before first deploy.
 - Check Render logs for Prisma migrate errors.
 

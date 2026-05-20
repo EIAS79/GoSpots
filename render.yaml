@@ -7,14 +7,14 @@ services:
     plan: free
     rootDir: .
     buildCommand: >-
-      corepack enable &&
+      npm install -g pnpm@10.12.1 &&
       pnpm install --frozen-lockfile &&
       pnpm --filter @venueflow/api exec prisma generate &&
       pnpm --filter @venueflow/api run build
     startCommand: >-
       cd apps/api &&
-      pnpm exec prisma migrate deploy &&
-      pnpm exec prisma db push --skip-generate &&
+      npx prisma migrate deploy &&
+      npx prisma db push --skip-generate &&
       node dist/main.js
     healthCheckPath: /api/v1/health
     envVars:
