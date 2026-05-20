@@ -1,0 +1,552 @@
+"use client";
+
+import {
+  Archive,
+  ArchiveRestore,
+  ArrowLeft,
+  Bell,
+  CheckCheck,
+  Clock,
+  CreditCard,
+  Gamepad2,
+  Loader2,
+  Mail,
+  MailOpen,
+  Sparkles,
+  UserCog,
+} from "lucide-react";
+import Link from "next/link";
+import { useRouter, useSearchParams } from "next/navigation";
+import { useCallback, useEffect, useState } from "react";
+import { TenantPage } from "@/components/layout/tenant-page";
+import { cn } from "@/lib/cn";
+import { formatDate } from "@/lib/format";
+import { NOTIFICATION_SECTIONS, sectionLabel } from "@/lib/notification-sections";
+import {
+  archiveNotifications,
+  unarchiveNotifications,
+  fetchNotifications,
+  markAllNotificationsRead,
+  markNotificationRead,
+  markNotificationUnread,
+  type NotificationRow,
+  type NotificationStatus,
+} from "@/lib/notifications-client";
+import { DASHBOARD_SECTION_GUIDES } from "@/lib/dashboard-section-guides";
+import { useVenueHref } from "@/lib/venue-context";
+import { useLiveData } from "@/lib/use-live-data";
+
+const GUIDE = DASHBOARD_SECTION_GUIDES.notifications;
+
+const TYPE_ICON: Record<string, typeof Bell> = {
+  SYSTEM: Bell,
+  TRIAL: Sparkles,
+  SUBSCRIPTION: CreditCard,
+  RESERVATION: Clock,
+  OPERATIONS: Gamepad2,
+  BILLING: CreditCard,
+  STAFF: UserCog,
+};
+
+function todayIso() {
+  return new Date().toISOString().slice(0, 10);
+}
+
+function NotificationItem({
+  row,
+  selected,
+  onToggleSelect,
+  onRead,
+  onUnread,
+  hrefBase,
+  showCheckboxes,
+  isArchivedView,
+}: {
+  row: NotificationRow;
+  selected: boolean;
+  onToggleSelect: (id: string) => void;
+  onRead: (id: string) => void;
+  onUnread: (id: string) => void;
+  hrefBase: string;
+  showCheckboxes: boolean;
+  isArchivedView: boolean;
+}) {
+  const Icon = TYPE_ICON[row.type] ?? Bell;
+  const unread = !row.readAt;
+  const target = row.href ? `${hrefBase}${row.href}` : null;
+
+  const inner = (
+    <>
+      {showCheckboxes ? (
+        <input
+          type="checkbox"
+          checked={selected}
+          onChange={() => onToggleSelect(row.id)}
+          onClick={(e) => e.stopPropagation()}
+          className="mt-1 rounded border-white/20"
+        />
+      ) : null}
+      <span
+        className={cn(
+          "grid h-9 w-9 shrink-0 place-items-center rounded-lg",
+          unread ? "bg-emerald-500/15 text-emerald-400" : "bg-zinc-800 text-zinc-500",
+        )}
+      >
+        <Icon size={16} />
+      </span>
+      <div className="min-w-0 flex-1">
+        <div className="flex flex-wrap items-center gap-2">
+          <p
+            className={cn(
+              "font-medium",
+              unread ? "text-zinc-100" : "text-zinc-400",
+            )}
+          >
+            {row.title}
+          </p>
+          <span className="rounded border border-white/10 px-1.5 py-0.5 text-[10px] text-zinc-500">
+            {sectionLabel(row.section)}
+          </span>
+          {unread ? (
+            <span className="h-1.5 w-1.5 rounded-full bg-emerald-400" />
+          ) : null}
+        </div>
+        <p className="mt-0.5 text-sm leading-snug text-zinc-500">{row.body}</p>
+        <p className="mt-1.5 text-xs text-zinc-600">{formatDate(row.createdAt)}</p>
+        {!isArchivedView ? (
+          <div className="mt-2 flex gap-2">
+            {unread ? (
+              <button
+                type="button"
+                onClick={(e) => {
+                  e.preventDefault();
+                  e.stopPropagation();
+                  onRead(row.id);
+                }}
+                className="text-[11px] text-emerald-400 hover:underline"
+              >
+                Mark read
+              </button>
+            ) : (
+              <button
+                type="button"
+                onClick={(e) => {
+                  e.preventDefault();
+                  e.stopPropagation();
+                  onUnread(row.id);
+                }}
+                className="text-[11px] text-zinc-500 hover:underline"
+              >
+                Mark unread
+              </button>
+            )}
+          </div>
+        ) : null}
+      </div>
+    </>
+  );
+
+  const className = cn(
+    "flex w-full gap-3 rounded-xl border px-4 py-3 text-left transition",
+    unread && !isArchivedView
+      ? "border-emerald-400/15 bg-emerald-500/[0.04] hover:bg-emerald-500/[0.07]"
+      : "border-white/5 bg-white/[0.02] hover:bg-white/[0.04]",
+    selected && "ring-1 ring-violet-400/40",
+  );
+
+  if (target && !isArchivedView) {
+    return (
+      <Link
+        href={target}
+        className={className}
+        onClick={() => unread && onRead(row.id)}
+      >
+        {inner}
+      </Link>
+    );
+  }
+
+  return (
+    <button type="button" className={className} onClick={() => onToggleSelect(row.id)}>
+      {inner}
+    </button>
+  );
+}
+
+export default function NotificationsPage() {
+  const hrefBase = useVenueHref("");
+  const notificationsHref = useVenueHref("/notifications");
+  const archivedHref = useVenueHref("/notifications?status=archived");
+  const router = useRouter();
+  const searchParams = useSearchParams();
+
+  const [items, setItems] = useState<NotificationRow[]>([]);
+  const [total, setTotal] = useState(0);
+  const [unreadCount, setUnreadCount] = useState(0);
+  const [status, setStatus] = useState<NotificationStatus>(() =>
+    searchParams.get("status") === "archived" ? "archived" : "all",
+  );
+  const [section, setSection] = useState("all");
+  const [from, setFrom] = useState("");
+  const [to, setTo] = useState(todayIso());
+  const [loading, setLoading] = useState(true);
+  const [markingAll, setMarkingAll] = useState(false);
+  const [archiving, setArchiving] = useState(false);
+  const [selected, setSelected] = useState<Set<string>>(new Set());
+
+  const load = useCallback(
+    (opts: { silent?: boolean } = {}) => {
+      if (!opts.silent) setLoading(true);
+      return fetchNotifications({
+        status,
+        section: section === "all" ? undefined : section,
+        from: from || undefined,
+        to: to || undefined,
+        take: 100,
+      })
+        .then((data) => {
+          setItems(data.items);
+          setTotal(data.total);
+          setUnreadCount(data.unreadCount);
+          if (!opts.silent) setSelected(new Set());
+        })
+        .finally(() => {
+          if (!opts.silent) setLoading(false);
+        });
+    },
+    [status, section, from, to],
+  );
+
+  useEffect(() => {
+    void load();
+  }, [load]);
+
+  useLiveData(() => load({ silent: true }), [status, section, from, to], {
+    intervalMs: 20_000,
+  });
+
+  useEffect(() => {
+    if (searchParams.get("status") === "archived") {
+      setStatus("archived");
+    } else if (searchParams.get("status") === null && status === "archived") {
+      setStatus("all");
+    }
+  }, [searchParams, status]);
+
+  const handleRead = async (id: string) => {
+    await markNotificationRead(id);
+    setItems((prev) =>
+      prev.map((n) =>
+        n.id === id ? { ...n, readAt: new Date().toISOString() } : n,
+      ),
+    );
+    setUnreadCount((c) => Math.max(0, c - 1));
+  };
+
+  const handleUnread = async (id: string) => {
+    await markNotificationUnread(id);
+    setItems((prev) =>
+      prev.map((n) => (n.id === id ? { ...n, readAt: null } : n)),
+    );
+    setUnreadCount((c) => c + 1);
+  };
+
+  const handleMarkAll = async () => {
+    setMarkingAll(true);
+    try {
+      await markAllNotificationsRead();
+      await load();
+    } finally {
+      setMarkingAll(false);
+    }
+  };
+
+  const toggleSelect = (id: string) => {
+    setSelected((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  };
+
+  const selectAllVisible = () => {
+    setSelected(new Set(items.map((i) => i.id)));
+  };
+
+  const handleArchive = async (opts: {
+    ids?: string[];
+    allMatching?: boolean;
+  }) => {
+    setArchiving(true);
+    try {
+      await archiveNotifications({
+        ...opts,
+        from: from || undefined,
+        to: to || undefined,
+        section: section === "all" ? undefined : section,
+        status:
+          status === "archived" || status === "all" ? "all"
+          : status === "unread" ? "unread"
+          : "read",
+      });
+      await load();
+    } finally {
+      setArchiving(false);
+    }
+  };
+
+  const isArchivedView = status === "archived";
+  const showCheckboxes = true;
+
+  const setStatusWithUrl = (next: NotificationStatus) => {
+    setStatus(next);
+    if (next === "archived") {
+      router.replace(archivedHref);
+    } else {
+      router.replace(notificationsHref);
+    }
+  };
+
+  const handleUnarchive = async (opts: {
+    ids?: string[];
+    allMatching?: boolean;
+  }) => {
+    setArchiving(true);
+    try {
+      await unarchiveNotifications({
+        ...opts,
+        from: from || undefined,
+        to: to || undefined,
+        section: section === "all" ? undefined : section,
+      });
+      await load();
+    } finally {
+      setArchiving(false);
+    }
+  };
+
+  return (
+    <TenantPage
+      title={isArchivedView ? "Archived notifications" : GUIDE.title}
+      description={
+        isArchivedView
+          ? "Restore items to your inbox with Unarchive. Nothing is deleted."
+          : GUIDE.description
+      }
+      capabilities={GUIDE.capabilities}
+      actions={
+        isArchivedView ? (
+          <Link
+            href={notificationsHref}
+            className="inline-flex items-center gap-1.5 rounded-lg border border-white/10 px-3 py-1.5 text-xs text-zinc-300 hover:bg-white/5"
+          >
+            <ArrowLeft size={14} />
+            Back to inbox
+          </Link>
+        ) : (
+          <Link
+            href={archivedHref}
+            className="inline-flex items-center gap-1.5 rounded-lg border border-violet-400/30 bg-violet-500/10 px-3 py-1.5 text-xs text-violet-200"
+            title="View archived and restore to inbox"
+          >
+            <Archive size={14} />
+            Archived
+          </Link>
+        )
+      }
+    >
+      <div className="mb-4 grid gap-3 rounded-xl border border-white/10 bg-white/[0.02] p-4 sm:grid-cols-2 lg:grid-cols-4">
+        <label className="block text-xs text-zinc-500">
+          From
+          <input
+            type="date"
+            value={from}
+            onChange={(e) => setFrom(e.target.value)}
+            className="mt-1 w-full rounded-lg border border-white/10 bg-zinc-950 px-3 py-2 text-sm text-white"
+          />
+        </label>
+        <label className="block text-xs text-zinc-500">
+          To
+          <input
+            type="date"
+            value={to}
+            onChange={(e) => setTo(e.target.value)}
+            className="mt-1 w-full rounded-lg border border-white/10 bg-zinc-950 px-3 py-2 text-sm text-white"
+          />
+        </label>
+        <label className="block text-xs text-zinc-500">
+          Section
+          <select
+            value={section}
+            onChange={(e) => setSection(e.target.value)}
+            className="mt-1 w-full rounded-lg border border-white/10 bg-zinc-950 px-3 py-2 text-sm text-white"
+          >
+            {NOTIFICATION_SECTIONS.map((s) => (
+              <option key={s.value} value={s.value}>
+                {s.label}
+              </option>
+            ))}
+          </select>
+        </label>
+        <label className="block text-xs text-zinc-500">
+          Status
+          <select
+            value={status}
+            onChange={(e) =>
+              setStatusWithUrl(e.target.value as NotificationStatus)
+            }
+            className="mt-1 w-full rounded-lg border border-white/10 bg-zinc-950 px-3 py-2 text-sm text-white"
+          >
+            <option value="all">All</option>
+            <option value="unread">Unread</option>
+            <option value="read">Read</option>
+            <option value="archived">Archived</option>
+          </select>
+        </label>
+      </div>
+
+      <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
+        <p className="text-xs text-zinc-500">
+          {total} notification{total === 1 ? "" : "s"}
+          {unreadCount > 0 && status !== "archived" ?
+            ` · ${unreadCount} unread`
+          : ""}
+        </p>
+        <div className="flex flex-wrap gap-2">
+          {status !== "archived" && unreadCount > 0 ? (
+            <button
+              type="button"
+              disabled={markingAll}
+              onClick={() => void handleMarkAll()}
+              className="inline-flex items-center gap-2 rounded-lg border border-white/10 px-3 py-1.5 text-xs text-zinc-400 hover:text-zinc-200 disabled:opacity-50"
+            >
+              {markingAll ? (
+                <Loader2 size={14} className="animate-spin" />
+              ) : (
+                <CheckCheck size={14} />
+              )}
+              Read all
+            </button>
+          ) : null}
+          {isArchivedView ? (
+            <>
+              <button
+                type="button"
+                onClick={selectAllVisible}
+                className="inline-flex items-center gap-2 rounded-lg border border-white/10 px-3 py-1.5 text-xs text-zinc-400 hover:text-zinc-200"
+              >
+                Select all in view
+              </button>
+              {selected.size > 0 ? (
+                <button
+                  type="button"
+                  disabled={archiving}
+                  onClick={() => void handleUnarchive({ ids: [...selected] })}
+                  className="inline-flex items-center gap-2 rounded-lg border border-emerald-400/30 bg-emerald-500/10 px-3 py-1.5 text-xs text-emerald-200 disabled:opacity-50"
+                >
+                  {archiving ? (
+                    <Loader2 size={14} className="animate-spin" />
+                  ) : (
+                    <ArchiveRestore size={14} />
+                  )}
+                  Unarchive selected ({selected.size})
+                </button>
+              ) : null}
+              <button
+                type="button"
+                disabled={archiving || items.length === 0}
+                onClick={() => void handleUnarchive({ allMatching: true })}
+                className="inline-flex items-center gap-2 rounded-lg border border-emerald-400/30 px-3 py-1.5 text-xs text-emerald-300 hover:bg-emerald-500/10 disabled:opacity-50"
+              >
+                <ArchiveRestore size={14} />
+                Unarchive all matching filter
+              </button>
+            </>
+          ) : (
+            <>
+              <button
+                type="button"
+                onClick={selectAllVisible}
+                className="inline-flex items-center gap-2 rounded-lg border border-white/10 px-3 py-1.5 text-xs text-zinc-400 hover:text-zinc-200"
+              >
+                Select all in view
+              </button>
+              {selected.size > 0 ? (
+                <button
+                  type="button"
+                  disabled={archiving}
+                  onClick={() => void handleArchive({ ids: [...selected] })}
+                  className="inline-flex items-center gap-2 rounded-lg border border-violet-400/30 bg-violet-500/10 px-3 py-1.5 text-xs text-violet-200 disabled:opacity-50"
+                >
+                  {archiving ? (
+                    <Loader2 size={14} className="animate-spin" />
+                  ) : (
+                    <Archive size={14} />
+                  )}
+                  Archive selected ({selected.size})
+                </button>
+              ) : null}
+              <button
+                type="button"
+                disabled={archiving || items.length === 0}
+                onClick={() => void handleArchive({ allMatching: true })}
+                className="inline-flex items-center gap-2 rounded-lg border border-violet-400/30 px-3 py-1.5 text-xs text-violet-300 hover:bg-violet-500/10 disabled:opacity-50"
+              >
+                <Archive size={14} />
+                Archive all matching filter
+              </button>
+            </>
+          )}
+        </div>
+      </div>
+
+      {loading ? (
+        <Loader2 className="h-6 w-6 animate-spin text-emerald-400" />
+      ) : items.length === 0 ? (
+        <div className="rounded-xl border border-dashed border-white/10 px-6 py-12 text-center">
+          <Bell className="mx-auto h-8 w-8 text-zinc-600" />
+          <p className="mt-3 text-sm text-zinc-400">
+            {status === "archived" ?
+              "No archived notifications for this filter."
+            : status === "unread" ?
+              "No unread notifications."
+            : "No notifications yet."}
+          </p>
+        </div>
+      ) : (
+        <ul className="space-y-2">
+          {items.map((row) => (
+            <li key={row.id}>
+              <NotificationItem
+                row={row}
+                selected={selected.has(row.id)}
+                onToggleSelect={toggleSelect}
+                onRead={handleRead}
+                onUnread={handleUnread}
+                hrefBase={hrefBase}
+                showCheckboxes={showCheckboxes}
+                isArchivedView={isArchivedView}
+              />
+            </li>
+          ))}
+        </ul>
+      )}
+
+      {isArchivedView ? (
+        <p className="mt-6 flex items-center gap-2 text-xs text-zinc-600">
+          <ArchiveRestore size={12} />
+          Select notifications and unarchive to return them to your inbox. Use the
+          archive icon in the header anytime to open this view.
+        </p>
+      ) : (
+        <p className="mt-6 flex items-center gap-2 text-xs text-zinc-600">
+          <MailOpen size={12} />
+          Use filters + archive to tidy your inbox, or click the{" "}
+          <Archive size={12} className="inline" /> icon in the header to review
+          archived items.
+        </p>
+      )}
+    </TenantPage>
+  );
+}

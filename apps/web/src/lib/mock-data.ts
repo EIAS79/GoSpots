@@ -241,7 +241,7 @@ export const plans: Plan[] = [
     description: "For one billiard hall finding its rhythm.",
     features: [
       "Up to 6 resources",
-      "2 staff accounts",
+      "Owner only (0 staff seats)",
       "Live timer + auto billing",
       "Daily revenue report",
       "1 branch",
@@ -342,7 +342,7 @@ export const faqs: Faq[] = [
   },
   {
     q: "Can I try it before I pay?",
-    a: "Yes. Every plan starts with a 14-day free trial. No card required, full feature access while you decide.",
+    a: "Yes. New venues get a 7-day Starter trial on signup. No card required — full Starter features while you decide, then subscribe to keep them.",
   },
   {
     q: "Will it work for my mixed venue (billiard + PS + bar)?",

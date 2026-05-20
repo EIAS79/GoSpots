@@ -1,8 +1,19 @@
+"use client";
+
+import { usePathname } from "next/navigation";
+import { cn } from "@/lib/cn";
+
 export function AuroraBackground() {
+  const pathname = usePathname();
+  const isDashboard = pathname?.startsWith("/dashboard") ?? false;
+
   return (
     <div
       aria-hidden
-      className="pointer-events-none fixed inset-0 -z-20 overflow-hidden bg-[var(--color-background)]"
+      className={cn(
+        "pointer-events-none fixed inset-0 -z-20 overflow-hidden bg-[var(--color-background)]",
+        isDashboard && "dashboard-aurora",
+      )}
     >
       <div className="aurora-mesh absolute inset-0" />
       <div className="aurora-blob aurora-blob-a" />

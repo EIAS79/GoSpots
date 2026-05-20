@@ -1,14 +1,20 @@
 "use client";
 
 import { motion, useScroll, useSpring } from "framer-motion";
+import { usePathname } from "next/navigation";
 
 export function ScrollProgress() {
+  const pathname = usePathname();
+  const isDashboard = pathname?.startsWith("/dashboard") ?? false;
+
   const { scrollYProgress } = useScroll();
   const scaleX = useSpring(scrollYProgress, {
     stiffness: 110,
     damping: 24,
     mass: 0.4,
   });
+
+  if (isDashboard) return null;
 
   return (
     <motion.div

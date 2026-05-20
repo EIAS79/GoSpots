@@ -126,7 +126,7 @@ export function Pricing() {
         </div>
 
         <p className="mt-8 text-center text-xs text-zinc-500">
-          All plans · 14-day free trial · no card required · multi-currency
+          All plans · 7-day Starter trial on signup · no card required
         </p>
       </div>
     </section>

@@ -1,0 +1,743 @@
+// VenueFlow — multi-tenant RBAC schema
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// ─────────────────────────────────────────────────────────────────
+// IDENTITY  (Users are global, Shops are tenants, Membership joins)
+// ─────────────────────────────────────────────────────────────────
+
+enum SystemRole {
+  USER          // default — players browsing venues
+  SUPER_ADMIN   // platform owner (you)
+}
+
+/// Owner registers with a real email. Staff accounts are created by the venue admin only.
+enum UserAccountType {
+  VENUE_OWNER
+  VENUE_STAFF
+}
+
+model User {
+  id            String   @id @default(cuid())
+  email         String   @unique // owner: real email · staff: handle@shop-slug.venueflow
+  passwordHash  String
+  name          String?
+  accountType   UserAccountType @default(VENUE_OWNER)
+  staffHandle   String?  // local part before @shop-slug.venueflow
+  systemRole    SystemRole @default(USER)
+  emailVerified Boolean  @default(false)
+  /// Set when employee completes one-time activation (owner never sets staff passwords).
+  passwordSetAt DateTime?
+  failedLogins  Int      @default(0)
+  lockedUntil   DateTime?
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  memberships   Membership[]
+  sessions      AuthSession[]
+  ownedShops    Shop[] @relation("ShopOwner")
+  notifications Notification[]
+
+  @@index([accountType])
+}
+
+// Refresh token sessions — rotated on use, revocable, IP/UA bound
+model AuthSession {
+  id              String   @id @default(cuid())
+  userId          String
+  user            User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  refreshTokenHash String  // argon2-hashed refresh token
+  userAgent       String?
+  ipAddress       String?
+  expiresAt       DateTime
+  revokedAt       DateTime?
+  createdAt       DateTime @default(now())
+
+  @@index([userId])
+}
+
+// ─────────────────────────────────────────────────────────────────
+// TENANT (Shop) — every shop-scoped record carries shopId
+// ─────────────────────────────────────────────────────────────────
+
+enum SubscriptionTier {
+  FREE
+  STARTER
+  STANDARD
+  PRO
+  ENTERPRISE
+}
+
+enum SubscriptionStatus {
+  TRIAL
+  ACTIVE
+  PAST_DUE
+  CANCELED
+}
+
+model Shop {
+  id            String   @id @default(cuid())
+  slug          String   @unique
+  /// Secret segment for /dashboard/{slug}--{dashboardKey} (unguessable, unique)
+  dashboardKey  String   @unique
+  name          String
+  /// Public marketing title (defaults to name when empty)
+  displayName   String?
+  description   String?
+  city          String?
+  country       String?
+  address       String?
+  phone         String?
+  email         String?
+  coverImage    String?
+  isPublished   Boolean  @default(false) // appears on /marketing
+  /// BCP 47 — dashboard UI + public venue pages
+  locale        String   @default("en")
+  /// ISO 4217 — prices, reports, marketing browse
+  currency      String   @default("EUR")
+  /// Dining / lounge floors tracked in reservations (1 = single level)
+  floorCount    Int      @default(1)
+
+  ownerId       String
+  owner         User     @relation("ShopOwner", fields: [ownerId], references: [id])
+
+  subscription  Subscription?
+
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  memberships   Membership[]
+  menuSections  MenuSection[]
+  menuItems     MenuItem[]
+  resourceCategories ResourceCategory[]
+  resources     Resource[]
+  reservations  Reservation[]
+  seatingTableGroups SeatingTableGroup[]
+  transactions  Transaction[]
+  shopOrders     ShopOrder[]
+  playSessions  PlaySession[]
+  openingHours  OpeningHour[]
+  scheduleExceptions ScheduleException[]
+  galleryItems  GalleryItem[]
+  auditLogs     AuditLog[]
+  tags          ShopTag[]
+  losses        ShopLoss[]
+  analytics     AnalyticsEvent[]
+  notifications Notification[]
+  storedImages  StoredImage[]
+}
+
+/// Compressed venue images (menu, gallery, gaming, cover, etc.)
+model StoredImage {
+  id        String   @id @default(cuid())
+  shopId    String
+  shop      Shop     @relation(fields: [shopId], references: [id], onDelete: Cascade)
+  mime      String   @default("image/webp")
+  encoding  String   @default("gzip")
+  width     Int      @default(0)
+  height    Int      @default(0)
+  byteSize  Int
+  data      Bytes
+  createdAt DateTime @default(now())
+
+  @@index([shopId])
+}
+
+model Subscription {
+  id        String   @id @default(cuid())
+  shopId    String   @unique
+  shop      Shop     @relation(fields: [shopId], references: [id], onDelete: Cascade)
+  tier      SubscriptionTier   @default(STARTER)
+  status    SubscriptionStatus @default(TRIAL)
+  trialEndsAt DateTime?
+  currentPeriodEnd DateTime?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+// ─────────────────────────────────────────────────────────────────
+// MEMBERSHIP — User ↔ Shop with role and granular permissions
+// ─────────────────────────────────────────────────────────────────
+
+enum ShopRole {
+  OWNER    // = client admin: full shop control
+  MANAGER  // owner-granted near-full access
+  STAFF    // worker; only what owner grants via permissions[]
+}
+
+// Permission strings stored as comma-separated for SQLite compat.
+// In owner's case, '*' means all.
+model Membership {
+  id            String   @id @default(cuid())
+  userId        String
+  user          User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  shopId        String
+  shop          Shop     @relation(fields: [shopId], references: [id], onDelete: Cascade)
+  role          ShopRole @default(STAFF)
+  permissions   String   @default("") // CSV: "menu.read,menu.write,reservation.write" or "*"
+  isActive      Boolean  @default(true)
+  invitedBy     String?
+  acceptedAt    DateTime?
+  /// One-time invite; cleared after employee sets their password.
+  inviteTokenHash String?
+  inviteExpiresAt DateTime?
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  @@unique([userId, shopId])
+  @@index([inviteTokenHash])
+  @@index([shopId])
+  @@index([shopId, role])
+}
+
+// ─────────────────────────────────────────────────────────────────
+// MENU
+// ─────────────────────────────────────────────────────────────────
+
+enum MealPeriod {
+  ALL_DAY
+  BREAKFAST
+  BRUNCH
+  LUNCH
+  AFTERNOON
+  DINNER
+  LATE_NIGHT
+}
+
+model MenuSection {
+  id            String      @id @default(cuid())
+  shopId        String
+  shop          Shop        @relation(fields: [shopId], references: [id], onDelete: Cascade)
+  name          String
+  sortOrder     Int         @default(0)
+  /// Optional service window for the whole section (items can inherit)
+  mealPeriod    MealPeriod?
+  availableFrom String?
+  availableTo   String?
+  availableDays String      @default("0,1,2,3,4,5,6")
+  createdAt     DateTime    @default(now())
+  updatedAt     DateTime    @updatedAt
+  items         MenuItem[]
+
+  @@index([shopId])
+}
+
+model MenuItem {
+  id                String   @id @default(cuid())
+  shopId            String
+  shop              Shop     @relation(fields: [shopId], references: [id], onDelete: Cascade)
+  sectionId         String?
+  section           MenuSection? @relation(fields: [sectionId], references: [id], onDelete: SetNull)
+  name              String
+  description       String?
+  imageUrl          String?
+  imageUrl2         String?
+  price             Float
+  stock             Int      @default(0)
+  /// Daily baseline — stock resets to this at start of each venue day
+  stockDaily        Int      @default(0)
+  /// YYYY-MM-DD (venue local) when stock was last reset
+  stockResetOn      String?
+  /// When false, stock is not tracked or shown to guests
+  trackStock        Boolean  @default(false)
+  isAvailable       Boolean  @default(true)
+  /// Use section meal window instead of item-level times
+  useSectionTiming  Boolean  @default(true)
+  /// Daily window when this item can be ordered (venue local time, HH:MM)
+  availableFrom     String?
+  availableTo       String?
+  /// CSV weekdays 0=Sun … 6=Sat e.g. "1,2,3,4,5"
+  availableDays     String   @default("0,1,2,3,4,5,6")
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+
+  tags          MenuItemTag[]
+  lineItems     TransactionLineItem[]
+  shopOrderLines ShopOrderLine[]
+
+  @@index([shopId])
+  @@index([shopId, sectionId])
+}
+
+enum TagType {
+  CATEGORY
+  FILTER
+  OFFER
+}
+
+/// Tags for menu items + public /venues filters & special offers
+model ShopTag {
+  id        String   @id @default(cuid())
+  shopId    String
+  shop      Shop     @relation(fields: [shopId], references: [id], onDelete: Cascade)
+  name      String
+  slug      String
+  type      TagType  @default(FILTER)
+  color     String?
+  sortOrder Int      @default(0)
+  createdAt DateTime @default(now())
+
+  items     MenuItemTag[]
+
+  @@unique([shopId, slug])
+  @@index([shopId, type])
+}
+
+model MenuItemTag {
+  menuItemId String
+  menuItem   MenuItem @relation(fields: [menuItemId], references: [id], onDelete: Cascade)
+  tagId      String
+  tag        ShopTag  @relation(fields: [tagId], references: [id], onDelete: Cascade)
+
+  @@id([menuItemId, tagId])
+}
+
+// ─────────────────────────────────────────────────────────────────
+// RESOURCES + RESERVATIONS
+// ─────────────────────────────────────────────────────────────────
+
+enum ResourceType {
+  BILLIARD
+  SNOOKER
+  POOL
+  DARTS
+  PLAYSTATION
+  PC
+  BOWLING
+  MINIGAMES
+  SWIMMING_POOL
+  TABLE_TENNIS
+  ARCADE
+  CHESS
+  CARDS
+  TABLE
+  OTHER
+}
+
+enum ResourceStatus {
+  AVAILABLE
+  BUSY
+  RESERVED
+  MAINTENANCE
+}
+
+/// Game / activity offering (e.g. PC lounge, bowling lanes) — staff set how many units exist.
+model ResourceCategory {
+  id          String       @id @default(cuid())
+  shopId      String
+  shop        Shop         @relation(fields: [shopId], references: [id], onDelete: Cascade)
+  type        ResourceType @default(OTHER)
+  name        String
+  description String?
+  imageUrl    String?
+  imageUrl2   String?
+  sortOrder   Int          @default(0)
+  /// Default booking block length in minutes
+  slotMinutes Int          @default(60)
+  createdAt   DateTime     @default(now())
+  updatedAt   DateTime     @updatedAt
+  rates       ResourceRate[]
+  resources   Resource[]
+
+  @@index([shopId])
+}
+
+model ResourceRate {
+  id              String           @id @default(cuid())
+  categoryId      String
+  category        ResourceCategory @relation(fields: [categoryId], references: [id], onDelete: Cascade)
+  label           String
+  durationMinutes Int?
+  price           Float
+  sortOrder       Int              @default(0)
+
+  @@index([categoryId])
+}
+
+model Resource {
+  id         String           @id @default(cuid())
+  shopId     String
+  shop       Shop             @relation(fields: [shopId], references: [id], onDelete: Cascade)
+  categoryId String?
+  category   ResourceCategory? @relation(fields: [categoryId], references: [id], onDelete: SetNull)
+  name       String
+  type       ResourceType     @default(OTHER)
+  description String?
+  imageUrl   String?
+  hourlyRate Float            @default(0)
+  status     ResourceStatus   @default(AVAILABLE)
+  sortOrder  Int              @default(0)
+  createdAt  DateTime         @default(now())
+  updatedAt  DateTime         @updatedAt
+
+  reservations Reservation[]
+  playSessions PlaySession[]
+
+  @@index([shopId])
+  @@index([shopId, categoryId])
+}
+
+enum ReservationStatus {
+  PENDING
+  CONFIRMED
+  CHECKED_IN
+  COMPLETED
+  CANCELED
+  NO_SHOW
+}
+
+model Reservation {
+  id          String   @id @default(cuid())
+  shopId      String
+  shop        Shop     @relation(fields: [shopId], references: [id], onDelete: Cascade)
+  resourceId  String?
+  resource    Resource? @relation(fields: [resourceId], references: [id], onDelete: SetNull)
+  guestName   String
+  guestEmail  String?
+  guestPhone  String?
+  partySize   Int      @default(1)
+  startsAt    DateTime
+  endsAt      DateTime
+  status      ReservationStatus @default(PENDING)
+  /// When true, create/update notifies the whole venue team in-app.
+  staffAlert  Boolean  @default(false)
+  notes       String?
+  /// Amount charged when booking is completed (separate from menu orders)
+  billedAmount  Float?
+  billedAt      DateTime?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  playSession PlaySession?
+
+  @@index([shopId, startsAt])
+}
+
+enum SeatingZone {
+  INDOOR
+  OUTDOOR
+}
+
+/// Dining / lounge seating — staff track how many tables are free per capacity (and custom event setups).
+model SeatingTableGroup {
+  id              String   @id @default(cuid())
+  shopId          String
+  shop            Shop     @relation(fields: [shopId], references: [id], onDelete: Cascade)
+  /// Indoor dining room vs patio / terrace
+  zone            SeatingZone @default(INDOOR)
+  /// Building level (1 … shop.floorCount)
+  floor           Int      @default(1)
+  /// Display name, e.g. "Table for 4" or "Terrace event"
+  label           String
+  /// Seats per table in this group
+  capacity        Int
+  /// How many physical tables of this type exist
+  totalCount      Int      @default(0)
+  /// How many are free right now (staff updates on the floor)
+  availableCount  Int      @default(0)
+  /// Extra context — events, combined tables, etc.
+  note            String?
+  /// Custom event window (optional; mainly for isCustom groups)
+  eventStartsAt   DateTime?
+  eventEndsAt     DateTime?
+  isCustom        Boolean  @default(false)
+  sortOrder       Int      @default(0)
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  @@index([shopId, sortOrder])
+  @@index([shopId, zone, floor, sortOrder])
+}
+
+enum PlaySessionStatus {
+  ACTIVE
+  COMPLETED
+  CANCELED
+}
+
+/// Walk-in or linked booking: billiard, PC, tables — players, duration, price.
+model PlaySession {
+  id              String            @id @default(cuid())
+  shopId          String
+  shop            Shop              @relation(fields: [shopId], references: [id], onDelete: Cascade)
+  resourceId      String?
+  resource        Resource?         @relation(fields: [resourceId], references: [id], onDelete: SetNull)
+  reservationId   String?           @unique
+  reservation     Reservation?      @relation(fields: [reservationId], references: [id], onDelete: SetNull)
+  playerCount     Int               @default(1)
+  startedAt       DateTime          @default(now())
+  endedAt         DateTime?
+  durationMinutes Int?
+  amount          Float             @default(0)
+  paymentMethod   PaymentMethod     @default(CASH)
+  label           String?
+  note            String?
+  status          PlaySessionStatus @default(ACTIVE)
+  archivedAt      DateTime?
+  createdById     String?
+  createdAt       DateTime          @default(now())
+  updatedAt       DateTime          @updatedAt
+  completedAt     DateTime?
+
+  @@index([shopId, status, createdAt])
+  @@index([shopId, archivedAt, createdAt])
+}
+
+// ─────────────────────────────────────────────────────────────────
+// TRANSACTIONS
+// ─────────────────────────────────────────────────────────────────
+
+enum TransactionKind {
+  SALE
+  REFUND
+  EXPENSE
+  ADJUSTMENT
+}
+
+enum ShopOrderStatus {
+  PENDING
+  COMPLETED
+  CANCELED
+}
+
+enum ShopOrderLineStatus {
+  ACTIVE
+  CANCELED
+}
+
+enum PaymentMethod {
+  CASH
+  CARD
+  ONLINE
+  OTHER
+}
+
+/// Staff-managed menu order (pending → completed); lines can be canceled individually.
+model ShopOrder {
+  id            String          @id @default(cuid())
+  shopId        String
+  shop          Shop            @relation(fields: [shopId], references: [id], onDelete: Cascade)
+  status        ShopOrderStatus @default(PENDING)
+  label         String?
+  note          String?
+  paymentMethod PaymentMethod   @default(CASH)
+  total         Float           @default(0)
+  /// Guests on this ticket (for customer / covers analytics)
+  guestCount    Int             @default(1)
+  /// Dining table had a prior reservation (optional fee on ticket)
+  tableReserved Boolean         @default(false)
+  /// Charge for table reservation when tableReserved (null or 0 = free)
+  reservationFee Float?
+  createdById   String?
+  createdAt     DateTime        @default(now())
+  updatedAt     DateTime        @updatedAt
+  completedAt   DateTime?
+  canceledAt    DateTime?
+  archivedAt    DateTime?
+
+  lines ShopOrderLine[]
+
+  @@index([shopId, status, createdAt])
+  @@index([shopId, archivedAt, createdAt])
+}
+
+model ShopOrderLine {
+  id          String              @id @default(cuid())
+  shopOrderId String
+  shopOrder   ShopOrder           @relation(fields: [shopOrderId], references: [id], onDelete: Cascade)
+  menuItemId  String?
+  menuItem    MenuItem?           @relation(fields: [menuItemId], references: [id], onDelete: SetNull)
+  name        String
+  quantity    Int                 @default(1)
+  unitPrice   Float
+  lineStatus  ShopOrderLineStatus @default(ACTIVE)
+  createdAt   DateTime            @default(now())
+  updatedAt   DateTime            @updatedAt
+
+  @@index([shopOrderId])
+  @@index([menuItemId])
+}
+
+model Transaction {
+  id          String   @id @default(cuid())
+  shopId      String
+  shop        Shop     @relation(fields: [shopId], references: [id], onDelete: Cascade)
+  kind        TransactionKind @default(SALE)
+  method      PaymentMethod   @default(CASH)
+  amount      Float
+  note        String?
+  items       String   @default("") // legacy JSON snapshot
+  createdById String?
+  createdAt   DateTime @default(now())
+
+  lines       TransactionLineItem[]
+
+  @@index([shopId, createdAt])
+  @@index([shopId, kind])
+}
+
+model TransactionLineItem {
+  id            String   @id @default(cuid())
+  transactionId String
+  transaction   Transaction @relation(fields: [transactionId], references: [id], onDelete: Cascade)
+  menuItemId    String?
+  menuItem      MenuItem? @relation(fields: [menuItemId], references: [id], onDelete: SetNull)
+  name          String
+  quantity      Int      @default(1)
+  unitPrice     Float
+  total         Float
+
+  @@index([transactionId])
+  @@index([menuItemId])
+}
+
+model ShopLoss {
+  id          String   @id @default(cuid())
+  shopId      String
+  shop        Shop     @relation(fields: [shopId], references: [id], onDelete: Cascade)
+  amount      Float
+  reason      String
+  category    String?
+  occurredAt  DateTime @default(now())
+  createdById String?
+  createdAt   DateTime @default(now())
+
+  @@index([shopId, occurredAt])
+}
+
+enum AnalyticsEventType {
+  VENUE_VIEW
+  MENU_VIEW
+  RESERVATION_CLICK
+  GALLERY_VIEW
+}
+
+model AnalyticsEvent {
+  id        String   @id @default(cuid())
+  shopId    String
+  shop      Shop     @relation(fields: [shopId], references: [id], onDelete: Cascade)
+  type      AnalyticsEventType
+  meta      String?
+  createdAt DateTime @default(now())
+
+  @@index([shopId, type, createdAt])
+}
+
+// ─────────────────────────────────────────────────────────────────
+// OPENING HOURS
+// ─────────────────────────────────────────────────────────────────
+
+model OpeningHour {
+  id        String   @id @default(cuid())
+  shopId    String
+  shop      Shop     @relation(fields: [shopId], references: [id], onDelete: Cascade)
+  weekday   Int      // 0 = Sunday … 6 = Saturday
+  opensAt   String   // "HH:MM"
+  closesAt  String   // "HH:MM"
+  isClosed  Boolean  @default(false)
+
+  @@unique([shopId, weekday])
+}
+
+/// One-off closures or special hours (events, holidays).
+model ScheduleException {
+  id        String   @id @default(cuid())
+  shopId    String
+  shop      Shop     @relation(fields: [shopId], references: [id], onDelete: Cascade)
+  date      String   // YYYY-MM-DD
+  label     String?
+  isClosed  Boolean  @default(true)
+  opensAt   String?
+  closesAt  String?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([shopId, date])
+  @@index([shopId])
+}
+
+// ─────────────────────────────────────────────────────────────────
+// GALLERY — shown on /marketing
+// ─────────────────────────────────────────────────────────────────
+
+model GalleryItem {
+  id         String   @id @default(cuid())
+  shopId     String
+  shop       Shop     @relation(fields: [shopId], references: [id], onDelete: Cascade)
+  imageUrl   String
+  caption    String?
+  sortOrder  Int      @default(0)
+  createdAt  DateTime @default(now())
+
+  @@index([shopId])
+}
+
+// ─────────────────────────────────────────────────────────────────
+// AUDIT LOG — every sensitive action
+// ─────────────────────────────────────────────────────────────────
+
+model AuditLog {
+  id         String   @id @default(cuid())
+  shopId     String?
+  shop       Shop?    @relation(fields: [shopId], references: [id], onDelete: SetNull)
+  userId     String?
+  section    String   @default("system")
+  action     String
+  summary    String   @default("")
+  actorRole  String?
+  actorName  String?
+  actorEmail String?
+  meta       String?  // JSON
+  ipAddress  String?
+  createdAt  DateTime @default(now())
+
+  @@index([shopId, createdAt])
+  @@index([shopId, section, createdAt])
+}
+
+// ─────────────────────────────────────────────────────────────────
+// NOTIFICATIONS — in-app alerts per venue (and optionally per user)
+// ─────────────────────────────────────────────────────────────────
+
+enum NotificationType {
+  SYSTEM
+  TRIAL
+  SUBSCRIPTION
+  RESERVATION
+  OPERATIONS
+  BILLING
+  STAFF
+}
+
+model Notification {
+  id        String           @id @default(cuid())
+  shopId    String
+  shop      Shop             @relation(fields: [shopId], references: [id], onDelete: Cascade)
+  /// null = visible to everyone in the shop; set = only that user
+  userId    String?
+  user      User?            @relation(fields: [userId], references: [id], onDelete: Cascade)
+  type      NotificationType @default(SYSTEM)
+  /// Filter group: subscription, reservation, operations, team, system, billing
+  section   String           @default("system")
+  /// Idempotent key per shop (and user when userId set), e.g. trial_ended
+  dedupeKey String?
+  title     String
+  body      String
+  /// Dashboard path segment, e.g. /subscription
+  href      String?
+  readAt    DateTime?
+  archivedAt DateTime?
+  createdAt DateTime         @default(now())
+
+  @@unique([shopId, userId, dedupeKey])
+  @@index([shopId, createdAt])
+  @@index([shopId, userId, readAt])
+  @@index([shopId, archivedAt, createdAt])
+  @@index([shopId, section, createdAt])
+}

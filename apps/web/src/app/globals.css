@@ -195,6 +195,20 @@ body {
   animation: pulse-soft 2.4s ease-in-out infinite;
 }
 
+/* Dashboard: no drifting/scaling aurora (avoids “zooming” behind the shell) */
+.dashboard-aurora .aurora-mesh,
+.dashboard-aurora .aurora-blob,
+.dashboard-aurora .aurora-grid,
+.dashboard-aurora .aurora-stars {
+  animation: none !important;
+}
+
+html.dashboard-route,
+html.dashboard-route body {
+  height: 100%;
+  overflow: hidden;
+}
+
 /* Honor user's reduced-motion preference */
 @media (prefers-reduced-motion: reduce) {
   .aurora-mesh,

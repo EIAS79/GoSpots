@@ -1,0 +1,16 @@
+services:
+  postgres:
+    image: postgres:16-alpine
+    container_name: venueflow-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: venueflow
+      POSTGRES_PASSWORD: venueflow_dev
+      POSTGRES_DB: venueflow
+    ports:
+      - "5432:5432"
+    volumes:
+      - venueflow_pg_data:/var/lib/postgresql/data
+
+volumes:
+  venueflow_pg_data:
