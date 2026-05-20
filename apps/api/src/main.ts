@@ -7,6 +7,7 @@ import cookieParser from "cookie-parser";
 import helmet from "helmet";
 import { join } from "path";
 import { AppModule } from "./app.module";
+import { parseCorsOrigins } from "./common/cors-origins";
 
 async function bootstrap() {
   const app = await NestFactory.create<NestExpressApplication>(AppModule);
@@ -41,11 +42,16 @@ async function bootstrap() {
     }),
   );
 
+  const corsOrigins = parseCorsOrigins(
+    config.get<string>("WEB_ORIGIN"),
+    config.get<string>("WEB_APP_URL"),
+    config.get<string>("CORS_ORIGIN"),
+  );
+  if (corsOrigins.length === 0) {
+    corsOrigins.push("http://localhost:3000");
+  }
   app.enableCors({
-    origin: [
-      config.get<string>("WEB_ORIGIN", "http://localhost:3000"),
-      config.get<string>("CORS_ORIGIN", "http://localhost:3000"),
-    ],
+    origin: corsOrigins,
     credentials: true,
   });
 

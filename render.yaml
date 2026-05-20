@@ -1,0 +1,37 @@
+# VenueFlow API — deploy from repo root (https://render.com)
+# Web app: deploy apps/web on Vercel (see docs/DEPLOYMENT.md)
+services:
+  - type: web
+    name: venueflow-api
+    runtime: node
+    plan: free
+    rootDir: .
+    buildCommand: >-
+      corepack enable &&
+      pnpm install --frozen-lockfile &&
+      pnpm --filter @venueflow/api exec prisma generate &&
+      pnpm --filter @venueflow/api run build
+    startCommand: >-
+      cd apps/api &&
+      pnpm exec prisma migrate deploy &&
+      node dist/main.js
+    healthCheckPath: /api/v1/health
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: PORT
+        value: 10000
+      - key: DATABASE_URL
+        sync: false
+      - key: JWT_ACCESS_SECRET
+        generateValue: true
+      - key: JWT_REFRESH_SECRET
+        generateValue: true
+      - key: WEB_ORIGIN
+        sync: false
+      - key: CORS_ORIGIN
+        sync: false
+      - key: COOKIE_SECURE
+        value: "true"
+      - key: COOKIE_SAME_SITE
+        value: none

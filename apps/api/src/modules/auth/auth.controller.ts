@@ -34,6 +34,16 @@ export class AuthController {
     private readonly config: ConfigService,
   ) {}
 
+  private cookieOptions() {
+    const secure = this.config.get("COOKIE_SECURE", "false") === "true";
+    const sameSiteRaw = this.config.get<string>("COOKIE_SAME_SITE", "lax");
+    const sameSite =
+      sameSiteRaw === "none" || sameSiteRaw === "strict"
+        ? sameSiteRaw
+        : "lax";
+    return { httpOnly: true, secure, sameSite } as const;
+  }
+
   private setAuthCookies(
     res: Response,
     tokens: {
@@ -43,13 +53,7 @@ export class AuthController {
       refreshExpiresIn: number;
     },
   ) {
-    const secure = this.config.get("COOKIE_SECURE", "false") === "true";
-    const common = {
-      httpOnly: true,
-      secure,
-      sameSite: "lax" as const,
-      path: "/",
-    };
+    const common = { ...this.cookieOptions(), path: "/" };
     res.cookie(ACCESS_COOKIE, tokens.accessToken, {
       ...common,
       maxAge: tokens.accessExpiresIn * 1000,
@@ -62,8 +66,7 @@ export class AuthController {
   }
 
   private clearAuthCookies(res: Response) {
-    const secure = this.config.get("COOKIE_SECURE", "false") === "true";
-    const common = { httpOnly: true, secure, sameSite: "lax" as const };
+    const common = this.cookieOptions();
     res.clearCookie(ACCESS_COOKIE, { ...common, path: "/" });
     res.clearCookie(REFRESH_COOKIE, { ...common, path: "/api/v1/auth" });
   }
