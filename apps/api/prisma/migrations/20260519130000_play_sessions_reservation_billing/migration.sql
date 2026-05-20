@@ -1,4 +1,10 @@
 -- CreateEnum
+DO $$ BEGIN
+  CREATE TYPE "PaymentMethod" AS ENUM ('CASH', 'CARD', 'ONLINE', 'OTHER');
+EXCEPTION
+  WHEN duplicate_object THEN null;
+END $$;
+
 CREATE TYPE "PlaySessionStatus" AS ENUM ('ACTIVE', 'COMPLETED', 'CANCELED');
 
 -- AlterTable

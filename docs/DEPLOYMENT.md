@@ -12,18 +12,33 @@ Vercel does not run the Nest API reliably; the web app **proxies** `/api/v1/*` t
 
 ---
 
-## 1. Database (Neon — recommended)
+## 1. Database (Neon)
 
-1. Create a project at [neon.tech](https://neon.tech).
-2. Copy the **pooled** connection string (`postgresql://...`).
-3. Use it as `DATABASE_URL` on the API host only.
+1. [neon.tech](https://neon.tech) → your project → **Connect**.
+2. Tab **Connection string** → copy the URI (must include `?sslmode=require`).
+3. Paste into:
+   - **Render** → `DATABASE_URL` (production API)
+   - **Local** → `apps/api/.env` as `DATABASE_URL` (file is gitignored)
 
-After the API is deployed once, migrations run automatically (`prisma migrate deploy` on start). Locally you can also run:
+Template (no secrets in repo): `apps/api/.env.production.example`
+
+Apply all migrations to Neon once (migrations are **PostgreSQL** — use Neon, not SQLite):
 
 ```bash
 cd apps/api
+# DATABASE_URL in apps/api/.env must point at Neon
 pnpm exec prisma migrate deploy
 ```
+
+Optional demo data:
+
+```bash
+pnpm run seed
+```
+
+After Render deploy, each start runs `prisma migrate deploy` then `prisma db push` (applies any schema fields not yet in a migration file).
+
+**Security:** Never commit `apps/api/.env`. Rotate your Neon password if it was shared in chat or screenshots.
 
 ---
 
@@ -33,7 +48,7 @@ pnpm exec prisma migrate deploy
 2. [Render Dashboard](https://dashboard.render.com) → **New** → **Blueprint** → connect repo (uses root `render.yaml`),  
    **or** **New Web Service** → root directory `.` with:
    - **Build:** `corepack enable && pnpm install --frozen-lockfile && pnpm --filter @venueflow/api exec prisma generate && pnpm --filter @venueflow/api run build`
-   - **Start:** `cd apps/api && pnpm exec prisma migrate deploy && node dist/main.js`
+   - **Start:** `cd apps/api && pnpm exec prisma migrate deploy && pnpm exec prisma db push --skip-generate && node dist/main.js`
    - **Health check path:** `/api/v1/health`
 
 3. Environment variables (Render → Environment):

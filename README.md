@@ -23,6 +23,8 @@ Copy env templates:
 
 ## Production preview (Vercel)
 
+**New to deploy?** Follow **[docs/START-HERE.md](docs/START-HERE.md)** step by step.
+
 See **[docs/DEPLOYMENT.md](docs/DEPLOYMENT.md)** for:
 
 - Vercel (frontend)
