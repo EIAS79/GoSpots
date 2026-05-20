@@ -79,8 +79,9 @@ Click **Add Environment Variable** for each row:
 
 1. Go to [vercel.com](https://vercel.com) → sign in with GitHub.
 2. **Add New…** → **Project** → import the **same** repo.
-3. **Important:** set **Root Directory** to `apps/web` (not the repo root).
-4. **Environment Variables** (before deploy):
+3. **Root Directory:** either `apps/web` **or** leave empty (repo root) — root `vercel.json` builds only the website.
+4. If build runs the API and fails: Settings → General → **Build Command** = `pnpm run build:web`, **Output Directory** = `apps/web/.next`.
+5. **Environment Variables** (before deploy):
 
 | Key | Value |
 |-----|--------|
