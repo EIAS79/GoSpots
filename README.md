@@ -2,7 +2,7 @@
 
 Multi-tenant SaaS for gaming venues, dining reservations, menu orders, and finance.
 
-(Rebranded from VenueFlow — GitHub repo may still be named `VenueFlow` until you rename it.)
+Product name: **GoSpots**. API routes and env var names are unchanged from the VenueFlow setup.
 
 ## Stack
 
