@@ -303,7 +303,7 @@ export type Testimonial = {
 export const testimonials: Testimonial[] = [
   {
     quote:
-      "We used to lose 200 PLN a night to forgotten timers. After VenueFlow that vanished in the first week.",
+      "We used to lose 200 PLN a night to forgotten timers. After GoSpots that vanished in the first week.",
     name: "Marek Kowalski",
     role: "Owner · Cue & Cobra, Warsaw",
     rating: 5,
@@ -338,7 +338,7 @@ export type Faq = { q: string; a: string };
 export const faqs: Faq[] = [
   {
     q: "Do I need to install anything in my venue?",
-    a: "No. VenueFlow runs in the browser on the device you already have — laptop, tablet, or counter PC. Updates push automatically.",
+    a: "No. GoSpots runs in the browser on the device you already have — laptop, tablet, or counter PC. Updates push automatically.",
   },
   {
     q: "Can I try it before I pay?",

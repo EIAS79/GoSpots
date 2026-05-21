@@ -122,7 +122,7 @@ export class StaffService {
       seats: { used, limit, tier },
       canCreateEmployees:
         limit > 0 && tierHasFeature(tier, "roles") && actor.shopRole === "OWNER",
-      loginSuffix: ".venueflow",
+      loginSuffix: ".gospots",
       venueSlug: shop.slug,
       seatPolicy:
         "One employee login = one person. They set their own password via a private setup link. Only one active session per account.",

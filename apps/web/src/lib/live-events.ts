@@ -25,7 +25,7 @@ export type LiveEvent = {
   meta?: Record<string, unknown>;
 };
 
-const EVENT_NAME = "venueflow:live";
+const EVENT_NAME = "gospots:live";
 
 export function publishLiveEvent(event: LiveEvent) {
   if (typeof window === "undefined") return;

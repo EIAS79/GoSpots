@@ -1,4 +1,5 @@
-export const VENUE_STAFF_LOGIN_SUFFIX = ".venueflow";
+export const VENUE_STAFF_LOGIN_SUFFIX = ".gospots";
+export const LEGACY_VENUE_STAFF_LOGIN_SUFFIX = ".venueflow";
 
 export function staffLoginPreview(username: string, shopSlug: string) {
   const u = username.trim().toLowerCase() || "username";

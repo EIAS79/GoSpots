@@ -29,7 +29,7 @@ describe('AppController (e2e)', () => {
       .get('/api/v1')
       .expect(200)
       .expect({
-        name: 'VenueFlow API',
+        name: 'GoSpots API',
         version: '1.0.0',
         docs: '/docs',
       });
@@ -41,7 +41,7 @@ describe('AppController (e2e)', () => {
       .expect(200)
       .expect((res) => {
         expect(res.body.status).toBe('ok');
-        expect(res.body.service).toBe('venueflow-api');
+        expect(res.body.service).toBe('gospots-api');
       });
   });
 

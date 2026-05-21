@@ -1,20 +1,20 @@
 {
-  "name": "venueflow",
+  "name": "gospots",
   "version": "0.1.0",
   "private": true,
   "packageManager": "pnpm@10.12.1",
   "scripts": {
     "kill-ports": "powershell -NoProfile -ExecutionPolicy Bypass -File ./scripts/kill-ports.ps1",
-    "db:setup": "powershell -NoProfile -ExecutionPolicy Bypass -File ./scripts/setup-venueflow-db.ps1",
+    "db:setup": "powershell -NoProfile -ExecutionPolicy Bypass -File ./scripts/setup-gospots-db.ps1",
     "check:dev": "powershell -NoProfile -ExecutionPolicy Bypass -File ./scripts/check-dev.ps1",
     "dev": "pnpm kill-ports && concurrently -n api,web -c cyan,magenta \"pnpm dev:api\" \"pnpm dev:web\"",
-    "dev:api": "pnpm --filter @venueflow/api run start:dev",
-    "dev:web": "pnpm --filter @venueflow/web run dev",
-    "build": "pnpm --filter @venueflow/api run build && pnpm --filter @venueflow/web run build",
-    "build:vercel": "pnpm --filter @venueflow/web run build",
-    "build:api": "pnpm --filter @venueflow/api run build",
-    "build:web": "pnpm --filter @venueflow/web run build",
-    "lint": "pnpm --filter @venueflow/api run lint && pnpm --filter @venueflow/web run lint"
+    "dev:api": "pnpm --filter @gospots/api run start:dev",
+    "dev:web": "pnpm --filter @gospots/web run dev",
+    "build": "pnpm --filter @gospots/api run build && pnpm --filter @gospots/web run build",
+    "build:vercel": "pnpm --filter @gospots/web run build",
+    "build:api": "pnpm --filter @gospots/api run build",
+    "build:web": "pnpm --filter @gospots/web run build",
+    "lint": "pnpm --filter @gospots/api run lint && pnpm --filter @gospots/web run lint"
   },
   "devDependencies": {
     "concurrently": "^9.2.1"

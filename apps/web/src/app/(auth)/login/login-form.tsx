@@ -45,7 +45,7 @@ export function LoginForm() {
   return (
     <AuthCard
       title="Welcome back"
-      subtitle="Venue owner: your email · Staff: username@venue-slug.venueflow"
+      subtitle="Venue owner: your email · Staff: username@venue-slug.gospots"
       footer={
         <>
           New here?{" "}
@@ -68,7 +68,7 @@ export function LoginForm() {
               required
               value={email}
               onChange={(e) => setEmail(e.target.value)}
-              placeholder="owner@venue.com or anna@cue-cobra.venueflow"
+              placeholder="owner@venue.com or anna@cue-cobra.gospots"
               className="w-full rounded-lg border border-white/10 bg-zinc-900/60 py-2.5 pl-9 pr-3 text-sm text-white outline-none transition focus:border-emerald-400/60 focus:bg-zinc-900/80 focus:ring-2 focus:ring-emerald-400/20"
             />
           </div>

@@ -1,4 +1,4 @@
-# VenueFlow — production preview (Vercel + hosted API + Postgres)
+# GoSpots — production preview (Vercel + hosted API + Postgres)
 
 This monorepo has **three parts** in production:
 
@@ -47,7 +47,7 @@ After Render deploy, each start runs `prisma migrate deploy` then `prisma db pus
 1. Push the repo to **GitHub** (private is fine).
 2. [Render Dashboard](https://dashboard.render.com) → **New** → **Blueprint** → connect repo (uses root `render.yaml`),  
    **or** **New Web Service** → root directory `.` with:
-   - **Build:** `npm install -g pnpm@10.12.1 && pnpm install --frozen-lockfile && pnpm --filter @venueflow/api exec prisma generate && pnpm --filter @venueflow/api run build`  
+   - **Build:** `npm install -g pnpm@10.12.1 && pnpm install --frozen-lockfile && pnpm --filter @gospots/api exec prisma generate && pnpm --filter @gospots/api run build`  
      (Do **not** use `corepack enable` on Render — it fails with `EROFS` on `/usr/bin/pnpm`.)
    - **Start:** `cd apps/api && npx prisma migrate deploy && npx prisma db push --skip-generate && node dist/main.js`
    - **Health check path:** `/api/v1/health`
@@ -64,7 +64,7 @@ After Render deploy, each start runs `prisma migrate deploy` then `prisma db pus
 | `COOKIE_SECURE` | `true` |
 | `COOKIE_SAME_SITE` | `none` (only if **not** using Vercel proxy; use `lax` with proxy) |
 
-4. Note the public URL, e.g. `https://venueflow-api.onrender.com`.
+4. Note the public URL, e.g. `https://gospots-api.onrender.com`.
 
 ---
 
@@ -72,14 +72,14 @@ After Render deploy, each start runs `prisma migrate deploy` then `prisma db pus
 
 1. [vercel.com](https://vercel.com) → **Add New Project** → import the GitHub repo.
 2. **Root Directory:** **`apps/web`** (required). If this is empty (repo root), the build fails with “No Next.js version detected”.
-3. Framework should detect **Next.js**; `apps/web/vercel.json` installs dependencies from the monorepo root and runs `pnpm --filter @venueflow/web run build`.
+3. Framework should detect **Next.js**; `apps/web/vercel.json` installs dependencies from the monorepo root and runs `pnpm --filter @gospots/web run build`.
 
 4. Environment variables (Vercel → Settings → Environment Variables):
 
 | Variable | Value |
 |----------|--------|
 | `NEXT_PUBLIC_API_BASE_URL` | `/api/v1` |
-| `API_PROXY_TARGET` | `https://venueflow-api.onrender.com` (no trailing slash) |
+| `API_PROXY_TARGET` | `https://gospots-api.onrender.com` (no trailing slash) |
 
 5. Deploy. Open the preview URL and register / log in.
 

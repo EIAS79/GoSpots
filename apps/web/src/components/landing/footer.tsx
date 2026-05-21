@@ -67,7 +67,7 @@ export function Footer() {
                 </div>
               </div>
               <span className="text-sm font-semibold text-white">
-                VenueFlow
+                GoSpots
               </span>
             </div>
             <p className="mt-4 max-w-xs text-sm text-zinc-400">
@@ -109,7 +109,7 @@ export function Footer() {
         </div>
 
         <div className="mt-12 flex flex-col items-center justify-between gap-3 border-t border-white/5 pt-6 text-xs text-zinc-500 md:flex-row">
-          <p>© {new Date().getFullYear()} VenueFlow. All rights reserved.</p>
+          <p>© {new Date().getFullYear()} GoSpots. All rights reserved.</p>
           <p>
             Built with Next.js · NestJS · PostgreSQL ·{" "}
             <span className="text-emerald-400">made for busy nights</span>

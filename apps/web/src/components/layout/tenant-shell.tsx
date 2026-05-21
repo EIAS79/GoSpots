@@ -222,7 +222,7 @@ export function TenantShell({ children }: { children: ReactNode }) {
               V
             </span>
           </span>
-          <span className="text-sm font-semibold tracking-tight">VenueFlow</span>
+          <span className="text-sm font-semibold tracking-tight">GoSpots</span>
         </Link>
 
         {primaryMembership && (

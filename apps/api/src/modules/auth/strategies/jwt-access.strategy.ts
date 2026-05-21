@@ -5,6 +5,7 @@ import { UserAccountType } from "@prisma/client";
 import { Request } from "express";
 import { ExtractJwt, Strategy } from "passport-jwt";
 import { PrismaService } from "../../../prisma/prisma.service";
+import { isVenueStaffLoginEmail } from "../../../common/venue-account";
 import { JwtAccessPayload } from "../auth.service";
 
 const cookieExtractor = (req: Request): string | null => {
@@ -31,7 +32,7 @@ export class JwtAccessStrategy extends PassportStrategy(Strategy, "jwt-access") 
   async validate(payload: JwtAccessPayload) {
     if (
       payload.acct === UserAccountType.VENUE_STAFF ||
-      payload.email?.toLowerCase().endsWith(".venueflow")
+      (payload.email && isVenueStaffLoginEmail(payload.email))
     ) {
       if (!payload.sid) {
         throw new UnauthorizedException("Session expired. Sign in again.");

@@ -17,7 +17,7 @@ describe('AppController', () => {
   describe('root', () => {
     it('should return API metadata', () => {
       expect(appController.getRoot()).toEqual({
-        name: 'VenueFlow API',
+        name: 'GoSpots API',
         version: '1.0.0',
         docs: '/docs',
       });

@@ -1,4 +1,4 @@
-# Creates venueflow DB user + database, runs Prisma migrations.
+# Creates GoSpots DB user + database, runs Prisma migrations.
 #
 # From repo root (interactive):
 #   pnpm db:setup
@@ -22,7 +22,7 @@ $repoRoot = Split-Path $PSScriptRoot -Parent
 $pgHost = "127.0.0.1"
 
 Write-Host ""
-Write-Host "VenueFlow database setup" -ForegroundColor Cyan
+Write-Host "GoSpots database setup" -ForegroundColor Cyan
 Write-Host "Uses PostgreSQL superuser: postgres (password from install)"
 Write-Host ""
 
@@ -42,25 +42,25 @@ if ($LASTEXITCODE -ne 0) {
   throw "Cannot connect as postgres. Wrong password? Set: `$env:POSTGRES_PASSWORD = 'your_password'"
 }
 
-Write-Host "Creating venueflow role..." -ForegroundColor Yellow
-$createRole = "DO `$`$ BEGIN IF NOT EXISTS (SELECT FROM pg_roles WHERE rolname = 'venueflow') THEN CREATE ROLE venueflow WITH LOGIN PASSWORD 'venueflow_dev'; ELSE ALTER ROLE venueflow WITH LOGIN PASSWORD 'venueflow_dev'; END IF; END `$`$;"
+Write-Host "Creating GoSpots role..." -ForegroundColor Yellow
+$createRole = "DO `$`$ BEGIN IF NOT EXISTS (SELECT FROM pg_roles WHERE rolname = 'gospots') THEN CREATE ROLE gospots WITH LOGIN PASSWORD 'gospots_dev'; ELSE ALTER ROLE gospots WITH LOGIN PASSWORD 'gospots_dev'; END IF; END `$`$;"
 & $psql -U postgres -h $pgHost -p 5432 -c $createRole 2>&1 | Out-Host
 
-$dbExists = & $psql -U postgres -h $pgHost -p 5432 -tAc "SELECT 1 FROM pg_database WHERE datname='venueflow'" 2>$null
+$dbExists = & $psql -U postgres -h $pgHost -p 5432 -tAc "SELECT 1 FROM pg_database WHERE datname='gospots'" 2>$null
 if ($LASTEXITCODE -ne 0 -or "$dbExists".Trim() -ne "1") {
-  Write-Host "Creating venueflow database..." -ForegroundColor Yellow
-  & $psql -U postgres -h $pgHost -p 5432 -c "CREATE DATABASE venueflow OWNER venueflow;" 2>&1 | Out-Host
+  Write-Host "Creating GoSpots database..." -ForegroundColor Yellow
+  & $psql -U postgres -h $pgHost -p 5432 -c "CREATE DATABASE gospots OWNER gospots;" 2>&1 | Out-Host
 }
 
 Remove-Item Env:PGPASSWORD -ErrorAction SilentlyContinue
 
-Write-Host "Verifying venueflow login..." -ForegroundColor Yellow
-$env:PGPASSWORD = "venueflow_dev"
-$vf = & $psql -U venueflow -h $pgHost -d venueflow -tAc "SELECT 1" 2>&1
+Write-Host "Verifying GoSpots login..." -ForegroundColor Yellow
+$env:PGPASSWORD = "gospots_dev"
+$vf = & $psql -U gospots -h $pgHost -d gospots -tAc "SELECT 1" 2>&1
 Remove-Item Env:PGPASSWORD -ErrorAction SilentlyContinue
 if ($LASTEXITCODE -ne 0) {
   Write-Host $vf
-  throw "venueflow user still cannot connect."
+  throw "GoSpots user still cannot connect."
 }
 
 Write-Host "Running Prisma migrations..." -ForegroundColor Yellow

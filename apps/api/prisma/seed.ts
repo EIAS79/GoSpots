@@ -4,7 +4,7 @@ import argon2 from "argon2";
 const prisma = new PrismaClient();
 
 async function main() {
-  const adminEmail = "admin@venueflow.local";
+  const adminEmail = "admin@gospots.local";
   const adminPassword = "ChangeMe123!"; // change after first login
 
   const existing = await prisma.user.findUnique({ where: { email: adminEmail } });

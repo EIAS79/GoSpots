@@ -58,7 +58,7 @@ export function Navbar() {
             </div>
           </div>
           <span className="text-sm font-semibold tracking-tight">
-            VenueFlow
+            GoSpots
           </span>
         </Link>
 

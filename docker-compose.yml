@@ -1,16 +1,16 @@
 services:
   postgres:
     image: postgres:16-alpine
-    container_name: venueflow-postgres
+    container_name: gospots-postgres
     restart: unless-stopped
     environment:
-      POSTGRES_USER: venueflow
-      POSTGRES_PASSWORD: venueflow_dev
-      POSTGRES_DB: venueflow
+      POSTGRES_USER: gospots
+      POSTGRES_PASSWORD: gospots_dev
+      POSTGRES_DB: gospots
     ports:
       - "5432:5432"
     volumes:
-      - venueflow_pg_data:/var/lib/postgresql/data
+      - gospots_pg_data:/var/lib/postgresql/data
 
 volumes:
-  venueflow_pg_data:
+  gospots_pg_data:

@@ -1,0 +1,5 @@
+CREATE ROLE gospots WITH LOGIN PASSWORD 'gospots_dev';
+
+CREATE DATABASE gospots OWNER gospots;
+
+GRANT ALL PRIVILEGES ON DATABASE gospots TO gospots;

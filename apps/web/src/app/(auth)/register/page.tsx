@@ -190,7 +190,7 @@ export default function RegisterPage() {
           </div>
         </Field>
 
-        <Field label="Public URL" hint={`venueflow.app/${effectiveSlug || "your-venue"}`}>
+        <Field label="Public URL" hint={`gospots.app/${effectiveSlug || "your-venue"}`}>
           <input
             value={shopSlug}
             onChange={(e) => {

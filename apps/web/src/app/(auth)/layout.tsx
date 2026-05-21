@@ -17,7 +17,7 @@ export default function AuthLayout({ children }: { children: ReactNode }) {
             V
           </span>
         </span>
-        VenueFlow
+        GoSpots
       </Link>
 
       {children}

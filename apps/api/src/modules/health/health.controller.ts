@@ -11,7 +11,7 @@ export class HealthController {
   check() {
     return {
       status: 'ok',
-      service: 'venueflow-api',
+      service: 'gospots-api',
       timestamp: new Date().toISOString(),
     };
   }

@@ -1,4 +1,4 @@
-export const VENUE_PATH_STORAGE_KEY = "venueflow.venuePath";
+export const VENUE_PATH_STORAGE_KEY = "gospots.venuePath";
 
 export function setStoredVenuePath(venuePath: string | null) {
   if (typeof window === "undefined") return;

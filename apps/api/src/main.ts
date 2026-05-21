@@ -57,7 +57,7 @@ async function bootstrap() {
 
   if (config.get("NODE_ENV") !== "production") {
     const swaggerConfig = new DocumentBuilder()
-      .setTitle("VenueFlow API")
+      .setTitle("GoSpots API")
       .setDescription("Gaming & billiard center management SaaS")
       .setVersion("1.0")
       .build();

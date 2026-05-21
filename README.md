@@ -1,6 +1,8 @@
-# VenueFlow
+# GoSpots
 
 Multi-tenant SaaS for gaming venues, dining reservations, menu orders, and finance.
+
+(Rebranded from VenueFlow — GitHub repo may still be named `VenueFlow` until you rename it.)
 
 ## Stack
 
@@ -21,16 +23,12 @@ Copy env templates:
 - `apps/api/.env.example` → `apps/api/.env`
 - `apps/web/.env.example` → `apps/web/.env.local`
 
-## Production preview (Vercel)
+## Production
 
-**New to deploy?** Follow **[docs/START-HERE.md](docs/START-HERE.md)** step by step.
+Live stack: **Vercel** (web) + **Render** (API) + **Neon** (DB).
 
-See **[docs/DEPLOYMENT.md](docs/DEPLOYMENT.md)** for:
-
-- Vercel (frontend)
-- Render (API)
-- Neon (database)
-- Environment variables and API proxy setup
+- **[docs/START-HERE.md](docs/START-HERE.md)** — your URLs, env vars, local dev, quick fixes
+- **[docs/DEPLOYMENT.md](docs/DEPLOYMENT.md)** — full deploy reference (first-time setup)
 
 ## Scripts
 

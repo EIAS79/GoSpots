@@ -1,4 +1,4 @@
-# Stops dev servers on VenueFlow ports (3000 = Next, 4000 = Nest)
+# Stops dev servers on GoSpots ports (3000 = Next, 4000 = Nest)
 $ports = 3000, 4000
 
 foreach ($port in $ports) {

@@ -1,7 +1,7 @@
 # Quick dev environment check (run from repo root: pnpm check:dev)
 
 $ok = $true
-Write-Host "`nVenueFlow dev check`n" -ForegroundColor Cyan
+Write-Host "`nGoSpots dev check`n" -ForegroundColor Cyan
 
 # Postgres port
 $pg = Test-NetConnection -ComputerName 127.0.0.1 -Port 5432 -WarningAction SilentlyContinue
@@ -12,16 +12,16 @@ if ($pg.TcpTestSucceeded) {
   $ok = $false
 }
 
-# venueflow user
+# GoSpots user
 $psql = "C:\Program Files\PostgreSQL\17\bin\psql.exe"
 if (Test-Path $psql) {
-  $env:PGPASSWORD = "venueflow_dev"
-  $r = & $psql -U venueflow -h 127.0.0.1 -d venueflow -tAc "SELECT 1" 2>&1
+  $env:PGPASSWORD = "gospots_dev"
+  $r = & $psql -U gospots -h 127.0.0.1 -d gospots -tAc "SELECT 1" 2>&1
   Remove-Item Env:PGPASSWORD -ErrorAction SilentlyContinue
   if ($LASTEXITCODE -eq 0) {
-    Write-Host "[OK] Database user venueflow connects" -ForegroundColor Green
+    Write-Host "[OK] Database user GoSpots connects" -ForegroundColor Green
   } else {
-    Write-Host "[FAIL] venueflow user missing or wrong password — run: pnpm db:setup" -ForegroundColor Red
+    Write-Host "[FAIL] GoSpots user missing or wrong password — run: pnpm db:setup" -ForegroundColor Red
     $ok = $false
   }
 }

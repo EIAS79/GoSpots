@@ -33,7 +33,7 @@ export class RegisterDto {
 }
 
 export class LoginDto {
-  /** Owner: real email · Staff: username@venue-slug.venueflow */
+  /** Owner: real email · Staff: username@venue-slug.gospots */
   @IsString()
   @IsNotEmpty()
   @MaxLength(200)

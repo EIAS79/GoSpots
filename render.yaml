@@ -1,16 +1,16 @@
-# VenueFlow API — deploy from repo root (https://render.com)
+# GoSpots API — deploy from repo root (https://render.com)
 # Web app: deploy apps/web on Vercel (see docs/DEPLOYMENT.md)
 services:
   - type: web
-    name: venueflow-api
+    name: gospots-api
     runtime: node
     plan: free
     rootDir: .
     buildCommand: >-
       npm install -g pnpm@10.12.1 &&
       pnpm install --frozen-lockfile &&
-      pnpm --filter @venueflow/api exec prisma generate &&
-      pnpm --filter @venueflow/api run build
+      pnpm --filter @gospots/api exec prisma generate &&
+      pnpm --filter @gospots/api run build
     startCommand: >-
       cd apps/api &&
       npx prisma migrate deploy &&

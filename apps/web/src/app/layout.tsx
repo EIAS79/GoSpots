@@ -15,10 +15,10 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "VenueFlow — One screen to run your gaming venue",
+  title: "GoSpots — One screen to run your gaming venue",
   description:
-    "VenueFlow is the operating system for billiard halls, gaming lounges, and entertainment centers. Live sessions, automatic billing, staff control, and daily revenue from one realtime dashboard.",
-  metadataBase: new URL("https://venueflow.app"),
+    "GoSpots is the operating system for billiard halls, gaming lounges, and entertainment centers. Live sessions, automatic billing, staff control, and daily revenue from one realtime dashboard.",
+  metadataBase: new URL("https://gospots.app"),
 };
 
 export default function RootLayout({

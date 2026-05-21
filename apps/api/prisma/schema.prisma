@@ -1,4 +1,4 @@
-// VenueFlow — multi-tenant RBAC schema
+// GoSpots — multi-tenant RBAC schema
 generator client {
   provider = "prisma-client-js"
 }
@@ -25,11 +25,11 @@ enum UserAccountType {
 
 model User {
   id            String   @id @default(cuid())
-  email         String   @unique // owner: real email · staff: handle@shop-slug.venueflow
+  email         String   @unique // owner: real email · staff: handle@shop-slug.gospots
   passwordHash  String
   name          String?
   accountType   UserAccountType @default(VENUE_OWNER)
-  staffHandle   String?  // local part before @shop-slug.venueflow
+  staffHandle   String?  // local part before @shop-slug.gospots
   systemRole    SystemRole @default(USER)
   emailVerified Boolean  @default(false)
   /// Set when employee completes one-time activation (owner never sets staff passwords).

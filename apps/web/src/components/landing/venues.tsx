@@ -76,7 +76,7 @@ export function Venues() {
             </span>
             <h2 className="mt-3 text-balance text-3xl font-bold md:text-5xl">
               Discover venues running on{" "}
-              <span className="text-gradient">VenueFlow.</span>
+              <span className="text-gradient">GoSpots.</span>
             </h2>
             <p className="mt-4 text-base text-zinc-400 md:text-lg">
               Check who&apos;s open right now, how busy they are, and reserve your

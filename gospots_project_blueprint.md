@@ -1,4 +1,4 @@
-# VenueFlow / Gaming & Billiard Center Management SaaS  
+# GoSpots / Gaming & Billiard Center Management SaaS  
 ## Full Project Blueprint, Architecture Plan, and Build Roadmap
 
 ---
@@ -34,7 +34,7 @@ The core purpose is:
 
 ### Main Positioning
 
-**VenueFlow is a SaaS platform for billiard and gaming centers that helps owners control live sessions, table usage, billing, staff activity, and daily revenue from one operating screen.**
+**GoSpots is a SaaS platform for billiard and gaming centers that helps owners control live sessions, table usage, billing, staff activity, and daily revenue from one operating screen.**
 
 ### Simple Sales Message
 
@@ -42,7 +42,7 @@ The core purpose is:
 
 ### What the Product Is
 
-VenueFlow is:
+GoSpots is:
 
 - A live operation screen
 - A session timer system
@@ -54,7 +54,7 @@ VenueFlow is:
 
 ### What the Product Is Not
 
-VenueFlow is not:
+GoSpots is not:
 
 - A generic POS
 - A restaurant system
@@ -221,7 +221,7 @@ This causes:
 - No visibility into busy hours
 - No clear resource profitability
 
-VenueFlow solves this by centralizing the operation.
+GoSpots solves this by centralizing the operation.
 
 ---
 
@@ -327,7 +327,7 @@ Good for billiard-focused positioning.
 
 Problem: it sounds too limited to billiards.
 
-### Option 2: VenueFlow
+### Option 2: GoSpots
 
 Better for a wider SaaS product.
 
@@ -342,7 +342,7 @@ It can cover:
 
 ### Recommended Name
 
-**VenueFlow**
+**GoSpots**
 
 Reason:
 
@@ -1107,7 +1107,7 @@ This gives structure without microservice complexity.
 Recommended project structure:
 
 ```text
-venueflow/
+GoSpots/
 │
 ├── app/
 │   ├── (auth)/
@@ -2259,7 +2259,7 @@ Add realtime.
 Use this with Cursor first:
 
 ```text
-We are building a real production SaaS called VenueFlow.
+We are building a real production SaaS called GoSpots.
 
 It is a multi-tenant management system for billiard and gaming centers.
 
@@ -2330,7 +2330,7 @@ Also create docs/architecture.md, docs/database.md, docs/roadmap.md with placeho
 After the structure is created, use this:
 
 ```text
-Now create the first Drizzle database schema for VenueFlow.
+Now create the first Drizzle database schema for GoSpots.
 
 Tables needed:
 - tenants
@@ -2372,7 +2372,7 @@ Rules:
 After schema:
 
 ```text
-Create seed data for VenueFlow.
+Create seed data for GoSpots.
 
 Seed:
 - System admin user
@@ -2560,7 +2560,7 @@ This is serious, modern, manageable, and suitable for building with Cursor.
 
 ## 34. One-Sentence Project Definition
 
-**VenueFlow is a multi-tenant SaaS platform for billiard and gaming venues that manages live resources, session timers, billing, staff activity, subscriptions, and daily revenue from one real-time operation dashboard.**
+**GoSpots is a multi-tenant SaaS platform for billiard and gaming venues that manages live resources, session timers, billing, staff activity, subscriptions, and daily revenue from one real-time operation dashboard.**
 
 ---
 

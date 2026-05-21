@@ -54,7 +54,7 @@ export default function PublicVenuePage() {
       <header className="border-b border-white/10 bg-zinc-950/80 backdrop-blur">
         <div className="mx-auto flex max-w-5xl items-center justify-between px-4 py-4">
           <Link href="/" className="text-sm text-zinc-500 hover:text-zinc-300">
-            ← VenueFlow
+            ← GoSpots
           </Link>
           <span className="text-xs text-zinc-600">{venue.currency}</span>
         </div>

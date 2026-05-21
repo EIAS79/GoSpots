@@ -63,7 +63,7 @@ export function VenueFinder() {
             <span className="h-2.5 w-2.5 rounded-full bg-amber-400/80" />
             <span className="h-2.5 w-2.5 rounded-full bg-emerald-400/80" />
             <span className="ml-3 text-xs text-zinc-500">
-              venueflow.app / play
+              gospots.app / play
             </span>
           </div>
           <div className="flex items-center gap-2 text-xs text-zinc-400">

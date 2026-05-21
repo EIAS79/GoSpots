@@ -191,7 +191,7 @@ const MARKETING_UNLOCKED: Record<SubscriptionTier, Set<MarketingFeatureKey>> = {
 };
 
 export const MARKETING_LABELS: Record<MarketingFeatureKey, string> = {
-  public_listing: "Listed on VenueFlow",
+  public_listing: "Listed on GoSpots",
   venue_profile: "Full public venue page",
   priority_listing: "Boosted search ranking",
   homepage_spotlight: "Homepage featured placement",
@@ -248,7 +248,7 @@ export const PLAN_CATEGORIES: PlanCategory[] = [
     id: "discovery",
     title: "Discovery & promotion",
     description:
-      "How players find you on VenueFlow — separate from dashboard tools. Paid placement, not day-to-day ops.",
+      "How players find you on GoSpots — separate from dashboard tools. Paid placement, not day-to-day ops.",
     kind: "marketing",
     keys: [...MARKETING_FEATURES],
   },

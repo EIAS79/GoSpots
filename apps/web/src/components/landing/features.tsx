@@ -35,7 +35,7 @@ export function Features() {
           </h2>
           <p className="mt-4 text-base text-zinc-400 md:text-lg">
             From the moment a customer sits down to the second the bill is paid
-            — VenueFlow handles it.
+            — GoSpots handles it.
           </p>
         </Reveal>
 

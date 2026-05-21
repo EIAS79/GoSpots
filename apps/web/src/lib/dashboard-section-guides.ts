@@ -59,7 +59,7 @@ export const DASHBOARD_SECTION_GUIDES = {
   subscription: {
     title: "Subscription & plan",
     description:
-      "Your VenueFlow plan controls features, staff seats, and trial access. Compare tiers before upgrading or downgrading.",
+      "Your GoSpots plan controls features, staff seats, and trial access. Compare tiers before upgrading or downgrading.",
     capabilities: [
       "See your current plan, trial days left, and unlocked features.",
       "Compare Starter, Standard, Pro, and marketing add-ons.",
