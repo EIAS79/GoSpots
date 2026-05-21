@@ -1,5 +1,22 @@
 -- Safe patches when migrate history is out of sync (run: pnpm exec prisma db execute --file prisma/pending-patches.sql)
 
+DO $$ BEGIN
+  CREATE TYPE "UserAccountType" AS ENUM ('VENUE_OWNER', 'VENUE_STAFF');
+EXCEPTION
+  WHEN duplicate_object THEN null;
+END $$;
+
+ALTER TABLE "User" ADD COLUMN IF NOT EXISTS "accountType" "UserAccountType" NOT NULL DEFAULT 'VENUE_OWNER';
+ALTER TABLE "User" ADD COLUMN IF NOT EXISTS "staffHandle" TEXT;
+ALTER TABLE "User" ADD COLUMN IF NOT EXISTS "passwordSetAt" TIMESTAMP(3);
+CREATE INDEX IF NOT EXISTS "User_accountType_idx" ON "User"("accountType");
+
+DO $$ BEGIN
+  CREATE TYPE "ReservationStatus" AS ENUM ('PENDING', 'CONFIRMED', 'CHECKED_IN', 'COMPLETED', 'CANCELED', 'NO_SHOW');
+EXCEPTION
+  WHEN duplicate_object THEN null;
+END $$;
+
 ALTER TABLE "Shop" ADD COLUMN IF NOT EXISTS "displayName" TEXT;
 ALTER TABLE "Shop" ADD COLUMN IF NOT EXISTS "country" TEXT;
 

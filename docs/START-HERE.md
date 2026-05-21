@@ -76,6 +76,39 @@ pnpm dev
 
 ---
 
+## Register: `accountType` / Internal server error
+
+Schema was ahead of Neon (migrations marked applied but columns missing). **Fixed with:**
+
+```powershell
+pnpm db:sync
+```
+
+(`apps/api/.env` = same Neon URL as Render.) Then try **Register** again.
+
+---
+
+## Render: `P3009` failed migration
+
+```powershell
+pnpm db:fix-migration
+pnpm db:sync
+```
+
+Then **Manual Deploy** on Render.
+
+---
+
+## Render deploy: build OK, start exits 1 (other)
+
+1. **Logs** above `Exited with status 1` for the error.
+2. `DATABASE_URL` on Render = Neon URL with `?sslmode=require`.
+3. `JWT_ACCESS_SECRET`, `COOKIE_SECURE=true`, `COOKIE_SAME_SITE=lax`.
+4. Start: `cd apps/api && npx prisma migrate deploy && node dist/main.js`
+5. **Manual Deploy**.
+
+---
+
 ## Broken?
 
 | Symptom | Fix |

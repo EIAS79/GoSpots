@@ -6,6 +6,8 @@
   "scripts": {
     "kill-ports": "powershell -NoProfile -ExecutionPolicy Bypass -File ./scripts/kill-ports.ps1",
     "db:setup": "powershell -NoProfile -ExecutionPolicy Bypass -File ./scripts/setup-gospots-db.ps1",
+    "db:fix-migration": "powershell -NoProfile -ExecutionPolicy Bypass -File ./scripts/fix-neon-migration.ps1",
+    "db:sync": "powershell -NoProfile -ExecutionPolicy Bypass -File ./scripts/sync-neon-schema.ps1",
     "check:dev": "powershell -NoProfile -ExecutionPolicy Bypass -File ./scripts/check-dev.ps1",
     "dev": "pnpm kill-ports && concurrently -n api,web -c cyan,magenta \"pnpm dev:api\" \"pnpm dev:web\"",
     "dev:api": "pnpm --filter @gospots/api run start:dev",
