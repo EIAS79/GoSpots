@@ -5,6 +5,7 @@ import Image from "next/image";
 import Link from "next/link";
 import { useParams } from "next/navigation";
 import { useEffect, useState } from "react";
+import { GoSpotsLogo } from "@/components/brand/gospots-logo";
 import { fetchPublicVenue, type PublicVenueDetail } from "@/lib/shop-settings-client";
 import { resolveMediaUrl } from "@/lib/media-url";
 import { formatVenueLocation, venueMarketingName } from "@/lib/venue-display";
@@ -53,9 +54,7 @@ export default function PublicVenuePage() {
     <div className="min-h-screen bg-zinc-950 text-zinc-100">
       <header className="border-b border-white/10 bg-zinc-950/80 backdrop-blur">
         <div className="mx-auto flex max-w-5xl items-center justify-between px-4 py-4">
-          <Link href="/" className="text-sm text-zinc-500 hover:text-zinc-300">
-            ← GoSpots
-          </Link>
+          <GoSpotsLogo href="/" size="sm" showTagline />
           <span className="text-xs text-zinc-600">{venue.currency}</span>
         </div>
       </header>

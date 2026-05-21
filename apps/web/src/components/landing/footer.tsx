@@ -1,4 +1,6 @@
 import Link from "next/link";
+import { GoSpotsLogo } from "@/components/brand/gospots-logo";
+import { BRAND_TAGLINE } from "@/lib/brand";
 
 function IconX(props: React.SVGProps<SVGSVGElement>) {
   return (
@@ -59,20 +61,10 @@ export function Footer() {
       <div className="mx-auto max-w-7xl px-4 py-14 md:px-8">
         <div className="grid gap-10 md:grid-cols-5">
           <div className="md:col-span-2">
-            <div className="flex items-center gap-2">
-              <div className="relative h-8 w-8 overflow-hidden rounded-lg bg-gradient-to-br from-emerald-400 via-cyan-400 to-violet-400">
-                <div className="absolute inset-[2px] rounded-md bg-zinc-950" />
-                <div className="absolute inset-0 grid place-items-center text-sm font-bold text-emerald-300">
-                  V
-                </div>
-              </div>
-              <span className="text-sm font-semibold text-white">
-                GoSpots
-              </span>
-            </div>
+            <GoSpotsLogo href="/" size="md" showTagline />
             <p className="mt-4 max-w-xs text-sm text-zinc-400">
-              The realtime operating system for billiard halls, gaming lounges,
-              and entertainment centers.
+              {BRAND_TAGLINE} — billiard halls, gaming lounges, and entertainment
+              venues near you. Owners run nights from one realtime dashboard.
             </p>
             <div className="mt-5 flex items-center gap-2">
               {[IconX, IconGithub, IconLinkedin].map((Icon, i) => (

@@ -15,10 +15,14 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "GoSpots — One screen to run your gaming venue",
+  title: "GoSpots — Find your next spot",
   description:
-    "GoSpots is the operating system for billiard halls, gaming lounges, and entertainment centers. Live sessions, automatic billing, staff control, and daily revenue from one realtime dashboard.",
-  metadataBase: new URL("https://gospots.app"),
+    "GoSpots helps players find billiard halls, gaming lounges, and entertainment venues — and gives owners one screen to run sessions, billing, and staff.",
+  metadataBase: new URL("https://gospots.vercel.app"),
+  icons: {
+    icon: "/gospots.png",
+    apple: "/gospots.png",
+  },
 };
 
 export default function RootLayout({

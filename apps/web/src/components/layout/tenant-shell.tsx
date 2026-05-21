@@ -31,6 +31,7 @@ import {
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { useEffect, useState, type ReactNode } from "react";
+import { GoSpotsLogo } from "@/components/brand/gospots-logo";
 import { NotificationHeaderActions } from "@/components/notifications/notification-header-actions";
 import { NotificationToasts } from "@/components/notifications/notification-toasts";
 import { fetchNotificationUnreadCount } from "@/lib/notifications-client";
@@ -213,17 +214,9 @@ export function TenantShell({ children }: { children: ReactNode }) {
   return (
     <div className="flex h-screen max-h-screen min-h-0 w-full max-w-[100vw] overflow-hidden bg-[var(--color-background)] text-zinc-100">
       <aside className="hidden h-full min-h-0 w-64 shrink-0 flex-col border-r border-white/5 bg-zinc-950/60 backdrop-blur md:flex">
-        <Link
-          href="/"
-          className="flex shrink-0 items-center gap-2 border-b border-white/5 px-5 py-4"
-        >
-          <span className="grid h-8 w-8 place-items-center overflow-hidden rounded-md bg-gradient-to-br from-emerald-400 via-amber-400 to-rose-400">
-            <span className="grid h-[calc(100%-2px)] w-[calc(100%-2px)] place-items-center rounded-[5px] bg-zinc-950 text-sm font-bold text-emerald-300">
-              V
-            </span>
-          </span>
-          <span className="text-sm font-semibold tracking-tight">GoSpots</span>
-        </Link>
+        <div className="shrink-0 border-b border-white/5 px-5 py-4">
+          <GoSpotsLogo href="/" size="md" />
+        </div>
 
         {primaryMembership && (
           <div className="shrink-0 border-b border-white/5 px-5 py-4">

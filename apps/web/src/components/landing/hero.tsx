@@ -24,9 +24,9 @@ const copy: Record<
   }
 > = {
   play: {
-    badge: "Find your next game · 240 venues live now",
-    titleA: "Find your spot.",
-    titleB: "Reserve in seconds.",
+    badge: "Find your next spot · 240 venues live now",
+    titleA: "Find your next",
+    titleB: "spot.",
     subtitle: (
       <>
         Billiard halls, gaming lounges, and esports cafés near you —{" "}
@@ -38,7 +38,7 @@ const copy: Record<
     accent: "cyan",
   },
   manage: {
-    badge: "Realtime ops for billiard & gaming venues",
+    badge: "GoSpots for venue owners",
     titleA: "Run your venue",
     titleB: "from one screen.",
     subtitle: (

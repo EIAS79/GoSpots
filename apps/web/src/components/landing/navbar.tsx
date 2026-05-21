@@ -10,6 +10,7 @@ import {
 import { Crown, Gamepad2, Menu, X } from "lucide-react";
 import Link from "next/link";
 import { useState } from "react";
+import { GoSpotsLogo } from "@/components/brand/gospots-logo";
 import { cn } from "@/lib/cn";
 import { navLinks } from "@/lib/mock-data";
 import { useMode } from "./mode-context";
@@ -50,17 +51,8 @@ export function Navbar() {
       className="fixed inset-x-0 top-0 z-50 border-b"
     >
       <div className="mx-auto flex max-w-7xl items-center justify-between px-4 py-3 md:px-8">
-        <Link href="/" className="group flex items-center gap-2">
-          <div className="relative h-8 w-8 overflow-hidden rounded-lg bg-gradient-to-br from-emerald-400 via-amber-400 to-rose-400">
-            <div className="absolute inset-[2px] rounded-md bg-zinc-950" />
-            <div className="absolute inset-0 grid place-items-center text-sm font-bold text-emerald-300">
-              V
-            </div>
-          </div>
-          <span className="text-sm font-semibold tracking-tight">
-            GoSpots
-          </span>
-        </Link>
+        <GoSpotsLogo href="/" size="md" showTagline className="hidden sm:inline-flex" />
+        <GoSpotsLogo href="/" size="md" className="sm:hidden" />
 
         <nav className="hidden items-center gap-1 rounded-full border border-white/10 bg-white/5 px-2 py-1 backdrop-blur md:flex">
           {visibleLinks.map((link) => (
