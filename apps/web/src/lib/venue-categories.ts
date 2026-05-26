@@ -1,0 +1,21 @@
+/** Mirrors API presets — used for filters before fetch */
+export const VENUE_CATEGORY_PRESETS = [
+  { slug: "gaming-center", name: "Gaming center", color: "#22d3ee" },
+  { slug: "gaming-lounge", name: "Gaming lounge", color: "#38bdf8" },
+  { slug: "esports-cafe", name: "Esports café", color: "#818cf8" },
+  { slug: "billiard-hall", name: "Billiard hall", color: "#34d399" },
+  { slug: "bowling", name: "Bowling", color: "#a78bfa" },
+  { slug: "arcade", name: "Arcade", color: "#f472b6" },
+  { slug: "club", name: "Club", color: "#e879f9" },
+  { slug: "night-club", name: "Night club", color: "#c084fc" },
+  { slug: "lounge", name: "Lounge", color: "#fbbf24" },
+  { slug: "bar", name: "Bar", color: "#fb923c" },
+  { slug: "restaurant", name: "Restaurant", color: "#f87171" },
+  { slug: "cafe", name: "Café", color: "#fcd34d" },
+  { slug: "pub", name: "Pub", color: "#f59e0b" },
+  { slug: "sports-bar", name: "Sports bar", color: "#4ade80" },
+  { slug: "karaoke", name: "Karaoke", color: "#f472b6" },
+  { slug: "cinema", name: "Cinema & entertainment", color: "#60a5fa" },
+  { slug: "family-entertainment", name: "Family entertainment", color: "#2dd4bf" },
+  { slug: "vr-experience", name: "VR experience", color: "#a855f7" },
+] as const;

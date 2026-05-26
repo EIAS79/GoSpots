@@ -4,12 +4,19 @@ import {
   Injectable,
   NotFoundException,
 } from "@nestjs/common";
+import { TagType } from "@prisma/client";
 import {
   isSupportedCurrency,
   isSupportedLocale,
   SUPPORTED_CURRENCIES,
   SUPPORTED_LOCALES,
 } from "../../common/locale-currency";
+import {
+  slugifyVenueCategory,
+  venueCategoryPreset,
+  VENUE_CATEGORY_PRESETS,
+} from "../../common/venue-categories";
+import { SyncVenueCategoriesDto } from "./dto/shop-settings.dto";
 import { requireShopId } from "../../common/tenant";
 import type { JwtAccessPayload } from "../auth/auth.service";
 import { AuditService } from "../audit/audit.service";
@@ -59,10 +66,17 @@ export class ShopService {
       select: this.shopProfileSelect(),
     });
     if (!shop) throw new NotFoundException("Venue not found.");
+    const venueCategories = await this.prisma.shopTag.findMany({
+      where: { shopId, type: TagType.VENUE_CATEGORY },
+      orderBy: [{ sortOrder: "asc" }, { name: "asc" }],
+      select: { id: true, name: true, slug: true, color: true },
+    });
     return {
       shop,
       locales: SUPPORTED_LOCALES,
       currencies: SUPPORTED_CURRENCIES,
+      venueCategoryPresets: VENUE_CATEGORY_PRESETS,
+      venueCategories,
     };
   }
 
@@ -165,11 +179,76 @@ export class ShopService {
       });
     }
 
-    return {
-      shop,
-      locales: SUPPORTED_LOCALES,
-      currencies: SUPPORTED_CURRENCIES,
-    };
+    return this.getSettings(actor);
+  }
+
+  async syncVenueCategories(actor: JwtAccessPayload, dto: SyncVenueCategoriesDto) {
+    this.assertOwnerOrManager(actor);
+    const shopId = requireShopId(actor);
+
+    const desired: { slug: string; name: string; color: string | null }[] = [];
+    for (const slug of dto.presetSlugs ?? []) {
+      const preset = venueCategoryPreset(slug);
+      if (!preset) continue;
+      desired.push({ slug: preset.slug, name: preset.name, color: preset.color });
+    }
+    for (const c of dto.custom ?? []) {
+      const name = c.name.trim();
+      if (!name) continue;
+      let slug = slugifyVenueCategory(name);
+      if (!slug) continue;
+      if (desired.some((d) => d.slug === slug)) {
+        slug = `${slug}-${Date.now().toString(36).slice(-4)}`;
+      }
+      desired.push({ slug, name, color: c.color?.trim() || null });
+    }
+
+    const existing = await this.prisma.shopTag.findMany({
+      where: { shopId, type: TagType.VENUE_CATEGORY },
+    });
+    const desiredSlugs = new Set(desired.map((d) => d.slug));
+
+    for (const tag of existing) {
+      if (!desiredSlugs.has(tag.slug)) {
+        await this.prisma.shopTag.delete({ where: { id: tag.id } });
+      }
+    }
+
+    let sort = 0;
+    for (const d of desired) {
+      const hit = existing.find((t) => t.slug === d.slug);
+      if (hit) {
+        await this.prisma.shopTag.update({
+          where: { id: hit.id },
+          data: {
+            name: d.name,
+            color: d.color,
+            sortOrder: sort++,
+            type: TagType.VENUE_CATEGORY,
+          },
+        });
+      } else {
+        await this.prisma.shopTag.create({
+          data: {
+            shopId,
+            name: d.name,
+            slug: d.slug,
+            color: d.color,
+            type: TagType.VENUE_CATEGORY,
+            sortOrder: sort++,
+          },
+        });
+      }
+    }
+
+    await this.audit.record(actor, {
+      section: "venue",
+      action: "venue.categories.sync",
+      summary: `Venue categories: ${desired.map((d) => d.name).join(", ") || "none"}`,
+      meta: { slugs: [...desiredSlugs] },
+    });
+
+    return this.getSettings(actor);
   }
 
   async convertCurrency(actor: JwtAccessPayload, dto: ConvertCurrencyDto) {
@@ -202,9 +281,48 @@ export class ShopService {
   }
 
   /** Published venues for marketing / player browse */
-  async listPublicVenues() {
+  async listPublicVenues(query?: {
+    q?: string;
+    city?: string;
+    country?: string;
+    categories?: string[];
+  }) {
+    const q = query?.q?.trim();
+    const city = query?.city?.trim();
+    const country = query?.country?.trim();
+    const categorySlugs = (query?.categories ?? []).filter(Boolean);
+
+    const and: Record<string, unknown>[] = [{ isPublished: true }];
+    if (q) {
+      and.push({
+        OR: [
+          { name: { contains: q, mode: "insensitive" } },
+          { displayName: { contains: q, mode: "insensitive" } },
+          { city: { contains: q, mode: "insensitive" } },
+          { country: { contains: q, mode: "insensitive" } },
+          { description: { contains: q, mode: "insensitive" } },
+        ],
+      });
+    }
+    if (city) {
+      and.push({ city: { contains: city, mode: "insensitive" } });
+    }
+    if (country) {
+      and.push({ country: { contains: country, mode: "insensitive" } });
+    }
+    if (categorySlugs.length) {
+      and.push({
+        tags: {
+          some: {
+            type: TagType.VENUE_CATEGORY,
+            slug: { in: categorySlugs },
+          },
+        },
+      });
+    }
+
     return this.prisma.shop.findMany({
-      where: { isPublished: true },
+      where: { AND: and },
       select: {
         id: true,
         slug: true,
@@ -216,8 +334,13 @@ export class ShopService {
         coverImage: true,
         locale: true,
         currency: true,
+        tags: {
+          where: { type: TagType.VENUE_CATEGORY },
+          orderBy: { sortOrder: "asc" },
+          select: { id: true, name: true, slug: true, color: true },
+        },
       },
-      orderBy: { name: "asc" },
+      orderBy: [{ country: "asc" }, { city: "asc" }, { name: "asc" }],
     });
   }
 
@@ -247,6 +370,11 @@ export class ShopService {
             caption: true,
             sortOrder: true,
           },
+        },
+        tags: {
+          where: { type: TagType.VENUE_CATEGORY },
+          orderBy: { sortOrder: "asc" },
+          select: { id: true, name: true, slug: true, color: true },
         },
       },
     });

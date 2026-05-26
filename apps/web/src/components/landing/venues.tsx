@@ -75,9 +75,16 @@ export function Venues() {
               For players
             </span>
             <h2 className="mt-3 text-balance text-3xl font-bold md:text-5xl">
-              Discover venues running on{" "}
-              <span className="text-gradient">Find your next spot.</span>
+              Discover venues on{" "}
+              <span className="text-gradient">GoSpots</span>
             </h2>
+            <Link
+              href="/venues"
+              className="mt-3 inline-flex items-center gap-2 text-sm font-medium text-amber-300 hover:text-amber-200"
+            >
+              Explore all venues — find your next spot{" "}
+              <ArrowRight size={16} />
+            </Link>
             <p className="mt-4 text-base text-zinc-400 md:text-lg">
               Check who&apos;s open right now, how busy they are, and reserve your
               table before you head out. Prices are shown in each venue&apos;s
@@ -86,7 +93,7 @@ export function Venues() {
           </div>
           <Magnetic strength={0.25}>
             <Link
-              href="#"
+              href="/venues"
               className="group inline-flex items-center gap-2 rounded-full border border-violet-400/30 bg-violet-500/10 px-4 py-2 text-sm font-medium text-violet-200 backdrop-blur hover:bg-violet-500/20"
             >
               Browse the full map

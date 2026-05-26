@@ -5,6 +5,7 @@ import { JwtAuthGuard } from "../auth/guards/jwt-auth.guard";
 import type { JwtAccessPayload } from "../auth/auth.service";
 import {
   ConvertCurrencyDto,
+  SyncVenueCategoriesDto,
   UpdateShopSettingsDto,
 } from "./dto/shop-settings.dto";
 import { ShopService } from "./shop.service";
@@ -26,6 +27,14 @@ export class ShopController {
     @Body() dto: UpdateShopSettingsDto,
   ) {
     return this.shop.updateSettings(user, dto);
+  }
+
+  @Patch("venue-categories")
+  syncVenueCategories(
+    @CurrentUser() user: JwtAccessPayload,
+    @Body() dto: SyncVenueCategoriesDto,
+  ) {
+    return this.shop.syncVenueCategories(user, dto);
   }
 
   @Get("currencies")

@@ -9,7 +9,9 @@ import {
   Max,
   MaxLength,
   Min,
+  ValidateNested,
 } from "class-validator";
+import { Type } from "class-transformer";
 import {
   SUPPORTED_CURRENCIES,
   SUPPORTED_LOCALES,
@@ -80,6 +82,30 @@ export class UpdateShopSettingsDto {
   @Max(10)
   floorCount?: number;
 }
+export class CustomVenueCategoryDto {
+  @IsString()
+  @MaxLength(48)
+  name!: string;
+
+  @IsOptional()
+  @IsString()
+  @MaxLength(24)
+  color?: string;
+}
+
+export class SyncVenueCategoriesDto {
+  /** Preset slugs from VENUE_CATEGORY_PRESETS */
+  @IsArray()
+  @IsString({ each: true })
+  presetSlugs!: string[];
+
+  @IsOptional()
+  @IsArray()
+  @ValidateNested({ each: true })
+  @Type(() => CustomVenueCategoryDto)
+  custom?: CustomVenueCategoryDto[];
+}
+
 export class ConvertCurrencyDto {
   @IsNumber()
   @Min(0)

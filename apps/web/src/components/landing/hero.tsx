@@ -33,7 +33,7 @@ const copy: Record<
         <span className="text-zinc-200">live availability, no waiting.</span>
       </>
     ),
-    ctaPrimary: { label: "Find a venue near you", href: "#venues" },
+    ctaPrimary: { label: "Find a venue near you", href: "/venues" },
     ctaSecondary: { label: "I run a venue", href: "/dashboard" },
     accent: "cyan",
   },
@@ -48,7 +48,7 @@ const copy: Record<
       </>
     ),
     ctaPrimary: { label: "Start your venue free", href: "/dashboard" },
-    ctaSecondary: { label: "Browse venues to play", href: "#venues" },
+    ctaSecondary: { label: "Browse venues to play", href: "/venues" },
     accent: "emerald",
   },
 };

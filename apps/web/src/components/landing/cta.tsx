@@ -72,7 +72,7 @@ export function Cta() {
               </Magnetic>
               <Magnetic strength={0.22}>
                 <Link
-                  href="#venues"
+                  href="/venues"
                   className="rounded-full border border-white/20 bg-white/5 px-7 py-3.5 text-sm font-medium text-white backdrop-blur transition hover:bg-white/10"
                 >
                   I&apos;m a player — find a venue

@@ -39,8 +39,8 @@ const sections = [
   {
     title: "For players",
     links: [
-      { label: "Find a venue", href: "#venues" },
-      { label: "Reservations", href: "#venues" },
+      { label: "Find a venue", href: "/venues" },
+      { label: "Reservations", href: "/venues" },
       { label: "Loyalty", href: "#" },
     ],
   },

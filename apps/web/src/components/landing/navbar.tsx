@@ -85,7 +85,7 @@ export function Navbar() {
                   <Crown size={14} className="text-amber-300" />I own a venue
                 </button>
                 <Link
-                  href="#venues"
+                  href="/venues"
                   className="group relative overflow-hidden rounded-full bg-amber-400 px-4 py-2 text-sm font-semibold text-zinc-950 transition hover:bg-amber-300"
                 >
                   <span className="relative z-10 inline-flex items-center gap-1.5">
@@ -158,7 +158,7 @@ export function Navbar() {
           {isPlay ? (
             <>
               <Link
-                href="#venues"
+                href="/venues"
                 onClick={() => setOpen(false)}
                 className="mt-2 rounded-full bg-amber-400 px-4 py-2 text-center text-sm font-semibold text-zinc-950"
               >

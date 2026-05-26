@@ -12,6 +12,7 @@ import {
   Plus,
 } from "lucide-react";
 import { useEffect, useState } from "react";
+import { VenueCategoriesSection } from "@/components/settings/venue-categories-section";
 import { VenueReloadOverlay } from "@/components/venue/venue-reload-overlay";
 import { cn } from "@/lib/cn";
 import { SUPPORTED_CURRENCIES } from "@/lib/locale-currency";
@@ -226,9 +227,14 @@ export function ShopSettingsPanel() {
               className="rounded border-white/20"
             />
             <Megaphone size={16} className="text-violet-400" />
-            Publish on marketing browse page
+            Publish on{" "}
+            <a href="/venues" className="text-amber-300/90 underline-offset-2 hover:underline">
+              /venues
+            </a>
           </label>
         </section>
+
+        <VenueCategoriesSection />
 
         <section className="rounded-2xl border border-white/10 bg-zinc-900/50 p-5 shadow-lg shadow-black/20">
           <div className="mb-4 flex items-center gap-2 text-violet-300">

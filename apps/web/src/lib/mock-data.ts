@@ -365,7 +365,7 @@ export const faqs: Faq[] = [
 export type NavLink = { label: string; href: string };
 
 export const navLinks: NavLink[] = [
-  { label: "Play", href: "#venues" },
+  { label: "Play", href: "/venues" },
   { label: "For venues", href: "#features" },
   { label: "How it works", href: "#how" },
   { label: "Pricing", href: "#pricing" },

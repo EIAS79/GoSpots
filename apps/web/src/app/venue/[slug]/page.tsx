@@ -74,6 +74,22 @@ export default function PublicVenuePage() {
       </div>
 
       <main className="mx-auto max-w-5xl px-4 py-10">
+        {venue.tags && venue.tags.length > 0 ? (
+          <div className="flex flex-wrap gap-2">
+            {venue.tags.map((t) => (
+              <span
+                key={t.id}
+                className="rounded-full border border-white/15 bg-zinc-900/80 px-3 py-1 text-xs font-medium"
+                style={{
+                  borderColor: t.color ? `${t.color}55` : undefined,
+                  color: t.color ?? "#fde68a",
+                }}
+              >
+                {t.name}
+              </span>
+            ))}
+          </div>
+        ) : null}
         {venue.description ? (
           <p className="max-w-2xl text-base leading-relaxed text-zinc-400">
             {venue.description}

@@ -19,10 +19,6 @@ export const metadata: Metadata = {
   description:
     "GoSpots helps players find billiard halls, gaming lounges, and entertainment venues — and gives owners one screen to run sessions, billing, and staff.",
   metadataBase: new URL("https://gospots.vercel.app"),
-  icons: {
-    icon: "/gospots.png",
-    apple: "/gospots.png",
-  },
 };
 
 export default function RootLayout({

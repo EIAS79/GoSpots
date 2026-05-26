@@ -24,7 +24,7 @@ export function Audience() {
       : "Find a great spot to play, reserve a table, and pay clean — no awkward arguing at the counter.";
   const ctaLabel =
     mode === "owner" ? "Create my venue account" : "Browse venues near me";
-  const ctaHref = mode === "owner" ? "/dashboard" : "#venues";
+  const ctaHref = mode === "owner" ? "/dashboard" : "/venues";
 
   return (
     <section id="how" className="relative py-24">

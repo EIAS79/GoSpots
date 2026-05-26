@@ -18,10 +18,25 @@ export type ShopSettings = {
   floorCount: number;
 };
 
+export type VenueCategoryTag = {
+  id: string;
+  name: string;
+  slug: string;
+  color: string | null;
+};
+
+export type VenueCategoryPreset = {
+  slug: string;
+  name: string;
+  color: string;
+};
+
 export type ShopSettingsResponse = {
   shop: ShopSettings;
   locales: { code: string; label: string }[];
   currencies: { code: string; label: string; symbol: string }[];
+  venueCategoryPresets?: VenueCategoryPreset[];
+  venueCategories?: VenueCategoryTag[];
 };
 
 export function fetchShopSettings() {
@@ -76,6 +91,7 @@ export type PublicVenue = {
   coverImage: string | null;
   locale: string;
   currency: string;
+  tags?: VenueCategoryTag[];
 };
 
 export type PublicVenueDetail = PublicVenue & {
@@ -90,8 +106,31 @@ export type PublicVenueDetail = PublicVenue & {
   }[];
 };
 
-export function fetchPublicVenues() {
-  return api<PublicVenue[]>("/public/venues");
+export function syncVenueCategories(body: {
+  presetSlugs: string[];
+  custom?: { name: string; color?: string }[];
+}) {
+  return api<ShopSettingsResponse>("/shop/venue-categories", {
+    method: "PATCH",
+    body: JSON.stringify(body),
+  });
+}
+
+export function fetchPublicVenues(params?: {
+  q?: string;
+  city?: string;
+  country?: string;
+  categories?: string[];
+}) {
+  const sp = new URLSearchParams();
+  if (params?.q?.trim()) sp.set("q", params.q.trim());
+  if (params?.city?.trim()) sp.set("city", params.city.trim());
+  if (params?.country?.trim()) sp.set("country", params.country.trim());
+  if (params?.categories?.length) {
+    sp.set("categories", params.categories.join(","));
+  }
+  const qs = sp.toString();
+  return api<PublicVenue[]>(`/public/venues${qs ? `?${qs}` : ""}`);
 }
 
 export function fetchPublicVenue(slug: string) {
