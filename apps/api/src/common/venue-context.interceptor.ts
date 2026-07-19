@@ -3,13 +3,13 @@ import {
   ExecutionContext,
   Injectable,
   NestInterceptor,
-} from "@nestjs/common";
-import { Observable } from "rxjs";
-import { parseDashboardPath } from "./dashboard-path";
-import type { JwtAccessPayload } from "../modules/auth/auth.service";
-import { PrismaService } from "../prisma/prisma.service";
+} from '@nestjs/common';
+import { Observable } from 'rxjs';
+import { parseDashboardPath } from './dashboard-path';
+import type { JwtAccessPayload } from '../modules/auth/auth.service';
+import { PrismaService } from '../prisma/prisma.service';
 
-export const VENUE_PATH_HEADER = "x-venue-path";
+export const VENUE_PATH_HEADER = 'x-venue-path';
 
 @Injectable()
 export class VenueContextInterceptor implements NestInterceptor {
@@ -48,10 +48,10 @@ export class VenueContextInterceptor implements NestInterceptor {
     });
     if (!shop) return;
 
-    if (user.sysRole === "SUPER_ADMIN") {
+    if (user.sysRole === 'SUPER_ADMIN') {
       user.shopId = shop.id;
-      user.shopRole = user.shopRole ?? "OWNER";
-      user.perms = user.perms ?? "*";
+      user.shopRole = user.shopRole ?? 'OWNER';
+      user.perms = user.perms ?? '*';
       user.tier = shop.subscription?.tier;
       return;
     }

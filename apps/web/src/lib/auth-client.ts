@@ -33,6 +33,8 @@ export interface AuthUser {
         tier: SubscriptionTier;
         status: string;
         trialEndsAt: string | null;
+        packId?: string | null;
+        addOns?: string | null;
       } | null;
     };
   }[];
@@ -43,10 +45,35 @@ export type AuthSessionResponse = {
   dashboardPath: string | null;
 };
 
-export function login(login: string, password: string) {
+export function login(
+  login: string,
+  password: string,
+  accountType?: UserAccountType,
+) {
   return api<AuthSessionResponse>("/auth/login", {
     method: "POST",
-    body: JSON.stringify({ login, password }),
+    body: JSON.stringify({ login, password, accountType }),
+  });
+}
+
+export function requestOwnerPasswordReset(email: string) {
+  return api<{ ok: boolean; message: string }>("/auth/forgot-password", {
+    method: "POST",
+    body: JSON.stringify({ email }),
+  });
+}
+
+export function requestStaffPasswordReset(venueName: string, loginId: string) {
+  return api<{ ok: boolean; message: string }>("/auth/staff/forgot-password", {
+    method: "POST",
+    body: JSON.stringify({ venueName, loginId }),
+  });
+}
+
+export function resetOwnerPassword(token: string, password: string) {
+  return api<{ ok: boolean }>("/auth/reset-password", {
+    method: "POST",
+    body: JSON.stringify({ token, password }),
   });
 }
 
@@ -56,6 +83,12 @@ export function register(input: {
   name?: string;
   shopSlug?: string;
   shopName?: string;
+  packId?: string;
+  addOns?: string[];
+  venueType?: string;
+  city?: string;
+  country?: string;
+  phone?: string;
 }) {
   return api<AuthSessionResponse>("/auth/register", {
     method: "POST",
@@ -74,6 +107,50 @@ export function refresh() {
 export function fetchMe() {
   return api<AuthUser & { dashboardPath: string | null }>("/auth/me", {
     method: "GET",
+  });
+}
+
+export function createVenue(input: { shopName: string; shopSlug: string }) {
+  return api<{
+    dashboardPath: string;
+    shop: { id: string; slug: string; name: string; dashboardKey: string };
+  }>("/auth/venues", {
+    method: "POST",
+    body: JSON.stringify(input),
+  });
+}
+
+export type LinkableVenue = {
+  id: string;
+  name: string;
+  slug: string;
+  city: string | null;
+  country: string | null;
+};
+
+export function previewLinkVenues(email: string, password: string) {
+  return api<{
+    email: string;
+    sameAccount: boolean;
+    venues: LinkableVenue[];
+    message?: string;
+  }>("/auth/venues/link/preview", {
+    method: "POST",
+    body: JSON.stringify({ email, password }),
+  });
+}
+
+export function linkVenues(input: {
+  email: string;
+  password: string;
+  shopIds: string[];
+}) {
+  return api<{
+    linked: { id: string; name: string; dashboardPath: string }[];
+    dashboardPath: string | null;
+  }>("/auth/venues/link", {
+    method: "POST",
+    body: JSON.stringify(input),
   });
 }
 

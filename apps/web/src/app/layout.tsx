@@ -1,7 +1,8 @@
 import type { Metadata } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
-import { AuroraBackground } from "@/components/effects/aurora-background";
-import { ScrollProgress } from "@/components/effects/scroll-progress";
+import Script from "next/script";
+import { AppProviders } from "@/components/layout/app-providers";
+import { getSiteUrlString } from "@/lib/site-url";
 import "./globals.css";
 
 const geistSans = Geist({
@@ -14,11 +15,47 @@ const geistMono = Geist_Mono({
   subsets: ["latin"],
 });
 
+const siteUrl = getSiteUrlString();
+
 export const metadata: Metadata = {
-  title: "GoSpots — Find your next spot",
+  metadataBase: new URL(siteUrl),
+  title: {
+    default: "GoSpots — live venue operations & discovery",
+    template: "%s · GoSpots",
+  },
   description:
-    "GoSpots helps players find billiard halls, gaming lounges, and entertainment venues — and gives owners one screen to run sessions, billing, and staff.",
-  metadataBase: new URL("https://gospots.vercel.app"),
+    "GoSpots is a private-beta platform for venue operators: one live screen for tables and consoles, session timers, reservations, billing, staff controls, and daily revenue clarity. Players can browse the growing public directory and reserve where venues enable it.",
+  applicationName: "GoSpots",
+  keywords: [
+    "billiard hall software",
+    "gaming lounge POS",
+    "snooker club reservations",
+    "venue session timer",
+    "entertainment venue billing",
+  ],
+  openGraph: {
+    type: "website",
+    locale: "en_US",
+    url: siteUrl,
+    siteName: "GoSpots",
+    title: "GoSpots — live venue operations & discovery",
+    description:
+      "Run sessions, reservations, billing, and staff from one dashboard. Players discover billiard halls, lounges, and game cafés as venues publish on GoSpots.",
+    images: [
+      {
+        url: "/gospots.png",
+        alt: "GoSpots",
+      },
+    ],
+  },
+  twitter: {
+    card: "summary",
+    title: "GoSpots — live venue operations & discovery",
+    description:
+      "One live operations screen for entertainment venues. Honest beta — onboarding operators first.",
+    images: ["/gospots.png"],
+  },
+  robots: { index: true, follow: true },
 };
 
 export default function RootLayout({
@@ -29,12 +66,14 @@ export default function RootLayout({
   return (
     <html
       lang="en"
-      className={`${geistSans.variable} ${geistMono.variable} dark h-full antialiased`}
+      suppressHydrationWarning
+      className={`${geistSans.variable} ${geistMono.variable} relative h-full antialiased`}
     >
-      <body className="relative min-h-full bg-[var(--color-background)] font-sans text-zinc-100">
-        <AuroraBackground />
-        <ScrollProgress />
-        {children}
+      <body className="relative min-h-full bg-[var(--color-background)] font-sans text-[var(--color-foreground)] transition-colors duration-300">
+        <Script id="gospots-theme-init" strategy="beforeInteractive">
+          {`(function(){try{var t=localStorage.getItem('gospots-theme');var r=document.documentElement;if(t==='light'){r.classList.remove('dark');r.dataset.theme='light';}else{r.classList.add('dark');r.dataset.theme='dark';}}catch(e){document.documentElement.classList.add('dark');document.documentElement.dataset.theme='dark';}})();`}
+        </Script>
+        <AppProviders>{children}</AppProviders>
       </body>
     </html>
   );

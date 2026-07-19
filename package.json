@@ -9,7 +9,7 @@
     "db:fix-migration": "powershell -NoProfile -ExecutionPolicy Bypass -File ./scripts/fix-neon-migration.ps1",
     "db:sync": "powershell -NoProfile -ExecutionPolicy Bypass -File ./scripts/sync-neon-schema.ps1",
     "check:dev": "powershell -NoProfile -ExecutionPolicy Bypass -File ./scripts/check-dev.ps1",
-    "dev": "pnpm kill-ports && concurrently -n api,web -c cyan,magenta \"pnpm dev:api\" \"pnpm dev:web\"",
+    "dev": "pnpm kill-ports && concurrently -n api,web -c cyan,magenta --restart-tries 3 --restart-after 3000 \"npm run dev:api\" \"npm run dev:web\"",
     "dev:api": "pnpm --filter @gospots/api run start:dev",
     "dev:web": "pnpm --filter @gospots/web run dev",
     "build": "pnpm --filter @gospots/api run build && pnpm --filter @gospots/web run build",
@@ -19,7 +19,8 @@
     "lint": "pnpm --filter @gospots/api run lint && pnpm --filter @gospots/web run lint"
   },
   "devDependencies": {
-    "concurrently": "^9.2.1"
+    "concurrently": "^9.2.1",
+    "pnpm": "10.12.1"
   },
   "engines": {
     "node": "20.x"

@@ -1,10 +1,10 @@
-import { randomBytes } from "crypto";
+import { randomBytes } from 'crypto';
 
 /** Separator between public slug and secret key (slug never contains `--`). */
-export const DASHBOARD_PATH_SEP = "--";
+export const DASHBOARD_PATH_SEP = '--';
 
 export function generateDashboardKey(): string {
-  return randomBytes(9).toString("base64url");
+  return randomBytes(9).toString('base64url');
 }
 
 export function buildDashboardPath(slug: string, dashboardKey: string): string {

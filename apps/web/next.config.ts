@@ -11,6 +11,11 @@ function apiUploadPatterns(): NonNullable<NextConfig["images"]>["remotePatterns"
       port: "4000",
       pathname: "/api/v1/**",
     },
+    {
+      protocol: "https",
+      hostname: "images.unsplash.com",
+      pathname: "/**",
+    },
   ];
 
   const publicBase = process.env.NEXT_PUBLIC_API_BASE_URL?.replace(/\/api\/v1\/?$/, "");

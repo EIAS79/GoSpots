@@ -1,5 +1,5 @@
-import { IsIn, IsOptional, IsString } from "class-validator";
-import { NOTIFICATION_SECTIONS } from "../../../common/notification.constants";
+import { IsIn, IsOptional, IsString } from 'class-validator';
+import { NOTIFICATION_SECTIONS } from '../../../common/notification.constants';
 
 export class NotificationQueryDto {
   @IsOptional()
@@ -12,13 +12,13 @@ export class NotificationQueryDto {
 
   @IsOptional()
   @IsString()
-  @IsIn([...NOTIFICATION_SECTIONS, "all"])
+  @IsIn([...NOTIFICATION_SECTIONS, 'all'])
   section?: string;
 
   /** all | unread | read | archived */
   @IsOptional()
   @IsString()
-  @IsIn(["all", "unread", "read", "archived"])
+  @IsIn(['all', 'unread', 'read', 'archived'])
   status?: string;
 
   @IsOptional()

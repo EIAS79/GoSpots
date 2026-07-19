@@ -34,7 +34,8 @@ export function GoSpotsLogo({
     <motion.span
       className={cn(
         "relative flex shrink-0 items-center justify-center",
-        animated && "drop-shadow-[0_0_18px_rgba(251,191,36,0.4)]",
+        animated &&
+          "drop-shadow-[0_0_16px_rgba(234,88,12,0.25)] dark:drop-shadow-[0_0_20px_rgba(251,191,36,0.45)]",
       )}
       style={{ width: s.box, height: Math.round(s.box * (56 / 48)) }}
       whileHover={animated ? { scale: 1.08, rotate: -3 } : undefined}
@@ -43,7 +44,7 @@ export function GoSpotsLogo({
       {animated && (
         <motion.span
           aria-hidden
-          className="pointer-events-none absolute inset-0 rounded-full bg-violet-500/20 blur-md"
+          className="pointer-events-none absolute inset-0 rounded-full bg-amber-400/25 blur-md dark:bg-amber-500/30"
           animate={{ opacity: [0.3, 0.65, 0.3], scale: [0.85, 1.12, 0.85] }}
           transition={{ duration: 3.2, repeat: Infinity, ease: "easeInOut" }}
         />
@@ -58,12 +59,19 @@ export function GoSpotsLogo({
       {(showName || showTagline) && (
         <span className="flex min-w-0 flex-col leading-tight">
           {showName && (
-            <span className={cn("font-semibold tracking-tight text-white", s.text)}>
+            <span
+              className={cn(
+                "font-semibold tracking-tight text-zinc-900 dark:text-white",
+                s.text,
+              )}
+            >
               {BRAND_NAME}
             </span>
           )}
           {showTagline && (
-            <span className={cn("text-zinc-400", s.tagline)}>{BRAND_TAGLINE}</span>
+            <span className={cn("text-zinc-600 dark:text-zinc-400", s.tagline)}>
+              {BRAND_TAGLINE}
+            </span>
           )}
         </span>
       )}

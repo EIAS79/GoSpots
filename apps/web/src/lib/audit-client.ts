@@ -56,6 +56,21 @@ export function deleteAuditEntry(id: string) {
   return api<{ ok: boolean }>(`/audit/${id}`, { method: "DELETE" });
 }
 
+export function deleteAuditEntries(body: {
+  ids?: string[];
+  allMatching?: boolean;
+  from?: string;
+  to?: string;
+  section?: string;
+  action?: string;
+  search?: string;
+}) {
+  return api<{ deleted: number }>("/audit", {
+    method: "DELETE",
+    body: JSON.stringify(body),
+  });
+}
+
 export async function downloadAuditCsv(params: AuditListParams = {}) {
   const res = await fetch(`${API_BASE_URL}/audit/export${toQuery(params)}`, {
     credentials: "include",

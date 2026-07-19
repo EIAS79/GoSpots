@@ -27,6 +27,15 @@ function roundMoney(n: number) {
   return Math.round(n * 100) / 100;
 }
 
+/** Apply discount % to the base charge (not a flat override). */
+export function applyBillingDiscount(
+  baseAmount: number,
+  discountPercent: number,
+): number {
+  const pct = Math.min(100, Math.max(0, discountPercent));
+  return roundMoney(baseAmount * (1 - pct / 100));
+}
+
 /**
  * Price from Gaming setup: category rate blocks (e.g. 60 min @ $40) or unit hourlyRate.
  */
@@ -52,7 +61,7 @@ export function computePlayBillingAmount(
       const blockMin = rate.durationMinutes!;
       const blocks = Math.ceil(durationMinutes / blockMin);
       const amount = roundMoney(blocks * rate.price * party);
-      const breakdown = `${durationMinutes} min · ${blocks}× ${rate.label} · ${party} guest${party > 1 ? "s" : ""}`;
+      const breakdown = `${durationMinutes} min · ${blocks}× ${rate.label} · ${party} guest${party > 1 ? 's' : ''}`;
       if (!best || amount < best.amount) {
         best = { amount, label: rate.label, breakdown };
       }
@@ -75,19 +84,19 @@ export function computePlayBillingAmount(
       amount,
       durationMinutes,
       rateLabel: `${input.hourlyRate}/hr`,
-      breakdown: `${durationMinutes} min @ ${input.hourlyRate}/hr · ${party} guest${party > 1 ? "s" : ""}`,
+      breakdown: `${durationMinutes} min @ ${input.hourlyRate}/hr · ${party} guest${party > 1 ? 's' : ''}`,
     };
   }
 
   return {
     amount: 0,
     durationMinutes,
-    rateLabel: "No rate configured",
-    breakdown: "Add rates under Gaming setup",
+    rateLabel: 'No rate configured',
+    breakdown: 'Add rates under Gaming setup',
   };
 }
 
-export type PlayBillingBucket = "in_progress" | "awaiting_payment" | "paid";
+export type PlayBillingBucket = 'in_progress' | 'awaiting_payment' | 'paid';
 
 export function classifyPlayBillingRow(
   status: string,
@@ -96,19 +105,40 @@ export function classifyPlayBillingRow(
   endsAt: Date,
   now: Date,
 ): PlayBillingBucket | null {
-  if (status === "CANCELED" || status === "NO_SHOW") return null;
-  if (billedAt) return "paid";
-  if (status === "CHECKED_IN") return "in_progress";
-  if (
-    (status === "CONFIRMED" || status === "PENDING") &&
-    startsAt <= now &&
-    endsAt > now
-  ) {
-    return "in_progress";
-  }
-  if (status === "COMPLETED") return "awaiting_payment";
-  if (endsAt <= now && status !== "COMPLETED") {
-    return "awaiting_payment";
-  }
+  if (status === 'CANCELED' || status === 'NO_SHOW') return null;
+  if (startsAt > now) return null;
+
+  const active = startsAt <= now && endsAt > now;
+  if (active) return 'in_progress';
+
+  if (billedAt) return 'paid';
+  if (status === 'COMPLETED' || endsAt <= now) return 'awaiting_payment';
   return null;
+}
+
+export function classifyWalkInBillingRow(
+  status: string,
+  completedAt: Date | null,
+  startedAt: Date,
+  endedAt: Date | null,
+  durationMinutes: number | null,
+  now: Date,
+): PlayBillingBucket | null {
+  if (status === 'CANCELED') return null;
+
+  const effectiveEnd =
+    endedAt ??
+    (durationMinutes != null && durationMinutes > 0
+      ? new Date(startedAt.getTime() + durationMinutes * 60_000)
+      : null);
+
+  const paid = status === 'COMPLETED' || completedAt != null;
+
+  if (status === 'ACTIVE') {
+    if (!effectiveEnd || effectiveEnd > now) return 'in_progress';
+    return paid ? 'paid' : 'awaiting_payment';
+  }
+
+  if (paid) return 'paid';
+  return 'awaiting_payment';
 }

@@ -8,22 +8,26 @@ import {
   CheckCheck,
   Clock,
   CreditCard,
+  Download,
   Gamepad2,
   Loader2,
-  Mail,
   MailOpen,
   Sparkles,
+  Trash2,
   UserCog,
 } from "lucide-react";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { useCallback, useEffect, useState } from "react";
 import { TenantPage } from "@/components/layout/tenant-page";
+import { FeatureGate } from "@/components/subscription/feature-gate";
 import { cn } from "@/lib/cn";
 import { formatDate } from "@/lib/format";
 import { NOTIFICATION_SECTIONS, sectionLabel } from "@/lib/notification-sections";
 import {
   archiveNotifications,
+  deleteNotifications,
+  downloadNotificationsCsv,
   unarchiveNotifications,
   fetchNotifications,
   markAllNotificationsRead,
@@ -33,6 +37,11 @@ import {
   type NotificationStatus,
 } from "@/lib/notifications-client";
 import { DASHBOARD_SECTION_GUIDES } from "@/lib/dashboard-section-guides";
+import { hasPermission } from "@/lib/auth-client";
+import { isFeatureUnlocked } from "@/lib/plan";
+import { useAuth } from "@/lib/use-auth";
+import { useCurrentMembership } from "@/lib/use-current-membership";
+import { useVenueAccess } from "@/lib/use-venue-access";
 import { useVenueHref } from "@/lib/venue-context";
 import { useLiveData } from "@/lib/use-live-data";
 
@@ -174,6 +183,16 @@ function NotificationItem({
 }
 
 export default function NotificationsPage() {
+  const { state } = useAuth();
+  const membership = useCurrentMembership();
+  const access = useVenueAccess();
+  const unlocked = isFeatureUnlocked(access.enabledModules, "notifications");
+  const canViewNotifications =
+    membership?.role === "OWNER" ||
+    hasPermission(membership?.permissions ?? "", "notifications.read");
+  const isOwner =
+    membership?.role === "OWNER" ||
+    (state.status === "authed" && state.user.systemRole === "SUPER_ADMIN");
   const hrefBase = useVenueHref("");
   const notificationsHref = useVenueHref("/notifications");
   const archivedHref = useVenueHref("/notifications?status=archived");
@@ -183,6 +202,7 @@ export default function NotificationsPage() {
   const [items, setItems] = useState<NotificationRow[]>([]);
   const [total, setTotal] = useState(0);
   const [unreadCount, setUnreadCount] = useState(0);
+  const [canDelete, setCanDelete] = useState(false);
   const [status, setStatus] = useState<NotificationStatus>(() =>
     searchParams.get("status") === "archived" ? "archived" : "all",
   );
@@ -192,7 +212,10 @@ export default function NotificationsPage() {
   const [loading, setLoading] = useState(true);
   const [markingAll, setMarkingAll] = useState(false);
   const [archiving, setArchiving] = useState(false);
+  const [exporting, setExporting] = useState(false);
+  const [deleting, setDeleting] = useState(false);
   const [selected, setSelected] = useState<Set<string>>(new Set());
+  const [error, setError] = useState<string | null>(null);
 
   const load = useCallback(
     (opts: { silent?: boolean } = {}) => {
@@ -208,6 +231,7 @@ export default function NotificationsPage() {
           setItems(data.items);
           setTotal(data.total);
           setUnreadCount(data.unreadCount);
+          setCanDelete(data.canDelete ?? false);
           if (!opts.silent) setSelected(new Set());
         })
         .finally(() => {
@@ -313,6 +337,7 @@ export default function NotificationsPage() {
     allMatching?: boolean;
   }) => {
     setArchiving(true);
+    setError(null);
     try {
       await unarchiveNotifications({
         ...opts,
@@ -326,36 +351,116 @@ export default function NotificationsPage() {
     }
   };
 
+  const handleExport = async () => {
+    setExporting(true);
+    setError(null);
+    try {
+      await downloadNotificationsCsv({
+        status,
+        section: section === "all" ? undefined : section,
+        from: from || undefined,
+        to: to || undefined,
+      });
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Export failed.");
+    } finally {
+      setExporting(false);
+    }
+  };
+
+  const handleDelete = async (opts: {
+    ids?: string[];
+    allMatching?: boolean;
+  }) => {
+    const count = opts.allMatching ? total : (opts.ids?.length ?? 0);
+    if (
+      !confirm(
+        `Permanently delete ${count} notification${count === 1 ? "" : "s"}? This cannot be undone.`,
+      )
+    ) {
+      return;
+    }
+    setDeleting(true);
+    setError(null);
+    try {
+      await deleteNotifications({
+        ...opts,
+        from: from || undefined,
+        to: to || undefined,
+        section: section === "all" ? undefined : section,
+        status,
+      });
+      await load();
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Delete failed.");
+    } finally {
+      setDeleting(false);
+    }
+  };
+
+  if (state.status === "authed" && !canViewNotifications) {
+    return (
+      <TenantPage title={GUIDE.title} description={GUIDE.description}>
+        <p className="text-sm text-zinc-400">
+          You do not have permission to view notifications.
+        </p>
+      </TenantPage>
+    );
+  }
+
   return (
     <TenantPage
       title={isArchivedView ? "Archived notifications" : GUIDE.title}
       description={
         isArchivedView
-          ? "Restore items to your inbox with Unarchive. Nothing is deleted."
+          ? "Restore items to your inbox with Unarchive. Owners can permanently delete."
           : GUIDE.description
       }
       capabilities={GUIDE.capabilities}
       actions={
-        isArchivedView ? (
-          <Link
-            href={notificationsHref}
-            className="inline-flex items-center gap-1.5 rounded-lg border border-white/10 px-3 py-1.5 text-xs text-zinc-300 hover:bg-white/5"
+        unlocked ? (
+        <div className="flex flex-wrap items-center gap-2">
+          <button
+            type="button"
+            disabled={exporting || loading}
+            onClick={() => void handleExport()}
+            className="inline-flex items-center gap-1.5 rounded-lg border border-emerald-400/30 bg-emerald-500/10 px-3 py-1.5 text-xs text-emerald-200 hover:bg-emerald-500/20 disabled:opacity-50"
           >
-            <ArrowLeft size={14} />
-            Back to inbox
-          </Link>
-        ) : (
-          <Link
-            href={archivedHref}
-            className="inline-flex items-center gap-1.5 rounded-lg border border-violet-400/30 bg-violet-500/10 px-3 py-1.5 text-xs text-violet-200"
-            title="View archived and restore to inbox"
-          >
-            <Archive size={14} />
-            Archived
-          </Link>
-        )
+            {exporting ? (
+              <Loader2 size={14} className="animate-spin" />
+            ) : (
+              <Download size={14} />
+            )}
+            Export CSV
+          </button>
+          {isArchivedView ? (
+            <Link
+              href={notificationsHref}
+              className="inline-flex items-center gap-1.5 rounded-lg border border-white/10 px-3 py-1.5 text-xs text-zinc-300 hover:bg-white/5"
+            >
+              <ArrowLeft size={14} />
+              Back to inbox
+            </Link>
+          ) : (
+            <Link
+              href={archivedHref}
+              className="inline-flex items-center gap-1.5 rounded-lg border border-violet-400/30 bg-violet-500/10 px-3 py-1.5 text-xs text-violet-200"
+              title="View archived and restore to inbox"
+            >
+              <Archive size={14} />
+              Archived
+            </Link>
+          )}
+        </div>
+        ) : null
       }
     >
+      <FeatureGate feature="notifications" unlocked={unlocked}>
+      {error ? (
+        <p className="mb-4 rounded-lg border border-rose-500/30 bg-rose-500/10 px-3 py-2 text-sm text-rose-200">
+          {error}
+        </p>
+      ) : null}
       <div className="mb-4 grid gap-3 rounded-xl border border-white/10 bg-white/[0.02] p-4 sm:grid-cols-2 lg:grid-cols-4">
         <label className="block text-xs text-zinc-500">
           From
@@ -429,15 +534,25 @@ export default function NotificationsPage() {
               Read all
             </button>
           ) : null}
+          <button
+            type="button"
+            onClick={selectAllVisible}
+            disabled={items.length === 0}
+            className="inline-flex items-center gap-2 rounded-lg border border-white/10 px-3 py-1.5 text-xs text-zinc-400 hover:text-zinc-200 disabled:opacity-50"
+          >
+            Select all in view
+          </button>
+          {selected.size > 0 ? (
+            <button
+              type="button"
+              onClick={() => setSelected(new Set())}
+              className="inline-flex items-center gap-2 rounded-lg border border-white/10 px-3 py-1.5 text-xs text-zinc-400 hover:text-zinc-200"
+            >
+              Clear selection
+            </button>
+          ) : null}
           {isArchivedView ? (
             <>
-              <button
-                type="button"
-                onClick={selectAllVisible}
-                className="inline-flex items-center gap-2 rounded-lg border border-white/10 px-3 py-1.5 text-xs text-zinc-400 hover:text-zinc-200"
-              >
-                Select all in view
-              </button>
               {selected.size > 0 ? (
                 <button
                   type="button"
@@ -460,18 +575,11 @@ export default function NotificationsPage() {
                 className="inline-flex items-center gap-2 rounded-lg border border-emerald-400/30 px-3 py-1.5 text-xs text-emerald-300 hover:bg-emerald-500/10 disabled:opacity-50"
               >
                 <ArchiveRestore size={14} />
-                Unarchive all matching filter
+                Unarchive all matching
               </button>
             </>
           ) : (
             <>
-              <button
-                type="button"
-                onClick={selectAllVisible}
-                className="inline-flex items-center gap-2 rounded-lg border border-white/10 px-3 py-1.5 text-xs text-zinc-400 hover:text-zinc-200"
-              >
-                Select all in view
-              </button>
               {selected.size > 0 ? (
                 <button
                   type="button"
@@ -494,10 +602,38 @@ export default function NotificationsPage() {
                 className="inline-flex items-center gap-2 rounded-lg border border-violet-400/30 px-3 py-1.5 text-xs text-violet-300 hover:bg-violet-500/10 disabled:opacity-50"
               >
                 <Archive size={14} />
-                Archive all matching filter
+                Archive all matching
               </button>
             </>
           )}
+          {canDelete || isOwner ? (
+            <>
+              {selected.size > 0 ? (
+                <button
+                  type="button"
+                  disabled={deleting}
+                  onClick={() => void handleDelete({ ids: [...selected] })}
+                  className="inline-flex items-center gap-2 rounded-lg border border-rose-400/30 bg-rose-500/10 px-3 py-1.5 text-xs text-rose-200 disabled:opacity-50"
+                >
+                  {deleting ? (
+                    <Loader2 size={14} className="animate-spin" />
+                  ) : (
+                    <Trash2 size={14} />
+                  )}
+                  Delete selected ({selected.size})
+                </button>
+              ) : null}
+              <button
+                type="button"
+                disabled={deleting || items.length === 0}
+                onClick={() => void handleDelete({ allMatching: true })}
+                className="inline-flex items-center gap-2 rounded-lg border border-rose-400/30 px-3 py-1.5 text-xs text-rose-300 hover:bg-rose-500/10 disabled:opacity-50"
+              >
+                <Trash2 size={14} />
+                Delete all matching
+              </button>
+            </>
+          ) : null}
         </div>
       </div>
 
@@ -547,6 +683,7 @@ export default function NotificationsPage() {
           archived items.
         </p>
       )}
+      </FeatureGate>
     </TenantPage>
   );
 }

@@ -79,8 +79,9 @@ export const features: Feature[] = [
     accent: "from-violet-500/20 to-violet-500/0",
   },
   {
-    title: "Bar & snacks",
-    description: "Add drinks and snacks to any live session in one tap.",
+    title: "Menu & kitchen orders",
+    description:
+      "Optional add-on: food and drink menus with kitchen tickets — for restaurants, bars, and cafés.",
     icon: Beer,
     span: "sm",
     accent: "from-amber-500/20 to-amber-500/0",
@@ -100,8 +101,9 @@ export const features: Feature[] = [
     accent: "from-blue-500/20 to-blue-500/0",
   },
   {
-    title: "Daily revenue reports",
-    description: "Revenue by table, by cashier, by hour. Cash vs card. Today vs yesterday.",
+    title: "Revenue & shift reports",
+    description:
+      "Included with play billing or menu orders — revenue, losses, and shift summaries when those modules are on.",
     icon: ChartColumn,
     span: "md",
     accent: "from-emerald-500/20 to-emerald-500/0",
@@ -139,218 +141,247 @@ export type PlayerStep = { title: string; description: string; icon: LucideIcon 
 
 export const playerSteps: PlayerStep[] = [
   {
-    title: "Discover venues",
-    description: "Browse billiard halls, gaming lounges, and esports cafés in your city.",
+    title: "Discover spots",
+    description:
+      "Browse billiard halls, gaming lounges, restaurants, cafés, bars, and karaoke rooms in your city.",
     icon: Gamepad2,
   },
   {
-    title: "Reserve a table",
-    description: "Pick a time slot, lock your spot, get a confirmation. Show up and play.",
+    title: "Reserve your spot",
+    description:
+      "Pick a time slot, lock it in, get a confirmation. Show up and enjoy — table, station, or booth.",
     icon: CalendarCheck,
   },
   {
-    title: "Pay clean",
-    description: "Itemized bills, no surprises. Earn loyalty perks at your favorite spots.",
+    title: "Confirm and go",
+    description:
+      "Lock your reservation, get a confirmation, and show up ready — table, station, or booth waiting.",
     icon: CreditCard,
   },
 ];
 
+export type ShopStatus = "open" | "closed" | "closing_soon";
+
 export type VenueCard = {
   name: string;
+  /** City name (no country) */
   city: string;
+  /** e.g. district or neighborhood */
+  area?: string;
+  country: string;
   tags: string[];
   rating: number;
   reviews: number;
-  open: boolean;
+  shopStatus: ShopStatus;
   busy: number;
   total: number;
   accent: string;
   image: string;
+  description: string;
+  rateLabel: string;
+  /** Visitors currently inside (demo) */
+  visitorsInside: number;
+  /** Max venue capacity for occupancy bar */
+  maxVisitors: number;
 };
+
+export function shopStatusLabel(status: ShopStatus): string {
+  if (status === "open") return "Open";
+  if (status === "closing_soon") return "Closing soon";
+  return "Closed";
+}
+
+export function formatVenueLocation(v: Pick<VenueCard, "city" | "area" | "country">): string {
+  const line = v.area ? `${v.city} · ${v.area}` : v.city;
+  return `${line}, ${v.country}`;
+}
 
 export const venues: VenueCard[] = [
   {
     name: "Cue & Cobra",
-    city: "Warsaw · Mokotów",
+    city: "Warsaw",
+    area: "Mokotów",
+    country: "Poland",
     tags: ["Billiard", "Snooker", "Bar"],
     rating: 4.9,
     reviews: 482,
-    open: true,
+    shopStatus: "open",
     busy: 7,
     total: 10,
     accent: "from-emerald-500/40 via-emerald-600/10 to-transparent",
     image:
-      "https://images.unsplash.com/photo-1615722440048-da4fd9202b9d?auto=format&fit=crop&w=900&q=70",
+      "https://images.unsplash.com/photo-1551845041-63e8e76836ea?auto=format&fit=crop&w=900&q=70",
+    description: "Twelve tables, full bar, late-night league nights.",
+    rateLabel: "from zł 28/hr",
+    visitorsInside: 54,
+    maxVisitors: 120,
   },
   {
     name: "Pixel Arena",
-    city: "Kraków · Stare Miasto",
-    tags: ["PlayStation", "PC", "Tournaments"],
+    city: "Kraków",
+    area: "Stare Miasto",
+    country: "Poland",
+    tags: ["PlayStation", "PC", "Esports"],
     rating: 4.8,
     reviews: 316,
-    open: true,
+    shopStatus: "closing_soon",
     busy: 14,
     total: 20,
     accent: "from-violet-500/40 via-violet-600/10 to-transparent",
     image:
       "https://images.unsplash.com/photo-1542751371-adc38448a05e?auto=format&fit=crop&w=900&q=70",
+    description: "LAN boxes, console lounges, and weekend brackets.",
+    rateLabel: "from zł 22/hr",
+    visitorsInside: 98,
+    maxVisitors: 140,
   },
   {
     name: "Black 8 Lounge",
-    city: "Wrocław · Centrum",
-    tags: ["Billiard", "Darts", "Late-night"],
+    city: "Wrocław",
+    area: "Centrum",
+    country: "Poland",
+    tags: ["Billiard", "Darts", "Cocktails"],
     rating: 4.7,
     reviews: 251,
-    open: true,
+    shopStatus: "open",
     busy: 4,
     total: 8,
     accent: "from-amber-500/40 via-amber-600/10 to-transparent",
     image:
       "https://images.unsplash.com/photo-1551845041-63e8e76836ea?auto=format&fit=crop&w=900&q=70",
+    description: "Dim lights, soul music, and eight championship tables.",
+    rateLabel: "from zł 35/hr",
+    visitorsInside: 31,
+    maxVisitors: 90,
   },
   {
     name: "Knight & Pawn",
-    city: "Poznań · Jeżyce",
-    tags: ["Chess", "Cards", "Board Games"],
+    city: "Poznań",
+    area: "Jeżyce",
+    country: "Poland",
+    tags: ["Chess", "Cards", "Café"],
     rating: 4.9,
     reviews: 198,
-    open: false,
+    shopStatus: "closed",
     busy: 0,
     total: 12,
     accent: "from-cyan-500/40 via-cyan-600/10 to-transparent",
     image:
       "https://images.unsplash.com/photo-1529699211952-734e80c4d42b?auto=format&fit=crop&w=900&q=70",
+    description: "Quiet boards, specialty coffee, and weekly chess ladders.",
+    rateLabel: "from zł 12/session",
+    visitorsInside: 0,
+    maxVisitors: 45,
+  },
+  {
+    name: "Neon Break",
+    city: "Berlin",
+    area: "Kreuzberg",
+    country: "Germany",
+    tags: ["Arcade", "Rhythm", "VR"],
+    rating: 4.6,
+    reviews: 412,
+    shopStatus: "open",
+    busy: 11,
+    total: 16,
+    accent: "from-fuchsia-500/35 via-rose-500/15 to-transparent",
+    image:
+      "https://images.unsplash.com/photo-1556438064-2d7646166914?auto=format&fit=crop&w=900&q=70",
+    description: "Retro cabinets mixed with modern VR bays and snack bar.",
+    rateLabel: "from €8/hr",
+    visitorsInside: 72,
+    maxVisitors: 110,
+  },
+  {
+    name: "Velvet Cue",
+    city: "Amsterdam",
+    area: "De Pijp",
+    country: "Netherlands",
+    tags: ["Snooker", "VIP rooms", "Bar"],
+    rating: 4.8,
+    reviews: 167,
+    shopStatus: "closing_soon",
+    busy: 3,
+    total: 6,
+    accent: "from-teal-500/35 via-emerald-600/12 to-transparent",
+    image:
+      "https://images.unsplash.com/photo-1572116469696-31de0f17cc34?auto=format&fit=crop&w=900&q=70",
+    description: "Members-first snooker suites with table-side service.",
+    rateLabel: "from €45/hr",
+    visitorsInside: 22,
+    maxVisitors: 48,
   },
 ];
 
-export type Plan = {
-  name: string;
-  price: string;
-  period: string;
+/** Honest “why operators care” — not customer quotes */
+export type VenuePainPoint = {
+  title: string;
   description: string;
-  highlight?: boolean;
-  features: string[];
-  cta: string;
+  icon: LucideIcon;
 };
 
-export const plans: Plan[] = [
+export const venuePainPoints: VenuePainPoint[] = [
   {
-    name: "Starter",
-    price: "€29",
-    period: "/month",
-    description: "For one billiard hall finding its rhythm.",
-    features: [
-      "Up to 6 resources",
-      "Owner only (0 staff seats)",
-      "Live timer + auto billing",
-      "Daily revenue report",
-      "1 branch",
-    ],
-    cta: "Start free trial",
+    title: "Forgotten timers",
+    description:
+      "Busy nights turn into guesswork. Minutes slip, tabs grow, and nobody agrees what was actually on the clock.",
+    icon: Timer,
   },
   {
-    name: "Standard",
-    price: "€79",
-    period: "/month",
-    description: "For mixed venues with bar and reservations.",
-    highlight: true,
-    features: [
-      "Up to 20 resources",
-      "5 staff accounts",
-      "Bar & snacks module",
-      "Reservations",
-      "Standard reports",
-    ],
-    cta: "Go Standard",
+    title: "Reservation conflicts",
+    description:
+      "Walk-ins collide with holds, VIPs overlap, and the floor map in the manager’s head stops matching reality.",
+    icon: CalendarCheck,
   },
   {
-    name: "Pro",
-    price: "€149",
-    period: "/month",
-    description: "For serious operators that scale.",
-    features: [
-      "Up to 100 resources",
-      "20 staff accounts",
-      "Roles & permissions",
-      "Memberships & loyalty",
-      "Peak hours & cashier reports",
-    ],
-    cta: "Upgrade to Pro",
+    title: "Wrong or disputed bills",
+    description:
+      "Hourly rates, extras, and discounts get mixed when everything lives on paper or scattered chats.",
+    icon: Receipt,
   },
   {
-    name: "Enterprise",
-    price: "Custom",
-    period: "",
-    description: "For chains and multi-branch businesses.",
-    features: [
-      "Unlimited branches",
-      "Unlimited users",
-      "Branch comparison",
-      "Custom integrations",
-      "Priority support",
-    ],
-    cta: "Talk to sales",
-  },
-];
-
-export type Testimonial = {
-  quote: string;
-  name: string;
-  role: string;
-  rating: number;
-};
-
-export const testimonials: Testimonial[] = [
-  {
-    quote:
-      "We used to lose 200 PLN a night to forgotten timers. After GoSpots that vanished in the first week.",
-    name: "Marek Kowalski",
-    role: "Owner · Cue & Cobra, Warsaw",
-    rating: 5,
+    title: "Staff discounts without control",
+    description:
+      "You need trust on the floor — but also limits, roles, and a trail when something looks off.",
+    icon: ShieldCheck,
   },
   {
-    quote:
-      "Cashier shift handover used to take 20 minutes of arguing. Now it's two taps and a report.",
-    name: "Ania Wójcik",
-    role: "Manager · Pixel Arena",
-    rating: 5,
+    title: "No live floor visibility",
+    description:
+      "Owners step away for an hour and lose sight of what’s playing, what’s reserved, and what’s actually earning.",
+    icon: LayoutDashboard,
   },
   {
-    quote:
-      "I run three branches from one dashboard. I see revenue per table per branch live. It changed how I think about the business.",
-    name: "Tomáš Novak",
-    role: "Founder · Black 8 Group",
-    rating: 5,
+    title: "Weak end-of-night reporting",
+    description:
+      "Closing the drawer shouldn’t take spreadsheets. You want per-table, per-cashier clarity without the drama.",
+    icon: ChartColumn,
   },
-];
-
-export type Stat = { value: string; label: string; icon: LucideIcon };
-
-export const stats: Stat[] = [
-  { value: "240+", label: "Venues running daily", icon: LayoutDashboard },
-  { value: "1.4M", label: "Sessions billed", icon: Timer },
-  { value: "€18M", label: "Revenue tracked", icon: Wallet },
-  { value: "99.98%", label: "Realtime uptime", icon: Activity },
 ];
 
 export type Faq = { q: string; a: string };
 
-export const faqs: Faq[] = [
+/** FAQ shown in the owner / "I run a venue" view */
+export const ownerFaqs: Faq[] = [
   {
     q: "Do I need to install anything in my venue?",
     a: "No. GoSpots runs in the browser on the device you already have — laptop, tablet, or counter PC. Updates push automatically.",
   },
   {
     q: "Can I try it before I pay?",
-    a: "Yes. New venues get a 7-day Starter trial on signup. No card required — full Starter features while you decide, then subscribe to keep them.",
+    a: "Yes. New venues get a 90-day free trial — no card required. Pick any features you want and change them freely during the trial. Nothing is ever charged without your consent.",
+  },
+  {
+    q: "How does pricing actually work?",
+    a: "Your venue type is free. You only pay for the features you switch on — each has its own monthly price — plus €4 per employee seat. No tiers, no bundles.",
+  },
+  {
+    q: "What happens if I turn a feature off?",
+    a: "Your data is never deleted — the section just disappears from the dashboard. Switch the feature back on and everything is exactly where you left it. On a paid plan, removals apply from the next billing month.",
   },
   {
     q: "Will it work for my mixed venue (billiard + PS + bar)?",
     a: "Yes. Resources can be tables, consoles, boards, or anything billable. Mix freely on one floor screen.",
-  },
-  {
-    q: "How does pricing work for multiple branches?",
-    a: "Starter and Standard cover one branch. Pro covers multi-location with shared staff. Enterprise covers unlimited branches with central dashboards.",
   },
   {
     q: "Is my venue data isolated from others?",
@@ -362,19 +393,48 @@ export const faqs: Faq[] = [
   },
 ];
 
+/** FAQ shown in the guest / "find a spot" view */
+export const playerFaqs: Faq[] = [
+  {
+    q: "Is GoSpots free for guests?",
+    a: "Completely. Browsing venues, checking details, and reserving a spot never costs you anything — venues pay for their tools, not you.",
+  },
+  {
+    q: "What kinds of places are on GoSpots?",
+    a: "Way more than gaming. Billiard halls, gaming lounges, and esports cafés — plus restaurants, cafés, bars, pubs, karaoke rooms, bowling alleys, night clubs, and family entertainment venues.",
+  },
+  {
+    q: "How do I find a spot near me?",
+    a: "Search the directory by city, country, and category, or start from a vibe — a table for dinner, a lane for bowling, or a station for your squad.",
+  },
+  {
+    q: "Can I reserve online?",
+    a: "When a venue enables reservations, you'll see a booking option on its page. Pick a time, lock your spot, and just show up.",
+  },
+  {
+    q: "Do I need an account to browse?",
+    a: "No account needed to browse and discover venues. You only sign in when a venue's booking flow requires it.",
+  },
+  {
+    q: "Why don't I see many venues yet?",
+    a: "GoSpots is in private beta and onboarding operators first. The public directory grows with every venue that turns on publishing.",
+  },
+];
+
 export type NavLink = { label: string; href: string };
 
 export const navLinks: NavLink[] = [
-  { label: "Play", href: "/venues" },
-  { label: "For venues", href: "#features" },
+  { label: "Explore", href: "/venues" },
+  { label: "Who it's for", href: "#who" },
   { label: "How it works", href: "#how" },
+  { label: "Features", href: "#features" },
   { label: "Pricing", href: "#pricing" },
   { label: "FAQ", href: "#faq" },
 ];
 
 export const trustIcons: { label: string; icon: LucideIcon }[] = [
-  { label: "Audit-grade logging", icon: History },
-  { label: "Multi-tenant isolation", icon: ShieldCheck },
-  { label: "Loved by 240+ venues", icon: Star },
-  { label: "Built for busy nights", icon: Users },
+  { label: "Immutable audit trail", icon: History },
+  { label: "Tenant-isolated data", icon: ShieldCheck },
+  { label: "Built for peak-hour floors", icon: Users },
+  { label: "Private beta — venues first", icon: Star },
 ];

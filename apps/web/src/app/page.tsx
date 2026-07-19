@@ -3,7 +3,7 @@ import { ModeProvider } from "@/components/landing/mode-context";
 
 export default function HomePage() {
   return (
-    <ModeProvider initial="play">
+    <ModeProvider initial="manage">
       <LandingPage />
     </ModeProvider>
   );

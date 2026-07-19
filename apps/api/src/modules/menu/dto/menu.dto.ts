@@ -9,8 +9,8 @@ import {
   Matches,
   MaxLength,
   Min,
-} from "class-validator";
-import { MealPeriod, TagType } from "@prisma/client";
+} from 'class-validator';
+import { MealPeriod, TagType } from '@prisma/client';
 
 export class CreateSectionDto {
   @IsString()
@@ -63,6 +63,10 @@ export class UpdateSectionDto {
   @IsOptional()
   @IsString()
   availableDays?: string;
+
+  @IsOptional()
+  @IsString()
+  imageUrl?: string | null;
 }
 
 export class CreateTagDto {

@@ -1,16 +1,55 @@
 "use client";
 
-import { ChevronDown, Search } from "lucide-react";
-import { useMemo, useState } from "react";
+import { Search, X } from "lucide-react";
+import { useEffect, useMemo, useState } from "react";
+import { MediaImage } from "@/components/ui/media-image";
 import { cn } from "@/lib/cn";
-import type { FullMenu, MenuItem } from "@/lib/menu-client";
+import type { FullMenu, MenuItem, MenuSection } from "@/lib/menu-client";
+import {
+  isItemOrderableNow,
+  itemOutOfStock,
+} from "@/lib/menu-timing";
 
-function itemOutOfStock(item: MenuItem): boolean {
-  return Boolean(item.trackStock && item.stock <= 0);
-}
+const UNCATEGORIZED_ID = "__other__";
+const ITEMS_PER_PAGE = 6;
 
-function itemAvailable(item: MenuItem): boolean {
-  return item.isAvailable && !itemOutOfStock(item);
+type SectionBucket = {
+  id: string;
+  name: string;
+  section?: MenuSection;
+  items: MenuItem[];
+};
+
+function buildSections(menu: FullMenu, search: string): SectionBucket[] {
+  const q = search.trim().toLowerCase();
+  const sectionById = new Map(menu.sections.map((s) => [s.id, s]));
+  const buckets = new Map<string, SectionBucket>();
+
+  for (const s of menu.sections) {
+    buckets.set(s.id, { id: s.id, name: s.name, section: s, items: [] });
+  }
+  buckets.set(UNCATEGORIZED_ID, {
+    id: UNCATEGORIZED_ID,
+    name: "Other",
+    items: [],
+  });
+
+  for (const item of menu.items) {
+    const section = item.sectionId
+      ? sectionById.get(item.sectionId)
+      : undefined;
+    if (!isItemOrderableNow(item, section)) continue;
+
+    const secId = item.sectionId ?? UNCATEGORIZED_ID;
+    const bucket = buckets.get(secId) ?? buckets.get(UNCATEGORIZED_ID)!;
+    if (q) {
+      const hay = `${bucket.name} ${item.name} ${item.description ?? ""}`.toLowerCase();
+      if (!hay.includes(q)) continue;
+    }
+    bucket.items.push(item);
+  }
+
+  return [...buckets.values()].filter((s) => s.items.length > 0);
 }
 
 export function MenuItemPicker({
@@ -25,152 +64,198 @@ export function MenuItemPicker({
   disabled?: boolean;
 }) {
   const [search, setSearch] = useState("");
-  const [openSectionId, setOpenSectionId] = useState<string | null>(null);
-  const [qty, setQty] = useState("1");
+  const [activeSectionId, setActiveSectionId] = useState<string | null>(null);
+  const [page, setPage] = useState(0);
+  const [flashId, setFlashId] = useState<string | null>(null);
 
-  const sections = useMemo(() => {
-    if (!menu) return [];
-    const q = search.trim().toLowerCase();
-    const bySection = new Map<
-      string,
-      { id: string; name: string; items: MenuItem[] }
-    >();
+  const sections = useMemo(
+    () => (menu ? buildSections(menu, search) : []),
+    [menu, search],
+  );
 
-    for (const s of menu.sections) {
-      bySection.set(s.id, { id: s.id, name: s.name, items: [] });
+  const activeSection =
+    sections.find((s) => s.id === activeSectionId) ?? sections[0] ?? null;
+
+  useEffect(() => {
+    if (!sections.length) {
+      setActiveSectionId(null);
+      return;
     }
-    bySection.set("__other__", { id: "__other__", name: "Other", items: [] });
-
-    for (const item of menu.items) {
-      if (!item.isAvailable && !item.trackStock) continue;
-      const secId = item.sectionId ?? "__other__";
-      const bucket = bySection.get(secId) ?? bySection.get("__other__")!;
-      if (q) {
-        const hay = `${bucket.name} ${item.name} ${item.description ?? ""}`.toLowerCase();
-        if (!hay.includes(q)) continue;
-      }
-      bucket.items.push(item);
+    if (!activeSectionId || !sections.some((s) => s.id === activeSectionId)) {
+      setActiveSectionId(sections[0]!.id);
     }
+  }, [sections, activeSectionId]);
 
-    return [...bySection.values()].filter((s) => s.items.length > 0);
-  }, [menu, search]);
+  useEffect(() => {
+    setPage(0);
+  }, [activeSectionId, search]);
 
   if (!menu) {
     return <p className="text-xs text-zinc-500">Loading menu…</p>;
   }
 
+  const items = activeSection?.items ?? [];
+  const pageCount = Math.max(1, Math.ceil(items.length / ITEMS_PER_PAGE));
+  const safePage = Math.min(page, pageCount - 1);
+  const pageItems = items.slice(
+    safePage * ITEMS_PER_PAGE,
+    safePage * ITEMS_PER_PAGE + ITEMS_PER_PAGE,
+  );
+
+  function addItem(item: MenuItem) {
+    if (disabled || itemOutOfStock(item)) return;
+    onPick(item.id, 1);
+    setFlashId(item.id);
+    window.setTimeout(() => setFlashId((cur) => (cur === item.id ? null : cur)), 450);
+  }
+
   return (
-    <div className="space-y-3">
-      <div className="relative">
+    <div className="flex min-h-0 flex-col gap-3">
+      <label className="relative block shrink-0">
         <Search
-          size={14}
+          size={15}
           className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-zinc-500"
         />
         <input
           type="search"
           value={search}
           onChange={(e) => setSearch(e.target.value)}
-          placeholder="Search menu items or sections…"
-          className="w-full rounded-lg border border-white/10 bg-zinc-950 py-2 pl-9 pr-3 text-sm text-white placeholder:text-zinc-600"
+          placeholder="Search dishes…"
+          className="w-full rounded-xl border border-white/10 bg-zinc-950 py-2.5 pl-9 pr-9 text-sm text-white placeholder:text-zinc-600 focus:border-emerald-500/40 focus:outline-none focus:ring-2 focus:ring-emerald-500/20"
         />
-      </div>
-      <div className="flex items-center gap-2">
-        <label className="text-xs text-zinc-500">
-          Qty
-          <input
-            type="number"
-            min={1}
-            value={qty}
-            onChange={(e) => setQty(e.target.value)}
-            className="ml-2 w-16 rounded-lg border border-white/10 bg-zinc-950 px-2 py-1 text-sm text-white"
-          />
-        </label>
-      </div>
-      <div className="max-h-64 space-y-1 overflow-y-auto rounded-lg border border-white/10 bg-zinc-950/80 p-1">
-        {sections.length === 0 ? (
-          <p className="p-4 text-center text-xs text-zinc-500">No items match.</p>
-        ) : (
-          sections.map((section) => {
-            const open = openSectionId === section.id;
-            return (
-              <div key={section.id} className="rounded-lg border border-white/5">
+        {search ? (
+          <button
+            type="button"
+            aria-label="Clear search"
+            onClick={() => setSearch("")}
+            className="absolute right-2 top-1/2 grid h-7 w-7 -translate-y-1/2 place-items-center rounded-full text-zinc-500 hover:bg-white/5"
+          >
+            <X size={14} />
+          </button>
+        ) : null}
+      </label>
+
+      {sections.length === 0 ? (
+        <p className="rounded-xl border border-dashed border-white/10 py-10 text-center text-xs text-zinc-500">
+          No items available right now.
+        </p>
+      ) : (
+        <>
+          <div className="flex shrink-0 gap-2 overflow-x-auto pb-0.5 scrollbar-hide">
+            {sections.map((s) => {
+              const active = s.id === activeSection?.id;
+              return (
+                <button
+                  key={s.id}
+                  type="button"
+                  onClick={() => setActiveSectionId(s.id)}
+                  className={cn(
+                    "shrink-0 rounded-full px-3.5 py-2 text-xs font-medium transition",
+                    active
+                      ? "bg-emerald-500 text-white shadow-md shadow-emerald-500/25"
+                      : "bg-zinc-950 text-zinc-400 ring-1 ring-white/10 hover:text-zinc-200",
+                  )}
+                >
+                  {s.name}
+                  <span className="ml-1.5 opacity-70">({s.items.length})</span>
+                </button>
+              );
+            })}
+          </div>
+
+          <div className="flex shrink-0 items-center justify-between gap-2">
+            {pageCount > 1 ? (
+              <div className="flex items-center gap-1.5">
                 <button
                   type="button"
-                  onClick={() =>
-                    setOpenSectionId((cur) =>
-                      cur === section.id ? null : section.id,
-                    )
-                  }
-                  className="flex w-full items-center justify-between gap-2 px-3 py-2 text-left text-sm font-medium text-zinc-200 hover:bg-white/5"
+                  disabled={safePage <= 0}
+                  onClick={() => setPage((p) => Math.max(0, p - 1))}
+                  className="grid h-8 w-8 place-items-center rounded-lg border border-white/10 bg-zinc-950 text-zinc-300 disabled:opacity-40"
+                  aria-label="Previous page"
                 >
-                  <span>
-                    {section.name}
-                    <span className="ml-2 text-xs font-normal text-zinc-500">
-                      ({section.items.length})
-                    </span>
-                  </span>
-                  <ChevronDown
-                    size={16}
-                    className={cn(
-                      "shrink-0 text-zinc-500 transition-transform",
-                      open && "rotate-180",
-                    )}
-                  />
+                  ‹
                 </button>
-                {open ? (
-                  <ul className="border-t border-white/5 pb-1">
-                    {section.items.map((item) => {
-                      const oos = itemOutOfStock(item);
-                      const ok = itemAvailable(item);
-                      return (
-                        <li key={item.id}>
-                          <button
-                            type="button"
-                            disabled={disabled || !ok}
-                            onClick={() => {
-                              const n = Math.max(1, parseInt(qty, 10) || 1);
-                              if (
-                                item.trackStock &&
-                                item.stock > 0 &&
-                                n > item.stock
-                              ) {
-                                onPick(item.id, item.stock);
-                              } else {
-                                onPick(item.id, n);
-                              }
-                            }}
-                            className={cn(
-                              "flex w-full items-center justify-between gap-2 px-3 py-2 text-left text-sm",
-                              ok
-                                ? "text-zinc-200 hover:bg-emerald-500/10"
-                                : "cursor-not-allowed text-zinc-600",
-                            )}
-                          >
-                            <span className="min-w-0 truncate">{item.name}</span>
-                            <span className="shrink-0 text-xs">
-                              {formatMoney(item.price)}
-                              {item.trackStock ? (
-                                <span
-                                  className={cn(
-                                    "ml-2",
-                                    oos ? "text-rose-400" : "text-zinc-500",
-                                  )}
-                                >
-                                  {oos ? "Out of stock" : `${item.stock} left`}
-                                </span>
-                              ) : null}
-                            </span>
-                          </button>
-                        </li>
-                      );
-                    })}
-                  </ul>
-                ) : null}
+                <span className="text-[11px] tabular-nums text-zinc-500">
+                  {safePage + 1} / {pageCount}
+                </span>
+                <button
+                  type="button"
+                  disabled={safePage >= pageCount - 1}
+                  onClick={() => setPage((p) => Math.min(pageCount - 1, p + 1))}
+                  className="grid h-8 w-8 place-items-center rounded-lg border border-white/10 bg-zinc-950 text-zinc-300 disabled:opacity-40"
+                  aria-label="Next page"
+                >
+                  ›
+                </button>
               </div>
-            );
-          })
-        )}
-      </div>
+            ) : (
+              <span className="text-[11px] text-zinc-500">
+                {items.length} item{items.length === 1 ? "" : "s"}
+              </span>
+            )}
+            <p className="text-[10px] text-zinc-600">
+              Tap to add · change qty on ticket
+            </p>
+          </div>
+
+          <ul className="grid max-h-[min(42vh,360px)] grid-cols-2 gap-2 overflow-y-auto overscroll-contain sm:grid-cols-3">
+            {pageItems.map((item) => {
+              const oos = itemOutOfStock(item);
+              const image = item.imageUrl ?? item.imageUrl2;
+              const flashed = flashId === item.id;
+
+              return (
+                <li key={item.id}>
+                  <button
+                    type="button"
+                    disabled={disabled || oos}
+                    onClick={() => addItem(item)}
+                    className={cn(
+                      "flex h-full w-full flex-col overflow-hidden rounded-xl border bg-zinc-950/80 text-left transition active:scale-[0.98] disabled:opacity-50",
+                      flashed
+                        ? "border-emerald-400/60 ring-2 ring-emerald-400/30"
+                        : "border-white/10 hover:border-emerald-500/30 hover:bg-zinc-900",
+                    )}
+                  >
+                    <span className="relative aspect-[4/3] w-full bg-zinc-900">
+                      {image ? (
+                        <MediaImage
+                          src={image}
+                          alt=""
+                          fill
+                          className="object-cover"
+                        />
+                      ) : (
+                        <span className="grid h-full place-items-center font-serif text-2xl text-zinc-600">
+                          {item.name.slice(0, 1)}
+                        </span>
+                      )}
+                    </span>
+                    <span className="flex flex-1 flex-col p-2.5">
+                      <span className="line-clamp-2 text-xs font-semibold leading-snug text-zinc-100">
+                        {item.name}
+                      </span>
+                      <span className="mt-1 text-xs font-bold tabular-nums text-emerald-300">
+                        {formatMoney(item.price)}
+                      </span>
+                      {item.trackStock ? (
+                        <span
+                          className={cn(
+                            "mt-1 text-[10px]",
+                            oos ? "text-rose-400" : "text-zinc-500",
+                          )}
+                        >
+                          {oos ? "Out of stock" : `${item.stock} left`}
+                        </span>
+                      ) : null}
+                    </span>
+                  </button>
+                </li>
+              );
+            })}
+          </ul>
+        </>
+      )}
     </div>
   );
 }

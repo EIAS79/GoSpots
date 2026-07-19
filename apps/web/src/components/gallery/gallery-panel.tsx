@@ -1,8 +1,12 @@
 "use client";
 
 import {
+  ArrowDown,
+  ArrowUp,
   ImagePlus,
   Loader2,
+  Pencil,
+  Save,
   Star,
   Trash2,
   Upload,
@@ -12,6 +16,7 @@ import { cn } from "@/lib/cn";
 import {
   deleteGalleryItem,
   fetchGallery,
+  updateGalleryItem,
   uploadGalleryCover,
   uploadGalleryItem,
   useGalleryItemAsCover,
@@ -19,9 +24,7 @@ import {
 } from "@/lib/gallery-client";
 import { validateImageUploadFile } from "@/lib/image-upload";
 import { resolveMediaUrl } from "@/lib/media-url";
-
-const PLACEHOLDER =
-  "https://images.unsplash.com/photo-1615722440048-da4fd9202b9d?auto=format&fit=crop&w=600&q=70";
+import { VENUE_PLACEHOLDER_SRC } from "@/lib/venue-placeholder";
 
 function Thumb({
   src,
@@ -48,6 +51,8 @@ export function GalleryPanel({ canWrite }: { canWrite: boolean }) {
   const [loading, setLoading] = useState(true);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [editingId, setEditingId] = useState<string | null>(null);
+  const [captionDraft, setCaptionDraft] = useState("");
   const coverInputRef = useRef<HTMLInputElement>(null);
   const galleryInputRef = useRef<HTMLInputElement>(null);
 
@@ -78,8 +83,8 @@ export function GalleryPanel({ canWrite }: { canWrite: boolean }) {
     setBusy(true);
     setError(null);
     try {
-      const res = await uploadGalleryCover(file);
-      setCoverImage(res.coverImage);
+      await uploadGalleryCover(file);
+      await load();
     } catch (e) {
       setError(e instanceof Error ? e.message : "Cover upload failed.");
     } finally {
@@ -97,8 +102,8 @@ export function GalleryPanel({ canWrite }: { canWrite: boolean }) {
     setBusy(true);
     setError(null);
     try {
-      const item = await uploadGalleryItem(file);
-      setItems((prev) => [...prev, item]);
+      await uploadGalleryItem(file);
+      await load();
     } catch (e) {
       setError(e instanceof Error ? e.message : "Upload failed.");
     } finally {
@@ -132,7 +137,46 @@ export function GalleryPanel({ canWrite }: { canWrite: boolean }) {
     }
   }
 
-  const coverUrl = resolveMediaUrl(coverImage) ?? PLACEHOLDER;
+  async function onSaveCaption(id: string) {
+    if (!canWrite) return;
+    setBusy(true);
+    setError(null);
+    try {
+      const updated = await updateGalleryItem(id, {
+        caption: captionDraft.trim() || null,
+      });
+      setItems((prev) => prev.map((item) => (item.id === id ? updated : item)));
+      setEditingId(null);
+      setCaptionDraft("");
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Could not save caption.");
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function onMove(item: GalleryItem, direction: -1 | 1) {
+    if (!canWrite) return;
+    const index = items.findIndex((entry) => entry.id === item.id);
+    const swapIndex = index + direction;
+    if (index < 0 || swapIndex < 0 || swapIndex >= items.length) return;
+    const other = items[swapIndex];
+    setBusy(true);
+    setError(null);
+    try {
+      await Promise.all([
+        updateGalleryItem(item.id, { sortOrder: other.sortOrder }),
+        updateGalleryItem(other.id, { sortOrder: item.sortOrder }),
+      ]);
+      await load();
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Could not reorder gallery.");
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  const coverUrl = resolveMediaUrl(coverImage) ?? VENUE_PLACEHOLDER_SRC;
 
   if (loading) {
     return (
@@ -156,7 +200,7 @@ export function GalleryPanel({ canWrite }: { canWrite: boolean }) {
             <p className="text-[11px] font-medium uppercase tracking-wide text-zinc-500">
               Marketing cover
             </p>
-            <div className="mt-2 h-28 w-44 overflow-hidden rounded-lg border border-white/10 bg-zinc-950 sm:h-32 sm:w-52">
+            <div className="mt-2 h-28 w-full max-w-xs overflow-hidden rounded-lg border border-white/10 bg-zinc-950 sm:h-32">
               <Thumb src={coverUrl} alt="Cover" />
             </div>
             {canWrite ? (
@@ -237,38 +281,125 @@ export function GalleryPanel({ canWrite }: { canWrite: boolean }) {
             <p className="text-xs text-zinc-500">No gallery photos yet.</p>
           </div>
         ) : (
-          <div className="grid grid-cols-4 gap-2 sm:grid-cols-5 md:grid-cols-6">
-            {items.map((item) => {
+          <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 md:grid-cols-4">
+            {items.map((item, index) => {
               const url = resolveMediaUrl(item.imageUrl);
               if (!url) return null;
               return (
                 <article
                   key={item.id}
-                  className="group relative aspect-square overflow-hidden rounded-lg border border-white/10 bg-zinc-950"
+                  className="rounded-lg border border-white/10 bg-zinc-950/70 p-2"
                 >
-                  <Thumb src={url} alt={item.caption ?? "Gallery"} />
-                  {canWrite ? (
-                    <div className="absolute inset-0 flex items-end justify-between gap-0.5 bg-black/50 p-1 opacity-0 transition group-hover:opacity-100">
+                  <div className="group relative aspect-square overflow-hidden rounded-md border border-white/10 bg-zinc-950">
+                    <Thumb src={url} alt={item.caption ?? "Gallery"} />
+                    {canWrite ? (
+                      <div className="absolute inset-x-0 bottom-0 flex flex-wrap items-center justify-between gap-0.5 bg-black/50 p-1 opacity-100 transition sm:opacity-0 sm:group-hover:opacity-100">
+                        <div className="flex gap-1">
+                          <button
+                            type="button"
+                            title="Move up"
+                            disabled={busy || index === 0}
+                            onClick={() => void onMove(item, -1)}
+                            className="rounded bg-white/15 p-1 text-zinc-100 disabled:opacity-40"
+                          >
+                            <ArrowUp size={11} />
+                          </button>
+                          <button
+                            type="button"
+                            title="Move down"
+                            disabled={busy || index === items.length - 1}
+                            onClick={() => void onMove(item, 1)}
+                            className="rounded bg-white/15 p-1 text-zinc-100 disabled:opacity-40"
+                          >
+                            <ArrowDown size={11} />
+                          </button>
+                        </div>
+                        <div className="flex gap-1">
+                          <button
+                            type="button"
+                            title="Set as cover"
+                            disabled={busy}
+                            onClick={() => void onUseAsCover(item.id)}
+                            className="rounded bg-white/15 p-1 text-amber-200"
+                          >
+                            <Star size={11} />
+                          </button>
+                          <button
+                            type="button"
+                            title="Edit caption"
+                            disabled={busy}
+                            onClick={() => {
+                              setEditingId(item.id);
+                              setCaptionDraft(item.caption ?? "");
+                            }}
+                            className="rounded bg-white/15 p-1 text-sky-200"
+                          >
+                            <Pencil size={11} />
+                          </button>
+                          <button
+                            type="button"
+                            title="Delete"
+                            disabled={busy}
+                            onClick={() => void onDelete(item.id)}
+                            className="rounded bg-white/15 p-1 text-rose-200"
+                          >
+                            <Trash2 size={11} />
+                          </button>
+                        </div>
+                      </div>
+                    ) : null}
+                  </div>
+                  <div className="mt-2">
+                    {editingId === item.id ? (
+                      <div className="space-y-2">
+                        <input
+                          value={captionDraft}
+                          onChange={(e) => setCaptionDraft(e.target.value)}
+                          placeholder="Add a caption"
+                          className="w-full rounded-md border border-white/10 bg-zinc-900 px-2.5 py-2 text-xs text-white"
+                        />
+                        <div className="flex gap-2">
+                          <button
+                            type="button"
+                            disabled={busy}
+                            onClick={() => void onSaveCaption(item.id)}
+                            className="inline-flex items-center gap-1 rounded-md bg-emerald-600 px-2 py-1 text-[11px] text-white disabled:opacity-50"
+                          >
+                            <Save size={11} />
+                            Save
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setEditingId(null);
+                              setCaptionDraft("");
+                            }}
+                            className="rounded-md border border-white/10 px-2 py-1 text-[11px] text-zinc-300"
+                          >
+                            Cancel
+                          </button>
+                        </div>
+                      </div>
+                    ) : (
                       <button
                         type="button"
-                        title="Set as cover"
-                        disabled={busy}
-                        onClick={() => void onUseAsCover(item.id)}
-                        className="rounded bg-white/15 p-1 text-amber-200"
+                        disabled={!canWrite}
+                        onClick={() => {
+                          if (!canWrite) return;
+                          setEditingId(item.id);
+                          setCaptionDraft(item.caption ?? "");
+                        }}
+                        className={cn(
+                          "line-clamp-2 text-left text-xs leading-relaxed",
+                          canWrite
+                            ? "text-zinc-400 hover:text-zinc-200"
+                            : "text-zinc-500",
+                        )}
                       >
-                        <Star size={11} />
+                        {item.caption?.trim() || "Add a caption"}
                       </button>
-                      <button
-                        type="button"
-                        title="Delete"
-                        disabled={busy}
-                        onClick={() => void onDelete(item.id)}
-                        className="rounded bg-white/15 p-1 text-rose-200"
-                      >
-                        <Trash2 size={11} />
-                      </button>
-                    </div>
-                  ) : null}
+                    )}
+                  </div>
                 </article>
               );
             })}

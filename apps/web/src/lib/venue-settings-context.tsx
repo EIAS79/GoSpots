@@ -54,6 +54,8 @@ export function VenueSettingsProvider({
         locale: initial.locale ?? "en",
         currency: initial.currency ?? "EUR",
         isPublished: initial.isPublished ?? false,
+        advertiseOnVenuesPage: initial.advertiseOnVenuesPage ?? true,
+        reviewsMode: initial.reviewsMode ?? "ENABLED",
         floorCount: initial.floorCount ?? 1,
       }
     : null,
@@ -83,10 +85,15 @@ export function VenueSettingsProvider({
   }, []);
 
   useEffect(() => {
-    if (!initial?.id) {
+    const hasFullProfile =
+      !!initial?.id &&
+      !!initial?.slug &&
+      !!initial?.locale &&
+      typeof initial.isPublished === "boolean";
+    if (!hasFullProfile) {
       void refresh();
     }
-  }, [initial?.id, refresh]);
+  }, [initial?.id, initial?.slug, initial?.locale, initial?.isPublished, refresh]);
 
   const updatePreferences = useCallback(
     async (prefs: Partial<ShopPreferences>) => {

@@ -8,14 +8,14 @@ import {
   Length,
   Matches,
   MaxLength,
-} from "class-validator";
-import { ShopRole } from "@prisma/client";
+} from 'class-validator';
+import { ShopRole } from '@prisma/client';
 
 export class CreateStaffDto {
   @IsString()
   @Length(3, 32)
   @Matches(/^[a-z0-9][a-z0-9._-]*$/i, {
-    message: "Username: 3–32 chars, letters/numbers, may include . _ -",
+    message: 'Username: 3–32 chars, letters/numbers, may include . _ -',
   })
   username!: string;
 

@@ -1,6 +1,6 @@
 "use client";
 
-import { CalendarCheck, Users, UtensilsCrossed } from "lucide-react";
+import { CalendarCheck, Check, Users, UtensilsCrossed } from "lucide-react";
 import { cn } from "@/lib/cn";
 import { OrderStatusBadge } from "@/components/finance/order-status-badge";
 import type { ShopOrder } from "@/lib/finance-client";
@@ -29,18 +29,18 @@ export function OrderGridCard({
   order,
   selected,
   checked,
+  selectionMode,
   onSelect,
   onToggleCheck,
   formatMoney,
-  showCheckbox,
 }: {
   order: ShopOrder;
   selected: boolean;
   checked: boolean;
+  selectionMode: boolean;
   onSelect: () => void;
   onToggleCheck: () => void;
   formatMoney: (n: number) => string;
-  showCheckbox: boolean;
 }) {
   const lines = activeLineCount(order);
   const title = getOrderDisplayLabel(order);
@@ -50,32 +50,23 @@ export function OrderGridCard({
     <article
       className={cn(
         "group relative flex flex-col rounded-xl border p-3 transition-all duration-200",
-        selected
-          ? "border-emerald-400/50 bg-gradient-to-br from-emerald-500/15 to-emerald-500/5 shadow-lg shadow-emerald-500/10 ring-1 ring-emerald-400/30"
-          : "border-white/10 bg-zinc-900/50 hover:border-white/20 hover:bg-zinc-900/80",
+        selectionMode && checked
+          ? "border-emerald-400/60 bg-emerald-500/10 ring-2 ring-emerald-400/40"
+          : selected && !selectionMode
+            ? "border-emerald-400/50 bg-gradient-to-br from-emerald-500/15 to-emerald-500/5 shadow-lg shadow-emerald-500/10 ring-1 ring-emerald-400/30"
+            : "border-white/10 bg-zinc-900/50 hover:border-white/20 hover:bg-zinc-900/80",
       )}
     >
-      {showCheckbox ? (
-        <label
-          className="absolute left-2 top-2 z-10 flex cursor-pointer items-center"
-          onClick={(e) => e.stopPropagation()}
-        >
-          <input
-            type="checkbox"
-            checked={checked}
-            onChange={onToggleCheck}
-            className="size-3.5 rounded border-white/30 bg-zinc-950/80 text-emerald-500 focus:ring-emerald-500/40"
-          />
-        </label>
+      {selectionMode && checked ? (
+        <span className="absolute right-2 top-2 z-10 grid size-6 place-items-center rounded-full bg-emerald-500 text-white shadow-lg shadow-emerald-500/30">
+          <Check size={14} strokeWidth={3} />
+        </span>
       ) : null}
 
       <button
         type="button"
-        onClick={onSelect}
-        className={cn(
-          "flex min-h-[88px] flex-1 flex-col text-left",
-          showCheckbox && "pl-5",
-        )}
+        onClick={() => (selectionMode ? onToggleCheck() : onSelect())}
+        className="flex min-h-[88px] flex-1 flex-col text-left"
       >
         <div className="flex items-start justify-between gap-1">
           <h3
@@ -87,7 +78,7 @@ export function OrderGridCard({
           >
             {title}
           </h3>
-          <OrderStatusBadge status={order.status} />
+          {!selectionMode ? <OrderStatusBadge status={order.status} /> : null}
         </div>
 
         <p className="mt-2 text-lg font-bold tabular-nums tracking-tight text-emerald-300">

@@ -1,15 +1,35 @@
-import { Injectable } from "@nestjs/common";
-import { PrismaService } from "../../prisma/prisma.service";
+import {
+  ForbiddenException,
+  Injectable,
+  NotFoundException,
+} from '@nestjs/common';
+import { PrismaService } from '../../prisma/prisma.service';
 import {
   buildFeatureCatalog,
   buildMarketingCatalog,
   resolveEffectiveTier,
+  resolveStaffSeatLimit,
   resolveSubscriptionAccess,
-  staffSeatLimit,
-} from "../../common/subscription-tier";
-import { requireShopId } from "../../common/tenant";
-import type { JwtAccessPayload } from "../auth/auth.service";
-import { buildFinanceAnalytics } from "../finance/finance-analytics.util";
+  TRIAL_STAFF_SEAT_LIMIT,
+  tierForPack,
+} from '../../common/subscription-tier';
+import {
+  monthlyTotal,
+  parseAddOns,
+  resolvePackId,
+  serializeAddOns,
+  VENUE_ADD_ON_LIST,
+  VENUE_PACK_LIST,
+  type AddOnId,
+} from '../../common/venue-packs';
+import { requireShopId } from '../../common/tenant';
+import { hasPermission, PERMISSIONS } from '../../common/permissions';
+import type { JwtAccessPayload } from '../auth/auth.service';
+import type { UpdateVenuePackDto } from '../auth/dto/auth.dto';
+import {
+  buildFinanceAnalytics,
+  computeRevenueSince,
+} from '../finance/finance-analytics.util';
 
 @Injectable()
 export class DashboardService {
@@ -28,9 +48,8 @@ export class DashboardService {
     });
 
     const [
-      salesToday,
-      salesWeek,
-      orderSalesToday,
+      revenueToday,
+      revenueWeek,
       orderSalesWeek,
       lossesWeek,
       ordersToday,
@@ -46,40 +65,15 @@ export class DashboardService {
       recentAudit,
       financeWeek,
     ] = await Promise.all([
-      this.prisma.transaction.aggregate({
-        where: {
-          shopId,
-          kind: "SALE",
-          createdAt: { gte: startOfDay },
-        },
-        _sum: { amount: true },
-      }),
-      this.prisma.transaction.aggregate({
-        where: {
-          shopId,
-          kind: "SALE",
-          createdAt: { gte: weekAgo },
-        },
-        _sum: { amount: true },
-      }),
+      computeRevenueSince(this.prisma, shopId, startOfDay),
+      computeRevenueSince(this.prisma, shopId, weekAgo),
       this.prisma.shopOrder.aggregate({
         where: {
           shopId,
-          status: "COMPLETED",
-          archivedAt: null,
-          completedAt: { gte: startOfDay },
-        },
-        _sum: { total: true },
-        _count: true,
-      }),
-      this.prisma.shopOrder.aggregate({
-        where: {
-          shopId,
-          status: "COMPLETED",
+          status: 'COMPLETED',
           archivedAt: null,
           completedAt: { gte: weekAgo },
         },
-        _sum: { total: true },
         _count: true,
       }),
       this.prisma.shopLoss.aggregate({
@@ -92,45 +86,55 @@ export class DashboardService {
       this.prisma.shopOrder.aggregate({
         where: {
           shopId,
-          status: "COMPLETED",
+          status: 'COMPLETED',
           archivedAt: null,
           completedAt: { gte: weekAgo },
         },
         _sum: { guestCount: true },
       }),
       this.prisma.reservation.count({
-        where: { shopId, startsAt: { gte: startOfDay, lt: new Date(startOfDay.getTime() + 86400000) } },
+        where: {
+          shopId,
+          startsAt: {
+            gte: startOfDay,
+            lt: new Date(startOfDay.getTime() + 86400000),
+          },
+        },
       }),
       this.prisma.reservation.count({
-        where: { shopId, status: { in: ["PENDING", "CONFIRMED"] } },
+        where: { shopId, status: { in: ['PENDING', 'CONFIRMED'] } },
       }),
       this.prisma.membership.count({
         where: {
           shopId,
-          role: { in: ["STAFF", "MANAGER"] },
+          role: { in: ['STAFF', 'MANAGER'] },
           isActive: true,
-          user: { accountType: "VENUE_STAFF" },
+          user: { accountType: 'VENUE_STAFF' },
         },
       }),
       this.prisma.menuItem.count({ where: { shopId } }),
       this.prisma.analyticsEvent.count({
-        where: { shopId, type: "VENUE_VIEW", createdAt: { gte: weekAgo } },
+        where: { shopId, type: 'VENUE_VIEW', createdAt: { gte: weekAgo } },
       }),
       this.prisma.analyticsEvent.count({
-        where: { shopId, type: "MENU_VIEW", createdAt: { gte: weekAgo } },
+        where: { shopId, type: 'MENU_VIEW', createdAt: { gte: weekAgo } },
       }),
       this.prisma.analyticsEvent.count({
-        where: { shopId, type: "RESERVATION_CLICK", createdAt: { gte: weekAgo } },
+        where: {
+          shopId,
+          type: 'RESERVATION_CLICK',
+          createdAt: { gte: weekAgo },
+        },
       }),
       this.prisma.reservation.findMany({
         where: { shopId },
-        orderBy: { startsAt: "desc" },
+        orderBy: { startsAt: 'desc' },
         take: 5,
         include: { resource: { select: { name: true } } },
       }),
       this.prisma.auditLog.findMany({
         where: { shopId },
-        orderBy: { createdAt: "desc" },
+        orderBy: { createdAt: 'desc' },
         take: 8,
       }),
       buildFinanceAnalytics(this.prisma, shopId, 7),
@@ -138,11 +142,12 @@ export class DashboardService {
 
     const topItems = financeWeek.topItems;
 
-    const effectiveTier = resolveEffectiveTier(shop?.subscription ?? null);
-    const features = buildFeatureCatalog(effectiveTier);
+    const access = resolveSubscriptionAccess(shop?.subscription ?? null);
+    const effectiveTier = access.effectiveTier;
+    const features = buildFeatureCatalog(access.enabledModules);
 
     const viewEvents = await this.prisma.analyticsEvent.findMany({
-      where: { shopId, type: "VENUE_VIEW", createdAt: { gte: weekAgo } },
+      where: { shopId, type: 'VENUE_VIEW', createdAt: { gte: weekAgo } },
       select: { createdAt: true },
     });
     const viewsByDay: Record<string, number> = {};
@@ -156,10 +161,6 @@ export class DashboardService {
       if (key in viewsByDay) viewsByDay[key]++;
     }
 
-    const revenueToday =
-      (salesToday._sum?.amount ?? 0) + (orderSalesToday._sum?.total ?? 0);
-    const revenueWeek =
-      (salesWeek._sum?.amount ?? 0) + (orderSalesWeek._sum?.total ?? 0);
     const lossesWeekAmt = lossesWeek._sum.amount ?? 0;
 
     return {
@@ -168,8 +169,8 @@ export class DashboardService {
         name: shop?.name,
         slug: shop?.slug,
         isPublished: shop?.isPublished,
-        locale: shop?.locale ?? "en",
-        currency: shop?.currency ?? "EUR",
+        locale: shop?.locale ?? 'en',
+        currency: shop?.currency ?? 'EUR',
       },
       subscription: shop?.subscription
         ? {
@@ -177,18 +178,26 @@ export class DashboardService {
             effectiveTier,
             status: shop.subscription.status,
             trialEndsAt: shop.subscription.trialEndsAt,
-            staffLimit: staffSeatLimit(effectiveTier),
+            staffLimit: resolveStaffSeatLimit(shop.subscription),
+            staffSeatQuantity:
+              (shop.subscription as { staffSeatQuantity?: number })
+                .staffSeatQuantity ?? 0,
             staffUsed: staffCount,
             features,
+            packId: access.packId,
+            addOns: access.addOns,
           }
         : {
-            tier: "FREE",
+            tier: 'FREE',
             effectiveTier,
-            status: "ACTIVE",
+            status: 'ACTIVE',
             trialEndsAt: null,
             staffLimit: 0,
+            staffSeatQuantity: 0,
             staffUsed: staffCount,
             features,
+            packId: null,
+            addOns: '',
           },
       kpis: {
         revenueToday,
@@ -196,7 +205,7 @@ export class DashboardService {
         lossesWeek: lossesWeekAmt,
         profitWeek: revenueWeek - lossesWeekAmt,
         ordersToday,
-        completedOrdersWeek: orderSalesWeek._count,
+        completedOrdersWeek: orderSalesWeek._count ?? 0,
         customersWeek: customersWeek._sum?.guestCount ?? 0,
         reservationsToday,
         reservationsPending,
@@ -247,6 +256,7 @@ export class DashboardService {
 
   async subscription(actor: JwtAccessPayload) {
     const shopId = requireShopId(actor);
+    await this.applyDuePendingPlan(shopId);
     const shop = await this.prisma.shop.findUnique({
       where: { id: shopId },
       include: { subscription: true },
@@ -254,25 +264,249 @@ export class DashboardService {
     const staffUsed = await this.prisma.membership.count({
       where: {
         shopId,
-        role: { in: ["STAFF", "MANAGER"] },
+        role: { in: ['STAFF', 'MANAGER'] },
         isActive: true,
-        user: { accountType: "VENUE_STAFF" },
+        user: { accountType: 'VENUE_STAFF' },
       },
     });
-    const access = resolveSubscriptionAccess(shop?.subscription ?? null);
-    const { effectiveTier } = access;
+    const sub = shop?.subscription ?? null;
+    const access = resolveSubscriptionAccess(sub);
+    const { effectiveTier, enabledModules } = access;
+    const staffSeatQuantity =
+      (sub as { staffSeatQuantity?: number } | null)?.staffSeatQuantity ?? 0;
+    const pendingPackId =
+      (sub as { pendingPackId?: string | null } | null)?.pendingPackId ?? null;
+    const pendingAddOns =
+      (sub as { pendingAddOns?: string | null } | null)?.pendingAddOns ?? null;
+    const pendingStaffSeatQuantity =
+      (sub as { pendingStaffSeatQuantity?: number | null } | null)
+        ?.pendingStaffSeatQuantity ?? null;
+    const hasPendingChanges = pendingPackId != null;
+    const pendingMonthlyTotal = hasPendingChanges
+      ? monthlyTotal(
+          pendingPackId,
+          pendingAddOns ?? '',
+          pendingStaffSeatQuantity ?? 0,
+        )
+      : null;
+
     return {
-      subscription: shop?.subscription,
+      subscription: sub
+        ? {
+            ...sub,
+            packId: sub.packId,
+            addOns: sub.addOns,
+          }
+        : null,
       effectiveTier,
       billedTier: access.billedTier,
       trialActive: access.trialActive,
       trialExpired: access.trialExpired,
       trialDaysRemaining: access.trialDaysRemaining,
+      packId: access.packId,
+      addOns: access.addOns,
+      staffSeatQuantity,
+      pendingPackId,
+      pendingAddOns,
+      pendingStaffSeatQuantity,
+      hasPendingChanges,
+      pendingAppliesAt: hasPendingChanges
+        ? ((sub as { currentPeriodEnd?: Date | null } | null)
+            ?.currentPeriodEnd ?? null)
+        : null,
+      pendingMonthlyTotal,
+      trialStaffSeatLimit: TRIAL_STAFF_SEAT_LIMIT,
+      enabledModules: [...enabledModules],
+      monthlyTotal: monthlyTotal(
+        access.packId,
+        access.addOns,
+        staffSeatQuantity,
+      ),
+      billingConfigured: this.billingConfigured(),
+      lemonSubscriptionId:
+        (sub as { lemonSubscriptionId?: string | null } | null)
+          ?.lemonSubscriptionId ?? null,
       staffUsed,
-      staffLimit: staffSeatLimit(effectiveTier),
-      features: buildFeatureCatalog(effectiveTier),
+      staffLimit: resolveStaffSeatLimit(sub),
+      features: buildFeatureCatalog(enabledModules),
       marketingFeatures: buildMarketingCatalog(effectiveTier),
+      packs: VENUE_PACK_LIST,
+      addOnCatalog: VENUE_ADD_ON_LIST,
+      /** Data is never deleted when features turn off — only visibility. */
+      dataRetentionNote:
+        'Turning features off only hides them from the dashboard. Your data stays and returns when you turn the feature back on.',
     };
   }
 
+  private billingConfigured() {
+    return Boolean(
+      process.env.LEMON_SQUEEZY_API_KEY &&
+        process.env.LEMON_SQUEEZY_STORE_ID &&
+        process.env.LEMON_SQUEEZY_VARIANT_ID,
+    );
+  }
+
+  /**
+   * If a paid period has ended and pending plan changes exist, promote them.
+   * Safe to call often — no-op when nothing is due.
+   */
+  async applyDuePendingPlan(shopId: string) {
+    const sub = await this.prisma.subscription.findUnique({
+      where: { shopId },
+    });
+    if (!sub) return;
+    const pendingPackId = (sub as { pendingPackId?: string | null })
+      .pendingPackId;
+    if (pendingPackId == null) return;
+    if (sub.status !== 'ACTIVE') return;
+    const periodEnd = sub.currentPeriodEnd;
+    if (periodEnd && periodEnd.getTime() > Date.now()) return;
+
+    const pendingAddOns =
+      (sub as { pendingAddOns?: string | null }).pendingAddOns ?? sub.addOns;
+    const pendingSeats =
+      (sub as { pendingStaffSeatQuantity?: number | null })
+        .pendingStaffSeatQuantity ??
+      (sub as { staffSeatQuantity?: number }).staffSeatQuantity ??
+      0;
+    const packId = resolvePackId(pendingPackId);
+    const tier = tierForPack(packId, pendingAddOns);
+
+    await this.prisma.$transaction([
+      this.prisma.subscription.update({
+        where: { shopId },
+        data: {
+          packId,
+          addOns: pendingAddOns,
+          tier,
+          staffSeatQuantity: pendingSeats,
+          pendingPackId: null,
+          pendingAddOns: null,
+          pendingStaffSeatQuantity: null,
+        } as never,
+      }),
+      this.prisma.shop.update({
+        where: { id: shopId },
+        data: { venueType: packId },
+      }),
+    ]);
+  }
+
+  async updatePack(actor: JwtAccessPayload, dto: UpdateVenuePackDto) {
+    if (
+      actor.shopRole !== 'OWNER' &&
+      !hasPermission(actor.perms ?? '', PERMISSIONS.SUBSCRIPTION_MANAGE)
+    ) {
+      throw new ForbiddenException(
+        'Only the venue owner or a manager with billing access can change the pack.',
+      );
+    }
+    const shopId = requireShopId(actor);
+    await this.applyDuePendingPlan(shopId);
+    const shop = await this.prisma.shop.findUnique({
+      where: { id: shopId },
+      include: { subscription: true },
+    });
+    if (!shop?.subscription) {
+      throw new NotFoundException('Subscription not found.');
+    }
+
+    const sub = shop.subscription;
+    const packId = resolvePackId(dto.packId ?? sub.packId);
+    const addOnsCsv =
+      dto.addOns != null
+        ? serializeAddOns(dto.addOns as AddOnId[])
+        : sub.addOns;
+    const hasTeam = parseAddOns(addOnsCsv).includes('team_accounts');
+    const currentSeats =
+      (sub as { staffSeatQuantity?: number }).staffSeatQuantity ?? 0;
+    let staffSeatQuantity =
+      dto.staffSeatQuantity != null
+        ? Math.max(0, Math.min(100, Math.floor(dto.staffSeatQuantity)))
+        : currentSeats;
+    if (!hasTeam) {
+      staffSeatQuantity = 0;
+    }
+
+    const access = resolveSubscriptionAccess(sub);
+    const isPaidActive = sub.status === 'ACTIVE' && !access.trialActive;
+    const waitingToPay =
+      !isPaidActive &&
+      !access.trialActive &&
+      (access.trialExpired ||
+        sub.status === 'CANCELED' ||
+        sub.status === 'PAST_DUE' ||
+        sub.status === 'TRIAL');
+
+    if (access.trialActive && hasTeam) {
+      staffSeatQuantity = Math.min(
+        TRIAL_STAFF_SEAT_LIMIT,
+        Math.max(1, staffSeatQuantity || TRIAL_STAFF_SEAT_LIMIT),
+      );
+    }
+
+    const tier = tierForPack(packId, addOnsCsv);
+
+    if (isPaidActive) {
+      const liveSame =
+        packId === sub.packId &&
+        addOnsCsv === sub.addOns &&
+        staffSeatQuantity === currentSeats;
+
+      if (liveSame) {
+        // Cancel any scheduled change that matches what is already live.
+        await this.prisma.subscription.update({
+          where: { shopId },
+          data: {
+            pendingPackId: null,
+            pendingAddOns: null,
+            pendingStaffSeatQuantity: null,
+          } as never,
+        });
+      } else {
+        // No mid-cycle refunds or access changes — schedule for next period.
+        await this.prisma.subscription.update({
+          where: { shopId },
+          data: {
+            pendingPackId: packId,
+            pendingAddOns: addOnsCsv,
+            pendingStaffSeatQuantity: staffSeatQuantity,
+          } as never,
+        });
+      }
+    } else if (waitingToPay) {
+      // Trial ended / canceled / past due: save selection for checkout only.
+      // Modules stay locked until Lemon marks the subscription ACTIVE.
+      await this.prisma.subscription.update({
+        where: { shopId },
+        data: {
+          pendingPackId: packId,
+          pendingAddOns: addOnsCsv,
+          pendingStaffSeatQuantity: staffSeatQuantity,
+        } as never,
+      });
+    } else {
+      // Active trial: apply immediately so selected modules appear in the dashboard.
+      await this.prisma.$transaction([
+        this.prisma.subscription.update({
+          where: { shopId },
+          data: {
+            packId,
+            addOns: addOnsCsv,
+            tier,
+            staffSeatQuantity,
+            pendingPackId: null,
+            pendingAddOns: null,
+            pendingStaffSeatQuantity: null,
+          } as never,
+        }),
+        this.prisma.shop.update({
+          where: { id: shopId },
+          data: { venueType: packId },
+        }),
+      ]);
+    }
+
+    return this.subscription(actor);
+  }
 }

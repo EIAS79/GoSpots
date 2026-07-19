@@ -10,6 +10,7 @@ import {
 } from "lucide-react";
 import { useCallback, useEffect, useState } from "react";
 import { TenantPage } from "@/components/layout/tenant-page";
+import { FeatureGate } from "@/components/subscription/feature-gate";
 import { cn } from "@/lib/cn";
 import {
   AUDIT_ACTION_GROUPS,
@@ -17,6 +18,7 @@ import {
   sectionLabel,
 } from "@/lib/audit";
 import {
+  deleteAuditEntries,
   deleteAuditEntry,
   downloadAuditCsv,
   fetchAuditLog,
@@ -24,7 +26,11 @@ import {
 } from "@/lib/audit-client";
 import { formatDate } from "@/lib/format";
 import { DASHBOARD_SECTION_GUIDES } from "@/lib/dashboard-section-guides";
+import { hasPermission } from "@/lib/auth-client";
+import { isFeatureUnlocked } from "@/lib/plan";
 import { useAuth } from "@/lib/use-auth";
+import { useCurrentMembership } from "@/lib/use-current-membership";
+import { useVenueAccess } from "@/lib/use-venue-access";
 
 const GUIDE = DASHBOARD_SECTION_GUIDES.audit;
 
@@ -141,12 +147,16 @@ function AuditRow({
   row,
   expanded,
   onToggle,
+  selected,
+  onToggleSelect,
   canDelete,
   onDelete,
 }: {
   row: AuditEntry;
   expanded: boolean;
   onToggle: () => void;
+  selected: boolean;
+  onToggleSelect: (id: string) => void;
   canDelete: boolean;
   onDelete: () => void;
 }) {
@@ -154,8 +164,22 @@ function AuditRow({
     row.actorName ?? row.actorEmail ?? row.actorRole ?? "Unknown user";
 
   return (
-    <li className="rounded-xl border border-white/10 bg-zinc-950/40">
+    <li
+      className={cn(
+        "rounded-xl border border-white/10 bg-zinc-950/40",
+        selected && "ring-1 ring-emerald-400/30",
+      )}
+    >
       <div className="flex items-start gap-2 px-4 py-3">
+        {canDelete ? (
+          <input
+            type="checkbox"
+            checked={selected}
+            onChange={() => onToggleSelect(row.id)}
+            className="mt-1 rounded border-white/20"
+            aria-label={`Select audit entry ${row.id}`}
+          />
+        ) : null}
         <button
           type="button"
           onClick={onToggle}
@@ -187,7 +211,7 @@ function AuditRow({
             type="button"
             onClick={onDelete}
             className="shrink-0 rounded-md p-1.5 text-zinc-600 transition hover:bg-rose-500/10 hover:text-rose-400"
-            title="Delete audit entry (platform developer only)"
+            title="Delete audit entry (owner only)"
           >
             <Trash2 size={14} />
           </button>
@@ -222,6 +246,13 @@ function AuditRow({
 
 export default function AuditPage() {
   const { state } = useAuth();
+  const membership = useCurrentMembership();
+  const access = useVenueAccess();
+  const unlocked = isFeatureUnlocked(access.enabledModules, "audit");
+  const canViewAudit =
+    membership?.role === "OWNER" ||
+    hasPermission(membership?.permissions ?? "", "audit.read");
+  const isOwner = membership?.role === "OWNER";
   const isSuperAdmin =
     state.status === "authed" && state.user.systemRole === "SUPER_ADMIN";
 
@@ -237,7 +268,9 @@ export default function AuditPage() {
   );
   const [loading, setLoading] = useState(true);
   const [exporting, setExporting] = useState(false);
+  const [deleting, setDeleting] = useState(false);
   const [expandedId, setExpandedId] = useState<string | null>(null);
+  const [selected, setSelected] = useState<Set<string>>(new Set());
   const [error, setError] = useState<string | null>(null);
 
   const load = useCallback(async () => {
@@ -253,6 +286,7 @@ export default function AuditPage() {
         take: 200,
       });
       setData(result);
+      setSelected(new Set());
     } catch (e) {
       setError(e instanceof Error ? e.message : "Failed to load audit log.");
     } finally {
@@ -264,7 +298,80 @@ export default function AuditPage() {
     void load();
   }, [load]);
 
-  const canDelete = (data?.canDelete ?? false) && isSuperAdmin;
+  const canDelete = (data?.canDelete ?? false) || isOwner || isSuperAdmin;
+
+  const toggleSelect = (id: string) => {
+    setSelected((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  };
+
+  const selectAllVisible = () => {
+    setSelected(new Set((data?.items ?? []).map((i) => i.id)));
+  };
+
+  const handleDeleteSelected = async () => {
+    if (selected.size === 0) return;
+    if (
+      !confirm(
+        `Permanently delete ${selected.size} audit entr${selected.size === 1 ? "y" : "ies"}? This cannot be undone.`,
+      )
+    ) {
+      return;
+    }
+    setDeleting(true);
+    setError(null);
+    try {
+      await deleteAuditEntries({ ids: [...selected] });
+      await load();
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Delete failed.");
+    } finally {
+      setDeleting(false);
+    }
+  };
+
+  const handleDeleteAllMatching = async () => {
+    const total = data?.total ?? 0;
+    if (total === 0) return;
+    if (
+      !confirm(
+        `Permanently delete all ${total} audit entries matching your filters? This cannot be undone.`,
+      )
+    ) {
+      return;
+    }
+    setDeleting(true);
+    setError(null);
+    try {
+      await deleteAuditEntries({
+        allMatching: true,
+        from,
+        to,
+        section,
+        action,
+        search: search || undefined,
+      });
+      await load();
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Delete failed.");
+    } finally {
+      setDeleting(false);
+    }
+  };
+
+  if (state.status === "authed" && !canViewAudit) {
+    return (
+      <TenantPage title={GUIDE.title} description={GUIDE.description}>
+        <p className="text-sm text-zinc-400">
+          You do not have permission to view the audit log.
+        </p>
+      </TenantPage>
+    );
+  }
 
   return (
     <TenantPage
@@ -294,14 +401,15 @@ export default function AuditPage() {
         </button>
       }
     >
-      {isSuperAdmin ? (
+      <FeatureGate feature="audit" unlocked={unlocked}>
+      {canDelete ? (
         <p className="mb-4 rounded-lg border border-rose-400/20 bg-rose-500/5 px-3 py-2 text-xs text-rose-200/90">
-          Platform developer mode: you can delete audit entries. No one else sees
-          this option.
+          Owner mode: you can permanently delete audit entries. Prefer export +
+          archive operationally — deletes cannot be undone.
         </p>
       ) : (
         <p className="mb-4 text-xs text-zinc-600">
-          Audit entries cannot be removed by venue owners or staff.
+          You can view and export. Only the venue owner can delete audit entries.
         </p>
       )}
 
@@ -391,9 +499,57 @@ export default function AuditPage() {
         <Loader2 className="h-6 w-6 animate-spin text-emerald-400" />
       ) : (
         <>
-          <p className="mb-3 text-xs text-zinc-500">
-            Showing {data?.items.length ?? 0} of {data?.total ?? 0} entries
-          </p>
+          <div className="mb-3 flex flex-wrap items-center justify-between gap-3">
+            <p className="text-xs text-zinc-500">
+              Showing {data?.items.length ?? 0} of {data?.total ?? 0} entries
+              {selected.size > 0 ? ` · ${selected.size} selected` : ""}
+            </p>
+            {canDelete ? (
+              <div className="flex flex-wrap gap-2">
+                <button
+                  type="button"
+                  onClick={selectAllVisible}
+                  disabled={(data?.items.length ?? 0) === 0}
+                  className="inline-flex items-center gap-2 rounded-lg border border-white/10 px-3 py-1.5 text-xs text-zinc-400 hover:text-zinc-200 disabled:opacity-50"
+                >
+                  Select all in view
+                </button>
+                {selected.size > 0 ? (
+                  <button
+                    type="button"
+                    onClick={() => setSelected(new Set())}
+                    className="inline-flex items-center gap-2 rounded-lg border border-white/10 px-3 py-1.5 text-xs text-zinc-400 hover:text-zinc-200"
+                  >
+                    Clear selection
+                  </button>
+                ) : null}
+                {selected.size > 0 ? (
+                  <button
+                    type="button"
+                    disabled={deleting}
+                    onClick={() => void handleDeleteSelected()}
+                    className="inline-flex items-center gap-2 rounded-lg border border-rose-400/30 bg-rose-500/10 px-3 py-1.5 text-xs text-rose-200 disabled:opacity-50"
+                  >
+                    {deleting ? (
+                      <Loader2 size={14} className="animate-spin" />
+                    ) : (
+                      <Trash2 size={14} />
+                    )}
+                    Delete selected ({selected.size})
+                  </button>
+                ) : null}
+                <button
+                  type="button"
+                  disabled={deleting || (data?.total ?? 0) === 0}
+                  onClick={() => void handleDeleteAllMatching()}
+                  className="inline-flex items-center gap-2 rounded-lg border border-rose-400/30 px-3 py-1.5 text-xs text-rose-300 hover:bg-rose-500/10 disabled:opacity-50"
+                >
+                  <Trash2 size={14} />
+                  Delete all matching
+                </button>
+              </div>
+            ) : null}
+          </div>
           <ul className="space-y-2">
             {(data?.items ?? []).map((row) => (
               <AuditRow
@@ -403,6 +559,8 @@ export default function AuditPage() {
                 onToggle={() =>
                   setExpandedId((id) => (id === row.id ? null : row.id))
                 }
+                selected={selected.has(row.id)}
+                onToggleSelect={toggleSelect}
                 canDelete={canDelete}
                 onDelete={() => {
                   if (
@@ -429,6 +587,7 @@ export default function AuditPage() {
           ) : null}
         </>
       )}
+      </FeatureGate>
     </TenantPage>
   );
 }

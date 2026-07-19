@@ -1,4 +1,4 @@
-import { IsInt, IsOptional, IsString, MaxLength, Min } from "class-validator";
+import { IsInt, IsOptional, IsString, MaxLength, Min } from 'class-validator';
 
 export class UpdateGalleryItemDto {
   @IsOptional()

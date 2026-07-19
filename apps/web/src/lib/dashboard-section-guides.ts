@@ -6,7 +6,7 @@ export const DASHBOARD_SECTION_GUIDES = {
       "Your live venue snapshot — occupancy, revenue hints, and quick links to daily work.",
     capabilities: [
       "See how busy the venue is right now.",
-      "Jump to operations, reservations, or finance from one place.",
+      "Jump to reservations, orders, or finance from one place.",
       "Check subscription status and trial time remaining.",
     ],
   },
@@ -19,7 +19,6 @@ export const DASHBOARD_SECTION_GUIDES = {
       "Add address, city, country, phone, and email.",
       "Publish your venue on the marketing browse page.",
       "Set dashboard language and venue currency.",
-      "Set how many building floors you have for dining seating (default 1).",
       "Use the currency converter for multi-currency planning.",
     ],
   },
@@ -36,34 +35,45 @@ export const DASHBOARD_SECTION_GUIDES = {
   notifications: {
     title: "Notifications",
     description:
-      "Alerts about trials, subscriptions, reservations, tables, billing, and team sign-ins. Nothing is deleted — archive items when you are done with them.",
+      "Alerts about trials, subscriptions, reservations, tables, billing, and team sign-ins. Archive to tidy your inbox; owners can permanently delete.",
     capabilities: [
       "Filter by date, section, and read status.",
       "Mark items read or unread, or mark all as read.",
       "Archive selected items or everything matching your filter.",
-      "Open archived via the archive icon in the header — unarchive to restore to your inbox.",
-      "Open linked pages (subscription, staff, etc.) from a notification.",
+      "Export the current filter to CSV.",
+      "Owners can permanently delete selected or all matching notifications.",
     ],
   },
   audit: {
     title: "Audit log",
     description:
-      "A tamper-resistant history of sensitive changes — who did what, when, and in which area of the dashboard. Owners, managers, and staff can view and export; only the platform developer can delete entries.",
+      "A history of sensitive changes — who did what, when, and in which area of the dashboard. Export anytime; only the venue owner can delete entries.",
     capabilities: [
       "Filter by date, section, action type, or search text.",
       "Expand entries to see technical details.",
       "Export the log to CSV for compliance or internal review.",
-      "You cannot delete audit rows — archive is not available here by design.",
+      "Select rows (or select all) — owners can permanently delete.",
+    ],
+  },
+  reviews: {
+    title: "Reviews",
+    description:
+      "Guest ratings and comments from your public venue page. See who reviewed you, when, their score, and the full text — hide or delete anything that should not stay public.",
+    capabilities: [
+      "Browse reviews with guest name, date, rating, and comment.",
+      "Filter by published or hidden status.",
+      "Hide a review from the public page or publish it again.",
+      "Delete spam or abusive reviews permanently.",
     ],
   },
   subscription: {
-    title: "Subscription & plan",
+    title: "Subscription & packs",
     description:
-      "Your GoSpots plan controls features, staff seats, and trial access. Compare tiers before upgrading or downgrading.",
+      "Your venue pack and add-ons control which modules are unlocked, staff seats, and trial access. Compare packs before changing your subscription.",
     capabilities: [
-      "See your current plan, trial days left, and unlocked features.",
-      "Compare Starter, Standard, Pro, and marketing add-ons.",
-      "Understand which tools unlock when you upgrade.",
+      "See your current pack, trial days left, and unlocked modules.",
+      "Compare venue packs and marketing add-ons.",
+      "Understand which tools unlock when you change packs or add modules.",
     ],
   },
   menu: {
@@ -87,15 +97,39 @@ export const DASHBOARD_SECTION_GUIDES = {
       "Add closure dates or special hours for private events.",
     ],
   },
-  playBilling: {
-    title: "Play billing",
+  notes: {
+    title: "Shift notes",
     description:
-      "Collect payment for game reservations — amounts are automatic from Gaming setup rates and how long the guest played.",
+      "Leave handoff notes for the next person on duty — title, details, day/time, and how urgent it is.",
     capabilities: [
-      "In progress lists live and checked-in bookings from Reservations.",
-      "Awaiting payment shows finished sessions not yet marked paid.",
-      "Paid groups by day; totals feed Finance reports (days, weeks, months).",
-      "Staff only taps Mark paid — no duplicate booking entry here.",
+      "See who wrote each note and their role.",
+      "Mark importance: info, normal, important, or urgent.",
+      "Set the shift day and time the note is about.",
+      "Archive notes when they’re no longer needed (data stays in history).",
+    ],
+  },
+  playBilling: {
+    title: "Game billing",
+    description:
+      "Collect payment for game sessions — booked and walk-in. Sessions move here automatically when they end.",
+    capabilities: [
+      "In progress shows live bookings and walk-ins currently playing.",
+      "Awaiting payment lists finished sessions — mark paid when you collect.",
+      "Edit time, amount, or apply a percentage discount before payment.",
+      "Add walk-ins for guests who showed up without a reservation.",
+      "Paid totals feed Finance reports.",
+    ],
+  },
+  gameBilling: {
+    title: "Game billing",
+    description:
+      "Collect payment for game sessions — booked and walk-in. Sessions move here automatically when they end.",
+    capabilities: [
+      "In progress shows live bookings and walk-ins currently playing.",
+      "Awaiting payment lists finished sessions — mark paid when you collect.",
+      "Edit time, amount, or apply a percentage discount before payment.",
+      "Add walk-ins for guests who showed up without a reservation.",
+      "Paid totals feed Finance reports.",
     ],
   },
   orders: {

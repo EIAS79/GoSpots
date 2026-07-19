@@ -1,3 +1,4 @@
+import type { BookingMode } from "./resources-client";
 import type { ResourceType } from "./resource-types";
 import { RESOURCE_TYPE_LABELS } from "./resource-types";
 
@@ -8,7 +9,20 @@ export const FEATURED_GAME_TYPES: ResourceType[] = [
   "PLAYSTATION",
   "BILLIARD",
   "BOWLING",
+  "TABLE_TENNIS",
+  "FOOSBALL",
+  "ARCADE",
 ];
+
+export const DINING_TYPES: ResourceType[] = ["DINING"];
+
+export function isDiningResourceType(type: ResourceType) {
+  return type === "DINING";
+}
+
+export function isGamingResourceType(type: ResourceType) {
+  return !isDiningResourceType(type);
+}
 
 export function getBookingUnitKind(type: ResourceType): BookingUnitKind {
   switch (type) {
@@ -18,9 +32,15 @@ export function getBookingUnitKind(type: ResourceType): BookingUnitKind {
     case "BILLIARD":
     case "SNOOKER":
     case "POOL":
+    case "TABLE_TENNIS":
+    case "FOOSBALL":
       return "TABLE";
     case "BOWLING":
       return "LANE";
+    case "DINING":
+      return "TABLE";
+    case "ARCADE":
+      return "SEAT";
     default:
       return "UNIT";
   }
@@ -33,7 +53,7 @@ export function getBookingUnitLabels(kind: BookingUnitKind) {
         singular: "seat",
         plural: "seats",
         selectLabel: "Seat",
-        countLabel: "Players",
+        countLabel: "Seat",
         createCountLabel: "How many seats to create",
         layoutHint: "Book individual seats (PC stations, PlayStation booths).",
       };
@@ -42,7 +62,7 @@ export function getBookingUnitLabels(kind: BookingUnitKind) {
         singular: "table",
         plural: "tables",
         selectLabel: "Table",
-        countLabel: "Players",
+        countLabel: "Seat",
         createCountLabel: "How many tables to create",
         layoutHint: "Book billiard / pool tables one at a time.",
       };
@@ -67,13 +87,21 @@ export function getBookingUnitLabels(kind: BookingUnitKind) {
   }
 }
 
+export {
+  bookingCollectsPartySize,
+  effectiveBillingPartySize,
+  parseBowlingChargeFromNotes,
+} from "./bowling-booking";
+
 export function defaultUnitNamePrefix(
   type: ResourceType,
   categoryName?: string,
 ): string {
   const kind = getBookingUnitKind(type);
   if (kind === "SEAT") {
-    return type === "PLAYSTATION" ? "Station" : "Seat";
+    if (type === "PLAYSTATION") return "Station";
+    if (type === "ARCADE") return "Cabinet";
+    return "Seat";
   }
   if (kind === "TABLE") return "Table";
   if (kind === "LANE") return "Lane";
@@ -93,11 +121,21 @@ export function sortScheduleCategories<T extends { type: ResourceType }>(
   });
 }
 
+export function sortDiningScheduleCategories<
+  T extends { type: ResourceType; name: string },
+>(categories: T[]): T[] {
+  return [...categories].sort((a, b) => a.name.localeCompare(b.name));
+}
+
 export const GAMING_SPEC_PLACEHOLDERS: Partial<Record<ResourceType, string>> = {
   PC: "e.g. RTX 3060, 144Hz monitors, mechanical keyboards, Windows 11…",
   PLAYSTATION: "e.g. PS5, 4K TV, DualSense controllers, game library…",
   BILLIARD: "e.g. 9ft tables, Simonis cloth, tournament cues…",
   BOWLING: "e.g. 6 lanes, automatic scoring, shoe rental included…",
+  TABLE_TENNIS: "e.g. tournament tables, pro paddles, ball included…",
+  FOOSBALL: "e.g. coin-op tables, tournament rods, 4-player tables…",
+  ARCADE: "e.g. fighting cabs, racers, claw machines, retro classics…",
+  DINING: "e.g. indoor dining room, patio seating, private booths, bar tables…",
 };
 
 export const GAMING_DEFAULT_NAMES: Partial<Record<ResourceType, string>> = {
@@ -105,6 +143,10 @@ export const GAMING_DEFAULT_NAMES: Partial<Record<ResourceType, string>> = {
   PLAYSTATION: "PlayStation Lounge",
   BILLIARD: "Billiard",
   BOWLING: "Bowling Lanes",
+  DINING: "Restaurant",
+  TABLE_TENNIS: "Ping Pong",
+  FOOSBALL: "Baby Foot",
+  ARCADE: "Arcade",
 };
 
 export const GAME_BOOKING_TYPE_OPTIONS: {

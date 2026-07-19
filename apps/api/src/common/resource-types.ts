@@ -1,21 +1,23 @@
-import type { ResourceType } from "@prisma/client";
+import type { ResourceType } from '@prisma/client';
 
 export const RESOURCE_TYPE_LABELS: Record<ResourceType, string> = {
-  BILLIARD: "Billiard",
-  SNOOKER: "Snooker",
-  POOL: "Pool table",
-  DARTS: "Darts",
-  PLAYSTATION: "PlayStation",
-  PC: "PC gaming",
-  BOWLING: "Bowling",
-  MINIGAMES: "Minigames",
-  SWIMMING_POOL: "Swimming pool",
-  TABLE_TENNIS: "Table tennis",
-  ARCADE: "Arcade",
-  CHESS: "Chess",
-  CARDS: "Card games",
-  TABLE: "Table / lounge",
-  OTHER: "Other",
+  BILLIARD: 'Billiard',
+  FOOSBALL: 'Baby foot',
+  SNOOKER: 'Snooker',
+  POOL: 'Pool table',
+  DARTS: 'Darts',
+  PLAYSTATION: 'PlayStation',
+  PC: 'PC gaming',
+  BOWLING: 'Bowling',
+  MINIGAMES: 'Minigames',
+  SWIMMING_POOL: 'Swimming pool',
+  TABLE_TENNIS: 'Table tennis',
+  ARCADE: 'Arcade',
+  CHESS: 'Chess',
+  CARDS: 'Card games',
+  TABLE: 'Table / lounge',
+  DINING: 'Restaurant dining',
+  OTHER: 'Other',
 };
 
 export const RESOURCE_TYPE_OPTIONS = (

@@ -110,6 +110,19 @@ export type FinanceAnalytics = {
     marketingViews: number;
   }[];
   topItems: SalesByItem[];
+  paymentMethodBreakdown?: {
+    method: string;
+    amount: number;
+    count: number;
+  }[];
+  dailyClose?: {
+    day: string;
+    menuOrders: number;
+    playSessions: number;
+    reservations: number;
+    quickSales: number;
+    total: number;
+  };
 };
 
 export type PlaySession = {

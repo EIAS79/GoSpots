@@ -6,8 +6,12 @@ import {
   IsString,
   MaxLength,
   Min,
-} from "class-validator";
-import { PaymentMethod, ShopOrderLineStatus, ShopOrderStatus } from "@prisma/client";
+} from 'class-validator';
+import {
+  PaymentMethod,
+  ShopOrderLineStatus,
+  ShopOrderStatus,
+} from '@prisma/client';
 
 export class CreateShopOrderDto {
   @IsOptional()

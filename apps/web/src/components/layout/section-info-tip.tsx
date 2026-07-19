@@ -16,6 +16,7 @@ export function SectionInfoTip({
   const [mounted, setMounted] = useState(false);
   const [coords, setCoords] = useState({ top: 0, left: 0 });
   const btnRef = useRef<HTMLButtonElement>(null);
+  const panelRef = useRef<HTMLDivElement>(null);
   const id = useId();
   const hasHelp =
     Boolean(description) || Boolean(capabilities && capabilities.length > 0);
@@ -40,11 +41,23 @@ export function SectionInfoTip({
     if (!open) return;
     updatePosition();
     const onScroll = () => updatePosition();
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") setOpen(false);
+    };
+    const onDoc = (e: MouseEvent) => {
+      const t = e.target as Node;
+      if (btnRef.current?.contains(t) || panelRef.current?.contains(t)) return;
+      setOpen(false);
+    };
     window.addEventListener("scroll", onScroll, true);
     window.addEventListener("resize", onScroll);
+    document.addEventListener("keydown", onKey);
+    document.addEventListener("mousedown", onDoc);
     return () => {
       window.removeEventListener("scroll", onScroll, true);
       window.removeEventListener("resize", onScroll);
+      document.removeEventListener("keydown", onKey);
+      document.removeEventListener("mousedown", onDoc);
     };
   }, [open, updatePosition]);
 
@@ -54,8 +67,9 @@ export function SectionInfoTip({
     open && mounted ?
       createPortal(
         <div
+          ref={panelRef}
           id={id}
-          role="tooltip"
+          role="dialog"
           className="fixed z-[300] w-[min(720px,calc(100vw-1.5rem))] rounded-xl border border-white/15 bg-zinc-950/98 p-4 shadow-[0_24px_80px_-12px_rgba(0,0,0,0.9)] backdrop-blur-md"
           style={{ top: coords.top, left: coords.left }}
           onMouseEnter={() => setOpen(true)}
@@ -97,24 +111,29 @@ export function SectionInfoTip({
         ref={btnRef}
         type="button"
         className={cn(
-          "grid h-7 w-7 shrink-0 place-items-center rounded-full border border-white/10 text-zinc-500 transition",
+          "grid h-11 w-11 shrink-0 place-items-center rounded-full border border-white/10 text-zinc-500 transition sm:h-9 sm:w-9",
           "hover:border-emerald-400/30 hover:bg-emerald-500/10 hover:text-emerald-300",
           "focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-emerald-500/50",
           open && "border-emerald-400/30 bg-emerald-500/10 text-emerald-300",
         )}
         aria-label="About this section"
         aria-expanded={open}
-        aria-describedby={open ? id : undefined}
+        aria-controls={open ? id : undefined}
+        onClick={() => {
+          updatePosition();
+          setOpen((v) => !v);
+        }}
         onMouseEnter={() => {
-          updatePosition();
-          setOpen(true);
+          if (window.matchMedia("(hover: hover)").matches) {
+            updatePosition();
+            setOpen(true);
+          }
         }}
-        onMouseLeave={() => setOpen(false)}
-        onFocus={() => {
-          updatePosition();
-          setOpen(true);
+        onMouseLeave={() => {
+          if (window.matchMedia("(hover: hover)").matches) {
+            setOpen(false);
+          }
         }}
-        onBlur={() => setOpen(false)}
       >
         <Info size={15} strokeWidth={2} />
       </button>

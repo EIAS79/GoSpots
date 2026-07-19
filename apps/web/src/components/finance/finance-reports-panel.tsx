@@ -2,6 +2,7 @@
 
 import { Download, Loader2, Printer } from "lucide-react";
 import { useCallback, useEffect, useRef, useState } from "react";
+import { cn } from "@/lib/cn";
 import { useLiveData } from "@/lib/use-live-data";
 import {
   VenueBarChart,
@@ -12,6 +13,7 @@ import {
 import { KpiCard } from "@/components/dashboard/kpi-card";
 import {
   CalendarRange,
+  CreditCard,
   Eye,
   Gamepad2,
   TrendingDown,
@@ -21,7 +23,9 @@ import {
 } from "lucide-react";
 import {
   fetchFinanceAnalytics,
+  fetchSalesByItem,
   type FinanceAnalytics,
+  type SalesByItem,
 } from "@/lib/finance-client";
 import {
   downloadTextFile,
@@ -46,6 +50,7 @@ export function FinanceReportsPanel({
   const { formatMoney } = useVenueSettings();
   const [days, setDays] = useState(30);
   const [data, setData] = useState<FinanceAnalytics | null>(null);
+  const [salesByItem, setSalesByItem] = useState<SalesByItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const printRef = useRef<HTMLDivElement>(null);
@@ -54,7 +59,12 @@ export function FinanceReportsPanel({
     if (!opts?.silent) setLoading(true);
     setError(null);
     try {
-      setData(await fetchFinanceAnalytics(days));
+      const [analytics, items] = await Promise.all([
+        fetchFinanceAnalytics(days),
+        fetchSalesByItem(days),
+      ]);
+      setData(analytics);
+      setSalesByItem(items);
     } catch (e) {
       if (!opts?.silent) {
         setError(e instanceof Error ? e.message : "Failed to load analytics.");
@@ -106,6 +116,25 @@ export function FinanceReportsPanel({
   const { summary } = data;
   const periodLabel =
     days === 1 ? "Today" : `Last ${days} days`;
+  const paymentBreakdown = data.paymentMethodBreakdown ?? [];
+  const dailyClose = data.dailyClose;
+  const showDailyClose =
+    dailyClose != null && (days === 1 || dailyClose.total > 0);
+
+  const paymentMethodLabel = (method: string) => {
+    switch (method) {
+      case "CASH":
+        return "Cash";
+      case "CARD":
+        return "Card";
+      case "ONLINE":
+        return "Online";
+      case "OTHER":
+        return "Other";
+      default:
+        return method;
+    }
+  };
 
   return (
     <div className="space-y-6 print:space-y-4">
@@ -155,7 +184,7 @@ export function FinanceReportsPanel({
           <p className="text-sm text-zinc-600">{periodLabel} · {new Date().toLocaleString()}</p>
         </div>
 
-        <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-6 print:grid-cols-3">
+        <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4 print:grid-cols-3">
           <KpiCard
             label="Total revenue"
             value={formatMoney(summary.revenue)}
@@ -196,6 +225,93 @@ export function FinanceReportsPanel({
             tone="sky"
           />
         </div>
+
+        {showDailyClose && dailyClose ? (
+          <section className="rounded-xl border border-amber-400/20 bg-amber-500/5 p-5 print:border-zinc-300 print:bg-white">
+            <h2 className="text-sm font-semibold text-white print:text-black">
+              Daily close — {dailyClose.day}
+            </h2>
+            <p className="mt-1 text-xs text-zinc-500 print:text-zinc-600">
+              Gross revenue by channel for the selected day (venue timezone).
+            </p>
+            <div className="mt-4 grid gap-3 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5">
+              <div className="rounded-lg border border-white/10 bg-zinc-950/40 px-3 py-2">
+                <p className="text-[10px] uppercase text-zinc-500">Menu</p>
+                <p className="text-sm font-semibold text-emerald-300">
+                  {formatMoney(dailyClose.menuOrders)}
+                </p>
+              </div>
+              <div className="rounded-lg border border-white/10 bg-zinc-950/40 px-3 py-2">
+                <p className="text-[10px] uppercase text-zinc-500">Play</p>
+                <p className="text-sm font-semibold text-sky-300">
+                  {formatMoney(dailyClose.playSessions)}
+                </p>
+              </div>
+              <div className="rounded-lg border border-white/10 bg-zinc-950/40 px-3 py-2">
+                <p className="text-[10px] uppercase text-zinc-500">Bookings</p>
+                <p className="text-sm font-semibold text-amber-300">
+                  {formatMoney(dailyClose.reservations)}
+                </p>
+              </div>
+              <div className="rounded-lg border border-white/10 bg-zinc-950/40 px-3 py-2">
+                <p className="text-[10px] uppercase text-zinc-500">Quick</p>
+                <p className="text-sm font-semibold text-violet-300">
+                  {formatMoney(dailyClose.quickSales)}
+                </p>
+              </div>
+              <div className="rounded-lg border border-amber-400/30 bg-amber-500/10 px-3 py-2">
+                <p className="text-[10px] uppercase text-amber-200/80">Total</p>
+                <p className="text-sm font-bold text-amber-100">
+                  {formatMoney(dailyClose.total)}
+                </p>
+              </div>
+            </div>
+          </section>
+        ) : null}
+
+        {paymentBreakdown.length > 0 ? (
+          <section className="rounded-xl border border-white/10 bg-zinc-900/40 p-5 print:border-zinc-300 print:bg-white">
+            <h2 className="flex items-center gap-2 text-sm font-semibold text-white print:text-black">
+              <CreditCard size={14} className="text-sky-400" />
+              Payment method breakdown ({periodLabel})
+            </h2>
+            <p className="mt-1 text-xs text-zinc-500 print:text-zinc-600">
+              Menu orders, quick sales, game billing, and walk-ins combined.
+            </p>
+            <div className="mt-4 overflow-x-auto">
+              <table className="w-full min-w-[20rem] text-left text-sm">
+                <thead className="text-xs uppercase text-zinc-500">
+                  <tr>
+                    <th className="pb-2 pr-4">Method</th>
+                    <th className="pb-2 pr-4 text-right">Transactions</th>
+                    <th className="pb-2 text-right">Net amount</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-white/5">
+                  {paymentBreakdown.map((row) => (
+                    <tr key={row.method}>
+                      <td className="py-2 pr-4 text-zinc-200">
+                        {paymentMethodLabel(row.method)}
+                      </td>
+                      <td className="py-2 pr-4 text-right text-zinc-400">
+                        {row.count}
+                      </td>
+                      <td
+                        className={cn(
+                          "py-2 text-right font-medium tabular-nums",
+                          row.amount < 0 ? "text-rose-300" : "text-emerald-300",
+                        )}
+                      >
+                        {row.amount < 0 ? "−" : ""}
+                        {formatMoney(Math.abs(row.amount))}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </section>
+        ) : null}
 
         <div className="grid gap-6 lg:grid-cols-2 print:grid-cols-1">
           <section className="rounded-xl border border-white/10 bg-zinc-900/40 p-5 print:border-zinc-300 print:bg-white">
@@ -296,6 +412,43 @@ export function FinanceReportsPanel({
             />
           </section>
         </div>
+
+        <section className="rounded-xl border border-white/10 bg-zinc-900/40 p-5 print:border-zinc-300 print:bg-white">
+          <h2 className="text-sm font-semibold text-white print:text-black">
+            Sales by item ({periodLabel})
+          </h2>
+          <p className="mt-1 text-xs text-zinc-500 print:text-zinc-600">
+            Menu quick sales and completed kitchen orders combined.
+          </p>
+          {salesByItem.length === 0 ? (
+            <p className="mt-4 text-sm text-zinc-500">No item sales in this period.</p>
+          ) : (
+            <div className="mt-4 overflow-x-auto">
+              <table className="w-full min-w-[28rem] text-left text-sm">
+                <thead className="text-xs uppercase text-zinc-500">
+                  <tr>
+                    <th className="pb-2 pr-4">Item</th>
+                    <th className="pb-2 pr-4 text-right">Qty</th>
+                    <th className="pb-2 text-right">Revenue</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-white/5">
+                  {salesByItem.map((row) => (
+                    <tr key={`${row.menuItemId ?? "custom"}-${row.name}`}>
+                      <td className="py-2 pr-4 text-zinc-200">{row.name}</td>
+                      <td className="py-2 pr-4 text-right text-zinc-400">
+                        {row.quantity}
+                      </td>
+                      <td className="py-2 text-right text-emerald-300">
+                        {formatMoney(row.revenue)}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </section>
       </div>
     </div>
   );

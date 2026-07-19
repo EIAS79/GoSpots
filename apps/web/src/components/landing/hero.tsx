@@ -1,12 +1,12 @@
 "use client";
 
-import { AnimatePresence, motion } from "framer-motion";
-import { ArrowRight, Crown, Gamepad2, Sparkles } from "lucide-react";
+import { AnimatePresence, motion, useReducedMotion } from "framer-motion";
+import { ArrowRight, Compass, Crown, Sparkles } from "lucide-react";
 import Link from "next/link";
-import { CountUp } from "@/components/effects/count-up";
 import { Magnetic } from "@/components/effects/magnetic";
 import { cn } from "@/lib/cn";
 import { trustIcons } from "@/lib/mock-data";
+import { HeroCollage } from "./hero-collage";
 import { LivePreview } from "./live-preview";
 import { type Mode, useMode } from "./mode-context";
 import { VenueFinder } from "./venue-finder";
@@ -23,79 +23,120 @@ const copy: Record<
     accent: "cyan" | "emerald";
   }
 > = {
-  play: {
-    badge: "Find your next spot · 240 venues live now",
-    titleA: "Find your next",
-    titleB: "spot.",
-    subtitle: (
-      <>
-        Billiard halls, gaming lounges, and esports cafés near you —{" "}
-        <span className="text-zinc-200">live availability, no waiting.</span>
-      </>
-    ),
-    ctaPrimary: { label: "Find a venue near you", href: "/venues" },
-    ctaSecondary: { label: "I run a venue", href: "/dashboard" },
-    accent: "cyan",
-  },
   manage: {
-    badge: "GoSpots for venue owners",
-    titleA: "Run your venue",
-    titleB: "from one screen.",
+    badge: "Venue operations · private beta",
+    titleA: "Run the floor",
+    titleB: "from one live screen.",
     subtitle: (
       <>
-        Live sessions. Instant bills. Total control —{" "}
-        <span className="text-zinc-200">built for busy nights.</span>
+        Sessions, reservations, billing, and staff control —{" "}
+        <span className="text-zinc-100">
+          built for billiard halls, gaming lounges, and busy entertainment floors.
+        </span>{" "}
+        We&apos;re onboarding operators first while the public directory grows.
       </>
     ),
-    ctaPrimary: { label: "Start your venue free", href: "/dashboard" },
-    ctaSecondary: { label: "Browse venues to play", href: "/venues" },
+    ctaPrimary: { label: "List your venue — free trial", href: "/register" },
+    ctaSecondary: { label: "Sign in", href: "/login" },
     accent: "emerald",
   },
+  play: {
+    badge: "Discover & reserve",
+    titleA: "Find your next",
+    titleB: "favorite spot.",
+    subtitle: (
+      <>
+        Billiard halls, gaming lounges, restaurants, cafés, bars, and karaoke rooms —{" "}
+        <span className="text-zinc-100">
+          search by city and category, then reserve when the venue enables it.
+        </span>
+      </>
+    ),
+    ctaPrimary: { label: "Browse venues", href: "/venues" },
+    ctaSecondary: { label: "I run a venue", href: "/register" },
+    accent: "cyan",
+  },
 };
 
-type HeroStat = {
-  label: string;
-  value: number;
-  suffix?: string;
-  prefix?: string;
-  decimals?: number;
-  tone: string;
+const pillarsByMode: Record<Mode, string[]> = {
+  manage: [
+    "Live table & console status",
+    "Timers, tabs, and handovers without guesswork",
+    "Honest beta — onboarding venues first",
+  ],
+  play: [
+    "From billiards to brunch — one directory",
+    "Filter by city, category, and vibe",
+    "Reserve when the venue enables it",
+  ],
 };
 
-const heroStats: HeroStat[] = [
-  { label: "Venues live", value: 240, suffix: "+", tone: "text-emerald-300" },
-  {
-    label: "Sessions billed",
-    value: 1.4,
-    decimals: 1,
-    suffix: "M",
-    tone: "text-cyan-300",
-  },
-  {
-    label: "Cities covered",
-    value: 18,
-    suffix: "+",
-    tone: "text-violet-300",
-  },
-  {
-    label: "Realtime uptime",
-    value: 99.98,
-    decimals: 2,
-    suffix: "%",
-    tone: "text-amber-300",
-  },
-];
+/** Word-by-word staggered headline line. */
+function StaggeredLine({
+  text,
+  className,
+  baseDelay = 0,
+}: {
+  text: string;
+  className?: string;
+  baseDelay?: number;
+}) {
+  const words = text.split(" ");
+  return (
+    <span className={cn("block", className)}>
+      {words.map((word, i) => (
+        <motion.span
+          key={`${word}-${i}`}
+          initial={{ opacity: 0, y: 18 }}
+          animate={{ opacity: 1, y: 0 }}
+          exit={{ opacity: 0, y: -10 }}
+          transition={{
+            duration: 0.45,
+            delay: baseDelay + i * 0.05,
+            ease: [0.22, 1, 0.36, 1],
+          }}
+          className="inline-block whitespace-pre"
+        >
+          {word}
+          {i < words.length - 1 ? " " : ""}
+        </motion.span>
+      ))}
+    </span>
+  );
+}
 
 export function Hero() {
   const { mode, setMode } = useMode();
+  const reduced = useReducedMotion();
   const c = copy[mode];
 
   return (
-    <section className="relative overflow-hidden pt-28 pb-20 md:pt-32 md:pb-24">
-      <div className="relative z-10 mx-auto max-w-7xl px-4 md:px-8">
+    <section className="relative isolate overflow-hidden pt-24 sm:pt-28 md:pt-32">
+      {/* Full-bleed venue photo collage + scrims (parallax handled inside) */}
+      <HeroCollage />
+
+      {/* Mode accent wash — crossfades emerald ↔ cyan when switching audience */}
+      <AnimatePresence mode="wait" initial={false}>
+        <motion.div
+          key={`tint-${mode}`}
+          aria-hidden
+          initial={{ opacity: 0 }}
+          animate={{ opacity: 1 }}
+          exit={{ opacity: 0 }}
+          transition={{ duration: 0.6, ease: [0.22, 1, 0.36, 1] }}
+          className={cn(
+            "pointer-events-none absolute inset-0 -z-[5]",
+            c.accent === "cyan"
+              ? "bg-[radial-gradient(ellipse_at_top,_rgba(56,189,248,0.14),transparent_60%)]"
+              : "bg-[radial-gradient(ellipse_at_top,_rgba(52,211,153,0.14),transparent_60%)]",
+          )}
+        />
+      </AnimatePresence>
+
+      <div className="relative z-10 mx-auto max-w-7xl px-4 sm:px-6 md:px-8">
         <ModeSwitcher mode={mode} setMode={setMode} />
 
-        <div className="mx-auto mt-8 flex max-w-3xl flex-col items-center text-center">
+        <div className="mx-auto mt-7 flex max-w-3xl flex-col items-center text-center sm:mt-9">
           <AnimatePresence mode="wait">
             <motion.span
               key={`badge-${mode}`}
@@ -104,40 +145,39 @@ export function Hero() {
               exit={{ opacity: 0, y: -6 }}
               transition={{ duration: 0.25 }}
               className={cn(
-                "inline-flex items-center gap-2 rounded-full border px-3 py-1 text-xs font-medium backdrop-blur",
+                "inline-flex items-center gap-2 rounded-full border px-3 py-1 text-[11px] font-medium backdrop-blur-md sm:text-xs",
                 c.accent === "cyan"
-                  ? "border-cyan-500/30 bg-cyan-500/10 text-cyan-300"
-                  : "border-emerald-500/30 bg-emerald-500/10 text-emerald-300",
+                  ? "border-cyan-400/35 bg-cyan-500/15 text-cyan-200"
+                  : "border-emerald-400/35 bg-emerald-500/15 text-emerald-200",
               )}
             >
-              <Sparkles size={14} className="animate-pulse-soft" />
+              <Sparkles size={13} className={reduced ? "" : "animate-pulse-soft"} />
               {c.badge}
             </motion.span>
           </AnimatePresence>
 
-          <h1 className="mt-7 text-balance text-5xl font-bold leading-[1.05] tracking-tight md:text-7xl">
+          <h1 className="mt-6 text-balance text-4xl font-bold leading-[1.06] tracking-tight text-white drop-shadow-[0_2px_18px_rgba(0,0,0,0.55)] sm:mt-7 sm:text-5xl md:text-6xl lg:text-7xl">
             <AnimatePresence mode="wait">
-              <motion.span
-                key={`titleA-${mode}`}
-                initial={{ opacity: 0, y: 18 }}
-                animate={{ opacity: 1, y: 0 }}
-                exit={{ opacity: 0, y: -10 }}
-                transition={{ duration: 0.45 }}
-                className="block text-zinc-100"
-              >
-                {c.titleA}
-              </motion.span>
-            </AnimatePresence>
-            <AnimatePresence mode="wait">
-              <motion.span
-                key={`titleB-${mode}`}
-                initial={{ opacity: 0, y: 18 }}
-                animate={{ opacity: 1, y: 0 }}
-                exit={{ opacity: 0, y: -10 }}
-                transition={{ duration: 0.45, delay: 0.05 }}
-                className="text-gradient animate-shine block"
-              >
-                {c.titleB}
+              <motion.span key={`title-${mode}`} exit={{ opacity: 0, y: -10 }}>
+                {reduced ? (
+                  <span className="block">{c.titleA}</span>
+                ) : (
+                  <StaggeredLine text={c.titleA} />
+                )}
+                {/* Gradient line stays a single block: transforms on child
+                    spans would break background-clip: text rendering. */}
+                <motion.span
+                  initial={reduced ? false : { opacity: 0, y: 18 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  transition={{
+                    duration: 0.45,
+                    delay: reduced ? 0 : 0.18,
+                    ease: [0.22, 1, 0.36, 1],
+                  }}
+                  className="text-gradient animate-shine block"
+                >
+                  {c.titleB}
+                </motion.span>
               </motion.span>
             </AnimatePresence>
           </h1>
@@ -149,7 +189,7 @@ export function Hero() {
               animate={{ opacity: 1, y: 0 }}
               exit={{ opacity: 0, y: -6 }}
               transition={{ duration: 0.3 }}
-              className="mt-6 max-w-xl text-balance text-base text-zinc-400 md:text-lg"
+              className="mt-5 max-w-xl text-balance text-sm text-zinc-300 sm:mt-6 sm:text-base md:text-lg"
             >
               {c.subtitle}
             </motion.p>
@@ -162,16 +202,16 @@ export function Hero() {
               animate={{ opacity: 1, y: 0 }}
               exit={{ opacity: 0, y: -8 }}
               transition={{ duration: 0.3 }}
-              className="mt-9 flex flex-col items-center gap-3 sm:flex-row"
+              className="mt-8 flex w-full flex-col items-center gap-3 sm:mt-9 sm:w-auto sm:flex-row"
             >
-              <Magnetic>
+              <Magnetic className="w-full sm:w-auto">
                 <Link
                   href={c.ctaPrimary.href}
                   className={cn(
-                    "group relative inline-flex items-center gap-2 overflow-hidden rounded-full px-6 py-3 text-sm font-semibold text-zinc-950 transition",
+                    "group relative inline-flex w-full items-center justify-center gap-2 overflow-hidden rounded-full px-6 py-3 text-sm font-semibold text-zinc-950 transition sm:w-auto",
                     c.accent === "cyan"
-                      ? "bg-cyan-400 shadow-[0_20px_60px_-15px_rgba(56,189,248,0.6)] hover:shadow-[0_30px_80px_-15px_rgba(56,189,248,0.8)]"
-                      : "bg-emerald-400 shadow-[0_20px_60px_-15px_rgba(52,211,153,0.6)] hover:shadow-[0_30px_80px_-15px_rgba(52,211,153,0.8)]",
+                      ? "bg-cyan-400 shadow-[0_20px_60px_-15px_rgba(56,189,248,0.55)] hover:shadow-[0_24px_70px_-15px_rgba(56,189,248,0.65)]"
+                      : "bg-emerald-400 shadow-[0_20px_60px_-15px_rgba(52,211,153,0.55)] hover:shadow-[0_24px_70px_-15px_rgba(52,211,153,0.65)]",
                   )}
                 >
                   <span className="relative z-10">{c.ctaPrimary.label}</span>
@@ -179,77 +219,60 @@ export function Hero() {
                     size={16}
                     className="relative z-10 transition-transform group-hover:translate-x-1"
                   />
-                  <span className="absolute inset-0 -translate-x-full bg-gradient-to-r from-transparent via-white/50 to-transparent transition-transform duration-700 group-hover:translate-x-full" />
+                  {!reduced && (
+                    <span className="absolute inset-0 -translate-x-full bg-gradient-to-r from-transparent via-white/40 to-transparent transition-transform duration-700 group-hover:translate-x-full" />
+                  )}
                 </Link>
               </Magnetic>
-              <Magnetic strength={0.25}>
-                <Link
-                  href={c.ctaSecondary.href}
-                  className="rounded-full border border-white/15 bg-white/[0.04] px-6 py-3 text-sm font-medium text-zinc-200 backdrop-blur transition hover:border-white/30 hover:bg-white/10"
-                >
-                  {c.ctaSecondary.label}
-                </Link>
-              </Magnetic>
+              <Link
+                href={c.ctaSecondary.href}
+                className="w-full rounded-full border border-white/20 bg-white/[0.06] px-6 py-3 text-center text-sm font-medium text-zinc-100 backdrop-blur-md transition hover:border-white/35 hover:bg-white/[0.12] sm:w-auto"
+              >
+                {c.ctaSecondary.label}
+              </Link>
             </motion.div>
           </AnimatePresence>
 
+          <ul className="mt-7 flex max-w-2xl flex-wrap justify-center gap-x-5 gap-y-2 text-[11px] text-zinc-400 sm:mt-8 sm:text-xs">
+            {pillarsByMode[mode].map((line) => (
+              <li key={line} className="inline-flex items-center gap-2">
+                <span
+                  className="h-1 w-1 shrink-0 rounded-full bg-amber-400/70"
+                  aria-hidden
+                />
+                {line}
+              </li>
+            ))}
+          </ul>
+
           <motion.div
-            initial={{ opacity: 0 }}
+            initial={reduced ? false : { opacity: 0 }}
             animate={{ opacity: 1 }}
-            transition={{ delay: 0.4 }}
-            className="mt-6 flex flex-wrap items-center justify-center gap-x-5 gap-y-2 text-xs text-zinc-500"
+            transition={{ delay: reduced ? 0 : 0.35 }}
+            className="mt-6 flex flex-wrap items-center justify-center gap-x-5 gap-y-2 text-[11px] text-zinc-400 sm:mt-8 sm:text-xs"
           >
             {trustIcons.map((t) => (
               <span key={t.label} className="inline-flex items-center gap-1.5">
-                <t.icon size={12} className="text-emerald-400/80" />
+                <t.icon size={12} className="text-amber-300/80" />
                 {t.label}
               </span>
             ))}
           </motion.div>
         </div>
 
-        <div className="relative z-10 mx-auto mt-16 w-full max-w-6xl">
+        {/* Preview panel overlaps the collage fade → hero merges into next section */}
+        <div className="relative z-10 mx-auto mt-12 w-full max-w-6xl pb-6 sm:mt-14 md:pb-10">
           <AnimatePresence mode="wait">
             <motion.div
               key={`preview-${mode}`}
-              initial={{ opacity: 0, y: 30, scale: 0.97 }}
+              initial={{ opacity: 0, y: 24, scale: 0.98 }}
               animate={{ opacity: 1, y: 0, scale: 1 }}
-              exit={{ opacity: 0, y: -20, scale: 0.97 }}
-              transition={{ duration: 0.5, ease: [0.22, 1, 0.36, 1] }}
+              exit={{ opacity: 0, y: -16, scale: 0.98 }}
+              transition={{ duration: 0.45, ease: [0.22, 1, 0.36, 1] }}
             >
               {mode === "play" ? <VenueFinder /> : <LivePreview />}
             </motion.div>
           </AnimatePresence>
-        </div>
-
-        <div className="mx-auto mt-14 grid max-w-5xl grid-cols-2 gap-3 md:grid-cols-4">
-          {heroStats.map((s, i) => (
-            <motion.div
-              key={s.label}
-              initial={{ opacity: 0, y: 14 }}
-              whileInView={{ opacity: 1, y: 0 }}
-              viewport={{ once: true }}
-              transition={{ duration: 0.5, delay: i * 0.07 }}
-              className="group relative overflow-hidden rounded-2xl border border-white/10 bg-white/[0.03] p-4 transition hover:border-white/25 hover:bg-white/[0.06]"
-            >
-              <div className="absolute inset-x-0 top-0 h-px bg-gradient-to-r from-transparent via-emerald-400/40 to-transparent opacity-0 transition-opacity group-hover:opacity-100" />
-              <p className="text-[11px] uppercase tracking-wider text-zinc-500">
-                {s.label}
-              </p>
-              <p className={`mt-2 text-2xl font-bold tabular-nums ${s.tone}`}>
-                <CountUp
-                  to={s.value}
-                  format={
-                    s.decimals != null
-                      ? (n) => n.toFixed(s.decimals)
-                      : undefined
-                  }
-                  prefix={s.prefix}
-                  suffix={s.suffix}
-                />
-              </p>
-            </motion.div>
-          ))}
         </div>
       </div>
     </section>
@@ -263,21 +286,23 @@ function ModeSwitcher({
   mode: Mode;
   setMode: (m: Mode) => void;
 }) {
-  const items: { id: Mode; label: string; icon: typeof Gamepad2 }[] = [
-    { id: "play", label: "I want to play", icon: Gamepad2 },
-    { id: "manage", label: "I run a venue", icon: Crown },
+  /** Owner-first: venue operators appear first */
+  const items: { id: Mode; label: string; short: string; icon: typeof Compass }[] = [
+    { id: "manage", label: "I run a venue", short: "Run a venue", icon: Crown },
+    { id: "play", label: "I'm looking for a spot", short: "Find a spot", icon: Compass },
   ];
   return (
-    <div className="mx-auto flex w-fit items-center gap-1 rounded-full border border-white/10 bg-white/[0.03] p-1 backdrop-blur">
+    <div className="mx-auto flex w-fit max-w-full items-center gap-1 rounded-full border border-white/15 bg-zinc-950/55 p-1 backdrop-blur-xl">
       {items.map((it) => {
         const Icon = it.icon;
         const active = mode === it.id;
         return (
           <button
             key={it.id}
+            type="button"
             onClick={() => setMode(it.id)}
             className={cn(
-              "relative inline-flex items-center gap-2 rounded-full px-4 py-2 text-sm font-medium transition",
+              "relative inline-flex items-center gap-2 whitespace-nowrap rounded-full px-3.5 py-2 text-[13px] font-medium transition sm:px-4 sm:text-sm",
               active ? "text-zinc-950" : "text-zinc-300 hover:text-white",
             )}
           >
@@ -294,7 +319,8 @@ function ModeSwitcher({
               />
             )}
             <Icon size={14} />
-            {it.label}
+            <span className="hidden sm:inline">{it.label}</span>
+            <span className="sm:hidden">{it.short}</span>
           </button>
         );
       })}

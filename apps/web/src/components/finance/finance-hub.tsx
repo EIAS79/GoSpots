@@ -3,6 +3,7 @@
 import {
   ChartColumn,
   LayoutGrid,
+  Receipt,
   TrendingDown,
   Wallet,
 } from "lucide-react";
@@ -12,6 +13,7 @@ import { cn } from "@/lib/cn";
 import { FinanceOverviewPanel } from "@/components/finance/finance-overview-panel";
 import { FinanceReportsPanel } from "@/components/finance/finance-reports-panel";
 import { FinanceTransactionsPanel } from "@/components/finance/finance-transactions-panel";
+import { InvoicesPanel } from "@/components/finance/invoices-panel";
 import { LossesPanel } from "@/components/finance/losses-panel";
 import { fetchDashboardOverview } from "@/lib/dashboard-client";
 import { useVenueHref } from "@/lib/venue-context";
@@ -20,6 +22,7 @@ import { useVenueHref } from "@/lib/venue-context";
 export type FinanceHubTab =
   | "overview"
   | "transactions"
+  | "invoices"
   | "losses"
   | "reports";
 
@@ -30,6 +33,7 @@ const TABS: {
 }[] = [
   { id: "overview", label: "Overview", icon: LayoutGrid },
   { id: "transactions", label: "Transactions", icon: Wallet },
+  { id: "invoices", label: "Invoices", icon: Receipt },
   { id: "losses", label: "Losses", icon: TrendingDown },
   { id: "reports", label: "Reports", icon: ChartColumn },
 ];
@@ -101,6 +105,8 @@ export function FinanceHub({
     switch (tab) {
       case "transactions":
         return <FinanceTransactionsPanel canWrite={canWrite} />;
+      case "invoices":
+        return <InvoicesPanel />;
       case "losses":
         return <LossesPanel canWrite={canWrite} />;
       case "reports":
@@ -123,9 +129,9 @@ export function FinanceHub({
       <p className="rounded-lg border border-white/10 bg-zinc-900/40 px-3 py-2 text-xs text-zinc-500">
         Track revenue, record quick sales and losses, and run reports. Kitchen
         orders live under{" "}
-        <span className="text-zinc-400">Operations → Menu orders</span>;
+        <span className="text-zinc-400">Menu orders</span>;
         game charges under{" "}
-        <span className="text-zinc-400">Operations → Play billing</span>;
+        <span className="text-zinc-400">Game billing</span>;
         reservations under{" "}
         <span className="text-zinc-400">Reservations</span>.
       </p>

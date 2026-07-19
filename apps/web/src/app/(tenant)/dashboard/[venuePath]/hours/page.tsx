@@ -12,47 +12,32 @@ import {
   deleteScheduleException,
   fetchSchedule,
   saveWeeklyHours,
+  updateScheduleException,
   type VenueSchedule,
 } from "@/lib/hours-client";
-import {
-  isFeatureUnlocked,
-  resolveEffectiveTier,
-  type SubscriptionTier,
-} from "@/lib/plan";
+import { isFeatureUnlocked } from "@/lib/plan";
 import { useAuth } from "@/lib/use-auth";
+import { useCurrentMembership } from "@/lib/use-current-membership";
+import { useVenueAccess } from "@/lib/use-venue-access";
 
 const GUIDE = DASHBOARD_SECTION_GUIDES.hours;
 
 export default function HoursPage() {
   const { state } = useAuth();
+  const access = useVenueAccess();
   const [schedule, setSchedule] = useState<VenueSchedule | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
 
-  const membership =
-    state.status === "authed" ? state.user.memberships[0] : null;
+  const membership = useCurrentMembership();
   const perms = membership?.permissions ?? "";
   const canWrite =
     state.status === "authed" &&
     (membership?.role === "OWNER" ||
-      membership?.role === "MANAGER" ||
       hasPermission(perms, "hours.write"));
 
-  const tier = resolveEffectiveTier(
-    membership?.shop.subscription
-      ? {
-          tier: membership.shop.subscription.tier as SubscriptionTier,
-          status: membership.shop.subscription.status as
-            | "TRIAL"
-            | "ACTIVE"
-            | "PAST_DUE"
-            | "CANCELED",
-          trialEndsAt: membership.shop.subscription.trialEndsAt,
-        }
-      : null,
-  );
-  const hoursUnlocked = isFeatureUnlocked(tier, "hours");
+  const hoursUnlocked = isFeatureUnlocked(access.enabledModules, "hours");
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -140,6 +125,19 @@ export default function HoursPage() {
                     ? {
                         ...s,
                         exceptions: s.exceptions.filter((e) => e.id !== id),
+                      }
+                    : s,
+                );
+              }}
+              onUpdateException={async (id, body) => {
+                const updated = await updateScheduleException(id, body);
+                setSchedule((s) =>
+                  s
+                    ? {
+                        ...s,
+                        exceptions: s.exceptions
+                          .map((e) => (e.id === id ? updated : e))
+                          .sort((a, b) => a.date.localeCompare(b.date)),
                       }
                     : s,
                 );

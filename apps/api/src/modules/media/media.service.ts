@@ -1,5 +1,5 @@
-import { Injectable, NotFoundException } from "@nestjs/common";
-import { PrismaService } from "../../prisma/prisma.service";
+import { Injectable, NotFoundException } from '@nestjs/common';
+import { PrismaService } from '../../prisma/prisma.service';
 import {
   assertImageUploadFile,
   compressImageForStorage,
@@ -8,13 +8,16 @@ import {
   mediaPathForId,
   parseMediaPath,
   type ImageUploadFile,
-} from "../../common/image-media.util";
+} from '../../common/image-media.util';
 
 @Injectable()
 export class MediaService {
   constructor(private readonly prisma: PrismaService) {}
 
-  async storeFromUpload(shopId: string, file: ImageUploadFile): Promise<string> {
+  async storeFromUpload(
+    shopId: string,
+    file: ImageUploadFile,
+  ): Promise<string> {
     assertImageUploadFile(file);
     const compressed = await compressImageForStorage(file.buffer);
     const row = await this.prisma.storedImage.create({
@@ -44,25 +47,29 @@ export class MediaService {
     oldPath: string | null | undefined,
     file: ImageUploadFile,
   ) {
-    await this.deleteByMediaPath(oldPath);
-    return this.storeFromUpload(shopId, file);
+    const nextPath = await this.storeFromUpload(shopId, file);
+    try {
+      await this.deleteByMediaPath(oldPath);
+    } catch {
+      // Keep the new image even if old media cleanup fails.
+    }
+    return nextPath;
   }
 
   async getRenderableImage(mediaId: string) {
     const row = await this.prisma.storedImage.findUnique({
       where: { id: mediaId },
     });
-    if (!row) throw new NotFoundException("Image not found.");
-    const raw =
-      row.data instanceof Buffer ? row.data : Buffer.from(row.data);
+    if (!row) throw new NotFoundException('Image not found.');
+    const raw = row.data instanceof Buffer ? row.data : Buffer.from(row.data);
     let buffer: Buffer;
     try {
       buffer = decompressStoredImage(raw, row.encoding);
     } catch {
-      throw new NotFoundException("Image data is corrupted.");
+      throw new NotFoundException('Image data is corrupted.');
     }
     if (!buffer?.length) {
-      throw new NotFoundException("Image data is empty.");
+      throw new NotFoundException('Image data is empty.');
     }
     return {
       buffer,

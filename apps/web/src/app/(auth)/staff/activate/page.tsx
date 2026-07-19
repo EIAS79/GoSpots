@@ -59,7 +59,7 @@ function ActivateForm() {
   return (
     <AuthCard
       title="Set up your employee login"
-      subtitle="Choose a password only you know. Your manager never sees it."
+      subtitle="Choose a password only you know — for a new account or after a password reset. Your manager never sees it."
     >
       <form onSubmit={onSubmit} className="space-y-4">
         <label className="block text-xs text-zinc-500">

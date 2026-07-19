@@ -12,12 +12,14 @@ export type StaffMember = {
   isActive: boolean;
   activated: boolean;
   pendingInvite: boolean;
+  passwordResetRequestedAt: string | null;
   createdAt: string;
 };
 
 export type StaffListResponse = {
-  seats: { used: number; limit: number; tier: string };
+  seats: { used: number; limit: number; purchased?: number; tier: string };
   canCreateEmployees: boolean;
+  canEditStaff: boolean;
   loginSuffix: string;
   venueSlug: string;
   seatPolicy: string;

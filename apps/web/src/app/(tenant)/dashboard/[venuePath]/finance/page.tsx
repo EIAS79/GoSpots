@@ -2,8 +2,12 @@
 
 import { FinanceHub } from "@/components/finance/finance-hub";
 import { TenantPage } from "@/components/layout/tenant-page";
+import { FeatureGate } from "@/components/subscription/feature-gate";
 import { hasPermission } from "@/lib/auth-client";
+import { isFeatureUnlocked } from "@/lib/plan";
 import { useAuth } from "@/lib/use-auth";
+import { useCurrentMembership } from "@/lib/use-current-membership";
+import { useVenueAccess } from "@/lib/use-venue-access";
 
 const GUIDE = {
   title: "Finance",
@@ -19,13 +23,18 @@ const GUIDE = {
 
 export default function FinancePage() {
   const { state } = useAuth();
-  const membership =
-    state.status === "authed" ? state.user.memberships[0] : null;
+  const access = useVenueAccess();
+  const membership = useCurrentMembership();
   const perms = membership?.permissions ?? "";
+  const transactionUnlocked = isFeatureUnlocked(
+    access.enabledModules,
+    "transaction",
+  );
+  const reportsUnlocked = isFeatureUnlocked(access.enabledModules, "reports");
+  const unlocked = transactionUnlocked || reportsUnlocked;
   const canWrite =
     state.status === "authed" &&
     (membership?.role === "OWNER" ||
-      membership?.role === "MANAGER" ||
       hasPermission(perms, "transaction.write"));
 
   return (
@@ -39,7 +48,9 @@ export default function FinancePage() {
           View-only — ask an admin for transaction write access to edit records.
         </p>
       ) : null}
-      <FinanceHub canWrite={canWrite} />
+      <FeatureGate feature="transaction" unlocked={unlocked} title="Finance">
+        <FinanceHub canWrite={canWrite && transactionUnlocked} />
+      </FeatureGate>
     </TenantPage>
   );
 }

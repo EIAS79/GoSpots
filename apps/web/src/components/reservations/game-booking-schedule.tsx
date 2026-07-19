@@ -4,17 +4,25 @@ import {
   CalendarClock,
   CircleDot,
   Gamepad2,
+  LogIn,
   MoreHorizontal,
   Monitor,
   PlayCircle,
-  RectangleHorizontal,
   User2,
+  UtensilsCrossed,
 } from "lucide-react";
 import { useEffect, useRef, useState, type ComponentType } from "react";
+import { useNowMs } from "@/lib/use-now-ms";
+import { BilliardTableIcon } from "@/components/icons/billiard-table-icon";
+import { BowlingLaneIcon } from "@/components/icons/bowling-lane-icon";
+import { ArcadeCabinetIcon } from "@/components/icons/arcade-cabinet-icon";
+import { FoosballTableIcon } from "@/components/icons/foosball-table-icon";
+import { PingPongTableIcon } from "@/components/icons/ping-pong-table-icon";
 import { cn } from "@/lib/cn";
 import {
   getBookingUnitKind,
   getBookingUnitLabels,
+  sortDiningScheduleCategories,
   sortScheduleCategories,
 } from "@/lib/booking-unit-kind";
 import {
@@ -25,25 +33,84 @@ import {
 import {
   countActiveBookings,
   isLiveBooking,
+  isSessionBlockingBooking,
   localDateInput,
+  resolveSessionBookingPhase,
 } from "@/lib/booking-time";
 import type {
   DaySchedule,
   ScheduleBooking,
   ScheduleCategory,
+  ScheduleCategorySection,
   ScheduleUnit,
 } from "@/lib/reservations-client";
+import { GamingFloorLayoutExplorer } from "@/components/reservations/gaming-floor-layout-explorer";
+import { BowlingLaneFloorMap } from "@/components/reservations/bowling-lane-floor-map";
 import { UnitGridPager } from "@/components/reservations/unit-grid-pager";
-import { RESOURCE_TYPE_LABELS, type ResourceType } from "@/lib/resource-types";
+import { getFloorMapVisualType } from "@/lib/gaming-floor-visual";
+import type { ResourceType } from "@/lib/resource-types";
 
 const TYPE_ICONS: Partial<
   Record<ResourceType, ComponentType<{ size?: number; className?: string }>>
 > = {
   PC: Monitor,
   PLAYSTATION: Gamepad2,
-  BILLIARD: CircleDot,
-  BOWLING: RectangleHorizontal,
+  BILLIARD: ({ className }) => (
+    <BilliardTableIcon status="AVAILABLE" className={className ?? "h-4 w-7"} />
+  ),
+  BOWLING: ({ className }) => (
+    <BowlingLaneIcon status="AVAILABLE" className={className ?? "h-5 w-3"} />
+  ),
+  TABLE_TENNIS: ({ className }) => (
+    <PingPongTableIcon status="AVAILABLE" className={className ?? "h-4 w-7"} />
+  ),
+  FOOSBALL: ({ className }) => (
+    <FoosballTableIcon status="AVAILABLE" className={className ?? "h-4 w-7"} />
+  ),
+  ARCADE: ({ className }) => (
+    <ArcadeCabinetIcon status="AVAILABLE" className={className ?? "h-4 w-5"} />
+  ),
+  DINING: UtensilsCrossed,
 };
+
+export type ReservationBoardVariant = "gaming" | "dining";
+
+const BOARD_THEME: Record<
+  ReservationBoardVariant,
+  {
+    pickerLabel: string;
+    selectedChip: string;
+    emptyTitle: string;
+    emptyHint: string;
+  }
+> = {
+  gaming: {
+    pickerLabel: "Game activity",
+    selectedChip:
+      "border-emerald-400/40 bg-emerald-500/15 text-emerald-100",
+    emptyTitle: "No games configured yet.",
+    emptyHint: "Add PC, PlayStation, billiard, or bowling under Gaming setup.",
+  },
+  dining: {
+    pickerLabel: "Restaurant",
+    selectedChip: "border-amber-400/40 bg-amber-500/15 text-amber-100",
+    emptyTitle: "No digital dining tables yet.",
+    emptyHint:
+      "Set up areas and table types under Venue → Dining layout, then manage bookings here.",
+  },
+};
+
+function useCompactFloorView() {
+  const [compact, setCompact] = useState(false);
+  useEffect(() => {
+    const mq = window.matchMedia("(max-width: 768px)");
+    const update = () => setCompact(mq.matches);
+    update();
+    mq.addEventListener("change", update);
+    return () => mq.removeEventListener("change", update);
+  }, []);
+  return compact;
+}
 
 function formatTime(iso: string) {
   return new Date(iso).toLocaleTimeString(undefined, {
@@ -57,21 +124,26 @@ function findActiveOrNext(
   isToday: boolean,
   nowMs: number = Date.now(),
 ): ScheduleBooking | null {
-  // Live = active status AND end time still in the future.
   const live = bookings.filter((b) => isLiveBooking(b, nowMs));
   if (live.length === 0) return null;
 
-  const inUse = live.find(
-    (b) =>
-      b.status === "CHECKED_IN" &&
-      new Date(b.startsAt).getTime() <= nowMs &&
-      new Date(b.endsAt).getTime() > nowMs,
-  );
+  const inUse = live.find((b) => b.status === "CHECKED_IN");
   if (inUse) return inUse;
+
+  const waiting = live.find(
+    (b) =>
+      resolveSessionBookingPhase(b.status, b.startsAt, b.endsAt, nowMs) ===
+      "waiting",
+  );
+  if (waiting) return waiting;
 
   if (isToday) {
     const upcoming = live
-      .filter((b) => new Date(b.endsAt).getTime() > nowMs)
+      .filter(
+        (b) =>
+          resolveSessionBookingPhase(b.status, b.startsAt, b.endsAt, nowMs) ===
+          "upcoming",
+      )
       .sort(
         (a, b) =>
           new Date(a.startsAt).getTime() - new Date(b.startsAt).getTime(),
@@ -82,6 +154,7 @@ function findActiveOrNext(
 }
 
 type ScheduleCommon = {
+  boardVariant: ReservationBoardVariant;
   canWrite: boolean;
   isToday: boolean;
   nowMs: number;
@@ -89,7 +162,8 @@ type ScheduleCommon = {
   onToggleNotWorking?: (unitId: string, notWorking: boolean) => Promise<void>;
   onFocusUnit?: (unitId: string, unitName: string) => void;
   onEditBooking?: (booking: ScheduleBooking, unitId: string) => void;
-  onEndBookingNow?: (booking: ScheduleBooking, unitId: string) => Promise<void>;
+  onCheckInBooking?: (booking: ScheduleBooking, unitId: string) => Promise<void>;
+  onGuestLeftBooking?: (booking: ScheduleBooking, unitId: string) => Promise<void>;
   highlightedUnitId?: string | null;
 };
 
@@ -99,32 +173,35 @@ export function GameBookingSchedule({
   onToggleNotWorking,
   onFocusUnit,
   onEditBooking,
-  onEndBookingNow,
+  onCheckInBooking,
+  onGuestLeftBooking,
   highlightedUnitId,
   canWrite,
+  selectedCategoryId,
+  onCategoryChange,
+  variant = "gaming",
 }: {
   schedule: DaySchedule;
   onBookUnit: (unitId: string, categoryId: string) => void;
   onToggleNotWorking?: (unitId: string, notWorking: boolean) => Promise<void>;
   onFocusUnit?: (unitId: string, unitName: string) => void;
   onEditBooking?: (booking: ScheduleBooking, unitId: string) => void;
-  onEndBookingNow?: (booking: ScheduleBooking, unitId: string) => Promise<void>;
+  onCheckInBooking?: (booking: ScheduleBooking, unitId: string) => Promise<void>;
+  onGuestLeftBooking?: (booking: ScheduleBooking, unitId: string) => Promise<void>;
   highlightedUnitId?: string | null;
   canWrite: boolean;
+  selectedCategoryId?: string;
+  onCategoryChange?: (categoryId: string) => void;
+  variant?: ReservationBoardVariant;
 }) {
   const isToday = schedule.date === localDateInput();
-  const [nowMs, setNowMs] = useState(() => Date.now());
+  const nowMs = useNowMs(10_000);
+  const compactFloor = useCompactFloorView();
+  const theme = BOARD_THEME[variant];
 
-  // Re-tick every 30s so live status, "Available" transitions at endsAt, and
-  // booking counts update without a network refetch. Combined with the 15s
-  // schedule poll this keeps the floor map effectively realtime.
-  useEffect(() => {
-    if (!isToday) return;
-    const id = setInterval(() => setNowMs(Date.now()), 30_000);
-    return () => clearInterval(id);
-  }, [isToday]);
-
-  const categories = sortScheduleCategories(
+  const categories = (variant === "dining"
+    ? sortDiningScheduleCategories
+    : sortScheduleCategories)(
     schedule.categories.map((cat) => ({
       ...cat,
       unitKind: cat.unitKind ?? getBookingUnitKind(cat.type),
@@ -133,16 +210,42 @@ export function GameBookingSchedule({
     })),
   );
 
+  const [internalCategoryId, setInternalCategoryId] = useState(
+    () => categories[0]?.id ?? "",
+  );
+
+  const activeCategoryId =
+    selectedCategoryId && categories.some((c) => c.id === selectedCategoryId)
+      ? selectedCategoryId
+      : internalCategoryId && categories.some((c) => c.id === internalCategoryId)
+        ? internalCategoryId
+        : categories[0]?.id ?? "";
+
+  useEffect(() => {
+    if (!categories.length) return;
+    if (!categories.some((c) => c.id === activeCategoryId)) {
+      setInternalCategoryId(categories[0].id);
+    }
+  }, [categories, activeCategoryId]);
+
+  const pickCategory = (id: string) => {
+    setInternalCategoryId(id);
+    onCategoryChange?.(id);
+  };
+
+  const activeCategory = categories.find((c) => c.id === activeCategoryId);
+
   if (categories.length === 0) {
     return (
       <p className="rounded-xl border border-dashed border-white/15 px-6 py-12 text-center text-sm text-zinc-500">
-        No games configured yet. Add PC, PlayStation, billiard, or bowling under{" "}
-        <span className="text-zinc-400">Games &amp; tables</span>.
+        {theme.emptyTitle}{" "}
+        <span className="text-zinc-400">{theme.emptyHint}</span>
       </p>
     );
   }
 
   const common: ScheduleCommon = {
+    boardVariant: variant,
     canWrite,
     isToday,
     nowMs,
@@ -150,96 +253,125 @@ export function GameBookingSchedule({
     onToggleNotWorking,
     onFocusUnit,
     onEditBooking,
-    onEndBookingNow,
+    onCheckInBooking,
+    onGuestLeftBooking,
     highlightedUnitId,
   };
 
   return (
-    <div className="space-y-5">
-      <div className="flex flex-wrap items-center gap-2 text-[11px]">
-        {(["AVAILABLE", "UNAVAILABLE", "NOT_WORKING"] as UnitFloorStatus[]).map(
-          (s) => (
-            <span
-              key={s}
-              className="inline-flex items-center gap-1.5 rounded-full border border-white/10 bg-zinc-950/50 px-2.5 py-1 text-zinc-300"
-            >
-              <span
-                className={cn("size-1.5 rounded-full", FLOOR_STATUS_DOT[s])}
-              />
-              {FLOOR_STATUS_LABELS[s]}
-            </span>
-          ),
-        )}
-        {!isToday ? (
-          <span className="text-zinc-500">
-            · Schedule for {schedule.date} — &quot;in use&quot; is only computed
-            for today
-          </span>
-        ) : null}
+    <div className="min-w-0 w-full rounded-xl border border-white/10 bg-zinc-900/40">
+      {/* Game activity picker */}
+      <div className="border-b border-white/10 bg-zinc-950/50 px-3 py-3">
+        <p className="mb-2 text-[9px] font-semibold uppercase tracking-widest text-zinc-600">
+          {theme.pickerLabel}
+        </p>
+        <div className="flex gap-2 overflow-x-auto pb-0.5 [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+          {categories.map((cat) => {
+            const Icon = TYPE_ICONS[cat.type];
+            const free = cat.units.filter(
+              (u) => u.floorStatus === "AVAILABLE",
+            ).length;
+            const selected = cat.id === activeCategoryId;
+            return (
+              <button
+                key={cat.id}
+                type="button"
+                onClick={() => pickCategory(cat.id)}
+                className={cn(
+                  "inline-flex shrink-0 items-center gap-2 rounded-lg border px-3 py-2 text-left transition",
+                  selected
+                    ? theme.selectedChip
+                    : "border-white/10 bg-zinc-900/60 text-zinc-400 hover:border-white/20 hover:text-zinc-200",
+                )}
+              >
+                {Icon ? (
+                  <span className="grid size-7 shrink-0 place-items-center rounded-md bg-white/5">
+                    <Icon size={14} />
+                  </span>
+                ) : null}
+                <span className="min-w-0">
+                  <span className="block max-w-[9rem] truncate text-xs font-semibold sm:max-w-[11rem]">
+                    {cat.name}
+                  </span>
+                  <span className="block text-[10px] opacity-75">
+                    {free}/{cat.units.length} free
+                  </span>
+                </span>
+              </button>
+            );
+          })}
+        </div>
       </div>
 
-      {categories.map((cat) => (
-        <CategorySection key={cat.id} category={cat} {...common} />
-      ))}
+      {activeCategory ? (
+        <CategorySection
+          category={activeCategory}
+          compactFloor={compactFloor}
+          {...common}
+        />
+      ) : null}
     </div>
   );
 }
 
 function CategorySection({
   category: cat,
+  compactFloor,
   ...common
-}: { category: ScheduleCategory } & ScheduleCommon) {
-  const Icon = TYPE_ICONS[cat.type];
-  const free = cat.units.filter((u) => u.floorStatus === "AVAILABLE").length;
-  const inUse = cat.units.filter((u) => u.floorStatus === "UNAVAILABLE").length;
-  const oos = cat.units.filter((u) => u.floorStatus === "NOT_WORKING").length;
-  const labels = cat.unitLabels ?? getBookingUnitLabels(cat.unitKind);
-
+}: { category: ScheduleCategory; compactFloor: boolean } & ScheduleCommon) {
   return (
-    <section className="overflow-hidden rounded-xl border border-white/10 bg-zinc-900/40">
-      <header className="flex flex-wrap items-center justify-between gap-3 border-b border-white/5 px-4 py-3">
-        <div className="flex min-w-0 items-center gap-3">
-          {Icon ? (
-            <span className="grid size-9 shrink-0 place-items-center rounded-lg bg-white/5 text-emerald-300">
-              <Icon size={18} />
-            </span>
-          ) : null}
-          <div className="min-w-0">
-            <h3 className="font-semibold text-white">{cat.name}</h3>
-            <p className="text-[11px] text-zinc-500">
-              {RESOURCE_TYPE_LABELS[cat.type]} · {cat.units.length}{" "}
-              {labels.plural} · default {cat.slotMinutes} min
-            </p>
-          </div>
-        </div>
-        <div className="flex shrink-0 flex-wrap gap-1.5 text-[11px]">
-          <span className="inline-flex items-center gap-1 rounded-full border border-emerald-400/25 bg-emerald-500/10 px-2 py-0.5 text-emerald-200">
-            <span className="size-1.5 rounded-full bg-emerald-400" />
-            {free} free
-          </span>
-          {inUse > 0 ? (
-            <span className="inline-flex items-center gap-1 rounded-full border border-rose-400/25 bg-rose-500/10 px-2 py-0.5 text-rose-200">
-              <span className="size-1.5 rounded-full bg-rose-400" />
-              {inUse} in use
-            </span>
-          ) : null}
-          {oos > 0 ? (
-            <span className="inline-flex items-center gap-1 rounded-full border border-white/10 bg-zinc-800/60 px-2 py-0.5 text-zinc-400">
-              <span className="size-1.5 rounded-full bg-zinc-500" />
-              {oos} OOS
-            </span>
-          ) : null}
-        </div>
-      </header>
-
+    <section>
       {cat.unitKind === "SEAT" ? (
-        <SeatGrid units={cat.units} categoryId={cat.id} {...common} />
+        compactFloor ? (
+          <UnitList
+            units={cat.units}
+            categoryId={cat.id}
+            categoryLabel={cat.name}
+            {...common}
+          />
+        ) : (
+          <SeatGrid
+            units={cat.units}
+            sections={cat.sections}
+            categoryId={cat.id}
+            categoryLabel={cat.name}
+            categoryType={cat.type}
+            {...common}
+          />
+        )
       ) : cat.unitKind === "TABLE" ? (
-        <TableGrid units={cat.units} categoryId={cat.id} {...common} />
+        compactFloor ? (
+          <UnitList
+            units={cat.units}
+            categoryId={cat.id}
+            categoryLabel={cat.name}
+            {...common}
+          />
+        ) : (
+          <TableGrid
+            units={cat.units}
+            sections={cat.sections}
+            categoryId={cat.id}
+            categoryLabel={cat.name}
+            categoryType={cat.type}
+            {...common}
+          />
+        )
       ) : cat.unitKind === "LANE" ? (
-        <LaneRow units={cat.units} categoryId={cat.id} {...common} />
+        <LaneGrid
+          units={cat.units}
+          sections={cat.sections}
+          categoryId={cat.id}
+          categoryLabel={cat.name}
+          {...common}
+        />
       ) : (
-        <UnitList units={cat.units} categoryId={cat.id} {...common} />
+        <UnitList
+          units={cat.units}
+          categoryId={cat.id}
+          categoryLabel={cat.name}
+          {...common}
+        />
       )}
     </section>
   );
@@ -247,7 +379,10 @@ function CategorySection({
 
 type GridProps = {
   units: ScheduleUnit[];
+  sections?: ScheduleCategorySection[];
   categoryId: string;
+  categoryLabel: string;
+  categoryType?: ResourceType;
 } & ScheduleCommon;
 
 function unitCardCommon(unit: ScheduleUnit, categoryId: string, p: GridProps) {
@@ -262,8 +397,11 @@ function unitCardCommon(unit: ScheduleUnit, categoryId: string, p: GridProps) {
     onEditBooking: p.onEditBooking
       ? (b: ScheduleBooking) => p.onEditBooking!(b, unit.id)
       : undefined,
-    onEndBookingNow: p.onEndBookingNow
-      ? (b: ScheduleBooking) => p.onEndBookingNow!(b, unit.id)
+    onCheckInBooking: p.onCheckInBooking
+      ? (b: ScheduleBooking) => p.onCheckInBooking!(b, unit.id)
+      : undefined,
+    onGuestLeftBooking: p.onGuestLeftBooking
+      ? (b: ScheduleBooking) => p.onGuestLeftBooking!(b, unit.id)
       : undefined,
     onToggleNotWorking: p.onToggleNotWorking
       ? () =>
@@ -275,60 +413,58 @@ function unitCardCommon(unit: ScheduleUnit, categoryId: string, p: GridProps) {
   };
 }
 
-const SEAT_PAGE = 20;
-const TABLE_PAGE = 9;
 const LIST_PAGE = 15;
 
 function SeatGrid(p: GridProps) {
   return (
-    <UnitGridPager
+    <GamingFloorLayoutExplorer
       units={p.units}
-      pageSize={SEAT_PAGE}
-      compact
-      gridClassName="grid grid-cols-2 gap-2 p-3 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5"
-    >
-      {(unit) => (
-        <UnitCard variant="seat" {...unitCardCommon(unit, p.categoryId, p)} />
-      )}
-    </UnitGridPager>
+      sections={p.sections}
+      categoryLabel={p.categoryLabel}
+      visualType={p.categoryType ? getFloorMapVisualType(p.categoryType) : "pc"}
+      stationsPerPage={12}
+      canWrite={p.canWrite}
+      nowMs={p.nowMs}
+      highlightedUnitId={p.highlightedUnitId}
+      onBookUnit={(unitId) => p.onBookUnit(unitId, p.categoryId)}
+      onEditBooking={(booking, unitId) => p.onEditBooking?.(booking, unitId)}
+      onToggleNotWorking={p.onToggleNotWorking}
+    />
   );
 }
 
 function TableGrid(p: GridProps) {
   return (
-    <UnitGridPager
+    <GamingFloorLayoutExplorer
       units={p.units}
-      pageSize={TABLE_PAGE}
-      gridClassName="grid gap-2.5 p-3 sm:grid-cols-2 lg:grid-cols-3"
-    >
-      {(unit) => (
-        <UnitCard variant="table" {...unitCardCommon(unit, p.categoryId, p)} />
-      )}
-    </UnitGridPager>
+      sections={p.sections}
+      categoryLabel={p.categoryLabel}
+      visualType={
+        p.categoryType ? getFloorMapVisualType(p.categoryType) : "billiard"
+      }
+      stationsPerPage={8}
+      canWrite={p.canWrite}
+      nowMs={p.nowMs}
+      highlightedUnitId={p.highlightedUnitId}
+      onBookUnit={(unitId) => p.onBookUnit(unitId, p.categoryId)}
+      onEditBooking={(booking, unitId) => p.onEditBooking?.(booking, unitId)}
+      onToggleNotWorking={p.onToggleNotWorking}
+    />
   );
 }
 
-function LaneRow(p: GridProps) {
-  if (p.units.length <= 16) {
-    return (
-      <ul className="flex gap-2.5 overflow-x-auto p-3 pb-4">
-        {p.units.map((unit) => (
-          <li key={unit.id} className="w-40 shrink-0">
-            <UnitCard
-              variant="lane"
-              {...unitCardCommon(unit, p.categoryId, p)}
-            />
-          </li>
-        ))}
-      </ul>
-    );
-  }
+function LaneGrid(p: GridProps) {
   return (
-    <UnitGridPager units={p.units} pageSize={12} lane>
-      {(unit) => (
-        <UnitCard variant="lane" {...unitCardCommon(unit, p.categoryId, p)} />
-      )}
-    </UnitGridPager>
+    <BowlingLaneFloorMap
+      units={p.units}
+      sections={p.sections}
+      canWrite={p.canWrite}
+      nowMs={p.nowMs}
+      highlightedUnitId={p.highlightedUnitId}
+      onBookUnit={(unitId) => p.onBookUnit(unitId, p.categoryId)}
+      onEditBooking={(booking, unitId) => p.onEditBooking?.(booking, unitId)}
+      onToggleNotWorking={p.onToggleNotWorking}
+    />
   );
 }
 
@@ -371,7 +507,8 @@ type UnitCardProps = {
   onBook: () => void;
   onFocus?: () => void;
   onEditBooking?: (b: ScheduleBooking) => void;
-  onEndBookingNow?: (b: ScheduleBooking) => Promise<void> | void;
+  onCheckInBooking?: (b: ScheduleBooking) => Promise<void> | void;
+  onGuestLeftBooking?: (b: ScheduleBooking) => Promise<void> | void;
   onToggleNotWorking?: () => void;
 };
 
@@ -397,32 +534,35 @@ function UnitCard({
   onBook,
   onFocus,
   onEditBooking,
-  onEndBookingNow,
+  onCheckInBooking,
+  onGuestLeftBooking,
   onToggleNotWorking,
 }: UnitCardProps) {
-  // The server-computed floorStatus is the source of truth, but if the
-  // booking that made the seat UNAVAILABLE has actually ended by `nowMs`, we
-  // optimistically treat the seat as AVAILABLE until the next refetch.
   const serverStatus = unit.floorStatus;
-  const hasLiveBlocking = unit.bookings.some(
-    (b) =>
-      isLiveBooking(b, nowMs) &&
-      new Date(b.startsAt).getTime() <= nowMs &&
-      new Date(b.endsAt).getTime() > nowMs,
+  const hasLiveBlocking = unit.bookings.some((b) =>
+    isSessionBlockingBooking(b, nowMs),
   );
   const status =
     serverStatus === "UNAVAILABLE" && !hasLiveBlocking
       ? "AVAILABLE"
       : serverStatus;
-  const bookingCount = countActiveBookings(unit.bookings, nowMs);
+  const bookingCount = unit.bookings.filter((b) => isLiveBooking(b, nowMs)).length;
   const focus = findActiveOrNext(unit.bookings, isToday, nowMs);
   const extraBookings = Math.max(0, bookingCount - (focus ? 1 : 0));
   const isOOS = status === "NOT_WORKING";
   const isInUse = status === "UNAVAILABLE";
   const compact = variant === "seat";
   const list = variant === "list";
-  const activeBooking =
-    isInUse && focus?.status === "CHECKED_IN" ? focus : null;
+  const sessionPhase = focus
+    ? resolveSessionBookingPhase(
+        focus.status,
+        focus.startsAt,
+        focus.endsAt,
+        nowMs,
+      )
+    : null;
+  const checkInBooking = sessionPhase === "waiting" ? focus : null;
+  const guestLeftBooking = focus?.status === "CHECKED_IN" ? focus : null;
 
   if (list) {
     return (
@@ -437,7 +577,8 @@ function UnitCard({
         onBook={onBook}
         onFocus={onFocus}
         onEditBooking={onEditBooking}
-        onEndBookingNow={onEndBookingNow}
+        onCheckInBooking={onCheckInBooking}
+        onGuestLeftBooking={onGuestLeftBooking}
         onToggleNotWorking={onToggleNotWorking}
       />
     );
@@ -498,10 +639,12 @@ function UnitCard({
               unit={unit}
               status={status}
               hasBookings={bookingCount > 0}
-              activeBooking={activeBooking}
+              checkInBooking={checkInBooking}
+              guestLeftBooking={guestLeftBooking}
               onToggleNotWorking={onToggleNotWorking}
               onFocus={onFocus}
-              onEndBookingNow={onEndBookingNow}
+              onCheckInBooking={onCheckInBooking}
+              onGuestLeftBooking={onGuestLeftBooking}
             />
           ) : null}
         </header>
@@ -510,6 +653,7 @@ function UnitCard({
           <FocusRow
             focus={focus}
             isInUse={isInUse}
+            nowMs={nowMs}
             compact={compact}
             extraBookings={extraBookings}
             onFocus={onFocus}
@@ -539,16 +683,25 @@ function UnitCard({
 function FocusRow({
   focus,
   isInUse,
+  nowMs,
   compact,
   extraBookings,
   onFocus,
 }: {
   focus: ScheduleBooking;
   isInUse: boolean;
+  nowMs: number;
   compact: boolean;
   extraBookings: number;
   onFocus?: () => void;
 }) {
+  const sessionPhase = resolveSessionBookingPhase(
+    focus.status,
+    focus.startsAt,
+    focus.endsAt,
+    nowMs,
+  );
+
   return (
     <div className="min-w-0 space-y-0.5">
       <p
@@ -569,8 +722,14 @@ function FocusRow({
         )}
       >
         <CalendarClock size={10} className="shrink-0" aria-hidden />
-        {formatTime(focus.startsAt)} – {formatTime(focus.endsAt)}
-        {isInUse ? (
+        {formatTime(focus.startsAt)}
+        {sessionPhase === "waiting" ? (
+          <span className="text-amber-300/90"> · waiting</span>
+        ) : focus.status === "CHECKED_IN" ? (
+          <span className="text-rose-300/90"> · in use</span>
+        ) : sessionPhase === "upcoming" ? (
+          <span> · upcoming</span>
+        ) : isInUse ? (
           <span className="text-rose-300/90"> · now</span>
         ) : null}
       </p>
@@ -666,7 +825,8 @@ function UnitRow({
   onBook,
   onFocus,
   onEditBooking,
-  onEndBookingNow,
+  onCheckInBooking,
+  onGuestLeftBooking,
   onToggleNotWorking,
 }: {
   unit: ScheduleUnit;
@@ -679,15 +839,22 @@ function UnitRow({
   onBook: () => void;
   onFocus?: () => void;
   onEditBooking?: (b: ScheduleBooking) => void;
-  onEndBookingNow?: (b: ScheduleBooking) => Promise<void> | void;
+  onCheckInBooking?: (b: ScheduleBooking) => Promise<void> | void;
+  onGuestLeftBooking?: (b: ScheduleBooking) => Promise<void> | void;
   onToggleNotWorking?: () => void;
 }) {
-  const activeBooking =
-    status === "UNAVAILABLE" &&
-    focus?.status === "CHECKED_IN" &&
-    isLiveBooking(focus, nowMs)
-      ? focus
+  const sessionPhase =
+    focus != null
+      ? resolveSessionBookingPhase(
+          focus.status,
+          focus.startsAt,
+          focus.endsAt,
+          nowMs,
+        )
       : null;
+  const checkInBooking = sessionPhase === "waiting" ? focus : null;
+  const guestLeftBooking = focus?.status === "CHECKED_IN" ? focus : null;
+
   return (
     <div
       className={cn(
@@ -707,8 +874,7 @@ function UnitRow({
           {FLOOR_STATUS_LABELS[status]}
           {focus ? (
             <span className="ml-1.5 text-zinc-500">
-              · {focus.guestName} {formatTime(focus.startsAt)}–
-              {formatTime(focus.endsAt)}
+              · {focus.guestName} {formatTime(focus.startsAt)}
             </span>
           ) : null}
           {bookingCount > (focus ? 1 : 0) ? (
@@ -735,10 +901,12 @@ function UnitRow({
             unit={unit}
             status={status}
             hasBookings={bookingCount > 0}
-            activeBooking={activeBooking}
+            checkInBooking={checkInBooking}
+            guestLeftBooking={guestLeftBooking}
             onToggleNotWorking={onToggleNotWorking}
             onFocus={onFocus}
-            onEndBookingNow={onEndBookingNow}
+            onCheckInBooking={onCheckInBooking}
+            onGuestLeftBooking={onGuestLeftBooking}
             inline
           />
         </div>
@@ -751,19 +919,23 @@ function UnitMenu({
   unit,
   status,
   hasBookings,
-  activeBooking,
+  checkInBooking,
+  guestLeftBooking,
   onToggleNotWorking,
   onFocus,
-  onEndBookingNow,
+  onCheckInBooking,
+  onGuestLeftBooking,
   inline,
 }: {
   unit: ScheduleUnit;
   status: UnitFloorStatus;
   hasBookings: boolean;
-  activeBooking?: ScheduleBooking | null;
+  checkInBooking?: ScheduleBooking | null;
+  guestLeftBooking?: ScheduleBooking | null;
   onToggleNotWorking?: () => void;
   onFocus?: () => void;
-  onEndBookingNow?: (b: ScheduleBooking) => Promise<void> | void;
+  onCheckInBooking?: (b: ScheduleBooking) => Promise<void> | void;
+  onGuestLeftBooking?: (b: ScheduleBooking) => Promise<void> | void;
   inline?: boolean;
 }) {
   const [open, setOpen] = useState(false);
@@ -778,14 +950,15 @@ function UnitMenu({
     return () => window.removeEventListener("mousedown", close);
   }, [open]);
 
-  // Don't show "mark out of service" in menu when it's the only action
-  // and would be redundant with the primary button (already handled by Restore).
   const isOOS = status === "NOT_WORKING";
   const showToggle = Boolean(onToggleNotWorking) && !isOOS;
   const showFocus = hasBookings && Boolean(onFocus);
-  const showEnd = Boolean(onEndBookingNow && activeBooking);
+  const showCheckIn = Boolean(onCheckInBooking && checkInBooking);
+  const showGuestLeft = Boolean(onGuestLeftBooking && guestLeftBooking);
 
-  if (!showToggle && !showFocus && !showEnd) return null;
+  if (!showToggle && !showFocus && !showCheckIn && !showGuestLeft) {
+    return null;
+  }
 
   return (
     <div ref={ref} className={cn("relative", inline ? "" : "shrink-0")}>
@@ -803,17 +976,30 @@ function UnitMenu({
       </button>
       {open ? (
         <div className="absolute right-0 top-7 z-20 w-48 overflow-hidden rounded-lg border border-white/10 bg-zinc-950/95 p-1 text-xs shadow-xl backdrop-blur">
-          {showEnd && activeBooking && onEndBookingNow ? (
+          {showCheckIn && checkInBooking && onCheckInBooking ? (
             <button
               type="button"
               onClick={() => {
-                void onEndBookingNow(activeBooking);
+                void onCheckInBooking(checkInBooking);
+                setOpen(false);
+              }}
+              className="flex w-full items-center gap-2 rounded-md px-2.5 py-1.5 text-left text-sky-300 hover:bg-sky-500/10 hover:text-sky-200"
+            >
+              <LogIn size={12} aria-hidden />
+              Check in guest
+            </button>
+          ) : null}
+          {showGuestLeft && guestLeftBooking && onGuestLeftBooking ? (
+            <button
+              type="button"
+              onClick={() => {
+                void onGuestLeftBooking(guestLeftBooking);
                 setOpen(false);
               }}
               className="flex w-full items-center gap-2 rounded-md px-2.5 py-1.5 text-left text-emerald-300 hover:bg-emerald-500/10 hover:text-emerald-200"
             >
               <PlayCircle size={12} aria-hidden />
-              End session — free seat
+              Guest left — free unit
             </button>
           ) : null}
           {showFocus ? (

@@ -1,7 +1,7 @@
 /** Staff login domain — not valid for public /register */
-export const VENUE_STAFF_EMAIL_SUFFIX = ".gospots";
+export const VENUE_STAFF_EMAIL_SUFFIX = '.gospots';
 /** Pre-rebrand logins still accepted */
-export const LEGACY_VENUE_STAFF_EMAIL_SUFFIX = ".venueflow";
+export const LEGACY_VENUE_STAFF_EMAIL_SUFFIX = '.venueflow';
 
 export function buildStaffLoginEmail(handle: string, shopSlug: string): string {
   const h = handle.trim().toLowerCase();
@@ -20,7 +20,7 @@ export function isVenueStaffLoginEmail(email: string): boolean {
 export function parseStaffHandleFromEmail(email: string): string | null {
   const lower = email.trim().toLowerCase();
   if (!isVenueStaffLoginEmail(lower)) return null;
-  const at = lower.indexOf("@");
+  const at = lower.indexOf('@');
   if (at <= 0) return null;
   return lower.slice(0, at);
 }

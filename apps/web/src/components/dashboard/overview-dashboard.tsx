@@ -153,7 +153,7 @@ export function OverviewDashboard({
 
       {tab === "finance" ? (
         <div className="space-y-4">
-          <div className="grid gap-3 sm:grid-cols-3">
+          <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
             <KpiCard
               label="Revenue (7d)"
               value={formatMoney(kpis.revenueWeek)}
@@ -201,7 +201,7 @@ export function OverviewDashboard({
 
       {tab === "orders" ? (
         <div className="space-y-4">
-          <div className="grid gap-3 sm:grid-cols-3">
+          <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
             <KpiCard
               label="Orders today"
               value={String(kpis.ordersToday)}
@@ -261,7 +261,7 @@ export function OverviewDashboard({
 
       {tab === "audience" ? (
         <div className="space-y-4">
-          <div className="grid gap-3 sm:grid-cols-3">
+          <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
             <KpiCard
               label="Venue views (7d)"
               value={String(kpis.venueViews7d)}

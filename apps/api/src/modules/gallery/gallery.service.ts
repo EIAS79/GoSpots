@@ -2,30 +2,36 @@ import {
   ForbiddenException,
   Injectable,
   NotFoundException,
-} from "@nestjs/common";
-import { PERMISSIONS } from "../../common/permissions";
-import { requireShopId } from "../../common/tenant";
-import type { JwtAccessPayload } from "../auth/auth.service";
-import { AuditService } from "../audit/audit.service";
-import { PrismaService } from "../../prisma/prisma.service";
-import { assertGalleryImageFile, type GalleryImageUpload } from "./gallery-upload.util";
-import { UpdateGalleryItemDto } from "./dto/gallery.dto";
-import { MediaService } from "../media/media.service";
+} from '@nestjs/common';
+import { hasPermission, PERMISSIONS } from '../../common/permissions';
+import { requireShopId } from '../../common/tenant';
+import type { JwtAccessPayload } from '../auth/auth.service';
+import { AuditService } from '../audit/audit.service';
+import { NotificationsService } from '../notifications/notifications.service';
+import { PrismaService } from '../../prisma/prisma.service';
+import {
+  assertGalleryImageFile,
+  type GalleryImageUpload,
+} from './gallery-upload.util';
+import { UpdateGalleryItemDto } from './dto/gallery.dto';
+import { MediaService } from '../media/media.service';
 
 @Injectable()
 export class GalleryService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly audit: AuditService,
+    private readonly notifications: NotificationsService,
     private readonly media: MediaService,
   ) {}
 
   private assert(actor: JwtAccessPayload, perm: string) {
     if (!actor.shopId) throw new ForbiddenException();
-    const p = actor.perms ?? "";
-    if (p !== "*" && !p.split(",").includes(perm)) {
-      throw new ForbiddenException(`Missing ${perm}`);
+    if (actor.shopRole === 'OWNER' || actor.shopRole === 'MANAGER') return;
+    if (hasPermission(actor.perms ?? '', perm as (typeof PERMISSIONS)[keyof typeof PERMISSIONS])) {
+      return;
     }
+    throw new ForbiddenException(`Missing ${perm}`);
   }
 
   async list(actor: JwtAccessPayload) {
@@ -39,7 +45,7 @@ export class GalleryService {
 
     const items = await this.prisma.galleryItem.findMany({
       where: { shopId },
-      orderBy: [{ sortOrder: "asc" }, { createdAt: "asc" }],
+      orderBy: [{ sortOrder: 'asc' }, { createdAt: 'asc' }],
     });
 
     return { coverImage: shop.coverImage, items };
@@ -64,10 +70,15 @@ export class GalleryService {
       select: { coverImage: true },
     });
     await this.audit.record(actor, {
-      section: "gallery",
-      action: "gallery.cover.update",
-      summary: "Updated venue marketing cover image",
+      section: 'gallery',
+      action: 'gallery.cover.update',
+      summary: 'Updated venue marketing cover image',
       meta: { imageUrl },
+    });
+    await this.notifications.recordVenueEvent(shopId, {
+      title: 'Gallery cover updated',
+      body: 'Your public venue cover image was changed.',
+      href: '/gallery',
     });
     return shop;
   }
@@ -94,10 +105,15 @@ export class GalleryService {
       },
     });
     await this.audit.record(actor, {
-      section: "gallery",
-      action: "gallery.item.create",
-      summary: "Added gallery photo",
+      section: 'gallery',
+      action: 'gallery.item.create',
+      summary: 'Added gallery photo',
       meta: { itemId: item.id },
+    });
+    await this.notifications.recordVenueEvent(shopId, {
+      title: 'Gallery photo added',
+      body: 'A new photo was added to your public gallery.',
+      href: '/gallery',
     });
     return item;
   }
@@ -114,7 +130,7 @@ export class GalleryService {
     });
     if (!existing) throw new NotFoundException();
 
-    return this.prisma.galleryItem.update({
+    const item = await this.prisma.galleryItem.update({
       where: { id },
       data: {
         ...(dto.caption !== undefined && {
@@ -123,6 +139,15 @@ export class GalleryService {
         ...(dto.sortOrder !== undefined && { sortOrder: dto.sortOrder }),
       },
     });
+
+    await this.audit.record(actor, {
+      section: 'gallery',
+      action: 'gallery.item.update',
+      summary: 'Updated gallery photo',
+      meta: { itemId: id },
+    });
+
+    return item;
   }
 
   async deleteItem(actor: JwtAccessPayload, id: string) {
@@ -136,9 +161,9 @@ export class GalleryService {
     await this.media.deleteByMediaPath(existing.imageUrl);
     await this.prisma.galleryItem.delete({ where: { id } });
     await this.audit.record(actor, {
-      section: "gallery",
-      action: "gallery.item.delete",
-      summary: "Removed gallery photo",
+      section: 'gallery',
+      action: 'gallery.item.delete',
+      summary: 'Removed gallery photo',
       meta: { itemId: id },
     });
     return { ok: true };
@@ -156,6 +181,17 @@ export class GalleryService {
       where: { id: shopId },
       data: { coverImage: item.imageUrl },
       select: { coverImage: true },
+    });
+    await this.audit.record(actor, {
+      section: 'gallery',
+      action: 'gallery.cover.update',
+      summary: 'Set gallery photo as marketing cover',
+      meta: { itemId: id, imageUrl: item.imageUrl },
+    });
+    await this.notifications.recordVenueEvent(shopId, {
+      title: 'Gallery cover updated',
+      body: 'A gallery photo was promoted to your venue cover.',
+      href: '/gallery',
     });
     return shop;
   }

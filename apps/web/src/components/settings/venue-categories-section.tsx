@@ -10,7 +10,7 @@ import {
   type VenueCategoryTag,
 } from "@/lib/shop-settings-client";
 
-export function VenueCategoriesSection() {
+export function VenueCategoriesSection({ canWrite = true }: { canWrite?: boolean }) {
   const [presets, setPresets] = useState<VenueCategoryPreset[]>([]);
   const [selected, setSelected] = useState<VenueCategoryTag[]>([]);
   const [selectedSlugs, setSelectedSlugs] = useState<Set<string>>(new Set());
@@ -55,6 +55,7 @@ export function VenueCategoriesSection() {
   }
 
   function togglePreset(slug: string) {
+    if (!canWrite) return;
     const next = new Set(selectedSlugs);
     if (next.has(slug)) next.delete(slug);
     else next.add(slug);
@@ -63,6 +64,7 @@ export function VenueCategoriesSection() {
   }
 
   function removeTag(slug: string) {
+    if (!canWrite) return;
     const next = new Set(selectedSlugs);
     next.delete(slug);
     const nextSelected = selected.filter((t) => t.slug !== slug);
@@ -72,6 +74,7 @@ export function VenueCategoriesSection() {
   }
 
   function addCustom() {
+    if (!canWrite) return;
     const name = customName.trim();
     if (!name) return;
     const slug = name
@@ -160,7 +163,7 @@ export function VenueCategoriesSection() {
             <button
               key={p.slug}
               type="button"
-              disabled={saving}
+              disabled={saving || !canWrite}
               onClick={() => togglePreset(p.slug)}
               className={cn(
                 "rounded-full border px-3 py-1.5 text-xs font-medium transition",
@@ -180,8 +183,9 @@ export function VenueCategoriesSection() {
         })}
       </div>
 
+      {canWrite ? (
       <div className="mt-4 flex flex-wrap gap-2 border-t border-white/5 pt-4">
-        <div className="flex min-w-[200px] flex-1 items-center gap-2 rounded-lg border border-white/10 bg-zinc-950 px-3 py-2">
+        <div className="flex min-w-0 w-full flex-1 items-center gap-2 rounded-lg border border-white/10 bg-zinc-950 px-3 py-2 sm:min-w-[200px]">
           <Sparkles size={14} className="shrink-0 text-amber-400/80" />
           <input
             value={customName}
@@ -202,6 +206,7 @@ export function VenueCategoriesSection() {
           Add
         </button>
       </div>
+      ) : null}
     </section>
   );
 }

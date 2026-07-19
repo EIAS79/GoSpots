@@ -19,11 +19,11 @@ export function TenantPage({
   className?: string;
 }) {
   return (
-    <div className="flex h-full min-h-0 w-full min-w-0 flex-1 flex-col overflow-hidden">
-      <header className="relative z-30 shrink-0 overflow-visible border-b border-white/5 bg-zinc-950/80 px-6 py-3 backdrop-blur md:px-8">
-        <div className="flex flex-wrap items-center justify-between gap-3">
-          <div className="flex min-w-0 items-center gap-2">
-            <h1 className="truncate text-xl font-semibold tracking-tight text-white md:text-2xl">
+    <div className="flex min-h-0 w-full min-w-0 flex-1 flex-col overflow-hidden">
+      <header className="relative z-30 shrink-0 border-b border-white/5 bg-zinc-950/80 px-4 py-3 backdrop-blur sm:px-5 md:px-6 lg:px-8">
+        <div className="flex flex-col gap-3 sm:flex-row sm:flex-wrap sm:items-center sm:justify-between">
+          <div className="flex min-w-0 max-w-full items-center gap-2">
+            <h1 className="min-w-0 truncate text-lg font-semibold tracking-tight text-white md:text-2xl">
               {title}
             </h1>
             <SectionInfoTip
@@ -32,7 +32,7 @@ export function TenantPage({
             />
           </div>
           {actions ? (
-            <div className="flex shrink-0 flex-wrap items-center gap-2">
+            <div className="flex w-full max-w-full flex-wrap items-center gap-2 sm:w-auto sm:justify-end">
               {actions}
             </div>
           ) : null}
@@ -40,7 +40,7 @@ export function TenantPage({
       </header>
       <div
         className={cn(
-          "relative z-0 min-h-0 w-full min-w-0 flex-1 overflow-x-hidden overflow-y-auto overscroll-contain p-6 md:p-8",
+          "relative z-0 min-h-0 w-full min-w-0 flex-1 overflow-x-hidden overflow-y-auto overscroll-y-contain p-4 sm:p-5 md:p-6 lg:p-8",
           className,
         )}
       >

@@ -36,7 +36,7 @@ Optional demo data:
 pnpm run seed
 ```
 
-After Render deploy, each start runs `prisma migrate deploy` then `prisma db push` (applies any schema fields not yet in a migration file).
+After Render deploy, each start runs **`prisma migrate deploy` only** (no `db push`). Keep schema changes in migration files under `apps/api/prisma/migrations/`.
 
 **Security:** Never commit `apps/api/.env`. Rotate your Neon password if it was shared in chat or screenshots.
 
@@ -49,7 +49,7 @@ After Render deploy, each start runs `prisma migrate deploy` then `prisma db pus
    **or** **New Web Service** → root directory `.` with:
    - **Build:** `npm install -g pnpm@10.12.1 && pnpm install --frozen-lockfile && pnpm --filter @gospots/api exec prisma generate && pnpm --filter @gospots/api run build`  
      (Do **not** use `corepack enable` on Render — it fails with `EROFS` on `/usr/bin/pnpm`.)
-   - **Start:** `cd apps/api && npx prisma migrate deploy && npx prisma db push --skip-generate && node dist/main.js`
+   - **Start:** `cd apps/api && npx prisma migrate deploy && node dist/main.js`
    - **Health check path:** `/api/v1/health`
 
 3. Environment variables (Render → Environment):
@@ -60,9 +60,17 @@ After Render deploy, each start runs `prisma migrate deploy` then `prisma db pus
 | `DATABASE_URL` | Neon connection string |
 | `JWT_ACCESS_SECRET` | long random string |
 | `WEB_ORIGIN` | `https://your-app.vercel.app` |
+| `WEB_APP_URL` | same as `WEB_ORIGIN` (password reset, checkout redirects, guest links) |
 | `CORS_ORIGIN` | same as `WEB_ORIGIN` (comma-separate multiple preview URLs) |
 | `COOKIE_SECURE` | `true` |
 | `COOKIE_SAME_SITE` | `none` (only if **not** using Vercel proxy; use `lax` with proxy) |
+| `RESEND_API_KEY` | Resend API key (required for email) |
+| `MAIL_FROM` | Verified sender, e.g. `bookings@yourdomain.com` |
+| `MAIL_FROM_NAME` | `GoSpots` |
+| `LEMON_SQUEEZY_API_KEY` | Lemon Squeezy API key (required for paid checkout) |
+| `LEMON_SQUEEZY_STORE_ID` | Store ID |
+| `LEMON_SQUEEZY_VARIANT_ID` | Subscription variant ID |
+| `LEMON_SQUEEZY_WEBHOOK_SECRET` | Webhook signing secret |
 
 4. Note the public URL, e.g. `https://gospots-api.onrender.com`.
 

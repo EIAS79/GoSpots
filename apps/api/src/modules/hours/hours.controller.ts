@@ -8,22 +8,22 @@ import {
   Put,
   Get,
   UseGuards,
-} from "@nestjs/common";
-import { ApiTags } from "@nestjs/swagger";
-import { PERMISSIONS } from "../../common/permissions";
-import { CurrentUser } from "../auth/decorators/current-user.decorator";
-import { RequirePermissions } from "../auth/decorators/roles.decorator";
-import { JwtAuthGuard } from "../auth/guards/jwt-auth.guard";
-import type { JwtAccessPayload } from "../auth/auth.service";
+} from '@nestjs/common';
+import { ApiTags } from '@nestjs/swagger';
+import { PERMISSIONS } from '../../common/permissions';
+import { CurrentUser } from '../auth/decorators/current-user.decorator';
+import { RequirePermissions } from '../auth/decorators/roles.decorator';
+import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
+import type { JwtAccessPayload } from '../auth/auth.service';
 import {
   CreateScheduleExceptionDto,
   PutWeeklyHoursDto,
   UpdateScheduleExceptionDto,
-} from "./dto/hours.dto";
-import { HoursService } from "./hours.service";
+} from './dto/hours.dto';
+import { HoursService } from './hours.service';
 
-@ApiTags("hours")
-@Controller("hours")
+@ApiTags('hours')
+@Controller('hours')
 @UseGuards(JwtAuthGuard)
 export class HoursController {
   constructor(private readonly hours: HoursService) {}
@@ -33,13 +33,16 @@ export class HoursController {
     return this.hours.getSchedule(user);
   }
 
-  @Put("weekly")
+  @Put('weekly')
   @RequirePermissions(PERMISSIONS.HOURS_WRITE)
-  putWeekly(@CurrentUser() user: JwtAccessPayload, @Body() dto: PutWeeklyHoursDto) {
+  putWeekly(
+    @CurrentUser() user: JwtAccessPayload,
+    @Body() dto: PutWeeklyHoursDto,
+  ) {
     return this.hours.putWeekly(user, dto);
   }
 
-  @Post("exceptions")
+  @Post('exceptions')
   @RequirePermissions(PERMISSIONS.HOURS_WRITE)
   createException(
     @CurrentUser() user: JwtAccessPayload,
@@ -48,19 +51,22 @@ export class HoursController {
     return this.hours.createException(user, dto);
   }
 
-  @Patch("exceptions/:id")
+  @Patch('exceptions/:id')
   @RequirePermissions(PERMISSIONS.HOURS_WRITE)
   updateException(
     @CurrentUser() user: JwtAccessPayload,
-    @Param("id") id: string,
+    @Param('id') id: string,
     @Body() dto: UpdateScheduleExceptionDto,
   ) {
     return this.hours.updateException(user, id, dto);
   }
 
-  @Delete("exceptions/:id")
+  @Delete('exceptions/:id')
   @RequirePermissions(PERMISSIONS.HOURS_WRITE)
-  deleteException(@CurrentUser() user: JwtAccessPayload, @Param("id") id: string) {
+  deleteException(
+    @CurrentUser() user: JwtAccessPayload,
+    @Param('id') id: string,
+  ) {
     return this.hours.deleteException(user, id);
   }
 }

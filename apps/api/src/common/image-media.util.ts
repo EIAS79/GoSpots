@@ -1,15 +1,15 @@
-import { BadRequestException } from "@nestjs/common";
-import sharp from "sharp";
-import { gunzipSync, gzipSync } from "zlib";
+import { BadRequestException } from '@nestjs/common';
+import sharp from 'sharp';
+import { gunzipSync, gzipSync } from 'zlib';
 
 export const IMAGE_UPLOAD_MAX_BYTES = 8 * 1024 * 1024;
 
 export const IMAGE_UPLOAD_ALLOWED_MIME = new Set([
-  "image/jpeg",
-  "image/png",
-  "image/webp",
-  "image/gif",
-  "image/avif",
+  'image/jpeg',
+  'image/png',
+  'image/webp',
+  'image/gif',
+  'image/avif',
 ]);
 
 export type ImageUploadFile = {
@@ -23,7 +23,7 @@ const WEBP_QUALITY = 78;
 
 export function assertImageUploadFile(
   file: ImageUploadFile | undefined,
-  label = "Image",
+  label = 'Image',
 ) {
   if (!file?.buffer?.length) {
     throw new BadRequestException(`${label} file is required.`);
@@ -34,9 +34,7 @@ export function assertImageUploadFile(
     );
   }
   if (!IMAGE_UPLOAD_ALLOWED_MIME.has(file.mimetype)) {
-    throw new BadRequestException(
-      "Use JPEG, PNG, WebP, GIF, or AVIF.",
-    );
+    throw new BadRequestException('Use JPEG, PNG, WebP, GIF, or AVIF.');
   }
 }
 
@@ -53,7 +51,7 @@ export type CompressedImagePayload = {
 export async function compressImageForStorage(
   input: Buffer,
 ): Promise<CompressedImagePayload> {
-  let pipeline = sharp(input, { failOn: "none", animated: false }).rotate();
+  let pipeline = sharp(input, { failOn: 'none', animated: false }).rotate();
 
   const meta = await pipeline.metadata();
   const w = meta.width ?? 0;
@@ -62,7 +60,7 @@ export async function compressImageForStorage(
     pipeline = pipeline.resize({
       width: MAX_DIMENSION,
       height: MAX_DIMENSION,
-      fit: "inside",
+      fit: 'inside',
       withoutEnlargement: true,
     });
   }
@@ -81,8 +79,8 @@ export async function compressImageForStorage(
 
   return {
     data: gzipped,
-    mime: "image/webp",
-    encoding: "gzip",
+    mime: 'image/webp',
+    encoding: 'gzip',
     width: outMeta.width ?? 0,
     height: outMeta.height ?? 0,
     byteSize: gzipped.length,
@@ -90,11 +88,8 @@ export async function compressImageForStorage(
 }
 
 /** Decompress DB payload to bytes the browser can render. */
-export function decompressStoredImage(
-  data: Buffer,
-  encoding: string,
-): Buffer {
-  if (encoding === "gzip") {
+export function decompressStoredImage(data: Buffer, encoding: string): Buffer {
+  if (encoding === 'gzip') {
     return gunzipSync(data);
   }
   return data;
@@ -112,5 +107,5 @@ export function parseMediaPath(path: string | null | undefined): string | null {
 }
 
 export function isLegacyUploadPath(path: string | null | undefined): boolean {
-  return !!path && path.startsWith("/uploads/");
+  return !!path && path.startsWith('/uploads/');
 }

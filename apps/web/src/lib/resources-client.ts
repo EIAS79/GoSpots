@@ -2,6 +2,8 @@ import { API_BASE_URL, ApiError, api } from "./api";
 import { getVenuePathHeaders } from "./venue-api-headers";
 import type { ResourceStatus, ResourceType } from "./resource-types";
 
+export type BookingMode = "TIME" | "GAME" | "PERSON" | "MIXED";
+
 export type ResourceRate = {
   id: string;
   label: string;
@@ -25,12 +27,15 @@ export type ResourceUnit = {
 export type ResourceCategory = {
   id: string;
   type: ResourceType;
+  bookingMode: BookingMode;
   name: string;
   description: string | null;
   imageUrl: string | null;
   imageUrl2: string | null;
   sortOrder: number;
   slotMinutes: number;
+  playstationGames: string[];
+  offeringConfig: Record<string, unknown> | null;
   rates: ResourceRate[];
   resources: ResourceUnit[];
 };
@@ -49,6 +54,9 @@ export function createResourceCategory(body: {
   name: string;
   description?: string;
   slotMinutes?: number;
+  bookingMode?: BookingMode;
+  playstationGames?: string[];
+  offeringConfig?: Record<string, unknown>;
   unitCount?: number;
   unitNamePrefix?: string;
   rates?: { label: string; durationMinutes?: number; price: number }[];
@@ -66,6 +74,9 @@ export function updateResourceCategory(
     name: string;
     description: string | null;
     slotMinutes: number;
+    bookingMode: BookingMode;
+    playstationGames: string[];
+    offeringConfig: Record<string, unknown> | null;
     totalUnits: number;
     rates: { label: string; durationMinutes?: number; price: number }[];
   }>,

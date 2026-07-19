@@ -1,6 +1,6 @@
 "use client";
 
-import { Loader2, Plus, Receipt } from "lucide-react";
+import { Loader2, Plus, Receipt, RotateCcw } from "lucide-react";
 import { useCallback, useEffect, useState } from "react";
 import { cn } from "@/lib/cn";
 import {
@@ -12,16 +12,28 @@ import { publishLiveEvent } from "@/lib/live-events";
 import { useLiveData } from "@/lib/use-live-data";
 import { useVenueSettings } from "@/lib/venue-settings-context";
 
+type TxMode = "SALE" | "REFUND";
+
+const PAYMENT_METHODS = [
+  { value: "CASH", label: "Cash" },
+  { value: "CARD", label: "Card" },
+  { value: "ONLINE", label: "Online" },
+  { value: "OTHER", label: "Other" },
+] as const;
+
 export function FinanceTransactionsPanel({ canWrite }: { canWrite: boolean }) {
   const { formatMoney } = useVenueSettings();
   const [rows, setRows] = useState<Transaction[]>([]);
   const [loading, setLoading] = useState(true);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [mode, setMode] = useState<TxMode>("SALE");
 
   const [name, setName] = useState("");
   const [amount, setAmount] = useState("");
   const [qty, setQty] = useState("1");
+  const [method, setMethod] = useState("CASH");
+  const [note, setNote] = useState("");
 
   const load = useCallback(async (opts?: { silent?: boolean }) => {
     if (!opts?.silent) setLoading(true);
@@ -46,7 +58,7 @@ export function FinanceTransactionsPanel({ canWrite }: { canWrite: boolean }) {
     refreshOnSections: ["finance", "shop_orders"],
   });
 
-  async function onQuickSale(e: React.FormEvent) {
+  async function onSubmit(e: React.FormEvent) {
     e.preventDefault();
     if (!canWrite) return;
     const unitPrice = parseFloat(amount);
@@ -59,8 +71,9 @@ export function FinanceTransactionsPanel({ canWrite }: { canWrite: boolean }) {
     setError(null);
     try {
       await createTransaction({
-        kind: "SALE",
-        method: "CASH",
+        kind: mode,
+        method,
+        note: note.trim() || undefined,
         lines: [
           {
             name: name.trim(),
@@ -72,10 +85,11 @@ export function FinanceTransactionsPanel({ canWrite }: { canWrite: boolean }) {
       setName("");
       setAmount("");
       setQty("1");
+      setNote("");
       publishLiveEvent({ section: "finance" });
       await load({ silent: true });
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Could not record sale.");
+      setError(err instanceof Error ? err.message : "Could not record transaction.");
     } finally {
       setBusy(false);
     }
@@ -99,14 +113,46 @@ export function FinanceTransactionsPanel({ canWrite }: { canWrite: boolean }) {
 
       {canWrite ? (
         <form
-          onSubmit={(e) => void onQuickSale(e)}
+          onSubmit={(e) => void onSubmit(e)}
           className="rounded-xl border border-white/10 bg-zinc-900/50 p-4"
         >
-          <p className="text-sm font-medium text-white">Quick counter sale</p>
-          <p className="mt-1 text-xs text-zinc-500">
-            Record a walk-up sale without building a full menu order.
+          <div className="flex flex-wrap items-center gap-2">
+            <button
+              type="button"
+              onClick={() => setMode("SALE")}
+              className={cn(
+                "inline-flex items-center gap-1 rounded-lg px-3 py-1.5 text-xs font-medium",
+                mode === "SALE"
+                  ? "bg-emerald-500/20 text-emerald-200"
+                  : "bg-white/5 text-zinc-400 hover:bg-white/10",
+              )}
+            >
+              <Plus size={14} />
+              Sale
+            </button>
+            <button
+              type="button"
+              onClick={() => setMode("REFUND")}
+              className={cn(
+                "inline-flex items-center gap-1 rounded-lg px-3 py-1.5 text-xs font-medium",
+                mode === "REFUND"
+                  ? "bg-rose-500/20 text-rose-200"
+                  : "bg-white/5 text-zinc-400 hover:bg-white/10",
+              )}
+            >
+              <RotateCcw size={14} />
+              Refund
+            </button>
+          </div>
+          <p className="mt-3 text-sm font-medium text-white">
+            {mode === "SALE" ? "Quick counter sale" : "Counter refund"}
           </p>
-          <div className="mt-3 grid gap-3 sm:grid-cols-4">
+          <p className="mt-1 text-xs text-zinc-500">
+            {mode === "SALE"
+              ? "Record a walk-up sale without building a full menu order."
+              : "Record a refund; stock is restored when a menu item ID is linked on the API."}
+          </p>
+          <div className="mt-3 grid gap-3 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5">
             <label className="block text-xs text-zinc-500 sm:col-span-2">
               Item / label
               <input
@@ -137,14 +183,42 @@ export function FinanceTransactionsPanel({ canWrite }: { canWrite: boolean }) {
                 className="mt-1 w-full rounded-lg border border-white/10 bg-zinc-950 px-3 py-2 text-sm text-white"
               />
             </label>
+            <label className="block text-xs text-zinc-500">
+              Payment
+              <select
+                value={method}
+                onChange={(e) => setMethod(e.target.value)}
+                className="mt-1 w-full rounded-lg border border-white/10 bg-zinc-950 px-3 py-2 text-sm text-white"
+              >
+                {PAYMENT_METHODS.map((m) => (
+                  <option key={m.value} value={m.value}>
+                    {m.label}
+                  </option>
+                ))}
+              </select>
+            </label>
           </div>
+          <label className="mt-3 block text-xs text-zinc-500">
+            Note (optional)
+            <input
+              value={note}
+              onChange={(e) => setNote(e.target.value)}
+              className="mt-1 w-full rounded-lg border border-white/10 bg-zinc-950 px-3 py-2 text-sm text-white"
+              placeholder="Reason, reference…"
+            />
+          </label>
           <button
             type="submit"
             disabled={busy}
-            className="mt-3 inline-flex items-center gap-1.5 rounded-lg bg-emerald-600 px-3 py-1.5 text-xs font-medium text-white hover:bg-emerald-500 disabled:opacity-50"
+            className={cn(
+              "mt-3 inline-flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-xs font-medium text-white disabled:opacity-50",
+              mode === "SALE"
+                ? "bg-emerald-600 hover:bg-emerald-500"
+                : "bg-rose-600 hover:bg-rose-500",
+            )}
           >
-            <Plus size={14} />
-            Record sale
+            {mode === "SALE" ? <Plus size={14} /> : <RotateCcw size={14} />}
+            {mode === "SALE" ? "Record sale" : "Record refund"}
           </button>
         </form>
       ) : null}
@@ -177,6 +251,7 @@ export function FinanceTransactionsPanel({ canWrite }: { canWrite: boolean }) {
                   <p className="text-[11px] text-zinc-500">
                     {new Date(t.createdAt).toLocaleString()} · {t.method} ·{" "}
                     {t.kind}
+                    {t.note ? ` · ${t.note}` : ""}
                   </p>
                 </div>
                 <span

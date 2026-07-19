@@ -10,12 +10,12 @@ import {
   MaxLength,
   Min,
   ValidateNested,
-} from "class-validator";
-import { Type } from "class-transformer";
+} from 'class-validator';
+import { Transform, Type } from 'class-transformer';
 import {
   SUPPORTED_CURRENCIES,
   SUPPORTED_LOCALES,
-} from "../../../common/locale-currency";
+} from '../../../common/locale-currency';
 
 const LOCALE_CODES = SUPPORTED_LOCALES.map((l) => l.code);
 const CURRENCY_CODES = SUPPORTED_CURRENCIES.map((c) => c.code);
@@ -72,8 +72,35 @@ export class UpdateShopSettingsDto {
   email?: string | null;
 
   @IsOptional()
+  @Transform(({ value }) => {
+    if (value === true || value === 'true' || value === 1 || value === '1') {
+      return true;
+    }
+    if (value === false || value === 'false' || value === 0 || value === '0') {
+      return false;
+    }
+    return value;
+  })
   @IsBoolean()
   isPublished?: boolean;
+
+  @IsOptional()
+  @Transform(({ value }) => {
+    if (value === true || value === 'true' || value === 1 || value === '1') {
+      return true;
+    }
+    if (value === false || value === 'false' || value === 0 || value === '0') {
+      return false;
+    }
+    return value;
+  })
+  @IsBoolean()
+  advertiseOnVenuesPage?: boolean;
+
+  @IsOptional()
+  @IsString()
+  @IsIn(['ENABLED', 'DISABLED', 'HIDDEN'])
+  reviewsMode?: 'ENABLED' | 'DISABLED' | 'HIDDEN';
 
   /** Building levels for dining seating (1–10). */
   @IsOptional()

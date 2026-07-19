@@ -45,9 +45,9 @@ export function GoSpotsMark({
           y2="50"
           gradientUnits="userSpaceOnUse"
         >
-          <stop offset="0%" stopColor="#a78bfa" />
-          <stop offset="45%" stopColor="#8b5cf6" />
-          <stop offset="100%" stopColor="#f59e0b" />
+          <stop offset="0%" stopColor="#fb923c" />
+          <stop offset="45%" stopColor="#f59e0b" />
+          <stop offset="100%" stopColor="#fbbf24" />
         </linearGradient>
         <linearGradient
           id="gospots-pin-shine"
@@ -72,7 +72,7 @@ export function GoSpotsMark({
         </radialGradient>
         <filter id="gospots-pin-shadow" x="-20%" y="-10%" width="140%" height="130%">
           <feDropShadow dx="0" dy="2" stdDeviation="2" floodColor="#000" floodOpacity="0.45" />
-          <feDropShadow dx="0" dy="0" stdDeviation="3" floodColor="#f59e0b" floodOpacity="0.35" />
+          <feDropShadow dx="0" dy="0" stdDeviation="4" floodColor="#fbbf24" floodOpacity="0.45" />
         </filter>
       </defs>
 

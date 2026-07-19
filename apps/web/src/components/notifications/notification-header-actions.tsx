@@ -19,7 +19,7 @@ export function NotificationHeaderActions({
     <div className={cn("flex items-center gap-2", className)}>
       <Link
         href={archivedHref}
-        className="grid h-9 w-9 place-items-center rounded-lg border border-white/10 bg-white/[0.03] text-zinc-400 transition hover:border-violet-400/30 hover:bg-violet-500/10 hover:text-violet-200"
+        className="grid h-11 w-11 place-items-center rounded-lg border border-white/10 bg-white/[0.03] text-zinc-400 transition hover:border-violet-400/30 hover:bg-violet-500/10 hover:text-violet-200"
         aria-label="View archived notifications"
         title="Archived — restore to inbox"
       >
@@ -27,7 +27,7 @@ export function NotificationHeaderActions({
       </Link>
       <Link
         href={inboxHref}
-        className="relative grid h-9 w-9 place-items-center rounded-lg border border-white/10 bg-white/[0.03] text-zinc-400 transition hover:border-white/20 hover:text-white"
+        className="relative grid h-11 w-11 place-items-center rounded-lg border border-white/10 bg-white/[0.03] text-zinc-400 transition hover:border-white/20 hover:text-white"
         aria-label={
           unreadCount > 0
             ? `Notifications, ${unreadCount} unread`

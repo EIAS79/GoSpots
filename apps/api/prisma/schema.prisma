@@ -36,6 +36,9 @@ model User {
   passwordSetAt DateTime?
   failedLogins  Int      @default(0)
   lockedUntil   DateTime?
+  /// Owner-only password reset (staff has no self-serve reset)
+  passwordResetTokenHash String?
+  passwordResetExpiresAt DateTime?
   createdAt     DateTime @default(now())
   updatedAt     DateTime @updatedAt
 
@@ -96,13 +99,20 @@ model Shop {
   phone         String?
   email         String?
   coverImage    String?
-  isPublished   Boolean  @default(false) // appears on /marketing
+  /// Public venue page is live (slug URL)
+  isPublished   Boolean  @default(false)
+  /// Appear in /venues directory (opt-out even with Venue page & discovery)
+  advertiseOnVenuesPage Boolean @default(true)
+  /// Guest reviews for venue + products: show, hide public, or fully off
+  reviewsMode   ShopReviewsMode @default(ENABLED)
   /// BCP 47 — dashboard UI + public venue pages
   locale        String   @default("en")
   /// ISO 4217 — prices, reports, marketing browse
   currency      String   @default("EUR")
   /// Dining / lounge floors tracked in reservations (1 = single level)
   floorCount    Int      @default(1)
+  /// Commercial venue profile: gaming | dining | bar | hotel_fb | mixed
+  venueType     String?
 
   ownerId       String
   owner         User     @relation("ShopOwner", fields: [ownerId], references: [id])
@@ -119,12 +129,19 @@ model Shop {
   resources     Resource[]
   reservations  Reservation[]
   seatingTableGroups SeatingTableGroup[]
+  eventRequests EventRequest[]
+  venueReviews  VenueReview[]
+  contactMessages ContactMessage[]
+  guestChats    GuestChat[]
+  gamingSections GamingSection[]
+  diningTableGroups DiningTableGroup[]
   transactions  Transaction[]
   shopOrders     ShopOrder[]
   playSessions  PlaySession[]
   openingHours  OpeningHour[]
   scheduleExceptions ScheduleException[]
   galleryItems  GalleryItem[]
+  shopNotes     ShopNote[]
   auditLogs     AuditLog[]
   tags          ShopTag[]
   losses        ShopLoss[]
@@ -153,10 +170,27 @@ model Subscription {
   id        String   @id @default(cuid())
   shopId    String   @unique
   shop      Shop     @relation(fields: [shopId], references: [id], onDelete: Cascade)
+  /// Kept for seat-limit / legacy compat; pack is the real commercial unit
   tier      SubscriptionTier   @default(STARTER)
   status    SubscriptionStatus @default(TRIAL)
   trialEndsAt DateTime?
   currentPeriodEnd DateTime?
+  /// Venue pack: gaming | dining | bar | hotel_fb | mixed
+  packId    String   @default("gaming")
+  /// Comma-separated add-on ids
+  addOns    String   @default("")
+  /// Purchased employee seats (0 = none; create accounts up to this count)
+  staffSeatQuantity Int @default(0)
+  /// Scheduled plan changes (paid ACTIVE only) — apply at currentPeriodEnd
+  pendingPackId             String?
+  pendingAddOns             String?
+  pendingStaffSeatQuantity  Int?
+  /// Lemon Squeezy subscription id (stringified)
+  lemonSubscriptionId String?
+  lemonCustomerId     String?
+  lemonOrderId        String?
+  /// Checkout / invoice currency (ISO 4217), defaults to shop currency
+  billingCurrency     String  @default("EUR")
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 }
@@ -187,6 +221,8 @@ model Membership {
   /// One-time invite; cleared after employee sets their password.
   inviteTokenHash String?
   inviteExpiresAt DateTime?
+  /// Set when staff requests a password reset (owner must issue a new link).
+  passwordResetRequestedAt DateTime?
   createdAt     DateTime @default(now())
   updatedAt     DateTime @updatedAt
 
@@ -215,6 +251,7 @@ model MenuSection {
   shopId        String
   shop          Shop        @relation(fields: [shopId], references: [id], onDelete: Cascade)
   name          String
+  imageUrl      String?
   sortOrder     Int         @default(0)
   /// Optional service window for the whole section (items can inherit)
   mealPeriod    MealPeriod?
@@ -305,6 +342,7 @@ model MenuItemTag {
 
 enum ResourceType {
   BILLIARD
+  FOOSBALL
   SNOOKER
   POOL
   DARTS
@@ -318,6 +356,7 @@ enum ResourceType {
   CHESS
   CARDS
   TABLE
+  DINING
   OTHER
 }
 
@@ -334,6 +373,7 @@ model ResourceCategory {
   shopId      String
   shop        Shop         @relation(fields: [shopId], references: [id], onDelete: Cascade)
   type        ResourceType @default(OTHER)
+  bookingMode BookingMode  @default(TIME)
   name        String
   description String?
   imageUrl    String?
@@ -341,12 +381,186 @@ model ResourceCategory {
   sortOrder   Int          @default(0)
   /// Default booking block length in minutes
   slotMinutes Int          @default(60)
+  playstationGames String[]
+  offeringConfig Json?
   createdAt   DateTime     @default(now())
   updatedAt   DateTime     @updatedAt
   rates       ResourceRate[]
   resources   Resource[]
+  gamingSections GamingSection[]
+  eventRequests EventRequest[]
 
   @@index([shopId])
+}
+
+enum ShopReviewsMode {
+  /// Guests can leave reviews; ratings show publicly
+  ENABLED
+  /// No new reviews; nothing shown publicly (venue or products)
+  DISABLED
+  /// Guests can still leave reviews (staff notified) but hidden from public
+  HIDDEN
+}
+
+enum VenueReviewStatus {
+  PENDING
+  PUBLISHED
+  REJECTED
+}
+
+/// Guest review of a venue (moderated before public display).
+model VenueReview {
+  id         String            @id @default(cuid())
+  shopId     String
+  shop       Shop              @relation(fields: [shopId], references: [id], onDelete: Cascade)
+  guestName  String
+  guestEmail String?
+  rating     Int
+  comment    String?
+  status     VenueReviewStatus @default(PENDING)
+  createdAt  DateTime          @default(now())
+  updatedAt  DateTime          @updatedAt
+
+  @@index([shopId, status, createdAt])
+}
+
+/// Guest message to venue staff (legacy one-shot contact form).
+model ContactMessage {
+  id         String   @id @default(cuid())
+  shopId     String
+  shop       Shop     @relation(fields: [shopId], references: [id], onDelete: Cascade)
+  guestName  String
+  guestEmail String?
+  guestPhone String?
+  subject    String?
+  message    String
+  createdAt  DateTime @default(now())
+
+  @@index([shopId, createdAt])
+}
+
+enum GuestChatStatus {
+  WAITING
+  OPEN
+  PAUSED
+  ENDED
+}
+
+enum GuestChatSender {
+  GUEST
+  STAFF
+}
+
+/// Live support chat between a guest and venue staff (Uber-style).
+/// Guests access only via secret guestToken — never listed publicly.
+model GuestChat {
+  id              String          @id @default(cuid())
+  shopId          String
+  shop            Shop            @relation(fields: [shopId], references: [id], onDelete: Cascade)
+  /// Secret token for guest access (localStorage + URL). Unguessable.
+  guestToken      String          @unique
+  guestName       String
+  guestEmail      String?
+  guestPhone      String?
+  status          GuestChatStatus @default(WAITING)
+  staffJoinedAt   DateTime?
+  staffUserId     String?
+  lastGuestPingAt DateTime?
+  endedAt         DateTime?
+  endedBy         GuestChatSender?
+  createdAt       DateTime        @default(now())
+  updatedAt       DateTime        @updatedAt
+  messages        GuestChatMessage[]
+
+  @@index([shopId, status, updatedAt])
+  @@index([shopId, createdAt])
+}
+
+model GuestChatMessage {
+  id          String          @id @default(cuid())
+  chatId      String
+  chat        GuestChat       @relation(fields: [chatId], references: [id], onDelete: Cascade)
+  sender      GuestChatSender
+  staffUserId String?
+  body        String
+  createdAt   DateTime        @default(now())
+
+  @@index([chatId, createdAt])
+}
+
+enum NoteImportance {
+  INFO
+  NORMAL
+  IMPORTANT
+  URGENT
+}
+
+/// Shift handoff / staff reminder notes for the next person on duty.
+model ShopNote {
+  id           String         @id @default(cuid())
+  shopId       String
+  shop         Shop           @relation(fields: [shopId], references: [id], onDelete: Cascade)
+  title        String
+  body         String
+  importance   NoteImportance @default(NORMAL)
+  /// Day/time this note is about (shift window), distinct from createdAt
+  relevantAt   DateTime       @default(now())
+  createdById  String?
+  authorName   String
+  authorRole   String
+  archivedAt   DateTime?
+  createdAt    DateTime       @default(now())
+  updatedAt    DateTime       @updatedAt
+
+  @@index([shopId, archivedAt, relevantAt])
+  @@index([shopId, createdAt])
+}
+
+/// Physical zone inside a game offering — VIP room, floor 2 lounge, etc.
+model GamingSection {
+  id                   String           @id @default(cuid())
+  shopId               String
+  shop                 Shop             @relation(fields: [shopId], references: [id], onDelete: Cascade)
+  categoryId           String
+  category             ResourceCategory @relation(fields: [categoryId], references: [id], onDelete: Cascade)
+  name                 String
+  floor                Int              @default(1)
+  isVip                Boolean          @default(false)
+  seatsPerRow          Int              @default(6)
+  sortOrder            Int              @default(0)
+  /// INDOOR | OUTDOOR — restaurant dining zones
+  zone                 String?
+  description          String?
+  imageUrl             String?
+  /// Default seats per table when creating tables in this zone (e.g. 2, 4, 6, 8)
+  defaultTableCapacity Int?
+  createdAt            DateTime         @default(now())
+  updatedAt            DateTime         @updatedAt
+  resources            Resource[]
+  tableGroups          DiningTableGroup[]
+
+  @@index([shopId, categoryId, sortOrder])
+  @@index([shopId, floor, sortOrder])
+}
+
+/// A batch of same-size tables inside a dining area (e.g. four 2-tops, two 6-tops).
+model DiningTableGroup {
+  id          String        @id @default(cuid())
+  shopId      String
+  shop        Shop          @relation(fields: [shopId], references: [id], onDelete: Cascade)
+  sectionId   String
+  section     GamingSection @relation(fields: [sectionId], references: [id], onDelete: Cascade)
+  name        String?
+  capacity    Int
+  description String?
+  imageUrl    String?
+  seatsPerRow Int           @default(4)
+  sortOrder   Int           @default(0)
+  createdAt   DateTime      @default(now())
+  updatedAt   DateTime      @updatedAt
+  resources   Resource[]
+
+  @@index([shopId, sectionId, sortOrder])
 }
 
 model ResourceRate {
@@ -367,12 +581,18 @@ model Resource {
   shop       Shop             @relation(fields: [shopId], references: [id], onDelete: Cascade)
   categoryId String?
   category   ResourceCategory? @relation(fields: [categoryId], references: [id], onDelete: SetNull)
+  sectionId  String?
+  section    GamingSection?    @relation(fields: [sectionId], references: [id], onDelete: SetNull)
+  tableGroupId String?
+  tableGroup   DiningTableGroup? @relation(fields: [tableGroupId], references: [id], onDelete: SetNull)
   name       String
   type       ResourceType     @default(OTHER)
   description String?
   imageUrl   String?
   hourlyRate Float            @default(0)
   status     ResourceStatus   @default(AVAILABLE)
+  /// Seat count for restaurant tables (DINING units).
+  capacity   Int?
   sortOrder  Int              @default(0)
   createdAt  DateTime         @default(now())
   updatedAt  DateTime         @updatedAt
@@ -382,6 +602,14 @@ model Resource {
 
   @@index([shopId])
   @@index([shopId, categoryId])
+  @@index([shopId, sectionId])
+}
+
+enum BookingMode {
+  TIME
+  GAME
+  PERSON
+  MIXED
 }
 
 enum ReservationStatus {
@@ -412,6 +640,14 @@ model Reservation {
   /// Amount charged when booking is completed (separate from menu orders)
   billedAmount  Float?
   billedAt      DateTime?
+  /// Staff discount before payment (0–100)
+  billingDiscountPercent Float @default(0)
+  /// Staff-edited charge before discount; null = use rate calculation
+  billingBaseAmount Float?
+  /// Tender used when play billing is marked paid (CASH, CARD, etc.)
+  billingPaymentMethod String?
+  /// Guest tracking link for online gaming bookings (no account).
+  guestToken    String?              @unique
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
 
@@ -423,6 +659,61 @@ model Reservation {
 enum SeatingZone {
   INDOOR
   OUTDOOR
+}
+
+enum EventRequestType {
+  TABLE
+  GAMING
+  BIRTHDAY
+  MEETING
+  PARTY
+  CORPORATE
+  OTHER
+}
+
+enum EventRequestSource {
+  CLIENT_WEB
+  PHONE
+  STAFF
+}
+
+enum EventRequestStatus {
+  PENDING
+  APPROVED
+  DECLINED
+  CANCELED
+}
+
+/// Customer event inquiry — birthday, party, meeting, etc. Staff approve or decline.
+model EventRequest {
+  id                  String             @id @default(cuid())
+  shopId              String
+  shop                Shop               @relation(fields: [shopId], references: [id], onDelete: Cascade)
+  eventType           EventRequestType     @default(OTHER)
+  source              EventRequestSource   @default(CLIENT_WEB)
+  guestName           String
+  guestEmail          String?
+  guestPhone          String?
+  partySize           Int                  @default(1)
+  preferredStartsAt   DateTime
+  preferredEndsAt     DateTime?
+  zone                SeatingZone?
+  floor               Int?
+  message             String?
+  status              EventRequestStatus   @default(PENDING)
+  /// Shown to guest when declined; internal note when approved.
+  staffResponseNote   String?
+  reviewedAt          DateTime?
+  reviewedById          String?
+  seatingTableGroupId String?
+  seatingTableGroup   SeatingTableGroup? @relation(fields: [seatingTableGroupId], references: [id], onDelete: SetNull)
+  resourceCategoryId  String?
+  resourceCategory    ResourceCategory?  @relation(fields: [resourceCategoryId], references: [id], onDelete: SetNull)
+  guestToken          String?              @unique
+  createdAt           DateTime             @default(now())
+  updatedAt           DateTime             @updatedAt
+
+  @@index([shopId, status, createdAt])
 }
 
 /// Dining / lounge seating — staff track how many tables are free per capacity (and custom event setups).
@@ -452,6 +743,8 @@ model SeatingTableGroup {
   createdAt       DateTime @default(now())
   updatedAt       DateTime @updatedAt
 
+  eventRequests   EventRequest[]
+
   @@index([shopId, sortOrder])
   @@index([shopId, zone, floor, sortOrder])
 }
@@ -476,6 +769,8 @@ model PlaySession {
   endedAt         DateTime?
   durationMinutes Int?
   amount          Float             @default(0)
+  /// Staff discount before payment (0–100)
+  billingDiscountPercent Float @default(0)
   paymentMethod   PaymentMethod     @default(CASH)
   label           String?
   note            String?

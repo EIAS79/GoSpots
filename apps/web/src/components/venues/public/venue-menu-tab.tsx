@@ -1,0 +1,50 @@
+"use client";
+
+import { useState } from "react";
+import { PublicMenuBoard } from "@/components/venues/public/public-menu-board";
+import { VenueMenuItemModal } from "@/components/venues/public/venue-menu-item-modal";
+import type {
+  PublicMenuItem,
+  PublicMenuSection,
+  PublicVenueDetail,
+} from "@/lib/shop-settings-client";
+
+export function VenueMenuTab({ venue }: { venue: PublicVenueDetail }) {
+  const menu = venue.menu;
+  const [selected, setSelected] = useState<{
+    item: PublicMenuItem;
+    section: PublicMenuSection | null;
+  } | null>(null);
+
+  const formatPrice = (n: number) =>
+    new Intl.NumberFormat(undefined, {
+      style: "currency",
+      currency: venue.currency,
+      maximumFractionDigits: 2,
+    }).format(n);
+
+  if (!menu?.items.length) {
+    return <p className="text-sm text-zinc-500">Menu not available.</p>;
+  }
+
+  return (
+    <>
+      <PublicMenuBoard
+        sections={menu.sections}
+        items={menu.items}
+        formatPrice={formatPrice}
+        onOpenItem={(item, section) => setSelected({ item, section })}
+      />
+
+      {selected ? (
+        <VenueMenuItemModal
+          item={selected.item}
+          section={selected.section}
+          currency={venue.currency}
+          reviewsMode={venue.reviewsMode}
+          onClose={() => setSelected(null)}
+        />
+      ) : null}
+    </>
+  );
+}

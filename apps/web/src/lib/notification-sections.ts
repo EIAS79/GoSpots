@@ -6,6 +6,7 @@ export const NOTIFICATION_SECTIONS = [
   { value: "operations", label: "Tables & operations" },
   { value: "team", label: "Staff & admin" },
   { value: "billing", label: "Billing" },
+  { value: "finance", label: "Finance" },
 ] as const;
 
 export function sectionLabel(section: string) {

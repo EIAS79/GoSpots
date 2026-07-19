@@ -4,8 +4,8 @@ import {
   IsIn,
   IsOptional,
   IsString,
-} from "class-validator";
-import { NOTIFICATION_SECTIONS } from "../../../common/notification.constants";
+} from 'class-validator';
+import { NOTIFICATION_SECTIONS } from '../../../common/notification.constants';
 
 export class ArchiveNotificationsDto {
   /** Archive specific rows (checkbox selection) */
@@ -29,11 +29,11 @@ export class ArchiveNotificationsDto {
 
   @IsOptional()
   @IsString()
-  @IsIn([...NOTIFICATION_SECTIONS, "all"])
+  @IsIn([...NOTIFICATION_SECTIONS, 'all'])
   section?: string;
 
   @IsOptional()
   @IsString()
-  @IsIn(["all", "unread", "read"])
+  @IsIn(['all', 'unread', 'read', 'archived'])
   status?: string;
 }

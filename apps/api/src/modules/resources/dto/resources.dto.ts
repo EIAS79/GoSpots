@@ -1,17 +1,21 @@
-import { ResourceStatus, ResourceType } from "@prisma/client";
+import { BookingMode, ResourceStatus, ResourceType } from '@prisma/client';
 import {
   IsArray,
+  IsBoolean,
+  IsIn,
   IsEnum,
   IsInt,
   IsNumber,
+  IsObject,
   IsOptional,
   IsString,
   Matches,
+  Max,
   MaxLength,
   Min,
   ValidateNested,
-} from "class-validator";
-import { Type } from "class-transformer";
+} from 'class-validator';
+import { Type } from 'class-transformer';
 
 export class ResourceRateDto {
   @IsString()
@@ -62,13 +66,27 @@ export class CreateCategoryDto {
 
   @IsOptional()
   @IsInt()
-  @Min(1)
+  @Min(0)
   unitCount?: number;
 
   @IsOptional()
   @IsString()
   @MaxLength(40)
   unitNamePrefix?: string;
+
+  @IsOptional()
+  @IsEnum(BookingMode)
+  bookingMode?: BookingMode;
+
+  @IsOptional()
+  @IsArray()
+  @IsString({ each: true })
+  @MaxLength(80, { each: true })
+  playstationGames?: string[];
+
+  @IsOptional()
+  @IsObject()
+  offeringConfig?: Record<string, unknown>;
 }
 
 export class UpdateCategoryDto {
@@ -106,6 +124,20 @@ export class UpdateCategoryDto {
   @IsInt()
   @Min(0)
   totalUnits?: number;
+
+  @IsOptional()
+  @IsEnum(BookingMode)
+  bookingMode?: BookingMode;
+
+  @IsOptional()
+  @IsArray()
+  @IsString({ each: true })
+  @MaxLength(80, { each: true })
+  playstationGames?: string[];
+
+  @IsOptional()
+  @IsObject()
+  offeringConfig?: Record<string, unknown>;
 }
 
 export class AddUnitsDto {
@@ -138,6 +170,181 @@ export class UpdateResourceDto {
   @IsOptional()
   @IsEnum(ResourceStatus)
   status?: ResourceStatus;
+
+  @IsOptional()
+  @IsInt()
+  sortOrder?: number;
+
+  @IsOptional()
+  @IsString()
+  @Matches(/^(null|[a-z0-9]{20,})$/i, {
+    message: 'sectionId must be null or a valid id.',
+  })
+  sectionId?: string | null;
+
+  @IsOptional()
+  @IsInt()
+  @Min(1)
+  @Max(30)
+  capacity?: number | null;
+}
+
+export class CreateGamingSectionDto {
+  @IsString()
+  @Matches(/^[a-z0-9]{20,}$/i, {
+    message: 'categoryId must be a valid id.',
+  })
+  categoryId!: string;
+
+  @IsString()
+  @MaxLength(80)
+  name!: string;
+
+  @IsOptional()
+  @IsInt()
+  @Min(1)
+  floor?: number;
+
+  @IsOptional()
+  @IsBoolean()
+  isVip?: boolean;
+
+  @IsOptional()
+  @IsInt()
+  @Min(2)
+  @Max(12)
+  seatsPerRow?: number;
+
+  @IsOptional()
+  @IsInt()
+  @Min(0)
+  seatCount?: number;
+  @IsOptional()
+  @IsInt()
+  @Min(1)
+  @Max(20)
+  defaultTableCapacity?: number;
+
+  @IsOptional()
+  @IsString()
+  @MaxLength(16)
+  zone?: string;
+
+  @IsOptional()
+  @IsString()
+  @MaxLength(500)
+  description?: string;
+}
+
+export class UpdateGamingSectionDto {
+  @IsOptional()
+  @IsString()
+  @MaxLength(80)
+  name?: string;
+
+  @IsOptional()
+  @IsInt()
+  @Min(1)
+  floor?: number;
+
+  @IsOptional()
+  @IsBoolean()
+  isVip?: boolean;
+
+  @IsOptional()
+  @IsInt()
+  @Min(2)
+  @Max(12)
+  seatsPerRow?: number;
+
+  @IsOptional()
+  @IsInt()
+  @Min(0)
+  seatCount?: number;
+
+  @IsOptional()
+  @IsInt()
+  sortOrder?: number;
+
+  @IsOptional()
+  @IsInt()
+  @Min(1)
+  @Max(20)
+  defaultTableCapacity?: number;
+
+  @IsOptional()
+  @IsString()
+  @MaxLength(16)
+  zone?: string;
+
+  @IsOptional()
+  @IsString()
+  @MaxLength(500)
+  description?: string;
+}
+
+export class CreateDiningTableGroupDto {
+  @IsString()
+  @Matches(/^[a-z0-9]{20,}$/i, {
+    message: 'sectionId must be a valid id.',
+  })
+  sectionId!: string;
+
+  @IsInt()
+  @Min(1)
+  @Max(8)
+  capacity!: number;
+
+  @IsInt()
+  @Min(1)
+  @Max(80)
+  tableCount!: number;
+
+  @IsOptional()
+  @IsString()
+  @MaxLength(80)
+  name?: string;
+
+  @IsOptional()
+  @IsString()
+  @MaxLength(500)
+  description?: string;
+
+  @IsOptional()
+  @IsInt()
+  @Min(2)
+  @Max(12)
+  seatsPerRow?: number;
+}
+
+export class UpdateDiningTableGroupDto {
+  @IsOptional()
+  @IsInt()
+  @Min(1)
+  @Max(8)
+  capacity?: number;
+
+  @IsOptional()
+  @IsInt()
+  @Min(0)
+  @Max(80)
+  tableCount?: number;
+
+  @IsOptional()
+  @IsString()
+  @MaxLength(80)
+  name?: string;
+
+  @IsOptional()
+  @IsString()
+  @MaxLength(500)
+  description?: string | null;
+
+  @IsOptional()
+  @IsInt()
+  @Min(2)
+  @Max(12)
+  seatsPerRow?: number;
 
   @IsOptional()
   @IsInt()

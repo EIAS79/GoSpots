@@ -1,4 +1,4 @@
-import argon2 from "argon2";
+import argon2 from 'argon2';
 
 // argon2id with high memory cost — current OWASP recommendation (2024).
 const OPTIONS = {
@@ -25,10 +25,10 @@ export async function verifyPassword(
 
 // Strong password rules — enforced server-side regardless of client validation.
 export function validatePasswordStrength(p: string): string | null {
-  if (p.length < 10) return "Password must be at least 10 characters.";
-  if (p.length > 128) return "Password too long.";
-  if (!/[a-z]/.test(p)) return "Password must contain a lowercase letter.";
-  if (!/[A-Z]/.test(p)) return "Password must contain an uppercase letter.";
-  if (!/\d/.test(p)) return "Password must contain a number.";
+  if (p.length < 10) return 'Password must be at least 10 characters.';
+  if (p.length > 128) return 'Password too long.';
+  if (!/[a-z]/.test(p)) return 'Password must contain a lowercase letter.';
+  if (!/[A-Z]/.test(p)) return 'Password must contain an uppercase letter.';
+  if (!/\d/.test(p)) return 'Password must contain a number.';
   return null;
 }

@@ -1,0 +1,383 @@
+/* Dining layout editor — responsive shell + collapsible sections */
+
+.dining-shell {
+  display: flex;
+  flex-direction: column;
+  width: 100%;
+  max-height: 100dvh;
+  min-height: 0;
+  overflow: hidden;
+  border-radius: 1rem 1rem 0 0;
+  background: var(--app-surface, #0c0b09);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+@media (min-width: 640px) {
+  .dining-shell {
+    max-height: min(90dvh, 880px);
+    border-radius: 1rem;
+  }
+}
+
+@media (min-width: 1024px) {
+  .dining-shell {
+    max-width: 42rem;
+  }
+}
+
+.dining-shell__header {
+  flex-shrink: 0;
+  padding: 0.875rem 1rem;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+  padding-top: max(0.875rem, env(safe-area-inset-top));
+}
+
+@media (min-width: 640px) {
+  .dining-shell__header {
+    padding: 1rem 1.25rem;
+  }
+}
+
+.dining-shell__body {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow-x: hidden;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  -webkit-overflow-scrolling: touch;
+  padding: 0.875rem 1rem 1.25rem;
+  padding-bottom: max(1.25rem, env(safe-area-inset-bottom));
+}
+
+@media (min-width: 640px) {
+  .dining-shell__body {
+    padding: 1rem 1.25rem 1.5rem;
+  }
+}
+
+.dining-shell__subtitle {
+  display: none;
+}
+
+@media (min-width: 640px) {
+  .dining-shell__subtitle {
+    display: block;
+  }
+}
+
+/* Horizontal floor strip — swipe on phone */
+.dining-floors {
+  display: flex;
+  gap: 0.5rem;
+  overflow-x: auto;
+  padding-bottom: 0.25rem;
+  margin: 0 -0.25rem;
+  padding-left: 0.25rem;
+  padding-right: 0.25rem;
+  scroll-snap-type: x proximity;
+  -ms-overflow-style: none;
+  scrollbar-width: none;
+}
+
+.dining-floors::-webkit-scrollbar {
+  display: none;
+}
+
+.dining-floors__pill {
+  flex-shrink: 0;
+  scroll-snap-align: start;
+  min-height: 2.5rem;
+  padding: 0.5rem 0.875rem;
+  font-size: 0.8125rem;
+  border-radius: 9999px;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  white-space: nowrap;
+}
+
+@media (min-width: 640px) {
+  .dining-floors {
+    flex-wrap: wrap;
+    overflow-x: visible;
+  }
+}
+
+/* Collapsible panels */
+.dining-panel {
+  border-radius: 0.875rem;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  background: rgba(24, 24, 27, 0.45);
+  overflow: hidden;
+}
+
+.dining-panel + .dining-panel {
+  margin-top: 0.75rem;
+}
+
+.dining-panel__header {
+  display: flex;
+  align-items: stretch;
+  gap: 0.25rem;
+}
+
+.dining-panel__actions {
+  display: flex;
+  flex-shrink: 0;
+  align-items: center;
+  padding-right: 0.5rem;
+}
+
+.dining-panel__trigger {
+  display: flex;
+  flex: 1 1 auto;
+  min-width: 0;
+  width: 100%;
+  align-items: center;
+  gap: 0.75rem;
+  padding: 0.875rem 1rem;
+  text-align: left;
+  min-height: 3rem;
+  touch-action: manipulation;
+  transition: background-color 0.15s ease;
+}
+
+.dining-panel__trigger:hover {
+  background: rgba(255, 255, 255, 0.03);
+}
+
+.dining-panel__trigger--open {
+  background: rgba(255, 255, 255, 0.02);
+}
+
+@media (min-width: 640px) {
+  .dining-panel__trigger {
+    padding: 0.75rem 1rem;
+    min-height: 2.75rem;
+  }
+}
+
+.dining-panel__trigger-text {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+.dining-panel__title {
+  font-size: 0.8125rem;
+  font-weight: 600;
+  color: #fafafa;
+  line-height: 1.3;
+}
+
+.dining-panel__meta {
+  margin-top: 0.125rem;
+  font-size: 0.6875rem;
+  color: #71717a;
+  line-height: 1.35;
+}
+
+.dining-panel__badge {
+  flex-shrink: 0;
+  font-size: 0.625rem;
+  font-weight: 600;
+  padding: 0.2rem 0.5rem;
+  border-radius: 9999px;
+  border: 1px solid rgba(251, 191, 36, 0.3);
+  background: rgba(245, 158, 11, 0.12);
+  color: #fde68a;
+}
+
+.dining-panel__chevron {
+  flex-shrink: 0;
+  color: #71717a;
+  transition: transform 0.2s ease;
+}
+
+.dining-panel__chevron--open {
+  transform: rotate(180deg);
+}
+
+.dining-panel__body {
+  border-top: 1px solid rgba(255, 255, 255, 0.06);
+  padding: 0.875rem 1rem 1rem;
+}
+
+.dining-panel__body--closed {
+  display: none;
+}
+
+/* Area cards — mobile-first stack */
+.dining-area-card {
+  border-radius: 0.875rem;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  background: rgba(24, 24, 27, 0.5);
+  padding: 0.875rem 1rem;
+}
+
+.dining-area-card__actions {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 0.5rem;
+  margin-top: 0.75rem;
+}
+
+@media (min-width: 640px) {
+  .dining-area-card__actions {
+    display: flex;
+    justify-content: flex-end;
+    margin-top: 0;
+  }
+}
+
+.dining-area-card__actions button {
+  min-height: 2.5rem;
+  font-size: 0.8125rem;
+}
+
+@media (min-width: 640px) {
+  .dining-area-card {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 1rem;
+  }
+
+  .dining-area-card__actions button {
+    min-height: 2.25rem;
+  }
+}
+
+/* Form fields — larger on touch */
+.dining-field input,
+.dining-field select,
+.dining-field textarea {
+  width: 100%;
+  margin-top: 0.375rem;
+  min-height: 2.75rem;
+  padding: 0.625rem 0.75rem;
+  font-size: 1rem;
+  border-radius: 0.625rem;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  background: #09090b;
+  color: #fafafa;
+}
+
+@media (min-width: 640px) {
+  .dining-field input,
+  .dining-field select,
+  .dining-field textarea {
+    min-height: 2.5rem;
+    font-size: 0.875rem;
+  }
+}
+
+.dining-field textarea {
+  min-height: 4.5rem;
+  resize: vertical;
+}
+
+.dining-field label,
+.dining-field > span:first-child {
+  font-size: 0.6875rem;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: #71717a;
+}
+
+/* Seat picker — bigger tap targets on phone */
+.dining-seats {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 0.375rem;
+}
+
+@media (min-width: 480px) {
+  .dining-seats {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.375rem;
+  }
+}
+
+.dining-seats__btn {
+  min-height: 2.75rem;
+  font-size: 0.9375rem;
+  font-weight: 600;
+  border-radius: 0.625rem;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+@media (min-width: 640px) {
+  .dining-seats__btn {
+    min-width: 2.25rem;
+    min-height: 2.25rem;
+    font-size: 0.875rem;
+  }
+}
+
+/* Zone toggle */
+.dining-zone-toggle {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 0.5rem;
+}
+
+.dining-zone-toggle button {
+  min-height: 2.75rem;
+  font-size: 0.8125rem;
+}
+
+/* Sticky subheader inside area detail */
+.dining-area-subheader {
+  flex-shrink: 0;
+  padding: 0.75rem 1rem;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+  background: rgba(9, 9, 11, 0.85);
+  backdrop-filter: blur(8px);
+  position: sticky;
+  top: 0;
+  z-index: 2;
+}
+
+/* Table type row thumbnail — visible on all sizes */
+.dining-table-thumb {
+  position: relative;
+  flex-shrink: 0;
+  width: 3.5rem;
+  height: 3rem;
+  border-radius: 0.5rem;
+  overflow: hidden;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  background: #09090b;
+}
+
+@media (min-width: 640px) {
+  .dining-table-thumb {
+    width: 4rem;
+    height: 3.25rem;
+  }
+}
+
+/* Primary actions bar — sticky on mobile when adding */
+.dining-sticky-actions {
+  position: sticky;
+  bottom: 0;
+  z-index: 3;
+  margin: 0 -1rem -1.25rem;
+  padding: 0.75rem 1rem;
+  padding-bottom: max(0.75rem, env(safe-area-inset-bottom));
+  background: linear-gradient(
+    to top,
+    rgba(9, 9, 11, 0.98) 70%,
+    rgba(9, 9, 11, 0)
+  );
+  border-top: 1px solid rgba(255, 255, 255, 0.06);
+}
+
+@media (min-width: 640px) {
+  .dining-sticky-actions {
+    position: static;
+    margin: 0;
+    padding: 0;
+    background: none;
+    border-top: none;
+  }
+}

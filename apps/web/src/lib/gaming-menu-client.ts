@@ -1,5 +1,7 @@
 import { api } from "./api";
 import type { BookingUnitKind } from "./booking-unit-kind";
+import type { GamingSectionSummary } from "./gaming-layout-client";
+import type { BookingMode } from "./resources-client";
 import type { ResourceType } from "./resource-types";
 
 export type GamingRate = {
@@ -13,12 +15,15 @@ export type GamingRate = {
 export type GamingOffering = {
   id: string;
   type: ResourceType;
+  bookingMode: BookingMode;
   name: string;
   description: string | null;
   imageUrl: string | null;
   imageUrl2: string | null;
   slotMinutes: number;
   sortOrder: number;
+  playstationGames: string[];
+  offeringConfig: Record<string, unknown> | null;
   unitKind: BookingUnitKind;
   unitLabels: {
     singular: string;
@@ -28,6 +33,7 @@ export type GamingOffering = {
     createCountLabel: string;
   };
   rates: GamingRate[];
+  sections: GamingSectionSummary[];
   inventory: {
     total: number;
     availableNow: number;

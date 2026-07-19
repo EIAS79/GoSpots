@@ -55,6 +55,22 @@ export function createScheduleException(body: {
   });
 }
 
+export function updateScheduleException(
+  id: string,
+  body: {
+    date?: string;
+    label?: string | null;
+    isClosed?: boolean;
+    opensAt?: string;
+    closesAt?: string;
+  },
+) {
+  return api<ScheduleException>(`/hours/exceptions/${id}`, {
+    method: "PATCH",
+    body: JSON.stringify(body),
+  });
+}
+
 export function deleteScheduleException(id: string) {
   return api(`/hours/exceptions/${id}`, { method: "DELETE" });
 }

@@ -14,7 +14,6 @@ services:
     startCommand: >-
       cd apps/api &&
       npx prisma migrate deploy &&
-      npx prisma db push --accept-data-loss --skip-generate &&
       node dist/main.js
     healthCheckPath: /api/v1/health
     envVars:
@@ -28,9 +27,25 @@ services:
         generateValue: true
       - key: WEB_ORIGIN
         sync: false
+      - key: WEB_APP_URL
+        sync: false
       - key: CORS_ORIGIN
         sync: false
       - key: COOKIE_SECURE
         value: "true"
       - key: COOKIE_SAME_SITE
         value: lax
+      - key: RESEND_API_KEY
+        sync: false
+      - key: MAIL_FROM
+        sync: false
+      - key: MAIL_FROM_NAME
+        value: GoSpots
+      - key: LEMON_SQUEEZY_API_KEY
+        sync: false
+      - key: LEMON_SQUEEZY_STORE_ID
+        sync: false
+      - key: LEMON_SQUEEZY_VARIANT_ID
+        sync: false
+      - key: LEMON_SQUEEZY_WEBHOOK_SECRET
+        sync: false

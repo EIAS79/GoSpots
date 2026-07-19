@@ -1,5 +1,6 @@
 export type ResourceType =
   | "BILLIARD"
+  | "FOOSBALL"
   | "SNOOKER"
   | "POOL"
   | "DARTS"
@@ -13,10 +14,12 @@ export type ResourceType =
   | "CHESS"
   | "CARDS"
   | "TABLE"
+  | "DINING"
   | "OTHER";
 
 export const RESOURCE_TYPE_LABELS: Record<ResourceType, string> = {
   BILLIARD: "Billiard",
+  FOOSBALL: "Baby foot",
   SNOOKER: "Snooker",
   POOL: "Pool table",
   DARTS: "Darts",
@@ -30,6 +33,7 @@ export const RESOURCE_TYPE_LABELS: Record<ResourceType, string> = {
   CHESS: "Chess",
   CARDS: "Card games",
   TABLE: "Table / lounge",
+  DINING: "Restaurant dining",
   OTHER: "Other",
 };
 

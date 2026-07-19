@@ -1,19 +1,36 @@
 "use client";
 
 import { Loader2, X } from "lucide-react";
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { FeedbackBanner } from "@/components/ui/feedback-banner";
 import { ModalPortal } from "@/components/ui/modal-portal";
 import {
   ACTIVE_BOOKING_STATUSES,
-  addMinutesToTime,
   combineDateAndTime,
   splitDateAndTime,
-  validateBookingWindow,
 } from "@/lib/booking-time";
+import {
+  holdEndFromLocal,
+  parseNoShowMinutes,
+} from "@/lib/dining-reservation";
+import { BowlingModePicker } from "@/components/gaming/bowling-mode-picker";
+import {
+  buildBowlingNotes,
+  estimateBowlingPrice,
+  suggestBowlingWalkInAmount,
+  parseBowlingConfig,
+  parseGamesFromNotes,
+  type BowlingChargeMode,
+} from "@/lib/bowling-booking";
+import {
+  listBowlingModes,
+  modeToOfferingConfig,
+  resolveBowlingMode,
+} from "@/lib/bowling-modes";
 import {
   getBookingUnitKind,
   getBookingUnitLabels,
+  bookingCollectsPartySize,
 } from "@/lib/booking-unit-kind";
 import type { Reservation, ReservationStatus } from "@/lib/reservations-client";
 import type { ResourceCatalog } from "@/lib/resources-client";
@@ -62,12 +79,18 @@ export function ReservationDialog({
   const units = catalog.categories.flatMap((c) =>
     c.resources.map((r) => ({
       ...r,
+      categoryId: c.id,
       categoryName: c.name,
       categoryType: c.type,
       slotMinutes: c.slotMinutes,
+      bookingMode: c.bookingMode,
+      offeringConfig: c.offeringConfig,
       unitKind: getBookingUnitKind(c.type),
     })),
   );
+
+  const initialNotes = initial?.notes ?? "";
+  const initialParsedGames = parseGamesFromNotes(initialNotes);
 
   const [resourceId, setResourceId] = useState(
     initial?.resourceId ?? defaultUnitId ?? units[0]?.id ?? "",
@@ -76,10 +99,9 @@ export function ReservationDialog({
   const [guestEmail, setGuestEmail] = useState(initial?.guestEmail ?? "");
   const [guestPhone, setGuestPhone] = useState(initial?.guestPhone ?? "");
   const [partySize, setPartySize] = useState(String(initial?.partySize ?? 1));
-  const [status, setStatus] = useState<ReservationStatus>(
-    initial?.status === "CHECKED_IN" ? "CHECKED_IN" : "CONFIRMED",
+  const [notes, setNotes] = useState(
+    initialNotes.replace(/^\[Bowling[^\]]*\]\s*/i, "").trim(),
   );
-  const [notes, setNotes] = useState(initial?.notes ?? "");
   const [staffAlert, setStaffAlert] = useState(initial?.staffAlert ?? false);
   const [feedback, setFeedback] = useState<{
     variant: "error" | "info";
@@ -98,38 +120,186 @@ export function ReservationDialog({
   const [endTime, setEndTime] = useState(initialEnd.time || "15:00");
 
   const selected = units.find((u) => u.id === resourceId);
+  const selectedCategory = catalog.categories.find(
+    (c) => c.id === selected?.categoryId,
+  );
+  const isDining = selected?.categoryType === "DINING";
+  const isBowling = selected?.categoryType === "BOWLING";
+  const noShowMinutes = parseNoShowMinutes(
+    selectedCategory?.offeringConfig ?? null,
+  );
   const unitLabels = getBookingUnitLabels(selected?.unitKind ?? "UNIT");
   const slotMinutes = selected?.slotMinutes ?? 60;
 
+  const bowlingModes = useMemo(
+    () =>
+      isBowling && selectedCategory
+        ? listBowlingModes(
+            selectedCategory.offeringConfig,
+            selectedCategory.bookingMode,
+            selectedCategory.rates ?? [],
+            slotMinutes,
+          )
+        : [],
+    [isBowling, selectedCategory, slotMinutes],
+  );
+
+  const [selectedBowlingModeId, setSelectedBowlingModeId] = useState("");
+  const selectedBowlingMode = useMemo(
+    () =>
+      bowlingModes.find((m) => m.id === selectedBowlingModeId) ??
+      bowlingModes[0] ??
+      null,
+    [bowlingModes, selectedBowlingModeId],
+  );
+
+  const chargeMode: BowlingChargeMode =
+    selectedBowlingMode?.chargeType ?? "TIME";
+  const bowlingConfig = selectedBowlingMode
+    ? modeToOfferingConfig(selectedBowlingMode)
+    : parseBowlingConfig(selectedCategory?.offeringConfig, slotMinutes);
+  const effectiveSlotMinutes = selectedBowlingMode?.slotMinutes ?? slotMinutes;
+
+  const [gameCount, setGameCount] = useState(
+    String(initialParsedGames ?? bowlingConfig.defaultGames),
+  );
+
+  useEffect(() => {
+    if (!isBowling || bowlingModes.length === 0) return;
+    const resolved =
+      initial?.resourceId === resourceId
+        ? resolveBowlingMode(bowlingModes, initialNotes)
+        : null;
+    const mode = resolved ?? bowlingModes[0];
+    setSelectedBowlingModeId(mode.id);
+    setGameCount(
+      String(
+        initial?.resourceId === resourceId && initialParsedGames
+          ? initialParsedGames
+          : mode.defaultGames,
+      ),
+    );
+  }, [resourceId, isBowling, bowlingModes, initial?.resourceId, initialNotes, initialParsedGames]);
+
+  const showPartySize =
+    isDining ||
+    (selected != null &&
+      selectedBowlingMode != null &&
+      bookingCollectsPartySize(selected.categoryType, {
+        bookingMode: selectedCategory?.bookingMode ?? "TIME",
+        notes: buildBowlingNotes(
+          "",
+          {
+            id: selectedBowlingMode.id,
+            chargeType: selectedBowlingMode.chargeType,
+          },
+          parseInt(gameCount, 10) || selectedBowlingMode.defaultGames,
+        ),
+        offeringConfig: selectedCategory?.offeringConfig,
+        categoryRates: selectedCategory?.rates,
+        slotMinutes: effectiveSlotMinutes,
+      }));
+
+  const estimatedDurationMinutes = useMemo(() => {
+    if (isBowling && chargeMode === "GAME") {
+      const games = parseInt(gameCount, 10) || bowlingConfig.defaultGames;
+      return games * (selectedBowlingMode?.minutesPerGame ?? effectiveSlotMinutes);
+    }
+    return effectiveSlotMinutes;
+  }, [
+    isBowling,
+    chargeMode,
+    gameCount,
+    bowlingConfig.defaultGames,
+    selectedBowlingMode?.minutesPerGame,
+    effectiveSlotMinutes,
+  ]);
+
+  const estimatedPrice = useMemo(() => {
+    if (!isBowling || !selectedBowlingMode) return null;
+    const games = parseInt(gameCount, 10) || bowlingConfig.defaultGames;
+    const players = parseInt(partySize, 10) || 1;
+    return (
+      suggestBowlingWalkInAmount(
+        selectedBowlingMode,
+        players,
+        estimatedDurationMinutes,
+        games,
+      ) ??
+      estimateBowlingPrice(
+        chargeMode,
+        games,
+        players,
+        bowlingConfig,
+        estimatedDurationMinutes,
+        effectiveSlotMinutes,
+      )
+    );
+  }, [
+    isBowling,
+    selectedBowlingMode,
+    chargeMode,
+    gameCount,
+    partySize,
+    bowlingConfig,
+    estimatedDurationMinutes,
+    effectiveSlotMinutes,
+  ]);
+
   const overlapHint = useMemo(() => {
-    if (!resourceId || !date) return null;
-    const err = validateBookingWindow(date, startTime, endTime);
-    if (err) return err;
+    if (!resourceId || !date || !startTime) return null;
     const start = combineDateAndTime(date, startTime);
-    const end = combineDateAndTime(date, endTime);
+    const holdEnd = new Date(holdEndFromLocal(date, startTime, noShowMinutes));
     const clash = existingBookings.find(
       (b) =>
         b.id !== initial?.id &&
         ACTIVE_BOOKING_STATUSES.includes(b.status) &&
         start < new Date(b.endsAt) &&
-        end > new Date(b.startsAt),
+        holdEnd > new Date(b.startsAt),
     );
     if (clash) {
-      return "This unit already has a booking in that time range.";
+      return isDining
+        ? "This table already has a reservation around that time."
+        : "This unit already has a booking around that time.";
     }
     return null;
   }, [
     resourceId,
     date,
     startTime,
-    endTime,
     existingBookings,
     initial?.id,
+    isDining,
+    noShowMinutes,
   ]);
 
   function applyStartTime(next: string) {
     setStartTime(next);
-    setEndTime(addMinutesToTime(next, slotMinutes));
+  }
+
+  function onBowlingModeChange(modeId: string) {
+    setSelectedBowlingModeId(modeId);
+    const mode = bowlingModes.find((m) => m.id === modeId);
+    if (!mode) return;
+    setGameCount(String(mode.defaultGames));
+  }
+
+  function validateBowlingFields(): string | null {
+    if (!isBowling) return null;
+    const players = parseInt(partySize, 10) || 0;
+    if (chargeMode === "PERSON" && selectedBowlingMode) {
+      if (players < selectedBowlingMode.minPlayers) {
+        return `Party size must be at least ${selectedBowlingMode.minPlayers}.`;
+      }
+      if (players > selectedBowlingMode.maxPlayers) {
+        return `Party size cannot exceed ${selectedBowlingMode.maxPlayers}.`;
+      }
+    }
+    if (chargeMode === "GAME") {
+      const games = parseInt(gameCount, 10) || 0;
+      if (games < 1) return "Enter at least one game.";
+    }
+    return null;
   }
 
   return (
@@ -141,16 +311,24 @@ export function ReservationDialog({
           className="absolute inset-0 bg-black/70 backdrop-blur-sm"
           onClick={onClose}
         />
-        <div className="relative z-10 w-full max-w-md rounded-t-2xl border border-white/10 bg-zinc-950 p-5 shadow-2xl sm:rounded-2xl">
-          <div className="mb-4 flex items-center justify-between">
-            <h2 className="text-lg font-semibold text-white">
-              {initial ? "Edit booking" : "New booking"}
-            </h2>
-            <button type="button" onClick={onClose} className="text-zinc-400">
+        <div className="relative z-10 flex max-h-[min(92dvh,720px)] w-full max-w-md flex-col overflow-hidden rounded-t-2xl border border-white/10 bg-zinc-950 shadow-2xl sm:rounded-2xl">
+          <div className="mb-0 flex shrink-0 items-center justify-between border-b border-white/5 px-5 py-4">
+            <div>
+              <h2 className="text-lg font-semibold text-white">
+                {initial ? "Edit booking" : "New booking"}
+              </h2>
+              {isBowling && selectedBowlingMode ? (
+                <p className="mt-0.5 text-[11px] text-zinc-500">
+                  Bowling · {selectedBowlingMode.name}
+                </p>
+              ) : null}
+            </div>
+            <button type="button" onClick={onClose} className="grid h-11 w-11 place-items-center text-zinc-400">
               <X size={18} />
             </button>
           </div>
 
+          <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain px-5 py-4">
           {feedback ? (
             <FeedbackBanner
               variant={feedback.variant === "error" ? "error" : "info"}
@@ -173,9 +351,9 @@ export function ReservationDialog({
             onSubmit={(e) => {
               e.preventDefault();
               if (!resourceId) return;
-              const windowErr = validateBookingWindow(date, startTime, endTime);
-              if (windowErr) {
-                setFeedback({ variant: "error", message: windowErr });
+              const bowlingErr = validateBowlingFields();
+              if (bowlingErr) {
+                setFeedback({ variant: "error", message: bowlingErr });
                 return;
               }
               if (overlapHint) {
@@ -183,19 +361,36 @@ export function ReservationDialog({
                 return;
               }
               const startsAt = combineDateAndTime(date, startTime).toISOString();
-              const endsAt = combineDateAndTime(date, endTime).toISOString();
+              const endsAt = holdEndFromLocal(date, startTime, noShowMinutes);
+              const games = parseInt(gameCount, 10) || bowlingConfig.defaultGames;
+              const finalNotes =
+                isBowling && selectedBowlingMode
+                  ? buildBowlingNotes(
+                      notes.trim(),
+                      {
+                        id: selectedBowlingMode.id,
+                        chargeType: selectedBowlingMode.chargeType,
+                      },
+                      games,
+                    )
+                  : notes.trim() || undefined;
+              const saveStatus: ReservationStatus =
+                initial?.status === "CANCELED" ||
+                initial?.status === "COMPLETED"
+                  ? initial.status
+                  : "CONFIRMED";
               setFeedback(null);
               void onSave({
                 resourceId,
                 guestName: guestName.trim(),
                 guestEmail: guestEmail.trim() || undefined,
                 guestPhone: guestPhone.trim() || undefined,
-                partySize: parseInt(partySize, 10) || 1,
+                partySize: showPartySize ? parseInt(partySize, 10) || 1 : 1,
                 startsAt,
                 endsAt,
-                status,
+                status: saveStatus,
                 staffAlert,
-                notes: notes.trim() || undefined,
+                notes: finalNotes,
               }).catch((err) => {
                 setFeedback({
                   variant: "error",
@@ -216,8 +411,11 @@ export function ReservationDialog({
                 {catalog.categories.map((cat) => {
                   const kind = getBookingUnitKind(cat.type);
                   const labels = getBookingUnitLabels(kind);
-                  const catUnits = units.filter((u) =>
-                    cat.resources.some((r) => r.id === u.id),
+                  const catUnits = units.filter(
+                    (u) =>
+                      cat.resources.some((r) => r.id === u.id) &&
+                      (u.status !== "MAINTENANCE" ||
+                        u.id === initial?.resourceId),
                   );
                   if (catUnits.length === 0) return null;
                   return (
@@ -236,6 +434,15 @@ export function ReservationDialog({
               </select>
             </label>
 
+            {isBowling && bowlingModes.length > 0 ? (
+              <BowlingModePicker
+                modes={bowlingModes}
+                value={selectedBowlingModeId}
+                onChange={onBowlingModeChange}
+                label="How is this guest booking?"
+              />
+            ) : null}
+
             <label className="block text-xs text-zinc-500">
               Date
               <input
@@ -247,32 +454,39 @@ export function ReservationDialog({
               />
             </label>
 
-            <div className="grid grid-cols-2 gap-2">
+            {isBowling && chargeMode === "GAME" ? (
               <label className="block text-xs text-zinc-500">
-                Start time
+                Number of games
                 <input
-                  type="time"
+                  type="number"
+                  min={1}
                   required
-                  value={startTime}
-                  onChange={(e) => applyStartTime(e.target.value)}
-                  className="mt-1 w-full rounded-lg border border-white/10 bg-zinc-900 px-2 py-2 text-sm text-white"
+                  value={gameCount}
+                  onChange={(e) => setGameCount(e.target.value)}
+                  className="mt-1 w-full rounded-lg border border-white/10 bg-zinc-900 px-3 py-2 text-sm text-white"
                 />
               </label>
-              <label className="block text-xs text-zinc-500">
-                End time
-                <input
-                  type="time"
-                  required
-                  value={endTime}
-                  onChange={(e) => setEndTime(e.target.value)}
-                  className="mt-1 w-full rounded-lg border border-white/10 bg-zinc-900 px-2 py-2 text-sm text-white"
-                />
-              </label>
-            </div>
+            ) : null}
+
+            <label className="block text-xs text-zinc-500">
+              {isDining ? "Arrival time" : "Start time"}
+              <input
+                type="time"
+                required
+                value={startTime}
+                onChange={(e) => applyStartTime(e.target.value)}
+                className="mt-1 w-full rounded-lg border border-white/10 bg-zinc-900 px-2 py-2 text-sm text-white"
+              />
+            </label>
             <p className="text-[10px] text-zinc-600">
-              Same-day only · end must be after start · default slot{" "}
-              {slotMinutes} min · no overlapping bookings on one unit
+              {`No fixed end time — unit held for ${noShowMinutes} min after start. If the guest does not show, it is freed automatically. Staff checks in on arrival and marks free when they leave.`}
             </p>
+
+            {estimatedPrice != null ? (
+              <p className="rounded-lg border border-emerald-400/20 bg-emerald-500/5 px-3 py-2 text-xs text-emerald-200">
+                Estimated charge: {estimatedPrice.toFixed(2)}
+              </p>
+            ) : null}
 
             <label className="block text-xs text-zinc-500">
               Guest name
@@ -284,30 +498,29 @@ export function ReservationDialog({
               />
             </label>
 
-            <label className="block text-xs text-zinc-500">
-              Session status
-              <select
-                value={status}
-                onChange={(e) =>
-                  setStatus(e.target.value as ReservationStatus)
-                }
-                className="mt-1 w-full rounded-lg border border-white/10 bg-zinc-900 px-3 py-2 text-sm text-white"
-              >
-                <option value="CONFIRMED">Scheduled — not in use yet</option>
-                <option value="CHECKED_IN">In use — unit unavailable now</option>
-              </select>
-            </label>
-
-            <label className="block text-xs text-zinc-500">
-              {unitLabels.countLabel}
-              <input
-                type="number"
-                min={1}
-                value={partySize}
-                onChange={(e) => setPartySize(e.target.value)}
-                className="mt-1 w-full rounded-lg border border-white/10 bg-zinc-900 px-3 py-2 text-sm text-white"
-              />
-            </label>
+            {showPartySize ? (
+              <label className="block text-xs text-zinc-500">
+                {`Players (${selectedBowlingMode?.minPlayers ?? bowlingConfig.minPlayers}–${selectedBowlingMode?.maxPlayers ?? bowlingConfig.maxPlayers})`}
+                <input
+                  type="number"
+                  min={selectedBowlingMode?.minPlayers ?? bowlingConfig.minPlayers}
+                  max={selectedBowlingMode?.maxPlayers ?? bowlingConfig.maxPlayers}
+                  value={partySize}
+                  onChange={(e) => setPartySize(e.target.value)}
+                  className="mt-1 w-full rounded-lg border border-white/10 bg-zinc-900 px-3 py-2 text-sm text-white"
+                />
+                <span className="mt-1 block text-[10px] text-zinc-600">
+                  Per-person pricing — charge is multiplied by player count and
+                  by each {selectedBowlingMode?.slotMinutes ?? effectiveSlotMinutes}{" "}
+                  min block in the booking window.
+                </span>
+              </label>
+            ) : isBowling && chargeMode === "TIME" ? (
+              <p className="rounded-lg border border-white/10 bg-zinc-900/50 px-3 py-2 text-[11px] text-zinc-500">
+                Lane rental for a time slot — you are booking the lane itself;
+                guest count does not affect the price.
+              </p>
+            ) : null}
 
             <label className="block text-xs text-zinc-500">
               Notes
@@ -366,6 +579,7 @@ export function ReservationDialog({
               </button>
             </div>
           </form>
+          </div>
         </div>
       </div>
     </ModalPortal>

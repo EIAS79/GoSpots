@@ -2,7 +2,7 @@
 
 import { ImagePlus, Loader2, Trash2, X } from "lucide-react";
 import Image from "next/image";
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useState } from "react";
 import { cn } from "@/lib/cn";
 import {
   MEAL_PERIOD_PRESETS,
@@ -114,7 +114,10 @@ export function SectionDialog({
   section,
   onClose,
   onSave,
+  onSaved,
   onDelete,
+  onUploadImage,
+  onClearImage,
   saving,
 }: {
   section?: MenuSection;
@@ -125,11 +128,18 @@ export function SectionDialog({
     availableFrom: string | null;
     availableTo: string | null;
     availableDays: string;
-  }) => Promise<void>;
-  onDelete?: () => Promise<void>;
+  }) => Promise<MenuSection | void>;
+  onSaved?: () => void;
+  onDelete?: () => void | Promise<void>;
+  onUploadImage?: (sectionId: string, file: File) => Promise<void>;
+  onClearImage?: () => Promise<void>;
   saving: boolean;
 }) {
   const [name, setName] = useState(section?.name ?? "");
+  const [imageUrl, setImageUrl] = useState(section?.imageUrl ?? null);
+  const [pendingImage, setPendingImage] = useState<File | null>(null);
+  const [previewImage, setPreviewImage] = useState<string | null>(null);
+  const [uploadingImage, setUploadingImage] = useState(false);
   const [mealPeriod, setMealPeriod] = useState<MealPeriod | "">(
     (section?.mealPeriod as MealPeriod) ?? "",
   );
@@ -140,6 +150,20 @@ export function SectionDialog({
   const [availableDays, setAvailableDays] = useState(
     section?.availableDays ?? "0,1,2,3,4,5,6",
   );
+
+  useEffect(() => {
+    setImageUrl(section?.imageUrl ?? null);
+  }, [section?.imageUrl]);
+
+  useEffect(() => {
+    if (!pendingImage) {
+      setPreviewImage(null);
+      return;
+    }
+    const url = URL.createObjectURL(pendingImage);
+    setPreviewImage(url);
+    return () => URL.revokeObjectURL(url);
+  }, [pendingImage]);
 
   useEffect(() => {
     if (!mealPeriod) return;
@@ -165,6 +189,31 @@ export function SectionDialog({
             availableFrom: availableFrom ? availableFrom.slice(0, 5) : null,
             availableTo: availableTo ? availableTo.slice(0, 5) : null,
             availableDays,
+          }).then(async (saved) => {
+            if (!saved?.id) return;
+            onClose();
+            if (pendingImage && onUploadImage) {
+              setUploadingImage(true);
+              try {
+                await onUploadImage(saved.id, pendingImage);
+                setPendingImage(null);
+              } catch (err) {
+                window.alert(
+                  err instanceof Error
+                    ? err.message
+                    : "Could not upload section photo.",
+                );
+                onSaved?.();
+                return;
+              } finally {
+                setUploadingImage(false);
+              }
+            }
+            onSaved?.();
+          }).catch((err) => {
+            window.alert(
+              err instanceof Error ? err.message : "Could not save section.",
+            );
           });
         }}
       >
@@ -178,6 +227,53 @@ export function SectionDialog({
             placeholder="e.g. Drinks, Food, Desserts"
           />
         </label>
+
+        <div className="rounded-xl border border-white/10 bg-zinc-900/40 p-4">
+          <p className="text-sm font-medium text-zinc-200">Section photo</p>
+          <p className="mt-0.5 text-xs text-zinc-500">
+            Optional cover for this category — max 8 MB.
+            {!section && pendingImage ? " Uploads after you save." : null}
+          </p>
+          <div className="mt-3 max-w-xs">
+            <MenuPhotoUpload
+              slotLabel="Cover"
+              previewPath={
+                section ? imageUrl ?? previewImage : previewImage
+              }
+              uploading={uploadingImage || (!!section && !!pendingImage)}
+              onPick={(f) => {
+                const err = validateImageUploadFile(f);
+                if (err) {
+                  window.alert(err);
+                  return;
+                }
+                if (section && onUploadImage) {
+                  setUploadingImage(true);
+                  void onUploadImage(section.id, f)
+                    .then(() => setPendingImage(null))
+                    .catch((err) => {
+                      window.alert(
+                        err instanceof Error
+                          ? err.message
+                          : "Could not upload section photo.",
+                      );
+                    })
+                    .finally(() => setUploadingImage(false));
+                } else {
+                  setPendingImage(f);
+                }
+              }}
+              onClear={() => {
+                if (section && onClearImage) {
+                  setImageUrl(null);
+                  void onClearImage();
+                } else {
+                  setPendingImage(null);
+                }
+              }}
+            />
+          </div>
+        </div>
 
         <label className="block text-xs text-zinc-500">
           Service period (optional)
@@ -353,6 +449,7 @@ export function ItemDialog({
   defaultSectionId,
   onClose,
   onSave,
+  onSaved,
   onDelete,
   onUploadImage,
   saving,
@@ -361,9 +458,14 @@ export function ItemDialog({
   sections: MenuSection[];
   defaultSectionId: string | null;
   onClose: () => void;
-  onSave: (body: Record<string, unknown>) => Promise<void>;
-  onDelete?: () => Promise<void>;
-  onUploadImage: (slot: "1" | "2", file: File) => Promise<void>;
+  onSave: (body: Record<string, unknown>) => Promise<MenuItem | void>;
+  onSaved?: () => void;
+  onDelete?: () => void | Promise<void>;
+  onUploadImage: (
+    itemId: string,
+    slot: "1" | "2",
+    file: File,
+  ) => Promise<void>;
   saving: boolean;
 }) {
   const [name, setName] = useState(item?.name ?? "");
@@ -392,7 +494,7 @@ export function ItemDialog({
   const [pending2, setPending2] = useState<File | null>(null);
   const [preview1, setPreview1] = useState<string | null>(null);
   const [preview2, setPreview2] = useState<string | null>(null);
-  const uploadingPending = useRef(false);
+  const [uploadingImage, setUploadingImage] = useState(false);
 
   useEffect(() => {
     setImageUrl(item?.imageUrl ?? null);
@@ -419,30 +521,6 @@ export function ItemDialog({
     return () => URL.revokeObjectURL(url);
   }, [pending2]);
 
-  useEffect(() => {
-    if (!item?.id || uploadingPending.current) return;
-    const jobs: Promise<void>[] = [];
-    if (pending1) {
-      jobs.push(
-        onUploadImage("1", pending1).then(() => {
-          setPending1(null);
-        }),
-      );
-    }
-    if (pending2) {
-      jobs.push(
-        onUploadImage("2", pending2).then(() => {
-          setPending2(null);
-        }),
-      );
-    }
-    if (!jobs.length) return;
-    uploadingPending.current = true;
-    void Promise.all(jobs).finally(() => {
-      uploadingPending.current = false;
-    });
-  }, [item?.id, pending1, pending2, onUploadImage]);
-
   const selectedSection = sections.find((s) => s.id === sectionId);
 
   useEffect(() => {
@@ -458,7 +536,7 @@ export function ItemDialog({
     }
     setUploadingSlot(slot);
     try {
-      await onUploadImage(slot, file);
+      await onUploadImage(item.id, slot, file);
       /* parent reloads item; local preview updates on next open */
     } finally {
       setUploadingSlot(null);
@@ -475,6 +553,10 @@ export function ItemDialog({
         className="space-y-4"
         onSubmit={(e) => {
           e.preventDefault();
+          if (!item && !sectionId) {
+            window.alert("Choose a section — items must belong to a category.");
+            return;
+          }
           void onSave({
             name: name.trim(),
             description: description.trim() || null,
@@ -495,7 +577,34 @@ export function ItemDialog({
                 ? availableTo.slice(0, 5)
                 : null,
             availableDays: useSectionTiming ? undefined : availableDays,
-          });
+          })
+            .then(async (saved) => {
+              if (!saved?.id) return;
+              onClose();
+              const jobs: Promise<void>[] = [];
+              if (pending1) jobs.push(onUploadImage(saved.id, "1", pending1));
+              if (pending2) jobs.push(onUploadImage(saved.id, "2", pending2));
+              if (jobs.length) {
+                setUploadingImage(true);
+                try {
+                  await Promise.all(jobs);
+                } catch (err) {
+                  window.alert(
+                    err instanceof Error
+                      ? err.message
+                      : "Item saved but photo upload failed.",
+                  );
+                } finally {
+                  setUploadingImage(false);
+                }
+              }
+              onSaved?.();
+            })
+            .catch((err) => {
+              window.alert(
+                err instanceof Error ? err.message : "Could not save item.",
+              );
+            });
         }}
       >
         <label className="block text-xs text-zinc-500">
@@ -534,11 +643,18 @@ export function ItemDialog({
           <label className="block text-xs text-zinc-500">
             Section
             <select
+              required
               value={sectionId}
               onChange={(e) => setSectionId(e.target.value)}
               className="mt-1 w-full rounded-lg border border-white/10 bg-zinc-900 px-3 py-2 text-sm text-white"
             >
-              <option value="">Uncategorized</option>
+              {!item ? (
+                <option value="" disabled>
+                  Select section…
+                </option>
+              ) : (
+                <option value="">Uncategorized</option>
+              )}
               {sections.map((s) => (
                 <option key={s.id} value={s.id}>
                   {s.name}
@@ -749,10 +865,12 @@ export function ItemDialog({
           ) : null}
           <button
             type="submit"
-            disabled={saving || !name.trim()}
+            disabled={saving || uploadingImage || !name.trim()}
             className="ml-auto inline-flex items-center gap-2 rounded-lg bg-emerald-600 px-4 py-2 text-sm font-medium text-white hover:bg-emerald-500 disabled:opacity-50"
           >
-            {saving ? <Loader2 size={14} className="animate-spin" /> : null}
+            {saving || uploadingImage ? (
+              <Loader2 size={14} className="animate-spin" />
+            ) : null}
             {item
               ? "Save changes"
               : pending1 || pending2

@@ -1,4 +1,5 @@
 import { api } from "./api";
+import type { BookingMode } from "./resources-client";
 import type { BookingUnitKind } from "./booking-unit-kind";
 import type { UnitFloorStatus } from "./booking-floor-status";
 import type { ResourceStatus, ResourceType } from "./resource-types";
@@ -49,6 +50,16 @@ export type ScheduleAgendaItem = ScheduleBooking & {
   unitName: string | null;
   categoryId: string | null;
   categoryName: string | null;
+  categoryType?: ResourceType | null;
+  awaitingPayment?: boolean;
+};
+
+export type ScheduleTableGroup = {
+  id: string;
+  name: string | null;
+  capacity: number;
+  seatsPerRow: number;
+  sortOrder: number;
 };
 
 export type ScheduleUnit = {
@@ -56,7 +67,25 @@ export type ScheduleUnit = {
   name: string;
   status: ResourceStatus;
   floorStatus: UnitFloorStatus;
+  capacity?: number | null;
+  tableGroup?: ScheduleTableGroup | null;
+  section: {
+    id: string;
+    name: string;
+    floor: number;
+    isVip: boolean;
+    seatsPerRow: number;
+  } | null;
   bookings: ScheduleBooking[];
+};
+
+export type ScheduleCategorySection = {
+  id: string;
+  name: string;
+  floor: number;
+  isVip: boolean;
+  seatsPerRow: number;
+  sortOrder: number;
 };
 
 export type DaySchedule = {
@@ -84,6 +113,9 @@ export type ScheduleCategory = {
     createCountLabel: string;
   };
   slotMinutes: number;
+  bookingMode?: BookingMode;
+  offeringConfig?: Record<string, unknown> | null;
+  sections?: ScheduleCategorySection[];
   units: ScheduleUnit[];
 };
 

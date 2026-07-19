@@ -1,15 +1,32 @@
 "use client";
 
 import {
-  CircleDot,
+  ChevronDown,
+  ChevronLeft,
+  ChevronRight,
+  ChevronUp,
   Gamepad2,
+  Map,
   Monitor,
   Plus,
-  RectangleHorizontal,
+  UtensilsCrossed,
 } from "lucide-react";
 import type { ComponentType } from "react";
+import { useState } from "react";
+import { BilliardTableIcon } from "@/components/icons/billiard-table-icon";
+import { BowlingLaneIcon } from "@/components/icons/bowling-lane-icon";
+import { ArcadeCabinetIcon } from "@/components/icons/arcade-cabinet-icon";
+import { FoosballTableIcon } from "@/components/icons/foosball-table-icon";
+import { PingPongTableIcon } from "@/components/icons/ping-pong-table-icon";
 import { MediaImage } from "@/components/ui/media-image";
+import { SeatFloorMap } from "@/components/reservations/seat-floor-map";
+import { BowlingLaneFloorMap } from "@/components/reservations/bowling-lane-floor-map";
 import { cn } from "@/lib/cn";
+import {
+  getFloorMapVisualType,
+  layoutMapLabel,
+  supportsGamingLayout,
+} from "@/lib/gaming-floor-visual";
 import type { ResourceType } from "@/lib/resource-types";
 import { RESOURCE_TYPE_LABELS } from "@/lib/resource-types";
 import {
@@ -17,55 +34,107 @@ import {
   type GamingMenuResponse,
   type GamingOffering,
 } from "@/lib/gaming-menu-client";
+import type { DaySchedule, ScheduleUnit } from "@/lib/reservations-client";
+
+const ADD_TYPE_LABELS: Partial<Record<ResourceType, string>> = {
+  PC: "Add PC arena",
+  PLAYSTATION: "Add PS5 arena",
+  BILLIARD: "Add billiard tables",
+  BOWLING: "Add bowling arena",
+  TABLE_TENNIS: "Add ping pong",
+  FOOSBALL: "Add baby foot",
+  ARCADE: "Add arcade",
+  DINING: "Set up restaurant dining",
+};
 
 const TYPE_ICONS: Partial<
   Record<ResourceType, ComponentType<{ size?: number; className?: string }>>
 > = {
   PC: Monitor,
   PLAYSTATION: Gamepad2,
-  BILLIARD: CircleDot,
-  BOWLING: RectangleHorizontal,
+  BILLIARD: ({ className }) => (
+    <BilliardTableIcon status="AVAILABLE" className={className ?? "h-5 w-9"} />
+  ),
+  BOWLING: ({ className }) => (
+    <BowlingLaneIcon status="AVAILABLE" className={className ?? "h-5 w-3"} />
+  ),
+  TABLE_TENNIS: ({ className }) => (
+    <PingPongTableIcon status="AVAILABLE" className={className ?? "h-5 w-8"} />
+  ),
+  FOOSBALL: ({ className }) => (
+    <FoosballTableIcon status="AVAILABLE" className={className ?? "h-5 w-9"} />
+  ),
+  ARCADE: ({ className }) => (
+    <ArcadeCabinetIcon status="AVAILABLE" className={className ?? "h-6 w-5"} />
+  ),
+  DINING: UtensilsCrossed,
 };
+
+function formatBookingMode(mode: GamingOffering["bookingMode"]) {
+  switch (mode) {
+    case "GAME":
+      return "By game";
+    case "PERSON":
+      return "Per person";
+    case "MIXED":
+      return "Mixed / flexible";
+    default:
+      return "By time";
+  }
+}
 
 export function GamingMenuPanel({
   menu,
+  schedule,
   formatPrice,
   canWrite,
+  variant = "gaming",
   onEdit,
+  onEditLayout,
   onAddType,
 }: {
   menu: GamingMenuResponse;
+  schedule?: DaySchedule | null;
   formatPrice: (n: number) => string;
   canWrite: boolean;
+  variant?: "gaming" | "dining";
   onEdit: (offering: GamingOffering) => void;
+  onEditLayout?: (offering: GamingOffering) => void;
   onAddType: (type: ResourceType) => void;
 }) {
   const { offerings, availableToAdd } = menu;
+  const isDining = variant === "dining";
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-4 md:space-y-6">
       {offerings.length === 0 && availableToAdd.length === 0 ? (
-        <p className="text-sm text-zinc-500">No gaming data loaded.</p>
+        <p className="text-sm text-zinc-500">
+          {isDining ? "No dining layout loaded." : "No gaming data loaded."}
+        </p>
       ) : null}
 
       {offerings.length > 0 ? (
-        <div className="grid gap-4 lg:grid-cols-2">
+        <div className="grid gap-3 md:gap-4 lg:grid-cols-2">
           {offerings.map((o) => (
             <OfferingCard
               key={o.id}
               offering={o}
+              schedule={schedule}
               formatPrice={formatPrice}
               canWrite={canWrite}
               onEdit={() => onEdit(o)}
+              onEditLayout={onEditLayout ? () => onEditLayout(o) : undefined}
             />
           ))}
         </div>
       ) : null}
 
       {canWrite && availableToAdd.length > 0 ? (
-        <section className="rounded-xl border border-dashed border-white/15 p-4">
-          <p className="mb-3 text-xs font-medium uppercase tracking-wide text-zinc-500">
-            Add a game your venue offers
+        <section className="rounded-xl border border-dashed border-white/15 p-3 md:p-4">
+          <p className="mb-2 text-xs font-medium uppercase tracking-wide text-zinc-500 md:mb-3">
+            {isDining
+              ? "Enable digital table booking"
+              : "Add a game your venue offers"}
           </p>
           <div className="flex flex-wrap gap-2">
             {availableToAdd.map((type) => {
@@ -79,20 +148,24 @@ export function GamingMenuPanel({
                 >
                   <Icon size={14} />
                   <Plus size={12} className="opacity-70" />
-                  {RESOURCE_TYPE_LABELS[type]}
+                  {ADD_TYPE_LABELS[type] ?? RESOURCE_TYPE_LABELS[type]}
                 </button>
               );
             })}
           </div>
-          <p className="mt-3 text-[11px] text-zinc-600">
-            Only add what you have — venues can run just PC, only bowling, or any mix.
+          <p className="mt-2 text-[11px] text-zinc-600 md:mt-3">
+            {isDining
+              ? "One dining layout per venue. Add zones and tables from Layout & zones on the card."
+              : "Each arena type appears once. Need extra VIP rooms or floors? Add them from Layout & zones on the arena card."}
           </p>
         </section>
       ) : null}
 
       {offerings.length === 0 && availableToAdd.length > 0 ? (
         <p className="text-center text-sm text-zinc-500">
-          Pick a game above to set up seats, pricing, and a photo.
+          {isDining
+            ? "Set up your dining room to show a live table map on your public site."
+            : "Pick a game above to set up seats, pricing, and a photo."}
         </p>
       ) : null}
     </div>
@@ -101,93 +174,146 @@ export function GamingMenuPanel({
 
 function OfferingCard({
   offering: o,
+  schedule,
   formatPrice,
   canWrite,
   onEdit,
+  onEditLayout,
 }: {
   offering: GamingOffering;
+  schedule?: DaySchedule | null;
   formatPrice: (n: number) => string;
   canWrite: boolean;
   onEdit: () => void;
+  onEditLayout?: () => void;
 }) {
   const Icon = TYPE_ICONS[o.type] ?? Gamepad2;
   const { inventory, unitLabels } = o;
   const inUse = inventory.reservedNow + inventory.inUseNow;
+  const isBowling = o.type === "BOWLING";
+  const floorVisualType = getFloorMapVisualType(o.type);
+  const supportsLayout = supportsGamingLayout(o.unitKind);
+  const liveCategory = schedule?.categories.find((c) => c.id === o.id);
+  const liveUnits = liveCategory?.units ?? [];
+  const layoutSections = liveCategory?.sections ?? o.sections ?? [];
+  const gamesPreview = o.playstationGames.slice(0, 4);
+  const [mapOpen, setMapOpen] = useState(false);
+
+  const availabilityPct =
+    inventory.total > 0
+      ? Math.round((inventory.availableNow / inventory.total) * 100)
+      : 0;
 
   return (
     <article className="flex flex-col overflow-hidden rounded-xl border border-white/10 bg-zinc-900/50">
-      <div className="flex gap-4 p-4">
+      {/* Header — compact on mobile */}
+      <div className="flex items-start gap-3 p-3 md:gap-4 md:p-4">
         {o.imageUrl ? (
-          <div className="relative h-24 w-24 shrink-0 overflow-hidden rounded-lg border border-white/10">
+          <div className="relative h-14 w-14 shrink-0 overflow-hidden rounded-lg border border-white/10 md:h-20 md:w-20">
             <MediaImage src={o.imageUrl} alt="" fill />
           </div>
         ) : (
-          <div className="grid h-24 w-24 shrink-0 place-items-center rounded-lg border border-white/10 bg-zinc-800 text-emerald-400/80">
-            <Icon size={28} />
+          <div className="grid h-14 w-14 shrink-0 place-items-center rounded-lg border border-white/10 bg-zinc-800 text-emerald-400/80 md:h-20 md:w-20">
+            <Icon size={22} className="md:hidden" />
+            <Icon size={26} className="hidden md:block" />
           </div>
         )}
         <div className="min-w-0 flex-1">
-          <p className="text-[10px] uppercase tracking-wide text-emerald-500/80">
+          <p className="text-[9px] uppercase tracking-wide text-emerald-500/80 md:text-[10px]">
             {RESOURCE_TYPE_LABELS[o.type]}
           </p>
-          <h3 className="text-lg font-semibold text-white">{o.name}</h3>
+          <h3 className="text-base font-semibold text-white md:text-lg">
+            {o.name}
+          </h3>
           {o.description ? (
-            <p className="mt-1 line-clamp-3 text-xs leading-relaxed text-zinc-500">
+            <p className="mt-0.5 line-clamp-2 text-[11px] leading-relaxed text-zinc-500 md:mt-1 md:line-clamp-3 md:text-xs">
               {o.description}
             </p>
           ) : (
-            <p className="mt-1 text-xs italic text-zinc-600">No specs added yet</p>
+            <p className="mt-0.5 text-[11px] italic text-zinc-600 md:text-xs">
+              No specs added yet
+            </p>
           )}
+          {o.type === "PLAYSTATION" && gamesPreview.length > 0 ? (
+            <div className="mt-2 flex flex-wrap gap-1">
+              {gamesPreview.map((game) => (
+                <span
+                  key={game}
+                  className="rounded-full border border-white/10 bg-white/[0.03] px-2 py-0.5 text-[9px] text-zinc-400"
+                >
+                  {game}
+                </span>
+              ))}
+              {o.playstationGames.length > gamesPreview.length ? (
+                <span className="rounded-full border border-white/10 bg-white/[0.03] px-2 py-0.5 text-[9px] text-zinc-500">
+                  +{o.playstationGames.length - gamesPreview.length} more
+                </span>
+              ) : null}
+            </div>
+          ) : null}
         </div>
       </div>
 
-      <div className="border-t border-white/5 bg-black/20 px-4 py-3">
-        <div className="mb-2 flex flex-wrap items-center gap-2">
-          <span className="rounded-full border border-emerald-400/25 bg-emerald-500/10 px-2.5 py-0.5 text-[11px] font-medium text-emerald-200">
-            {inventory.availableNow} / {inventory.total} {unitLabels.plural} free now
+      {/* Stats strip */}
+      <div className="border-t border-white/5 bg-black/20 px-3 py-2.5 md:px-4 md:py-3">
+        <div className="flex flex-wrap items-center gap-1.5 md:gap-2">
+          <span className="rounded-full border border-emerald-400/25 bg-emerald-500/10 px-2 py-0.5 text-[10px] font-medium text-emerald-200 md:px-2.5 md:text-[11px]">
+            {inventory.availableNow}/{inventory.total} free
           </span>
           {inUse > 0 ? (
-            <span className="rounded-full border border-amber-400/20 bg-amber-500/10 px-2.5 py-0.5 text-[11px] text-amber-200">
+            <span className="rounded-full border border-amber-400/20 bg-amber-500/10 px-2 py-0.5 text-[10px] text-amber-200 md:text-[11px]">
               {inUse} booked
             </span>
           ) : null}
           {inventory.maintenance > 0 ? (
-            <span className="text-[11px] text-zinc-500">
-              {inventory.maintenance} maintenance
+            <span className="text-[10px] text-zinc-500 md:text-[11px]">
+              {inventory.maintenance} maint.
             </span>
           ) : null}
         </div>
-        <div className="h-1.5 overflow-hidden rounded-full bg-zinc-800">
+        <div className="mt-2 h-1 overflow-hidden rounded-full bg-zinc-800 md:h-1.5">
           <div
             className={cn(
               "h-full rounded-full transition-all",
               inventory.total === 0
                 ? "w-0"
-                : inventory.availableNow / inventory.total > 0.5
+                : availabilityPct > 50
                   ? "bg-emerald-500"
                   : inventory.availableNow > 0
                     ? "bg-amber-500"
                     : "bg-rose-500/80",
             )}
-            style={{
-              width:
-                inventory.total > 0
-                  ? `${Math.round((inventory.availableNow / inventory.total) * 100)}%`
-                  : "0%",
-            }}
+            style={{ width: `${availabilityPct}%` }}
           />
         </div>
-        <p className="mt-2 text-[10px] text-zinc-600">
-          Game bookings subtract from this stock automatically.
-        </p>
+
+        {layoutSections.length > 0 ? (
+          <div className="mt-2 flex flex-wrap gap-1">
+            {layoutSections.map((s) => (
+              <span
+                key={s.id}
+                className="rounded-full border border-white/10 bg-white/[0.03] px-2 py-0.5 text-[9px] text-zinc-500"
+              >
+                {s.name}
+                {s.isVip ? " · VIP" : ""}
+              </span>
+            ))}
+          </div>
+        ) : null}
+        {isBowling ? (
+          <p className="mt-2 text-[10px] text-zinc-500">
+            Bowling mode: {formatBookingMode(o.bookingMode)}
+          </p>
+        ) : null}
       </div>
 
+      {/* Rates — horizontal scroll on mobile */}
       {o.rates.length > 0 ? (
-        <ul className="flex flex-wrap gap-1.5 border-t border-white/5 px-4 py-3">
+        <ul className="flex gap-1.5 overflow-x-auto border-t border-white/5 px-3 py-2 [-ms-overflow-style:none] [scrollbar-width:none] md:flex-wrap md:px-4 md:py-3 [&::-webkit-scrollbar]:hidden">
           {o.rates.map((r) => (
             <li
               key={r.id}
-              className="rounded-full border border-white/10 bg-white/[0.03] px-2 py-0.5 text-[10px] text-zinc-400"
+              className="shrink-0 rounded-full border border-white/10 bg-white/[0.03] px-2 py-0.5 text-[10px] text-zinc-400"
             >
               {r.label}: {formatPrice(r.price)}
               {formatGamingRateDuration(r.durationMinutes)}
@@ -196,17 +322,76 @@ function OfferingCard({
         </ul>
       ) : null}
 
+      {/* Live map — collapsed by default on phone, always visible on desktop */}
+      {supportsLayout && liveUnits.length > 0 ? (
+        <div className="border-t border-white/5 bg-black/30">
+          <button
+            type="button"
+            onClick={() => setMapOpen((v) => !v)}
+            className="flex w-full items-center justify-between px-3 py-2 text-left md:pointer-events-none md:px-4 md:pt-3"
+            aria-expanded={mapOpen}
+          >
+            <span className="text-[10px] font-medium uppercase tracking-wide text-zinc-500">
+              {layoutMapLabel(o.type, o.unitKind)}
+            </span>
+            <span className="text-zinc-500 md:hidden">
+              {mapOpen ? <ChevronUp size={14} /> : <ChevronDown size={14} />}
+            </span>
+          </button>
+
+          <div className={cn(!mapOpen && "max-md:hidden")}>
+            {isBowling ? (
+              <LaneMapPreview units={liveUnits} />
+            ) : (
+              <SeatFloorMap
+                units={liveUnits}
+                sections={layoutSections}
+                categoryLabel={o.name}
+                displayOnly
+                variant="compact"
+                pageSize={12}
+                visualType={floorVisualType}
+              />
+            )}
+          </div>
+        </div>
+      ) : null}
+
       {canWrite ? (
-        <div className="border-t border-white/5 p-3">
+        <div className="grid gap-2 border-t border-white/5 p-2.5 sm:grid-cols-2 md:p-3">
+          {supportsLayout && onEditLayout ? (
+            <button
+              type="button"
+              onClick={onEditLayout}
+              className="inline-flex items-center justify-center gap-1.5 rounded-lg border border-emerald-400/25 bg-emerald-500/10 py-2 text-[11px] text-emerald-100 hover:bg-emerald-500/20 md:text-xs"
+            >
+              <Map size={13} />
+              Layout &amp; zones
+            </button>
+          ) : null}
           <button
             type="button"
             onClick={onEdit}
-            className="w-full rounded-lg border border-white/10 py-2 text-xs text-zinc-300 hover:bg-white/5"
+            className={cn(
+              "rounded-lg border border-white/10 py-2 text-[11px] text-zinc-300 hover:bg-white/5 md:text-xs",
+              supportsLayout && onEditLayout ? "" : "sm:col-span-2",
+            )}
           >
             Edit {unitLabels.plural}, pricing &amp; photo
           </button>
         </div>
       ) : null}
     </article>
+  );
+}
+
+function LaneMapPreview({ units }: { units: ScheduleUnit[] }) {
+  return (
+    <BowlingLaneFloorMap
+      units={units}
+      displayOnly
+      showLegend={false}
+      lanesPerPage={6}
+    />
   );
 }

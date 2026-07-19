@@ -1,19 +1,119 @@
-import type { PrismaService } from "../../prisma/prisma.service";
+import type { PrismaService } from '../../prisma/prisma.service';
+import { venueDayKey } from '../../common/menu-stock.util';
 
 export type DayKey = string;
 
-export function dayKeysForRange(days: number, now = new Date()): DayKey[] {
+export type PaymentMethodBreakdownRow = {
+  method: string;
+  amount: number;
+  count: number;
+};
+
+export type DailyCloseSummary = {
+  day: string;
+  menuOrders: number;
+  playSessions: number;
+  reservations: number;
+  quickSales: number;
+  total: number;
+};
+
+export function dayKeysForRange(
+  days: number,
+  locale = 'en',
+  now = new Date(),
+): DayKey[] {
   const keys: DayKey[] = [];
   for (let i = days - 1; i >= 0; i--) {
     const d = new Date(now);
     d.setDate(d.getDate() - i);
-    keys.push(d.toISOString().slice(0, 10));
+    keys.push(venueDayKey(locale, d));
   }
   return keys;
 }
 
 export function emptyDayMap(keys: DayKey[]): Record<DayKey, number> {
   return Object.fromEntries(keys.map((k) => [k, 0]));
+}
+
+function dayBucket(locale: string, at: Date): DayKey {
+  return venueDayKey(locale, at);
+}
+
+function addPaymentBreakdown(
+  map: Map<string, PaymentMethodBreakdownRow>,
+  method: string | null | undefined,
+  amount: number,
+) {
+  if (amount <= 0) return;
+  const key = method?.trim() || 'UNKNOWN';
+  const cur = map.get(key);
+  if (cur) {
+    cur.amount += amount;
+    cur.count += 1;
+  } else {
+    map.set(key, { method: key, amount, count: 1 });
+  }
+}
+
+export async function computeRevenueSince(
+  prisma: PrismaService,
+  shopId: string,
+  since: Date,
+) {
+  const [txSales, completedOrders, billedReservations, completedPlaySessions] =
+    await Promise.all([
+      prisma.transaction.aggregate({
+        where: { shopId, kind: 'SALE', createdAt: { gte: since } },
+        _sum: { amount: true },
+      }),
+      prisma.shopOrder.findMany({
+        where: {
+          shopId,
+          status: 'COMPLETED',
+          archivedAt: null,
+          completedAt: { gte: since },
+        },
+        select: { total: true },
+      }),
+      prisma.reservation.findMany({
+        where: {
+          shopId,
+          billedAt: { gte: since },
+          billedAmount: { not: null },
+        },
+        select: {
+          billedAmount: true,
+          resourceId: true,
+        },
+      }),
+      prisma.playSession.findMany({
+        where: {
+          shopId,
+          status: 'COMPLETED',
+          archivedAt: null,
+          completedAt: { gte: since },
+          reservationId: null,
+        },
+        select: { amount: true },
+      }),
+    ]);
+
+  const orderRevenue = completedOrders.reduce(
+    (sum, order) => sum + order.total,
+    0,
+  );
+  const txRevenue = txSales._sum?.amount ?? 0;
+  const reservationRevenue = billedReservations.reduce(
+    (sum, reservation) => sum + (reservation.billedAmount ?? 0),
+    0,
+  );
+  const playRevenue = completedPlaySessions.reduce(
+    (sum, session) => sum + session.amount,
+    0,
+  );
+
+  return txRevenue + orderRevenue + reservationRevenue + playRevenue;
 }
 
 /** Merge transaction SALES + completed shop orders into top items. */
@@ -25,18 +125,18 @@ export async function aggregateTopItems(
 ) {
   const [txRows, orderLines] = await Promise.all([
     prisma.transactionLineItem.groupBy({
-      by: ["menuItemId", "name"],
+      by: ['menuItemId', 'name'],
       where: {
-        transaction: { shopId, kind: "SALE", createdAt: { gte: since } },
+        transaction: { shopId, kind: 'SALE', createdAt: { gte: since } },
       },
       _sum: { quantity: true, total: true },
     }),
     prisma.shopOrderLine.findMany({
       where: {
-        lineStatus: "ACTIVE",
+        lineStatus: 'ACTIVE',
         shopOrder: {
           shopId,
-          status: "COMPLETED",
+          status: 'COMPLETED',
           archivedAt: null,
           completedAt: { gte: since },
         },
@@ -57,7 +157,7 @@ export async function aggregateTopItems(
     revenue: number;
   };
   const key = (menuItemId: string | null, name: string) =>
-    `${menuItemId ?? "__"}|${name}`;
+    `${menuItemId ?? '__'}|${name}`;
   const map = new Map<string, Agg>();
 
   for (const r of txRows) {
@@ -99,7 +199,12 @@ export async function buildFinanceAnalytics(
 ) {
   const now = new Date();
   const since = new Date(now.getTime() - days * 86400000);
-  const keys = dayKeysForRange(days, now);
+  const shop = await prisma.shop.findUnique({
+    where: { id: shopId },
+    select: { locale: true },
+  });
+  const locale = shop?.locale ?? 'en';
+  const keys = dayKeysForRange(days, locale, now);
 
   const [
     txSales,
@@ -113,15 +218,16 @@ export async function buildFinanceAnalytics(
     completedPlaySessions,
     marketingEvents,
     completedReservationsInRange,
+    txForPaymentBreakdown,
   ] = await Promise.all([
     prisma.transaction.aggregate({
-      where: { shopId, kind: "SALE", createdAt: { gte: since } },
+      where: { shopId, kind: 'SALE', createdAt: { gte: since } },
       _sum: { amount: true },
       _count: true,
     }),
     prisma.transaction.findMany({
-      where: { shopId, kind: "SALE", createdAt: { gte: since } },
-      select: { amount: true, createdAt: true },
+      where: { shopId, kind: 'SALE', createdAt: { gte: since } },
+      select: { amount: true, createdAt: true, method: true },
     }),
     prisma.shopLoss.aggregate({
       where: { shopId, occurredAt: { gte: since } },
@@ -134,7 +240,7 @@ export async function buildFinanceAnalytics(
     prisma.shopOrder.findMany({
       where: {
         shopId,
-        status: "COMPLETED",
+        status: 'COMPLETED',
         archivedAt: null,
         completedAt: { gte: since },
       },
@@ -142,6 +248,7 @@ export async function buildFinanceAnalytics(
         total: true,
         guestCount: true,
         completedAt: true,
+        paymentMethod: true,
       },
     }),
     prisma.shopOrder.findMany({
@@ -154,24 +261,29 @@ export async function buildFinanceAnalytics(
         shopId,
         billedAt: { gte: since },
         billedAmount: { not: null },
-        resourceId: { not: null },
       },
       select: {
         billedAmount: true,
         partySize: true,
         billedAt: true,
         resourceId: true,
+        billingPaymentMethod: true,
       },
     }),
     prisma.playSession.findMany({
       where: {
         shopId,
-        status: "COMPLETED",
+        status: 'COMPLETED',
         archivedAt: null,
         completedAt: { gte: since },
         reservationId: null,
       },
-      select: { amount: true, playerCount: true, completedAt: true },
+      select: {
+        amount: true,
+        playerCount: true,
+        completedAt: true,
+        paymentMethod: true,
+      },
     }),
     prisma.analyticsEvent.findMany({
       where: { shopId, createdAt: { gte: since } },
@@ -180,10 +292,18 @@ export async function buildFinanceAnalytics(
     prisma.reservation.findMany({
       where: {
         shopId,
-        status: { in: ["COMPLETED", "CHECKED_IN"] },
+        status: { in: ['COMPLETED', 'CHECKED_IN'] },
         startsAt: { gte: since },
       },
       select: { partySize: true, startsAt: true },
+    }),
+    prisma.transaction.findMany({
+      where: {
+        shopId,
+        kind: { in: ['SALE', 'REFUND'] },
+        createdAt: { gte: since },
+      },
+      select: { amount: true, method: true, kind: true },
     }),
   ]);
 
@@ -214,21 +334,21 @@ export async function buildFinanceAnalytics(
   ) as Record<string, (typeof revenueByDay)[0]>;
 
   for (const t of txByDay) {
-    const day = t.createdAt.toISOString().slice(0, 10);
+    const day = dayBucket(locale, t.createdAt);
     if (!revMap[day]) continue;
     revMap[day].quickSales += t.amount;
     revMap[day].total += t.amount;
   }
   for (const o of completedOrders) {
     if (!o.completedAt) continue;
-    const day = o.completedAt.toISOString().slice(0, 10);
+    const day = dayBucket(locale, o.completedAt);
     if (!revMap[day]) continue;
     revMap[day].menuOrders += o.total;
     revMap[day].total += o.total;
   }
   for (const r of billedReservations) {
     if (!r.billedAt) continue;
-    const day = r.billedAt.toISOString().slice(0, 10);
+    const day = dayBucket(locale, r.billedAt);
     if (!revMap[day]) continue;
     const amt = r.billedAmount ?? 0;
     if (r.resourceId) {
@@ -240,7 +360,7 @@ export async function buildFinanceAnalytics(
   }
   for (const p of completedPlaySessions) {
     if (!p.completedAt) continue;
-    const day = p.completedAt.toISOString().slice(0, 10);
+    const day = dayBucket(locale, p.completedAt);
     if (!revMap[day]) continue;
     revMap[day].playSessions += p.amount;
     revMap[day].total += p.amount;
@@ -248,7 +368,7 @@ export async function buildFinanceAnalytics(
 
   const lossesByDay = emptyDayMap(keys);
   for (const l of lossesByDayRows) {
-    const day = l.occurredAt.toISOString().slice(0, 10);
+    const day = dayBucket(locale, l.occurredAt);
     if (day in lossesByDay) lossesByDay[day] += l.amount;
   }
 
@@ -263,10 +383,10 @@ export async function buildFinanceAnalytics(
   ) as Record<string, (typeof ordersByDay)[0]>;
 
   for (const o of allOrdersInRange) {
-    const day = o.createdAt.toISOString().slice(0, 10);
+    const day = dayBucket(locale, o.createdAt);
     if (!ordMap[day]) continue;
     ordMap[day].count += 1;
-    if (o.status === "COMPLETED") {
+    if (o.status === 'COMPLETED') {
       ordMap[day].completed += 1;
       ordMap[day].customers += o.guestCount;
     }
@@ -287,13 +407,13 @@ export async function buildFinanceAnalytics(
   let reservationClicks = 0;
   const viewsByDay = emptyDayMap(keys);
   for (const e of marketingEvents) {
-    const day = e.createdAt.toISOString().slice(0, 10);
-    if (e.type === "VENUE_VIEW" || e.type === "GALLERY_VIEW") {
+    const day = dayBucket(locale, e.createdAt);
+    if (e.type === 'VENUE_VIEW' || e.type === 'GALLERY_VIEW') {
       marketingViews += 1;
       if (day in viewsByDay) viewsByDay[day] += 1;
     }
-    if (e.type === "MENU_VIEW") menuViews += 1;
-    if (e.type === "RESERVATION_CLICK") reservationClicks += 1;
+    if (e.type === 'MENU_VIEW') menuViews += 1;
+    if (e.type === 'RESERVATION_CLICK') reservationClicks += 1;
   }
 
   const audienceByDay = keys.map((day) => ({
@@ -307,20 +427,53 @@ export async function buildFinanceAnalytics(
     audienceByDay.map((r) => [r.day, r]),
   ) as Record<string, (typeof audienceByDay)[0]>;
 
-  for (const o of allOrdersInRange) {
-    if (o.status !== "COMPLETED") continue;
-    const day = o.createdAt.toISOString().slice(0, 10);
+  for (const o of completedOrders) {
+    if (!o.completedAt) continue;
+    const day = dayBucket(locale, o.completedAt);
     if (audMap[day]) audMap[day].menuCovers += o.guestCount;
   }
   for (const r of completedReservationsInRange) {
-    const day = r.startsAt.toISOString().slice(0, 10);
+    const day = dayBucket(locale, r.startsAt);
     if (audMap[day]) audMap[day].reservationGuests += r.partySize;
   }
   for (const p of completedPlaySessions) {
     if (!p.completedAt) continue;
-    const day = p.completedAt.toISOString().slice(0, 10);
+    const day = dayBucket(locale, p.completedAt);
     if (audMap[day]) audMap[day].playPlayers += p.playerCount;
   }
+
+  const paymentMap = new Map<string, PaymentMethodBreakdownRow>();
+  for (const t of txForPaymentBreakdown) {
+    const signed = t.kind === 'REFUND' ? -t.amount : t.amount;
+    addPaymentBreakdown(paymentMap, t.method, signed);
+  }
+  for (const o of completedOrders) {
+    addPaymentBreakdown(paymentMap, o.paymentMethod, o.total);
+  }
+  for (const r of billedReservations) {
+    addPaymentBreakdown(
+      paymentMap,
+      r.billingPaymentMethod,
+      r.billedAmount ?? 0,
+    );
+  }
+  for (const p of completedPlaySessions) {
+    addPaymentBreakdown(paymentMap, p.paymentMethod, p.amount);
+  }
+  const paymentMethodBreakdown = [...paymentMap.values()]
+    .filter((row) => row.amount !== 0)
+    .sort((a, b) => b.amount - a.amount);
+
+  const closeDay = keys[keys.length - 1] ?? venueDayKey(locale, now);
+  const closeRow = revMap[closeDay];
+  const dailyClose: DailyCloseSummary = {
+    day: closeDay,
+    menuOrders: closeRow?.menuOrders ?? 0,
+    playSessions: closeRow?.playSessions ?? 0,
+    reservations: closeRow?.reservations ?? 0,
+    quickSales: closeRow?.quickSales ?? 0,
+    total: closeRow?.total ?? 0,
+  };
 
   return {
     days,
@@ -354,5 +507,7 @@ export async function buildFinanceAnalytics(
     ordersByDay,
     audienceByDay,
     topItems,
+    paymentMethodBreakdown,
+    dailyClose,
   };
 }

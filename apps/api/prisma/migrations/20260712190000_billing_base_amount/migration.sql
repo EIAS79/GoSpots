@@ -1,0 +1,1 @@
+ALTER TABLE "Reservation" ADD COLUMN IF NOT EXISTS "billingBaseAmount" DOUBLE PRECISION;

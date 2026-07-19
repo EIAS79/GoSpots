@@ -8,9 +8,9 @@ import {
   MaxLength,
   Min,
   ValidateNested,
-} from "class-validator";
-import { Type } from "class-transformer";
-import { PaymentMethod, TransactionKind } from "@prisma/client";
+} from 'class-validator';
+import { Type } from 'class-transformer';
+import { PaymentMethod, TransactionKind } from '@prisma/client';
 
 export class LineItemDto {
   @IsOptional()

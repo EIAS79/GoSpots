@@ -7,21 +7,21 @@ import {
   Patch,
   Post,
   UseGuards,
-} from "@nestjs/common";
-import { ApiTags } from "@nestjs/swagger";
-import { PERMISSIONS } from "../../common/permissions";
-import { CurrentUser } from "../auth/decorators/current-user.decorator";
-import { RequirePermissions } from "../auth/decorators/roles.decorator";
-import { JwtAuthGuard } from "../auth/guards/jwt-auth.guard";
-import type { JwtAccessPayload } from "../auth/auth.service";
+} from '@nestjs/common';
+import { ApiTags } from '@nestjs/swagger';
+import { PERMISSIONS } from '../../common/permissions';
+import { CurrentUser } from '../auth/decorators/current-user.decorator';
+import { RequirePermissions } from '../auth/decorators/roles.decorator';
+import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
+import type { JwtAccessPayload } from '../auth/auth.service';
 import {
   CreateSeatingTableGroupDto,
   UpdateSeatingTableGroupDto,
-} from "./dto/seating-tables.dto";
-import { SeatingTablesService } from "./seating-tables.service";
+} from './dto/seating-tables.dto';
+import { SeatingTablesService } from './seating-tables.service';
 
-@ApiTags("seating-tables")
-@Controller("seating-tables")
+@ApiTags('seating-tables')
+@Controller('seating-tables')
 @UseGuards(JwtAuthGuard)
 export class SeatingTablesController {
   constructor(private readonly seating: SeatingTablesService) {}
@@ -41,19 +41,19 @@ export class SeatingTablesController {
     return this.seating.create(user, dto);
   }
 
-  @Patch(":id")
+  @Patch(':id')
   @RequirePermissions(PERMISSIONS.RESERVATION_WRITE)
   update(
     @CurrentUser() user: JwtAccessPayload,
-    @Param("id") id: string,
+    @Param('id') id: string,
     @Body() dto: UpdateSeatingTableGroupDto,
   ) {
     return this.seating.update(user, id, dto);
   }
 
-  @Delete(":id")
+  @Delete(':id')
   @RequirePermissions(PERMISSIONS.RESERVATION_WRITE)
-  delete(@CurrentUser() user: JwtAccessPayload, @Param("id") id: string) {
+  delete(@CurrentUser() user: JwtAccessPayload, @Param('id') id: string) {
     return this.seating.delete(user, id);
   }
 }

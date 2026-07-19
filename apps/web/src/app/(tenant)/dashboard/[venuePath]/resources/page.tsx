@@ -2,6 +2,7 @@
 
 import { Loader2 } from "lucide-react";
 import { useCallback, useEffect, useState } from "react";
+import { GamingLayoutEditor } from "@/components/gaming/gaming-layout-editor";
 import { GamingMenuPanel } from "@/components/gaming/gaming-menu-panel";
 import { GamingOfferingEditor } from "@/components/gaming/gaming-offering-editor";
 import { FeatureGate } from "@/components/subscription/feature-gate";
@@ -12,6 +13,7 @@ import {
   type GamingMenuResponse,
   type GamingOffering,
 } from "@/lib/gaming-menu-client";
+import { fetchDaySchedule, type DaySchedule } from "@/lib/reservations-client";
 import type { ResourceType } from "@/lib/resource-types";
 import {
   createResourceCategory,
@@ -19,20 +21,24 @@ import {
   updateResourceCategory,
   uploadResourceCategoryImage,
 } from "@/lib/resources-client";
-import {
-  isFeatureUnlocked,
-  resolveEffectiveTier,
-  type SubscriptionTier,
-} from "@/lib/plan";
+import { isFeatureUnlocked } from "@/lib/plan";
+import { showsGamingUi } from "@/lib/venue-packs";
 import { useAuth } from "@/lib/use-auth";
+import { useCurrentMembership } from "@/lib/use-current-membership";
+import { useLiveData } from "@/lib/use-live-data";
+import { useVenueAccess } from "@/lib/use-venue-access";
 import { useVenueSettings } from "@/lib/venue-settings-context";
+
+function todayDateInput() {
+  return new Date().toISOString().slice(0, 10);
+}
 
 const GUIDE = {
   title: "Gaming",
   description:
     "Your venue’s game menu — only add what you offer. Set seats, tables, or lanes, specs, pricing, and photos. Reservations reduce live availability.",
   capabilities: [
-    "PC & PlayStation: count seats, list GPU/console specs.",
+    "PC & PlayStation: cinema-style live seat map by zone and floor — green free, red busy, gray out of service.",
     "Billiard: tables · Bowling: lanes — each with its own photo.",
     "Price per hour, 30 min, or custom tiers.",
     "Live stock: bookings subtract from free seats/tables/lanes.",
@@ -42,7 +48,9 @@ const GUIDE = {
 export default function ResourcesPage() {
   const { state } = useAuth();
   const { formatMoney } = useVenueSettings();
+  const access = useVenueAccess();
   const [menu, setMenu] = useState<GamingMenuResponse | null>(null);
+  const [schedule, setSchedule] = useState<DaySchedule | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
@@ -51,45 +59,45 @@ export default function ResourcesPage() {
     offering?: GamingOffering;
     initialType?: ResourceType;
   } | null>(null);
+  const [layoutEditor, setLayoutEditor] = useState<GamingOffering | null>(null);
 
-  const membership =
-    state.status === "authed" ? state.user.memberships[0] : null;
+  const membership = useCurrentMembership();
   const canWrite =
     state.status === "authed" &&
     (membership?.role === "OWNER" ||
-      membership?.role === "MANAGER" ||
       hasPermission(membership?.permissions ?? "", "resource.write"));
 
-  const tier = resolveEffectiveTier(
-    membership?.shop.subscription
-      ? {
-          tier: membership.shop.subscription.tier as SubscriptionTier,
-          status: membership.shop.subscription.status as
-            | "TRIAL"
-            | "ACTIVE"
-            | "PAST_DUE"
-            | "CANCELED",
-          trialEndsAt: membership.shop.subscription.trialEndsAt,
-        }
-      : null,
-  );
-  const unlocked = isFeatureUnlocked(tier, "resource");
+  const unlocked =
+    isFeatureUnlocked(access.enabledModules, "resource") &&
+    showsGamingUi(access.packId, access.addOns);
 
-  const load = useCallback(async () => {
-    setLoading(true);
+  const load = useCallback(async (opts: { silent?: boolean } = {}) => {
+    if (!opts.silent) setLoading(true);
     setError(null);
     try {
-      setMenu(await fetchGamingMenu());
+      const [menuData, scheduleData] = await Promise.all([
+        fetchGamingMenu(),
+        fetchDaySchedule(todayDateInput()),
+      ]);
+      setMenu(menuData);
+      setSchedule(scheduleData);
     } catch (e) {
-      setError(e instanceof Error ? e.message : "Failed to load gaming menu.");
+      if (!opts.silent) {
+        setError(e instanceof Error ? e.message : "Failed to load gaming menu.");
+      }
     } finally {
-      setLoading(false);
+      if (!opts.silent) setLoading(false);
     }
   }, []);
 
   useEffect(() => {
     void load();
   }, [load]);
+
+  useLiveData(() => load({ silent: true }), [], {
+    intervalMs: 15_000,
+    refreshOnSections: ["reservation"],
+  });
 
   return (
     <TenantPage
@@ -107,9 +115,11 @@ export default function ResourcesPage() {
         ) : menu ? (
           <GamingMenuPanel
             menu={menu}
+            schedule={schedule}
             formatPrice={formatMoney}
             canWrite={canWrite && unlocked}
             onEdit={(o) => setEditor({ offering: o })}
+            onEditLayout={(o) => setLayoutEditor(o)}
             onAddType={(type) => setEditor({ initialType: type })}
           />
         ) : null}
@@ -129,6 +139,9 @@ export default function ResourcesPage() {
                   name: body.name,
                   description: body.description,
                   slotMinutes: body.slotMinutes,
+                  bookingMode: body.bookingMode,
+                  playstationGames: body.playstationGames,
+                  offeringConfig: body.offeringConfig ?? null,
                   totalUnits: body.totalUnits,
                   rates: body.rates,
                 });
@@ -145,6 +158,9 @@ export default function ResourcesPage() {
                   name: body.name,
                   description: body.description ?? undefined,
                   slotMinutes: body.slotMinutes,
+                  bookingMode: body.bookingMode,
+                  playstationGames: body.playstationGames,
+                  offeringConfig: body.offeringConfig,
                   unitCount: body.totalUnits,
                   rates: body.rates,
                 });
@@ -183,10 +199,10 @@ export default function ResourcesPage() {
           }
           onUploadImage={
             editor.offering
-              ? async (file) => {
+              ? async (slot, file) => {
                   const cat = await uploadResourceCategoryImage(
                     editor.offering!.id,
-                    "1",
+                    slot,
                     file,
                   );
                   setEditor((prev) =>
@@ -195,16 +211,26 @@ export default function ResourcesPage() {
                           ...prev,
                           offering: {
                             ...prev.offering,
-                            imageUrl: cat.imageUrl,
+                            ...(slot === "1"
+                              ? { imageUrl: cat.imageUrl }
+                              : { imageUrl2: cat.imageUrl2 }),
                           },
                         }
                       : prev,
                   );
                   await load();
-                  return cat.imageUrl;
+                  return slot === "1" ? cat.imageUrl : cat.imageUrl2;
                 }
               : undefined
           }
+        />
+      ) : null}
+
+      {layoutEditor && canWrite && unlocked ? (
+        <GamingLayoutEditor
+          offering={layoutEditor}
+          onClose={() => setLayoutEditor(null)}
+          onSaved={() => load({ silent: true })}
         />
       ) : null}
     </TenantPage>

@@ -25,14 +25,11 @@ describe('AppController (e2e)', () => {
   });
 
   it('/api/v1 (GET)', () => {
-    return request(app.getHttpServer())
-      .get('/api/v1')
-      .expect(200)
-      .expect({
-        name: 'GoSpots API',
-        version: '1.0.0',
-        docs: '/docs',
-      });
+    return request(app.getHttpServer()).get('/api/v1').expect(200).expect({
+      name: 'GoSpots API',
+      version: '1.0.0',
+      docs: '/docs',
+    });
   });
 
   it('/api/v1/health (GET)', () => {

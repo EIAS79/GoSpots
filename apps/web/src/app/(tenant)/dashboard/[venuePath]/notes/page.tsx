@@ -1,0 +1,396 @@
+"use client";
+
+import {
+  Archive,
+  Loader2,
+  Plus,
+  StickyNote,
+  X,
+} from "lucide-react";
+import { useCallback, useEffect, useMemo, useState } from "react";
+import { FeatureGate } from "@/components/subscription/feature-gate";
+import { TenantPage } from "@/components/layout/tenant-page";
+import { cn } from "@/lib/cn";
+import { hasPermission } from "@/lib/auth-client";
+import { DASHBOARD_SECTION_GUIDES } from "@/lib/dashboard-section-guides";
+import {
+  archiveNote,
+  createNote,
+  fetchNotes,
+  type NoteImportance,
+  type ShopNote,
+} from "@/lib/notes-client";
+import { isFeatureUnlocked } from "@/lib/plan";
+import { useAuth } from "@/lib/use-auth";
+import { useCurrentMembership } from "@/lib/use-current-membership";
+import { useVenueAccess } from "@/lib/use-venue-access";
+
+const GUIDE = DASHBOARD_SECTION_GUIDES.notes;
+
+const IMPORTANCE_OPTIONS: {
+  id: NoteImportance;
+  label: string;
+  hint: string;
+}[] = [
+  { id: "INFO", label: "Info", hint: "FYI only" },
+  { id: "NORMAL", label: "Normal", hint: "Standard handoff" },
+  { id: "IMPORTANT", label: "Important", hint: "Read before starting" },
+  { id: "URGENT", label: "Urgent", hint: "Act on this first" },
+];
+
+function importanceStyle(level: NoteImportance) {
+  switch (level) {
+    case "URGENT":
+      return "border-rose-400/40 bg-rose-500/15 text-rose-100";
+    case "IMPORTANT":
+      return "border-amber-400/40 bg-amber-500/15 text-amber-100";
+    case "INFO":
+      return "border-sky-400/35 bg-sky-500/10 text-sky-100";
+    default:
+      return "border-emerald-400/35 bg-emerald-500/10 text-emerald-100";
+  }
+}
+
+function toLocalInputValue(iso?: string) {
+  const d = iso ? new Date(iso) : new Date();
+  if (Number.isNaN(d.getTime())) return "";
+  const pad = (n: number) => String(n).padStart(2, "0");
+  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
+}
+
+function formatWhen(iso: string) {
+  const d = new Date(iso);
+  return d.toLocaleString(undefined, {
+    weekday: "short",
+    month: "short",
+    day: "numeric",
+    hour: "2-digit",
+    minute: "2-digit",
+  });
+}
+
+function defaultStaffName(user: {
+  name: string | null;
+  staffHandle?: string | null;
+  email: string;
+} | null) {
+  if (!user) return "";
+  return (
+    user.name?.trim() ||
+    user.staffHandle?.trim() ||
+    user.email.split("@")[0] ||
+    ""
+  );
+}
+
+function NotesContent() {
+  const { state } = useAuth();
+  const membership = useCurrentMembership();
+  const perms = membership?.permissions ?? "";
+  const isOwner = membership?.role === "OWNER";
+  const canWriteAuth =
+    isOwner || hasPermission(perms, "notes.write");
+  const canView =
+    isOwner ||
+    hasPermission(perms, "notes.read") ||
+    hasPermission(perms, "notes.write");
+  const authedUser = state.status === "authed" ? state.user : null;
+
+  const [notes, setNotes] = useState<ShopNote[]>([]);
+  const [canWrite, setCanWrite] = useState(canWriteAuth);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+  const [showForm, setShowForm] = useState(false);
+  const [saving, setSaving] = useState(false);
+
+  const [authorName, setAuthorName] = useState("");
+  const [title, setTitle] = useState("");
+  const [body, setBody] = useState("");
+  const [importance, setImportance] = useState<NoteImportance>("NORMAL");
+  const [relevantAt, setRelevantAt] = useState(toLocalInputValue());
+
+  const load = useCallback(async () => {
+    setLoading(true);
+    setError(null);
+    try {
+      const data = await fetchNotes(false);
+      setNotes(data.notes);
+      setCanWrite(data.canWrite);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Failed to load notes.");
+    } finally {
+      setLoading(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    if (canView) void load();
+    else setLoading(false);
+  }, [canView, load]);
+
+  const sorted = useMemo(() => {
+    const rank: Record<NoteImportance, number> = {
+      URGENT: 0,
+      IMPORTANT: 1,
+      NORMAL: 2,
+      INFO: 3,
+    };
+    return [...notes].sort((a, b) => {
+      const byImp = rank[a.importance] - rank[b.importance];
+      if (byImp !== 0) return byImp;
+      return new Date(b.relevantAt).getTime() - new Date(a.relevantAt).getTime();
+    });
+  }, [notes]);
+
+  async function onCreate(e: React.FormEvent) {
+    e.preventDefault();
+    if (!title.trim() || !body.trim() || !authorName.trim()) return;
+    setSaving(true);
+    setError(null);
+    try {
+      await createNote({
+        title: title.trim(),
+        body: body.trim(),
+        importance,
+        relevantAt: new Date(relevantAt).toISOString(),
+        authorName: authorName.trim(),
+      });
+      setAuthorName(defaultStaffName(authedUser));
+      setTitle("");
+      setBody("");
+      setImportance("NORMAL");
+      setRelevantAt(toLocalInputValue());
+      setShowForm(false);
+      await load();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Could not save note.");
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  async function onArchive(id: string) {
+    setError(null);
+    try {
+      await archiveNote(id);
+      await load();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Could not archive note.");
+    }
+  }
+
+  if (!canView) {
+    return (
+      <TenantPage title={GUIDE.title} description={GUIDE.description}>
+        <p className="text-sm text-zinc-400">
+          You do not have permission to view shift notes.
+        </p>
+      </TenantPage>
+    );
+  }
+
+  return (
+    <TenantPage
+      title={GUIDE.title}
+      description={GUIDE.description}
+      capabilities={GUIDE.capabilities}
+      actions={
+        canWrite ? (
+          <button
+            type="button"
+            onClick={() =>
+              setShowForm((v) => {
+                if (!v) setAuthorName(defaultStaffName(authedUser));
+                return !v;
+              })
+            }
+            className="inline-flex items-center gap-1.5 rounded-lg bg-emerald-600 px-3 py-1.5 text-sm text-white hover:bg-emerald-500"
+          >
+            {showForm ? <X size={14} /> : <Plus size={14} />}
+            {showForm ? "Cancel" : "New note"}
+          </button>
+        ) : null
+      }
+    >
+      {error ? (
+        <p className="mb-4 rounded-lg border border-rose-500/30 bg-rose-500/10 px-3 py-2 text-sm text-rose-200">
+          {error}
+        </p>
+      ) : null}
+
+      {showForm && canWrite ? (
+        <form
+          onSubmit={onCreate}
+          className="mb-6 space-y-4 rounded-xl border border-emerald-400/25 bg-emerald-500/5 p-5"
+        >
+          <div className="flex items-center gap-2 text-sm font-medium text-emerald-200">
+            <StickyNote size={16} />
+            New shift note
+          </div>
+
+          <label className="block text-xs text-zinc-500">
+            Staff name
+            <input
+              required
+              value={authorName}
+              onChange={(e) => setAuthorName(e.target.value)}
+              placeholder="Enter your name"
+              maxLength={80}
+              className="mt-1 w-full rounded-lg border border-white/10 bg-zinc-950 px-3 py-2 text-sm text-white outline-none focus:border-emerald-400/40"
+            />
+          </label>
+
+          <label className="block text-xs text-zinc-500">
+            Title
+            <input
+              required
+              value={title}
+              onChange={(e) => setTitle(e.target.value)}
+              placeholder="e.g. Fridge restocked — check evening stock"
+              maxLength={160}
+              className="mt-1 w-full rounded-lg border border-white/10 bg-zinc-950 px-3 py-2 text-sm text-white outline-none focus:border-emerald-400/40"
+            />
+          </label>
+
+          <label className="block text-xs text-zinc-500">
+            Description
+            <textarea
+              required
+              value={body}
+              onChange={(e) => setBody(e.target.value)}
+              rows={4}
+              maxLength={4000}
+              placeholder="What should the next shift know?"
+              className="mt-1 w-full resize-y rounded-lg border border-white/10 bg-zinc-950 px-3 py-2 text-sm text-white outline-none focus:border-emerald-400/40"
+            />
+          </label>
+
+          <div className="grid gap-4 sm:grid-cols-2">
+            <label className="block text-xs text-zinc-500">
+              Shift day & time
+              <input
+                type="datetime-local"
+                required
+                value={relevantAt}
+                onChange={(e) => setRelevantAt(e.target.value)}
+                className="mt-1 w-full rounded-lg border border-white/10 bg-zinc-950 px-3 py-2 text-sm text-white outline-none focus:border-emerald-400/40"
+              />
+            </label>
+            <div>
+              <p className="text-xs text-zinc-500">Importance</p>
+              <div className="mt-1 flex flex-wrap gap-1.5">
+                {IMPORTANCE_OPTIONS.map((opt) => (
+                  <button
+                    key={opt.id}
+                    type="button"
+                    title={opt.hint}
+                    onClick={() => setImportance(opt.id)}
+                    className={cn(
+                      "rounded-lg border px-2.5 py-1.5 text-xs transition",
+                      importance === opt.id
+                        ? importanceStyle(opt.id)
+                        : "border-white/10 text-zinc-400 hover:border-white/20 hover:text-zinc-200",
+                    )}
+                  >
+                    {opt.label}
+                  </button>
+                ))}
+              </div>
+            </div>
+          </div>
+
+          <button
+            type="submit"
+            disabled={saving}
+            className="rounded-lg bg-emerald-600 px-4 py-2 text-sm font-medium text-white disabled:opacity-50"
+          >
+            {saving ? "Posting…" : "Post note"}
+          </button>
+        </form>
+      ) : null}
+
+      {loading ? (
+        <Loader2 className="h-6 w-6 animate-spin text-emerald-400" />
+      ) : sorted.length === 0 ? (
+        <p className="rounded-xl border border-dashed border-white/15 px-6 py-12 text-center text-sm text-zinc-500">
+          No active notes yet. Leave a handoff for the next shift.
+        </p>
+      ) : (
+        <ul className="space-y-3">
+          {sorted.map((note) => (
+            <li
+              key={note.id}
+              className={cn(
+                "rounded-xl border px-4 py-4",
+                note.importance === "URGENT"
+                  ? "border-rose-400/30 bg-rose-500/[0.06]"
+                  : note.importance === "IMPORTANT"
+                    ? "border-amber-400/25 bg-amber-500/[0.05]"
+                    : "border-white/10 bg-zinc-950/50",
+              )}
+            >
+              <div className="flex flex-wrap items-start justify-between gap-3">
+                <div className="min-w-0 flex-1">
+                  <div className="flex flex-wrap items-center gap-2">
+                    <span
+                      className={cn(
+                        "rounded-full border px-2 py-0.5 text-[10px] font-medium uppercase tracking-wide",
+                        importanceStyle(note.importance),
+                      )}
+                    >
+                      {IMPORTANCE_OPTIONS.find((o) => o.id === note.importance)
+                        ?.label ?? note.importance}
+                    </span>
+                    <h3 className="text-sm font-semibold text-white">
+                      {note.title}
+                    </h3>
+                  </div>
+                  <p className="mt-2 whitespace-pre-wrap text-sm leading-relaxed text-zinc-300">
+                    {note.body}
+                  </p>
+                  <p className="mt-3 text-[11px] text-zinc-500">
+                    For{" "}
+                    <span className="text-zinc-300">
+                      {formatWhen(note.relevantAt)}
+                    </span>
+                    {" · "}
+                    by{" "}
+                    <span className="text-zinc-300">{note.authorName}</span>
+                    <span className="text-zinc-600">
+                      {" "}
+                      ({note.authorRole})
+                    </span>
+                    {" · "}
+                    posted {formatWhen(note.createdAt)}
+                  </p>
+                </div>
+                {canWrite ? (
+                  <button
+                    type="button"
+                    onClick={() => void onArchive(note.id)}
+                    className="inline-flex items-center gap-1 rounded-lg border border-white/10 px-2.5 py-1.5 text-[11px] text-zinc-400 hover:border-white/20 hover:text-zinc-200"
+                    title="Archive note"
+                  >
+                    <Archive size={12} />
+                    Done
+                  </button>
+                ) : null}
+              </div>
+            </li>
+          ))}
+        </ul>
+      )}
+    </TenantPage>
+  );
+}
+
+export default function NotesPage() {
+  const access = useVenueAccess();
+  const unlocked = isFeatureUnlocked(access.enabledModules, "notes");
+
+  return (
+    <FeatureGate feature="notes" unlocked={unlocked} title="Shift notes">
+      <NotesContent />
+    </FeatureGate>
+  );
+}

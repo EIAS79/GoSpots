@@ -1,4 +1,5 @@
-import { API_BASE_URL, ApiError, api } from "./api";
+import { ApiError, api } from "./api";
+import { getApiBaseUrl } from "./api-base-url";
 import { getVenuePathHeaders } from "./venue-api-headers";
 import type { MealPeriod } from "./menu-periods";
 
@@ -16,6 +17,7 @@ export type ShopTag = {
 export type MenuSection = {
   id: string;
   name: string;
+  imageUrl: string | null;
   sortOrder: number;
   mealPeriod: MealPeriod | null;
   availableFrom: string | null;
@@ -77,6 +79,7 @@ export function updateSection(
     availableFrom: string | null;
     availableTo: string | null;
     availableDays: string;
+    imageUrl: string | null;
   }>,
 ) {
   return api<MenuSection>(`/menu/sections/${id}`, {
@@ -144,22 +147,24 @@ export function deleteMenuItem(id: string) {
   return api(`/menu/items/${id}`, { method: "DELETE" });
 }
 
-export async function uploadMenuItemImage(
-  itemId: string,
-  slot: "1" | "2",
-  file: File,
-): Promise<MenuItem> {
+async function uploadMenuFile<T>(path: string, file: File): Promise<T> {
   const form = new FormData();
   form.append("file", file);
-  const res = await fetch(
-    `${API_BASE_URL}/menu/items/${itemId}/images/${slot}`,
-    {
+  const base = getApiBaseUrl();
+  let res: Response;
+  try {
+    res = await fetch(`${base}${path}`, {
       method: "POST",
       credentials: "include",
       headers: getVenuePathHeaders(),
       body: form,
-    },
-  );
+    });
+  } catch {
+    throw new ApiError(
+      `Cannot reach the API at ${base}. Is the backend running? Try: pnpm dev`,
+      0,
+    );
+  }
   if (!res.ok) {
     let body: unknown = null;
     try {
@@ -175,5 +180,26 @@ export async function uploadMenuItemImage(
       `Upload failed: ${res.status}`;
     throw new ApiError(message, res.status, body);
   }
-  return res.json() as Promise<MenuItem>;
+  return res.json() as Promise<T>;
+}
+
+export async function uploadMenuItemImage(
+  itemId: string,
+  slot: "1" | "2",
+  file: File,
+): Promise<MenuItem> {
+  return uploadMenuFile<MenuItem>(
+    `/menu/items/${itemId}/images/${slot}`,
+    file,
+  );
+}
+
+export async function uploadSectionImage(
+  sectionId: string,
+  file: File,
+): Promise<MenuSection> {
+  return uploadMenuFile<MenuSection>(
+    `/menu/sections/${sectionId}/image`,
+    file,
+  );
 }

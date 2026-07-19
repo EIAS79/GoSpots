@@ -1,72 +1,80 @@
-import { SubscriptionStatus, SubscriptionTier } from "@prisma/client";
+import { SubscriptionStatus, SubscriptionTier } from '@prisma/client';
+import {
+  legacyModulesFromTier,
+  modulesForPackAndAddOns,
+  TRIAL_DURATION_DAYS as PACK_TRIAL_DAYS,
+  type ModuleKey,
+  type VenuePackId,
+} from './venue-packs';
+
+export { TRIAL_DURATION_DAYS } from './venue-packs';
+export const TRIAL_DURATION_DAYS_PACK = PACK_TRIAL_DAYS;
+
+/** Free trial employee seat cap (no purchase required during trial). */
+export const TRIAL_STAFF_SEAT_LIMIT = 3;
 
 /** All feature keys referenced in the dashboard UI */
 export const ALL_FEATURE_KEYS = [
-  "menu",
-  "resource",
-  "reservation",
-  "transaction",
-  "gallery",
-  "hours",
-  "bar",
-  "reports",
-  "roles",
-  "memberships",
-  "multi_shop",
-  "integrations",
+  'menu',
+  'resource',
+  'reservation',
+  'transaction',
+  'gallery',
+  'hours',
+  'notes',
+  'bar',
+  'reports',
+  'roles',
+  'memberships',
+  'multi_shop',
+  'integrations',
+  'audit',
+  'notifications',
+  'reviews',
+  'messaging',
+  'marketing',
 ] as const;
 
 export type FeatureKey = (typeof ALL_FEATURE_KEYS)[number];
 
+/** @deprecated Prefer pack/module access — kept for marketing + seat fallbacks */
 export const FEATURE_MATRIX: Record<SubscriptionTier, Set<string>> = {
   FREE: new Set(),
   STARTER: new Set([
-    "menu",
-    "resource",
-    "reservation",
-    "transaction",
-    "gallery",
-    "hours",
+    'menu',
+    'resource',
+    'reservation',
+    'transaction',
+    'gallery',
+    'hours',
+    'notes',
   ]),
   STANDARD: new Set([
-    "menu",
-    "resource",
-    "reservation",
-    "transaction",
-    "gallery",
-    "hours",
-    "bar",
-    "reports",
+    'menu',
+    'resource',
+    'reservation',
+    'transaction',
+    'gallery',
+    'hours',
+    'notes',
+    'bar',
+    'reports',
   ]),
   PRO: new Set([
-    "menu",
-    "resource",
-    "reservation",
-    "transaction",
-    "gallery",
-    "hours",
-    "bar",
-    "reports",
-    "memberships",
-    "roles",
+    'menu',
+    'resource',
+    'reservation',
+    'transaction',
+    'gallery',
+    'hours',
+    'notes',
+    'bar',
+    'reports',
+    'memberships',
+    'roles',
   ]),
-  ENTERPRISE: new Set([
-    "menu",
-    "resource",
-    "reservation",
-    "transaction",
-    "gallery",
-    "hours",
-    "bar",
-    "reports",
-    "memberships",
-    "roles",
-    "multi_shop",
-    "integrations",
-  ]),
+  ENTERPRISE: new Set([...ALL_FEATURE_KEYS]),
 };
-
-export const TRIAL_DURATION_DAYS = 7;
 
 export const STAFF_SEAT_LIMITS: Record<SubscriptionTier, number> = {
   FREE: 0,
@@ -80,7 +88,43 @@ export function staffSeatLimit(tier: SubscriptionTier): number {
   return STAFF_SEAT_LIMITS[tier];
 }
 
-export function tierHasFeature(tier: SubscriptionTier, feature: string): boolean {
+export function staffSeatLimitFromModules(modules: Set<string>): number {
+  if (!modules.has('roles')) return 0;
+  if (modules.has('multi_shop')) return 20;
+  return 5;
+}
+
+/** Purchased employee seats — source of truth for paid create limits. */
+export function staffSeatLimitFromQuantity(
+  quantity: number | null | undefined,
+): number {
+  return Math.max(0, Math.floor(quantity ?? 0));
+}
+
+type SeatSubRow = {
+  tier: SubscriptionTier;
+  status: SubscriptionStatus;
+  trialEndsAt: Date | null;
+  packId?: string | null;
+  addOns?: string | null;
+  staffSeatQuantity?: number | null;
+} | null;
+
+/**
+ * Trial: up to 3 seats when Team accounts is enabled.
+ * Paid: purchased quantity. Locked / expired: 0 (modules already empty).
+ */
+export function resolveStaffSeatLimit(subscription: SeatSubRow): number {
+  const access = resolveSubscriptionAccess(subscription);
+  if (!moduleHasFeature(access.enabledModules, 'roles')) return 0;
+  if (access.trialActive) return TRIAL_STAFF_SEAT_LIMIT;
+  return staffSeatLimitFromQuantity(subscription?.staffSeatQuantity);
+}
+
+export function tierHasFeature(
+  tier: SubscriptionTier,
+  feature: string,
+): boolean {
   return FEATURE_MATRIX[tier].has(feature);
 }
 
@@ -88,6 +132,8 @@ type SubRow = {
   tier: SubscriptionTier;
   status: SubscriptionStatus;
   trialEndsAt: Date | null;
+  packId?: string | null;
+  addOns?: string | null;
 } | null;
 
 export type SubscriptionAccess = {
@@ -97,10 +143,32 @@ export type SubscriptionAccess = {
   trialExpired: boolean;
   trialEndsAt: Date | null;
   trialDaysRemaining: number;
+  packId: VenuePackId | null;
+  addOns: string;
+  enabledModules: Set<ModuleKey>;
 };
 
 function trialExpiredAt(trialEndsAt: Date | null): boolean {
   return !!trialEndsAt && trialEndsAt.getTime() < Date.now();
+}
+
+function syntheticTierFromModules(modules: Set<string>): SubscriptionTier {
+  if (modules.has('multi_shop') || modules.has('integrations')) {
+    return SubscriptionTier.ENTERPRISE;
+  }
+  if (modules.has('roles')) return SubscriptionTier.PRO;
+  if (modules.has('reports')) return SubscriptionTier.STANDARD;
+  if (modules.size > 0) return SubscriptionTier.STARTER;
+  return SubscriptionTier.FREE;
+}
+
+function resolveModules(subscription: NonNullable<SubRow>): Set<ModuleKey> {
+  const hasPack =
+    !!subscription.packId && subscription.packId.trim().length > 0;
+  if (hasPack) {
+    return modulesForPackAndAddOns(subscription.packId, subscription.addOns);
+  }
+  return legacyModulesFromTier(subscription.tier) as Set<ModuleKey>;
 }
 
 export function resolveSubscriptionAccess(
@@ -113,6 +181,9 @@ export function resolveSubscriptionAccess(
     trialExpired: false,
     trialEndsAt: null,
     trialDaysRemaining: 0,
+    packId: null,
+    addOns: '',
+    enabledModules: new Set(),
   };
 
   if (!subscription) return empty;
@@ -132,74 +203,86 @@ export function resolveSubscriptionAccess(
         )
       : 0;
 
-  const base = {
+  const locked =
+    status === SubscriptionStatus.CANCELED ||
+    status === SubscriptionStatus.PAST_DUE ||
+    (status === SubscriptionStatus.TRIAL && !!trialEndsAt && expired);
+
+  // Trial + paid ACTIVE: visibility follows saved features (never wipe data).
+  // Expired trial / past_due / canceled: all modules off until they pay.
+  const modules = locked
+    ? new Set<ModuleKey>()
+    : resolveModules(subscription);
+  const effectiveTier = locked
+    ? SubscriptionTier.FREE
+    : syntheticTierFromModules(modules);
+
+  return {
     billedTier: tier,
+    effectiveTier,
     trialEndsAt,
     trialActive: activeTrial,
     trialExpired:
       status === SubscriptionStatus.TRIAL && !!trialEndsAt && expired,
     trialDaysRemaining: daysRemaining,
+    packId: (subscription.packId as VenuePackId) ?? null,
+    addOns: subscription.addOns ?? '',
+    enabledModules: modules,
   };
-
-  if (
-    status === SubscriptionStatus.CANCELED ||
-    status === SubscriptionStatus.PAST_DUE
-  ) {
-    return { ...base, effectiveTier: SubscriptionTier.FREE };
-  }
-
-  if (base.trialExpired) {
-    return { ...base, effectiveTier: SubscriptionTier.FREE };
-  }
-
-  if (activeTrial || status === SubscriptionStatus.ACTIVE) {
-    return { ...base, effectiveTier: tier };
-  }
-
-  return { ...base, effectiveTier: tier };
 }
 
-/** No subscription or expired trial/canceled → FREE (see-only, nothing unlocked). */
 export function resolveEffectiveTier(subscription: SubRow): SubscriptionTier {
   return resolveSubscriptionAccess(subscription).effectiveTier;
 }
 
+export function resolveEnabledModules(subscription: SubRow): Set<ModuleKey> {
+  return resolveSubscriptionAccess(subscription).enabledModules;
+}
+
+export function moduleHasFeature(
+  modules: Set<string>,
+  feature: string,
+): boolean {
+  return modules.has(feature);
+}
+
 export function addTrialEndDate(from = new Date()): Date {
   const end = new Date(from);
-  end.setDate(end.getDate() + TRIAL_DURATION_DAYS);
+  end.setDate(end.getDate() + PACK_TRIAL_DAYS);
   return end;
 }
 
-export function buildFeatureCatalog(effectiveTier: SubscriptionTier) {
+export function buildFeatureCatalog(modulesOrTier: Set<string> | SubscriptionTier) {
+  const unlocked =
+    typeof modulesOrTier === 'string'
+      ? FEATURE_MATRIX[modulesOrTier]
+      : modulesOrTier;
   return ALL_FEATURE_KEYS.map((key) => ({
     key,
-    unlocked: tierHasFeature(effectiveTier, key),
+    unlocked: unlocked.has(key),
   }));
 }
 
 /** Public /venues discovery & paid placement — separate from dashboard modules */
 export const MARKETING_FEATURE_KEYS = [
-  "public_listing",
-  "venue_profile",
-  "priority_listing",
-  "homepage_spotlight",
+  'public_listing',
+  'venue_profile',
+  'priority_listing',
+  'homepage_spotlight',
 ] as const;
 
 export type MarketingFeatureKey = (typeof MARKETING_FEATURE_KEYS)[number];
 
-export const MARKETING_FEATURE_MATRIX: Record<
-  SubscriptionTier,
-  Set<string>
-> = {
+export const MARKETING_FEATURE_MATRIX: Record<SubscriptionTier, Set<string>> = {
   FREE: new Set(),
-  STARTER: new Set(["public_listing"]),
-  STANDARD: new Set(["public_listing", "venue_profile"]),
-  PRO: new Set(["public_listing", "venue_profile", "priority_listing"]),
+  STARTER: new Set(['public_listing']),
+  STANDARD: new Set(['public_listing', 'venue_profile']),
+  PRO: new Set(['public_listing', 'venue_profile', 'priority_listing']),
   ENTERPRISE: new Set([
-    "public_listing",
-    "venue_profile",
-    "priority_listing",
-    "homepage_spotlight",
+    'public_listing',
+    'venue_profile',
+    'priority_listing',
+    'homepage_spotlight',
   ]),
 };
 
@@ -215,4 +298,10 @@ export function buildMarketingCatalog(effectiveTier: SubscriptionTier) {
     key,
     unlocked: tierHasMarketingFeature(effectiveTier, key),
   }));
+}
+
+/** Map pack → stored SubscriptionTier for seat/legacy fields */
+export function tierForPack(packId: string, addOns: string): SubscriptionTier {
+  const modules = modulesForPackAndAddOns(packId, addOns);
+  return syntheticTierFromModules(modules);
 }

@@ -28,27 +28,27 @@ export function orderTicketLabel(order: ShopOrderForAudit) {
 
 export function orderStatusLabel(status: string) {
   switch (status) {
-    case "PENDING":
-      return "Preparing";
-    case "COMPLETED":
-      return "Handed off";
-    case "CANCELED":
-      return "Canceled";
+    case 'PENDING':
+      return 'Preparing';
+    case 'COMPLETED':
+      return 'Handed off';
+    case 'CANCELED':
+      return 'Canceled';
     default:
       return status;
   }
 }
 
 function guestPhrase(count: number) {
-  return count === 1 ? "1 guest" : `${count} guests`;
+  return count === 1 ? '1 guest' : `${count} guests`;
 }
 
 function linesPhrase(lines: OrderLineForAudit[] | undefined) {
-  const active = (lines ?? []).filter((l) => l.lineStatus === "ACTIVE");
-  if (active.length === 0) return "no items yet";
+  const active = (lines ?? []).filter((l) => l.lineStatus === 'ACTIVE');
+  if (active.length === 0) return 'no items yet';
   const parts = active.map((l) => `${l.quantity}× ${l.name}`);
-  if (parts.length <= 4) return parts.join(", ");
-  return `${parts.slice(0, 4).join(", ")} (+${parts.length - 4} more)`;
+  if (parts.length <= 4) return parts.join(', ');
+  return `${parts.slice(0, 4).join(', ')} (+${parts.length - 4} more)`;
 }
 
 export function shopOrderAuditMeta(
@@ -56,7 +56,7 @@ export function shopOrderAuditMeta(
   extra?: Record<string, unknown>,
 ) {
   const activeLines = (order.lines ?? [])
-    .filter((l) => l.lineStatus === "ACTIVE")
+    .filter((l) => l.lineStatus === 'ACTIVE')
     .map((l) => ({
       name: l.name,
       quantity: l.quantity,
@@ -85,10 +85,7 @@ export function auditSummaryCreate(order: ShopOrderForAudit) {
   return `New menu order — ${orderTicketLabel(order)} · ${guestPhrase(order.guestCount)} · ${order.paymentMethod}`;
 }
 
-export function auditSummaryUpdate(
-  order: ShopOrderForAudit,
-  change: string,
-) {
+export function auditSummaryUpdate(order: ShopOrderForAudit, change: string) {
   return `${change} — ${orderTicketLabel(order)} · ${orderStatusLabel(order.status)} · ${order.total.toFixed(2)} · ${linesPhrase(order.lines)}`;
 }
 
@@ -101,4 +98,19 @@ export function auditSummaryAddLine(
 
 export function auditSummaryDelete(order: ShopOrderForAudit) {
   return `Permanently deleted ${orderTicketLabel(order)} · ${order.total.toFixed(2)} · ${linesPhrase(order.lines)}`;
+}
+
+export function auditSummaryPatchLine(
+  order: ShopOrderForAudit,
+  line: { name: string; quantity: number },
+  change: string,
+) {
+  return `${change} — ${line.quantity}× ${line.name} on ${orderTicketLabel(order)} (total ${order.total.toFixed(2)})`;
+}
+
+export function auditSummaryRemoveLine(
+  order: ShopOrderForAudit,
+  line: { name: string; quantity: number },
+) {
+  return `Removed ${line.quantity}× ${line.name} from ${orderTicketLabel(order)} (total ${order.total.toFixed(2)})`;
 }

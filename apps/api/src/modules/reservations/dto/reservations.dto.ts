@@ -1,4 +1,4 @@
-import { ReservationStatus } from "@prisma/client";
+import { ReservationStatus } from '@prisma/client';
 import {
   IsBoolean,
   IsDateString,
@@ -10,7 +10,7 @@ import {
   IsString,
   MaxLength,
   Min,
-} from "class-validator";
+} from 'class-validator';
 
 export class ReservationQueryDto {
   @IsOptional()

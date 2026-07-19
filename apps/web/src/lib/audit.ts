@@ -7,6 +7,9 @@ export const AUDIT_SECTIONS = [
   { value: "finance", label: "Finance" },
   { value: "reports", label: "Reports" },
   { value: "venue", label: "Venue settings" },
+  { value: "gallery", label: "Gallery" },
+  { value: "hours", label: "Hours & schedule" },
+  { value: "notes", label: "Shift notes" },
   { value: "subscription", label: "Subscription" },
   { value: "system", label: "System" },
 ] as const;

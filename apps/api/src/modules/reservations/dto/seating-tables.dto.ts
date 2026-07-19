@@ -7,9 +7,9 @@ import {
   IsString,
   MaxLength,
   Min,
-} from "class-validator";
+} from 'class-validator';
 
-export const SEATING_ZONE_VALUES = ["INDOOR", "OUTDOOR"] as const;
+export const SEATING_ZONE_VALUES = ['INDOOR', 'OUTDOOR'] as const;
 export type SeatingZoneDto = (typeof SEATING_ZONE_VALUES)[number];
 
 export class CreateSeatingTableGroupDto {

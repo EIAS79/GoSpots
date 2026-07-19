@@ -1,5 +1,6 @@
 import {
   IsBoolean,
+  IsEnum,
   IsIn,
   IsInt,
   IsNumber,
@@ -7,13 +8,14 @@ import {
   IsString,
   Min,
   MinLength,
-} from "class-validator";
+} from 'class-validator';
+import { PaymentMethod } from '@prisma/client';
 
 export const PLAY_BILLING_TABS = [
-  "in_progress",
-  "awaiting_payment",
-  "paid",
-  "all",
+  'in_progress',
+  'awaiting_payment',
+  'paid',
+  'all',
 ] as const;
 export type PlayBillingTabDto = (typeof PLAY_BILLING_TABS)[number];
 
@@ -33,6 +35,14 @@ export class PlayBillingQueryDto {
   @IsOptional()
   @IsString()
   take?: string;
+
+  @IsOptional()
+  @IsString()
+  page?: string;
+
+  @IsOptional()
+  @IsString()
+  pageSize?: string;
 }
 
 export class MarkPlayBillingPaidDto {
@@ -40,6 +50,15 @@ export class MarkPlayBillingPaidDto {
   @IsNumber()
   @Min(0)
   amountOverride?: number;
+
+  @IsOptional()
+  @IsNumber()
+  @Min(0)
+  discountPercent?: number;
+
+  @IsOptional()
+  @IsEnum(PaymentMethod)
+  paymentMethod?: PaymentMethod;
 }
 
 export class UpdatePlayBillingDto {
@@ -69,11 +88,23 @@ export class UpdatePlayBillingDto {
   @IsString()
   notes?: string | null;
 
-  /** Custom charge (before or after payment). Pass null to clear. */
+  /** Staff-set base charge before discount. Pass null to revert to Gaming setup rates. */
+  @IsOptional()
+  @IsNumber()
+  @Min(0)
+  baseAmount?: number | null;
+
+  /** @deprecated Use baseAmount */
   @IsOptional()
   @IsNumber()
   @Min(0)
   amountOverride?: number | null;
+
+  /** Staff discount 0–100 before payment. */
+  @IsOptional()
+  @IsNumber()
+  @Min(0)
+  discountPercent?: number;
 
   /** Move a paid row back to awaiting payment. */
   @IsOptional()
@@ -81,7 +112,7 @@ export class UpdatePlayBillingDto {
   clearPaid?: boolean;
 }
 
-export const PLAY_BILLING_CANCEL_REASONS = ["NO_SHOW", "CANCELED"] as const;
+export const PLAY_BILLING_CANCEL_REASONS = ['NO_SHOW', 'CANCELED'] as const;
 export type PlayBillingCancelReasonDto =
   (typeof PLAY_BILLING_CANCEL_REASONS)[number];
 

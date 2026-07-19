@@ -1,11 +1,11 @@
-import { BadRequestException, Injectable, Logger } from "@nestjs/common";
+import { BadRequestException, Injectable, Logger } from '@nestjs/common';
 import {
   isSupportedCurrency,
   normalizeCurrency,
   SUPPORTED_CURRENCIES,
   SUPPORTED_CURRENCY_CODES,
   type SupportedCurrency,
-} from "../../common/locale-currency";
+} from '../../common/locale-currency';
 
 /** 1 EUR equals `rates[code]` units of `code` */
 type RateTable = {
@@ -15,7 +15,7 @@ type RateTable = {
 };
 
 const CACHE_TTL_MS = 60 * 60 * 1000;
-const PIVOT: SupportedCurrency = "EUR";
+const PIVOT: SupportedCurrency = 'EUR';
 
 @Injectable()
 export class CurrencyRatesService {
@@ -37,7 +37,7 @@ export class CurrencyRatesService {
     conversions: { currency: string; amount: number; rate: number }[];
   }> {
     if (!Number.isFinite(amount) || amount < 0) {
-      throw new BadRequestException("Amount must be a non-negative number.");
+      throw new BadRequestException('Amount must be a non-negative number.');
     }
     const fromCode = normalizeCurrency(from);
     const uniqueTargets = [
@@ -51,7 +51,7 @@ export class CurrencyRatesService {
       ),
     ];
     if (uniqueTargets.length === 0) {
-      throw new BadRequestException("Provide at least one target currency.");
+      throw new BadRequestException('Provide at least one target currency.');
     }
 
     const { rates, fetchedAt } = await this.getRateTable();
@@ -107,7 +107,7 @@ export class CurrencyRatesService {
 
     await this.mergeOpenErLatest(rates, missing, PIVOT);
     if (missing.size > 0) {
-      await this.mergeOpenErLatest(rates, missing, "USD");
+      await this.mergeOpenErLatest(rates, missing, 'USD');
     }
     if (missing.size > 0) {
       await this.mergeFrankfurter(rates, missing);
@@ -120,9 +120,9 @@ export class CurrencyRatesService {
       (c) => rates[c] == null || rates[c] <= 0,
     );
     if (stillMissing.length > 0) {
-      this.logger.error(`Missing rates for: ${stillMissing.join(", ")}`);
+      this.logger.error(`Missing rates for: ${stillMissing.join(', ')}`);
       throw new BadRequestException(
-        `Exchange rates unavailable for: ${stillMissing.join(", ")}. Try again shortly.`,
+        `Exchange rates unavailable for: ${stillMissing.join(', ')}. Try again shortly.`,
       );
     }
 
@@ -145,8 +145,8 @@ export class CurrencyRatesService {
         result?: string;
         rates?: Record<string, number>;
       };
-      if (body.result !== "success" || !body.rates) {
-        throw new Error("unexpected response");
+      if (body.result !== 'success' || !body.rates) {
+        throw new Error('unexpected response');
       }
       this.applyCrossBase(rates, missing, base, body.rates);
     } catch (err) {
@@ -163,7 +163,7 @@ export class CurrencyRatesService {
 
     try {
       const res = await fetch(
-        `https://api.frankfurter.app/latest?from=${PIVOT}&to=${need.join(",")}`,
+        `https://api.frankfurter.app/latest?from=${PIVOT}&to=${need.join(',')}`,
         { signal: AbortSignal.timeout(8000) },
       );
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
@@ -201,7 +201,7 @@ export class CurrencyRatesService {
           conversion_rate?: number;
         };
         if (
-          body.result === "success" &&
+          body.result === 'success' &&
           body.conversion_rate != null &&
           body.conversion_rate > 0
         ) {

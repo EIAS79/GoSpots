@@ -1,199 +1,208 @@
 "use client";
 
-import { motion, useScroll, useSpring, useTransform } from "framer-motion";
+import {
+  motion,
+  useReducedMotion,
+  useScroll,
+  useSpring,
+} from "framer-motion";
 import { useRef } from "react";
 import { Reveal } from "@/components/effects/reveal";
 import { features } from "@/lib/mock-data";
 import { cn } from "@/lib/cn";
 
-export function Features() {
-  const headFeature = features[0];
-  const restFeatures = features.slice(1);
+type Feature = (typeof features)[number];
 
-  const timelineRef = useRef<HTMLDivElement>(null);
+const EASE = [0.22, 1, 0.36, 1] as const;
+
+function formatStep(n: number) {
+  return String(n).padStart(2, "0");
+}
+
+/**
+ * Vertical timeline: a center rail that "draws" itself as you scroll,
+ * numbered nodes on the rail, and cards alternating left / right.
+ * Below lg the rail sits on the left and all cards stack to its right.
+ */
+export function Features() {
+  const reduced = useReducedMotion();
+  const railRef = useRef<HTMLDivElement>(null);
+
   const { scrollYProgress } = useScroll({
-    target: timelineRef,
-    offset: ["start 75%", "end 60%"],
+    target: railRef,
+    offset: ["start 0.75", "end 0.55"],
   });
-  const lineScale = useSpring(scrollYProgress, {
-    stiffness: 80,
-    damping: 18,
+  const drawn = useSpring(scrollYProgress, {
+    stiffness: 90,
+    damping: 22,
     mass: 0.4,
   });
-  const dotY = useTransform(scrollYProgress, [0, 1], ["0%", "100%"]);
 
   return (
-    <section id="features" className="relative py-24">
-      <div className="mx-auto max-w-7xl px-4 md:px-8">
+    <section id="features" className="relative py-20 sm:py-24">
+      <div className="mx-auto max-w-7xl px-4 sm:px-6 md:px-8">
         <Reveal className="mx-auto max-w-2xl text-center">
-          <span className="text-xs font-medium uppercase tracking-widest text-emerald-400">
+          <span className="text-xs font-medium uppercase tracking-widest text-emerald-700 dark:text-emerald-400">
             What it does
           </span>
           <h2 className="mt-3 text-balance text-3xl font-bold md:text-5xl">
             Everything you need to{" "}
             <span className="text-gradient">control the floor.</span>
           </h2>
-          <p className="mt-4 text-base text-zinc-400 md:text-lg">
-            From the moment a customer sits down to the second the bill is paid
-            — GoSpots handles it.
+          <p className="mt-4 text-base text-zinc-600 dark:text-zinc-400 md:text-lg">
+            Eight connected steps — from live floor view to reservations and
+            revenue — in one platform built for entertainment venues.
           </p>
         </Reveal>
 
-        <Reveal delay={0.05} className="mt-14">
-          <FeaturedHero feature={headFeature} />
-        </Reveal>
-
-        <div
-          ref={timelineRef}
-          className="relative mx-auto mt-12 max-w-5xl pb-12"
-        >
+        <div ref={railRef} className="relative mx-auto mt-14 max-w-5xl sm:mt-16">
+          {/* Base rail (faint) — left on mobile, centered on lg+ */}
           <div
             aria-hidden
-            className="pointer-events-none absolute left-6 top-0 h-full w-px bg-gradient-to-b from-emerald-400/40 via-white/10 to-violet-400/40 md:left-1/2 md:-translate-x-1/2"
+            className="absolute bottom-4 top-4 left-[18px] w-px -translate-x-1/2 bg-black/[0.08] dark:bg-white/[0.08] sm:left-[22px] lg:left-1/2"
           />
+          {/* Drawn rail — fills with scroll */}
           <motion.div
             aria-hidden
-            style={{ scaleY: lineScale }}
-            className="pointer-events-none absolute left-6 top-0 h-full w-px origin-top bg-gradient-to-b from-emerald-400 via-cyan-300 to-violet-400 shadow-[0_0_22px_rgba(52,211,153,0.5)] md:left-1/2 md:-translate-x-1/2"
+            style={reduced ? undefined : { scaleY: drawn }}
+            className="absolute bottom-4 top-4 left-[18px] w-px -translate-x-1/2 origin-top bg-gradient-to-b from-emerald-400 via-cyan-400 to-violet-400 shadow-[0_0_16px_rgba(52,211,153,0.45)] sm:left-[22px] lg:left-1/2"
           />
-          <motion.div
-            aria-hidden
-            style={{ top: dotY }}
-            className="pointer-events-none absolute left-6 z-10 hidden h-3 w-3 -translate-x-1/2 rounded-full bg-emerald-300 shadow-[0_0_22px_rgba(52,211,153,0.9)] md:left-1/2 md:block"
-          >
-            <span className="absolute inset-0 animate-ping rounded-full bg-emerald-300/70" />
-          </motion.div>
 
-          <ul className="relative flex flex-col gap-10 md:gap-16">
-            {restFeatures.map((f, i) => {
-              const isLeft = i % 2 === 0;
-              return (
-                <li key={f.title} className="relative">
-                  <Node index={i + 1} />
-                  <motion.div
-                    initial={{ opacity: 0, y: 20 }}
-                    whileInView={{ opacity: 1, y: 0 }}
-                    viewport={{ once: true, margin: "-60px" }}
-                    transition={{ duration: 0.45 }}
-                    className="grid items-center gap-6 md:grid-cols-2"
-                  >
-                    <div
-                      className={cn(
-                        "pl-14 md:pl-0",
-                        isLeft
-                          ? "md:col-start-1 md:col-end-2 md:pr-12 md:text-right"
-                          : "md:col-start-2 md:col-end-3 md:pl-12",
-                      )}
-                    >
-                      <div className="group relative overflow-hidden rounded-2xl border border-white/10 bg-white/[0.025] p-6 transition hover:-translate-y-0.5 hover:border-white/25 hover:bg-white/[0.04]">
-                        <div
-                          className={cn(
-                            "absolute -right-12 -top-12 h-44 w-44 rounded-full bg-gradient-to-br opacity-60 blur-2xl transition-opacity duration-500 group-hover:opacity-100",
-                            f.accent ?? "from-emerald-500/20 to-emerald-500/0",
-                          )}
-                          aria-hidden
-                        />
-                        <div className="relative">
-                          <div
-                            className={cn(
-                              "flex items-center gap-3",
-                              isLeft ? "md:flex-row-reverse" : "",
-                            )}
-                          >
-                            <span className="inline-flex h-10 w-10 items-center justify-center rounded-xl border border-white/10 bg-zinc-900/80 shadow-inner">
-                              <f.icon size={18} className="text-emerald-300" />
-                            </span>
-                            <span className="font-mono text-[11px] uppercase tracking-widest text-zinc-500">
-                              Step · 0{i + 2}
-                            </span>
-                          </div>
-                          <h3 className="mt-4 text-lg font-semibold text-white">
-                            {f.title}
-                          </h3>
-                          <p className="mt-2 text-sm leading-relaxed text-zinc-400">
-                            {f.description}
-                          </p>
-                        </div>
-                        <span
-                          aria-hidden
-                          className={cn(
-                            "pointer-events-none absolute top-1/2 hidden h-px w-10 -translate-y-1/2 bg-gradient-to-r md:block",
-                            isLeft
-                              ? "right-0 translate-x-full from-transparent via-emerald-400/40 to-emerald-400/80"
-                              : "left-0 -translate-x-full from-violet-400/80 via-violet-400/40 to-transparent",
-                          )}
-                        />
-                      </div>
-                    </div>
-                  </motion.div>
-                </li>
-              );
-            })}
-          </ul>
+          <ol className="relative flex flex-col gap-10 sm:gap-12">
+            {features.map((feature, i) => (
+              <TimelineRow
+                key={feature.title}
+                feature={feature}
+                step={i + 1}
+                side={i % 2 === 0 ? "left" : "right"}
+                isHeart={i === 0}
+              />
+            ))}
+          </ol>
         </div>
       </div>
     </section>
   );
 }
 
-function FeaturedHero({ feature }: { feature: (typeof features)[number] }) {
-  const Icon = feature.icon;
-  return (
-    <div className="rounded-3xl">
-      <div className="group relative overflow-hidden rounded-3xl border border-emerald-400/20 bg-gradient-to-br from-emerald-500/[0.07] via-white/[0.02] to-violet-500/[0.06] p-6 md:p-10">
-        <div className="absolute -right-20 -top-20 h-72 w-72 rounded-full bg-emerald-500/25 blur-3xl" />
-        <div className="absolute -bottom-24 -left-20 h-72 w-72 rounded-full bg-violet-500/20 blur-3xl" />
+function TimelineRow({
+  feature,
+  step,
+  side,
+  isHeart,
+}: {
+  feature: Feature;
+  step: number;
+  side: "left" | "right";
+  isHeart: boolean;
+}) {
+  const reduced = useReducedMotion();
+  const fromX = reduced ? 0 : side === "left" ? -32 : 32;
 
-        <div className="relative grid items-center gap-8 md:grid-cols-[1fr_auto]">
-          <div>
-            <span className="inline-flex items-center gap-2 rounded-full border border-emerald-400/30 bg-emerald-500/10 px-3 py-1 text-[11px] font-medium uppercase tracking-widest text-emerald-300">
-              Step · 01 · The heart
+  return (
+    <li className="relative">
+      {/* Node on the rail */}
+      <motion.span
+        initial={reduced ? false : { scale: 0, opacity: 0 }}
+        whileInView={{ scale: 1, opacity: 1 }}
+        viewport={{ once: true, margin: "-80px" }}
+        transition={{ type: "spring", stiffness: 320, damping: 22 }}
+        className="absolute left-[18px] top-6 z-10 grid h-9 w-9 -translate-x-1/2 place-items-center rounded-full border border-emerald-400/40 bg-[var(--color-surface-2)] font-mono text-[11px] font-bold text-emerald-700 shadow-[0_0_24px_rgba(52,211,153,0.35)] dark:bg-zinc-950 dark:text-emerald-300 sm:left-[22px] sm:h-11 sm:w-11 lg:left-1/2"
+        aria-hidden
+      >
+        {formatStep(step)}
+      </motion.span>
+
+      {/* Connector from node to card (lg+ only) */}
+      <span
+        aria-hidden
+        className={cn(
+          "absolute top-[46px] hidden h-px w-[calc(8%-22px)] bg-gradient-to-r lg:block",
+          side === "left"
+            ? "right-1/2 mr-[22px] from-transparent to-emerald-400/45"
+            : "left-1/2 ml-[22px] from-emerald-400/45 to-transparent",
+        )}
+      />
+
+      {/* Card — full width right of rail on mobile; 42% column on lg */}
+      <motion.article
+        initial={{ opacity: 0, y: 18, x: fromX }}
+        whileInView={{ opacity: 1, y: 0, x: 0 }}
+        viewport={{ once: true, margin: "-60px" }}
+        transition={{ duration: 0.5, ease: EASE }}
+        className={cn(
+          "group relative ml-12 overflow-hidden rounded-2xl border border-[var(--color-border)] bg-[var(--color-surface)]/60 p-4 backdrop-blur transition-colors duration-300 hover:border-emerald-400/30 dark:border-white/10 dark:bg-white/[0.03] sm:ml-14 sm:p-6 lg:ml-0 lg:w-[42%]",
+          side === "left" ? "lg:mr-auto" : "lg:ml-auto",
+          isHeart &&
+            "border-emerald-400/25 bg-gradient-to-br from-emerald-500/[0.08] via-transparent to-violet-500/[0.05] dark:border-emerald-400/25 dark:via-white/[0.02]",
+        )}
+      >
+        {/* Accent glow */}
+        <div
+          aria-hidden
+          className={cn(
+            "pointer-events-none absolute -right-14 -top-14 h-44 w-44 rounded-full bg-gradient-to-br opacity-40 blur-3xl transition-opacity duration-500 group-hover:opacity-80",
+            feature.accent,
+          )}
+        />
+
+        <div className="relative">
+          <div className="flex items-center justify-between gap-3">
+            <span
+              className={cn(
+                "grid h-10 w-10 shrink-0 place-items-center rounded-xl border border-[var(--color-border)] bg-[var(--color-surface-2)]/80 dark:border-white/10 dark:bg-zinc-900/80",
+                isHeart
+                  ? "text-emerald-700 dark:text-emerald-300"
+                  : "text-amber-700 dark:text-amber-300",
+              )}
+            >
+              <feature.icon size={18} />
             </span>
-            <h3 className="mt-4 text-balance text-3xl font-bold leading-tight md:text-4xl">
-              {feature.title}
-            </h3>
-            <p className="mt-3 max-w-xl text-base text-zinc-300">
-              {feature.description}
-            </p>
-            <div className="mt-5 flex flex-wrap gap-2 text-xs text-zinc-400">
-              {["3-second floor view", "Live timer per resource", "Action in one tap"].map(
+            <span
+              className={cn(
+                "inline-flex items-center gap-1.5 rounded-full border px-2.5 py-0.5 font-mono text-[10px] uppercase tracking-widest",
+                isHeart
+                  ? "border-emerald-400/30 bg-emerald-500/10 text-emerald-700 dark:text-emerald-300"
+                  : "border-[var(--color-border)] bg-[var(--color-surface-2)]/80 text-zinc-500 dark:border-white/10 dark:bg-zinc-950/60",
+              )}
+            >
+              {formatStep(step)}
+              {isHeart && (
+                <span className="normal-case tracking-normal text-emerald-700 dark:text-emerald-200/90">
+                  · The heart
+                </span>
+              )}
+            </span>
+          </div>
+
+          <h3
+            className={cn(
+              "mt-4 font-semibold text-[var(--color-foreground)] dark:text-white",
+              isHeart ? "text-xl sm:text-2xl" : "text-base sm:text-lg",
+            )}
+          >
+            {feature.title}
+          </h3>
+          <p className="mt-2 text-sm leading-relaxed text-zinc-600 dark:text-zinc-400">
+            {feature.description}
+          </p>
+
+          {isHeart && (
+            <div className="mt-4 flex flex-wrap gap-2 text-xs text-zinc-600 dark:text-zinc-400">
+              {["3-second floor view", "Live timer per resource", "One-tap actions"].map(
                 (t) => (
                   <span
                     key={t}
-                    className="rounded-full border border-white/10 bg-white/5 px-3 py-1"
+                    className="rounded-full border border-[var(--color-border)] bg-[var(--color-surface)]/60 px-3 py-1 dark:border-white/10 dark:bg-white/5"
                   >
                     {t}
                   </span>
                 ),
               )}
             </div>
-          </div>
-          <div className="relative grid h-28 w-28 place-items-center rounded-2xl border border-white/10 bg-zinc-950/80 shadow-[0_30px_60px_-10px_rgba(52,211,153,0.4)]">
-            <Icon size={42} className="text-emerald-300" />
-            <span className="absolute inset-0 rounded-2xl bg-gradient-to-br from-emerald-400/20 to-violet-400/10 opacity-60 blur" />
-          </div>
+          )}
         </div>
-      </div>
-    </div>
-  );
-}
-
-function Node({ index }: { index: number }) {
-  return (
-    <motion.div
-      initial={{ scale: 0, opacity: 0 }}
-      whileInView={{ scale: 1, opacity: 1 }}
-      viewport={{ once: true }}
-      transition={{ type: "spring", stiffness: 220, damping: 18 }}
-      className="absolute left-6 top-7 z-[5] -translate-x-1/2 md:left-1/2"
-      aria-hidden
-    >
-      <span className="relative grid h-9 w-9 place-items-center rounded-full border border-white/15 bg-zinc-950 shadow-[0_0_22px_rgba(52,211,153,0.35)]">
-        <span className="font-mono text-[10px] font-bold text-emerald-300">
-          {String(index + 1).padStart(2, "0")}
-        </span>
-        <span className="absolute inset-0 rounded-full ring-1 ring-emerald-400/30" />
-      </span>
-    </motion.div>
+      </motion.article>
+    </li>
   );
 }

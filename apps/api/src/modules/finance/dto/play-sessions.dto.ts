@@ -1,4 +1,5 @@
 import {
+  IsBoolean,
   IsEnum,
   IsInt,
   IsNumber,
@@ -6,8 +7,8 @@ import {
   IsString,
   MaxLength,
   Min,
-} from "class-validator";
-import { PaymentMethod, PlaySessionStatus } from "@prisma/client";
+} from 'class-validator';
+import { PaymentMethod, PlaySessionStatus } from '@prisma/client';
 
 export class CreatePlaySessionDto {
   @IsOptional()
@@ -32,6 +33,11 @@ export class CreatePlaySessionDto {
   @IsNumber()
   @Min(0)
   amount?: number;
+
+  @IsOptional()
+  @IsNumber()
+  @Min(0)
+  discountPercent?: number;
 
   @IsOptional()
   @IsEnum(PaymentMethod)
@@ -73,6 +79,11 @@ export class UpdatePlaySessionDto {
   amount?: number;
 
   @IsOptional()
+  @IsNumber()
+  @Min(0)
+  discountPercent?: number;
+
+  @IsOptional()
   @IsEnum(PaymentMethod)
   paymentMethod?: PaymentMethod;
 
@@ -85,4 +96,14 @@ export class UpdatePlaySessionDto {
   @IsString()
   @MaxLength(500)
   note?: string | null;
+
+  /** End an active walk-in (moves to awaiting payment). */
+  @IsOptional()
+  @IsBoolean()
+  endSession?: boolean;
+
+  /** Undo paid — reopen for payment. */
+  @IsOptional()
+  @IsBoolean()
+  clearPaid?: boolean;
 }

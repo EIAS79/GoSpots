@@ -1,19 +1,19 @@
 /** Calendar day key in venue locale (YYYY-MM-DD). */
 export function venueDayKey(locale: string, at = new Date()): string {
-  return at.toLocaleDateString("en-CA", { timeZone: localeToTz(locale) });
+  return at.toLocaleDateString('en-CA', { timeZone: localeToTz(locale) });
 }
 
 function localeToTz(locale: string): string {
   const map: Record<string, string> = {
-    en: "UTC",
-    "en-US": "America/New_York",
-    "en-GB": "Europe/London",
-    ar: "Africa/Cairo",
-    "ar-EG": "Africa/Cairo",
-    de: "Europe/Berlin",
-    fr: "Europe/Paris",
+    en: 'UTC',
+    'en-US': 'America/New_York',
+    'en-GB': 'Europe/London',
+    ar: 'Africa/Cairo',
+    'ar-EG': 'Africa/Cairo',
+    de: 'Europe/Berlin',
+    fr: 'Europe/Paris',
   };
-  return map[locale] ?? "UTC";
+  return map[locale] ?? 'UTC';
 }
 
 export type MenuItemStockFields = {

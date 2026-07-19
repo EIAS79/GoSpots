@@ -4,18 +4,17 @@ import { TenantPage } from "@/components/layout/tenant-page";
 import { GalleryPanel } from "@/components/gallery/gallery-panel";
 import { hasPermission } from "@/lib/auth-client";
 import { useAuth } from "@/lib/use-auth";
+import { useCurrentMembership } from "@/lib/use-current-membership";
 import { DASHBOARD_SECTION_GUIDES } from "@/lib/dashboard-section-guides";
 
 const GUIDE = DASHBOARD_SECTION_GUIDES.gallery;
 
 export default function GalleryPage() {
   const { state } = useAuth();
-  const membership =
-    state.status === "authed" ? state.user.memberships[0] : null;
+  const membership = useCurrentMembership();
   const canWrite =
     state.status === "authed" &&
     (membership?.role === "OWNER" ||
-      membership?.role === "MANAGER" ||
       hasPermission(membership?.permissions ?? "", "gallery.write"));
 
   return (

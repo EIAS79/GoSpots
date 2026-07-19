@@ -1,6 +1,6 @@
 "use client";
 
-import { CalendarOff, Loader2, Plus, Trash2 } from "lucide-react";
+import { CalendarOff, Loader2, Pencil, Plus, Trash2, X } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 import type { OpeningHourRow, ScheduleException } from "@/lib/hours-client";
 
@@ -28,6 +28,7 @@ export function HoursPanel({
   saving,
   onSaveWeekly,
   onAddException,
+  onUpdateException,
   onDeleteException,
 }: {
   weekly: WeeklyDraft[];
@@ -42,6 +43,16 @@ export function HoursPanel({
     opensAt?: string;
     closesAt?: string;
   }) => Promise<void>;
+  onUpdateException: (
+    id: string,
+    body: {
+      date: string;
+      label?: string;
+      isClosed: boolean;
+      opensAt?: string;
+      closesAt?: string;
+    },
+  ) => Promise<void>;
   onDeleteException: (id: string) => Promise<void>;
 }) {
   const [draft, setDraft] = useState(weekly);
@@ -58,6 +69,13 @@ export function HoursPanel({
   const [exOpens, setExOpens] = useState("09:00");
   const [exCloses, setExCloses] = useState("22:00");
   const [exSaving, setExSaving] = useState(false);
+  const [editingId, setEditingId] = useState<string | null>(null);
+  const [editDate, setEditDate] = useState("");
+  const [editLabel, setEditLabel] = useState("");
+  const [editClosed, setEditClosed] = useState(true);
+  const [editOpens, setEditOpens] = useState("09:00");
+  const [editCloses, setEditCloses] = useState("22:00");
+  const [editSaving, setEditSaving] = useState(false);
 
   const upcoming = useMemo(() => {
     const today = new Date().toISOString().slice(0, 10);
@@ -69,6 +87,20 @@ export function HoursPanel({
       rows.map((r) => (r.weekday === weekday ? { ...r, ...patch } : r)),
     );
     setDirty(true);
+  }
+
+  function startEditing(ex: ScheduleException) {
+    setEditingId(ex.id);
+    setEditDate(ex.date);
+    setEditLabel(ex.label ?? "");
+    setEditClosed(ex.isClosed);
+    setEditOpens(ex.opensAt?.slice(0, 5) ?? "09:00");
+    setEditCloses(ex.closesAt?.slice(0, 5) ?? "22:00");
+  }
+
+  function cancelEditing() {
+    setEditingId(null);
+    setEditSaving(false);
   }
 
   return (
@@ -251,28 +283,144 @@ export function HoursPanel({
             upcoming.map((ex) => (
               <li
                 key={ex.id}
-                className="flex flex-wrap items-center justify-between gap-2 rounded-lg border border-white/10 bg-zinc-950/50 px-3 py-2.5"
+                className="rounded-lg border border-white/10 bg-zinc-950/50 px-3 py-2.5"
               >
-                <div>
-                  <p className="text-sm text-white">{formatDate(ex.date)}</p>
-                  <p className="text-xs text-zinc-500">
-                    {ex.label || (ex.isClosed ? "Closed" : "Special hours")}
-                    {ex.isClosed
-                      ? ""
-                      : ex.opensAt && ex.closesAt
-                        ? ` · ${ex.opensAt} – ${ex.closesAt}`
-                        : ""}
-                  </p>
+                <div className="flex flex-wrap items-center justify-between gap-2">
+                  <div>
+                    <p className="text-sm text-white">{formatDate(ex.date)}</p>
+                    <p className="text-xs text-zinc-500">
+                      {ex.label || (ex.isClosed ? "Closed" : "Special hours")}
+                      {ex.isClosed
+                        ? ""
+                        : ex.opensAt && ex.closesAt
+                          ? ` · ${ex.opensAt} – ${ex.closesAt}`
+                          : ""}
+                    </p>
+                  </div>
+                  {canWrite ? (
+                    <div className="flex items-center gap-1">
+                      <button
+                        type="button"
+                        onClick={() => startEditing(ex)}
+                        className="rounded-lg p-2 text-zinc-500 hover:bg-white/5 hover:text-zinc-200"
+                        aria-label="Edit"
+                      >
+                        <Pencil size={14} />
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => void onDeleteException(ex.id)}
+                        className="rounded-lg p-2 text-zinc-500 hover:bg-rose-500/10 hover:text-rose-300"
+                        aria-label="Remove"
+                      >
+                        <Trash2 size={14} />
+                      </button>
+                    </div>
+                  ) : null}
                 </div>
-                {canWrite ? (
-                  <button
-                    type="button"
-                    onClick={() => void onDeleteException(ex.id)}
-                    className="rounded-lg p-2 text-zinc-500 hover:bg-rose-500/10 hover:text-rose-300"
-                    aria-label="Remove"
+                {canWrite && editingId === ex.id ? (
+                  <form
+                    className="mt-3 grid gap-3 rounded-lg border border-white/10 bg-zinc-900/70 p-3 sm:grid-cols-2"
+                    onSubmit={(e) => {
+                      e.preventDefault();
+                      if (!editDate) return;
+                      setEditSaving(true);
+                      void onUpdateException(ex.id, {
+                        date: editDate,
+                        label: editLabel.trim() || undefined,
+                        isClosed: editClosed,
+                        opensAt: editClosed ? undefined : editOpens,
+                        closesAt: editClosed ? undefined : editCloses,
+                      })
+                        .then(() => cancelEditing())
+                        .finally(() => setEditSaving(false));
+                    }}
                   >
-                    <Trash2 size={14} />
-                  </button>
+                    <div className="flex items-center justify-between sm:col-span-2">
+                      <p className="text-xs font-medium uppercase tracking-wide text-zinc-500">
+                        Edit exception
+                      </p>
+                      <button
+                        type="button"
+                        onClick={cancelEditing}
+                        className="rounded-lg p-1 text-zinc-500 hover:bg-white/5 hover:text-zinc-200"
+                        aria-label="Cancel edit"
+                      >
+                        <X size={14} />
+                      </button>
+                    </div>
+                    <label className="block text-xs text-zinc-500 sm:col-span-2">
+                      Date
+                      <input
+                        type="date"
+                        required
+                        value={editDate}
+                        onChange={(e) => setEditDate(e.target.value)}
+                        className="mt-1 w-full rounded-lg border border-white/10 bg-zinc-900 px-3 py-2 text-sm text-white"
+                      />
+                    </label>
+                    <label className="block text-xs text-zinc-500 sm:col-span-2">
+                      Note (optional)
+                      <input
+                        value={editLabel}
+                        onChange={(e) => setEditLabel(e.target.value)}
+                        placeholder="e.g. Staff party, maintenance"
+                        className="mt-1 w-full rounded-lg border border-white/10 bg-zinc-900 px-3 py-2 text-sm text-white"
+                      />
+                    </label>
+                    <label className="flex items-center gap-2 text-sm text-zinc-300 sm:col-span-2">
+                      <input
+                        type="checkbox"
+                        checked={editClosed}
+                        onChange={(e) => setEditClosed(e.target.checked)}
+                        className="rounded border-white/20"
+                      />
+                      Closed all day
+                    </label>
+                    {!editClosed ? (
+                      <>
+                        <label className="block text-xs text-zinc-500">
+                          Opens
+                          <input
+                            type="time"
+                            required
+                            value={editOpens}
+                            onChange={(e) => setEditOpens(e.target.value)}
+                            className="mt-1 w-full rounded-lg border border-white/10 bg-zinc-900 px-3 py-2 text-sm text-white"
+                          />
+                        </label>
+                        <label className="block text-xs text-zinc-500">
+                          Closes
+                          <input
+                            type="time"
+                            required
+                            value={editCloses}
+                            onChange={(e) => setEditCloses(e.target.value)}
+                            className="mt-1 w-full rounded-lg border border-white/10 bg-zinc-900 px-3 py-2 text-sm text-white"
+                          />
+                        </label>
+                      </>
+                    ) : null}
+                    <div className="flex gap-2 sm:col-span-2">
+                      <button
+                        type="button"
+                        onClick={cancelEditing}
+                        className="rounded-lg border border-white/10 px-3 py-2 text-sm text-zinc-300"
+                      >
+                        Cancel
+                      </button>
+                      <button
+                        type="submit"
+                        disabled={editSaving || !editDate}
+                        className="inline-flex items-center gap-2 rounded-lg bg-emerald-600 px-3 py-2 text-sm text-white disabled:opacity-50"
+                      >
+                        {editSaving ? (
+                          <Loader2 size={14} className="animate-spin" />
+                        ) : null}
+                        Save changes
+                      </button>
+                    </div>
+                  </form>
                 ) : null}
               </li>
             ))

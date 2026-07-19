@@ -2,24 +2,34 @@ import {
   ForbiddenException,
   Injectable,
   NotFoundException,
-} from "@nestjs/common";
-import type { MealPeriod } from "@prisma/client";
-import { PrismaService } from "../../prisma/prisma.service";
-import { presetForPeriod } from "../../common/meal-periods";
-import { requireShopId, slugifyTag } from "../../common/tenant";
-import { AuditService } from "../audit/audit.service";
-import type { JwtAccessPayload } from "../auth/auth.service";
+} from '@nestjs/common';
+import type { MealPeriod } from '@prisma/client';
+import { PrismaService } from '../../prisma/prisma.service';
+import { presetForPeriod } from '../../common/meal-periods';
+import { requireShopId, slugifyTag } from '../../common/tenant';
+import { assertShopFeature } from '../../common/subscription-feature.util';
+import { AuditService } from '../audit/audit.service';
+import type { JwtAccessPayload } from '../auth/auth.service';
+import { NotificationsService } from '../notifications/notifications.service';
 import {
   CreateMenuItemDto,
   CreateSectionDto,
   CreateTagDto,
   UpdateMenuItemDto,
   UpdateSectionDto,
-} from "./dto/menu.dto";
-import { resetShopMenuStockForDay, setMenuItemStockBaseline } from "../../common/menu-stock-db.util";
-import { venueDayKey } from "../../common/menu-stock.util";
-import { assertMenuImageFile, type MenuImageUpload } from "./menu-upload.util";
-import { MediaService } from "../media/media.service";
+} from './dto/menu.dto';
+import {
+  resetShopMenuStockForDay,
+  setMenuItemStockBaseline,
+} from '../../common/menu-stock-db.util';
+import { venueDayKey } from '../../common/menu-stock.util';
+import { assertMenuImageFile, type MenuImageUpload } from './menu-upload.util';
+import { MediaService } from '../media/media.service';
+import {
+  sectionImageUrl,
+  sectionImageUrlsByShop,
+  setSectionImageUrl,
+} from '../../common/menu-section-image.util';
 
 @Injectable()
 export class MenuService {
@@ -27,13 +37,14 @@ export class MenuService {
     private readonly prisma: PrismaService,
     private readonly audit: AuditService,
     private readonly media: MediaService,
+    private readonly notifications: NotificationsService,
   ) {}
 
   private assertWrite(actor: JwtAccessPayload) {
     if (!actor.shopId) throw new ForbiddenException();
-    const p = actor.perms ?? "";
-    if (p !== "*" && !p.split(",").includes("menu.write")) {
-      throw new ForbiddenException("Missing menu.write");
+    const p = actor.perms ?? '';
+    if (p !== '*' && !p.split(',').includes('menu.write')) {
+      throw new ForbiddenException('Missing menu.write');
     }
   }
 
@@ -43,31 +54,36 @@ export class MenuService {
       where: { id: shopId },
       select: { locale: true },
     });
-    const locale = shop?.locale ?? "en";
+    const locale = shop?.locale ?? 'en';
     const today = venueDayKey(locale);
-    const [sections, tags] = await Promise.all([
+    const [sections, tags, sectionImages] = await Promise.all([
       this.prisma.menuSection.findMany({
         where: { shopId },
-        orderBy: { sortOrder: "asc" },
+        orderBy: { sortOrder: 'asc' },
       }),
       this.prisma.shopTag.findMany({
         where: { shopId },
-        orderBy: [{ type: "asc" }, { sortOrder: "asc" }],
+        orderBy: [{ type: 'asc' }, { sortOrder: 'asc' }],
       }),
+      sectionImageUrlsByShop(this.prisma, shopId),
     ]);
     await resetShopMenuStockForDay(this.prisma, shopId, today);
     const itemsAfterReset = await this.prisma.menuItem.findMany({
       where: { shopId },
       include: { tags: { include: { tag: true } } },
-      orderBy: { name: "asc" },
+      orderBy: { name: 'asc' },
     });
     return {
-      sections,
+      sections: sections.map((s) => ({
+        ...s,
+        imageUrl: sectionImages.get(s.id) ?? null,
+      })),
       tags,
       items: itemsAfterReset.map((i) => ({
         ...i,
         stockDaily: (i as { stockDaily?: number }).stockDaily ?? i.stock,
-        stockResetOn: (i as { stockResetOn?: string | null }).stockResetOn ?? null,
+        stockResetOn:
+          (i as { stockResetOn?: string | null }).stockResetOn ?? null,
         tagIds: i.tags.map((t) => t.tagId),
         tags: i.tags.map((t) => t.tag),
       })),
@@ -83,15 +99,16 @@ export class MenuService {
     const preset = dto.mealPeriod ? presetForPeriod(dto.mealPeriod) : null;
     return {
       mealPeriod: dto.mealPeriod ?? undefined,
-      availableFrom:
-        dto.availableFrom ?? preset?.from ?? undefined,
+      availableFrom: dto.availableFrom ?? preset?.from ?? undefined,
       availableTo: dto.availableTo ?? preset?.to ?? undefined,
-      availableDays: dto.availableDays ?? "0,1,2,3,4,5,6",
+      availableDays: dto.availableDays ?? '0,1,2,3,4,5,6',
     };
   }
 
   async createSection(actor: JwtAccessPayload, dto: CreateSectionDto) {
     this.assertWrite(actor);
+    const shopId = actor.shopId!;
+    await assertShopFeature(this.prisma, shopId, 'menu');
     const timing = this.sectionTimingFromDto(dto);
     const section = await this.prisma.menuSection.create({
       data: {
@@ -102,12 +119,12 @@ export class MenuService {
       },
     });
     await this.audit.record(actor, {
-      section: "menu",
-      action: "menu.section.create",
+      section: 'menu',
+      action: 'menu.section.create',
       summary: `Created menu section "${section.name}"`,
       meta: { sectionId: section.id },
     });
-    return section;
+    return { ...section, imageUrl: null };
   }
 
   async updateSection(
@@ -138,6 +155,11 @@ export class MenuService {
             availableDays: dto.availableDays ?? existing.availableDays,
           })
         : {};
+    if (dto.imageUrl === null) {
+      const oldUrl = await sectionImageUrl(this.prisma, actor.shopId!, id);
+      if (oldUrl) await this.media.deleteByMediaPath(oldUrl);
+      await setSectionImageUrl(this.prisma, actor.shopId!, id, null);
+    }
     const section = await this.prisma.menuSection.update({
       where: { id },
       data: {
@@ -146,22 +168,49 @@ export class MenuService {
         ...timing,
       },
     });
+    const imageUrl =
+      dto.imageUrl === null
+        ? null
+        : await sectionImageUrl(this.prisma, actor.shopId!, id);
     await this.audit.record(actor, {
-      section: "menu",
-      action: "menu.section.update",
+      section: 'menu',
+      action: 'menu.section.update',
       summary: `Updated menu section "${section.name}"`,
       meta: { sectionId: id, before: existing.name, after: section.name },
     });
-    return section;
+    return { ...section, imageUrl };
+  }
+
+  async uploadSectionImage(
+    actor: JwtAccessPayload,
+    id: string,
+    file: MenuImageUpload,
+  ) {
+    this.assertWrite(actor);
+    const shopId = actor.shopId!;
+    const section = await this.ensureSection(shopId, id);
+    assertMenuImageFile(file);
+    const oldUrl = await sectionImageUrl(this.prisma, shopId, id);
+    const url = await this.media.replaceMediaPath(shopId, oldUrl, file);
+    await setSectionImageUrl(this.prisma, shopId, id, url);
+    await this.audit.record(actor, {
+      section: 'menu',
+      action: 'menu.section.image',
+      summary: `Updated menu section image "${section.name}"`,
+      meta: { sectionId: id },
+    });
+    return { ...section, imageUrl: url };
   }
 
   async deleteSection(actor: JwtAccessPayload, id: string) {
     this.assertWrite(actor);
     const existing = await this.ensureSection(actor.shopId!, id);
+    const oldUrl = await sectionImageUrl(this.prisma, actor.shopId!, id);
+    await this.media.deleteByMediaPath(oldUrl);
     await this.prisma.menuSection.delete({ where: { id } });
     await this.audit.record(actor, {
-      section: "menu",
-      action: "menu.section.delete",
+      section: 'menu',
+      action: 'menu.section.delete',
       summary: `Deleted menu section "${existing.name}"`,
       meta: { sectionId: id },
     });
@@ -186,8 +235,8 @@ export class MenuService {
       },
     });
     await this.audit.record(actor, {
-      section: "menu",
-      action: "menu.tag.create",
+      section: 'menu',
+      action: 'menu.tag.create',
       summary: `Created menu tag "${tag.name}"`,
       meta: { tagId: tag.id },
     });
@@ -199,8 +248,8 @@ export class MenuService {
     const existing = await this.ensureTag(actor.shopId!, id);
     await this.prisma.shopTag.delete({ where: { id } });
     await this.audit.record(actor, {
-      section: "menu",
-      action: "menu.tag.delete",
+      section: 'menu',
+      action: 'menu.tag.delete',
       summary: `Deleted menu tag "${existing.name}"`,
       meta: { tagId: id },
     });
@@ -210,6 +259,7 @@ export class MenuService {
   async createItem(actor: JwtAccessPayload, dto: CreateMenuItemDto) {
     this.assertWrite(actor);
     const shopId = actor.shopId!;
+    await assertShopFeature(this.prisma, shopId, 'menu');
     if (dto.sectionId) await this.ensureSection(shopId, dto.sectionId);
     const item = await this.prisma.menuItem.create({
       data: {
@@ -226,7 +276,7 @@ export class MenuService {
         useSectionTiming: dto.useSectionTiming ?? true,
         availableFrom: dto.availableFrom,
         availableTo: dto.availableTo,
-        availableDays: dto.availableDays ?? "0,1,2,3,4,5,6",
+        availableDays: dto.availableDays ?? '0,1,2,3,4,5,6',
       },
     });
     if (dto.tagIds?.length) {
@@ -241,12 +291,12 @@ export class MenuService {
         this.prisma,
         item.id,
         dto.stock ?? 0,
-        venueDayKey(shop?.locale ?? "en"),
+        venueDayKey(shop?.locale ?? 'en'),
       );
     }
     await this.audit.record(actor, {
-      section: "menu",
-      action: "menu.item.create",
+      section: 'menu',
+      action: 'menu.item.create',
       summary: `Added menu item "${item.name}" (${item.price})`,
       meta: { menuItemId: item.id, price: item.price },
     });
@@ -294,13 +344,25 @@ export class MenuService {
         this.prisma,
         id,
         dto.stock,
-        venueDayKey(shop?.locale ?? "en"),
+        venueDayKey(shop?.locale ?? 'en'),
       );
     }
     const after = await this.getItem(actor, id);
+    if (
+      after.trackStock &&
+      after.stock <= 0 &&
+      before.stock > 0
+    ) {
+      await this.notifications.recordOperationsEvent(shopId, {
+        title: 'Menu item out of stock',
+        body: `"${after.name}" has 0 units left`,
+        href: '/menu',
+        dedupeKey: `menu-stock:${after.id}`,
+      });
+    }
     await this.audit.record(actor, {
-      section: "menu",
-      action: "menu.item.update",
+      section: 'menu',
+      action: 'menu.item.update',
       summary: `Updated menu item "${after.name}"`,
       meta: {
         menuItemId: id,
@@ -314,21 +376,20 @@ export class MenuService {
   async uploadItemImage(
     actor: JwtAccessPayload,
     id: string,
-    slot: "1" | "2",
+    slot: '1' | '2',
     file: MenuImageUpload,
   ) {
     this.assertWrite(actor);
     const shopId = actor.shopId!;
     const item = await this.ensureItem(shopId, id);
     assertMenuImageFile(file);
-    const oldUrl = slot === "1" ? item.imageUrl : item.imageUrl2;
+    const oldUrl = slot === '1' ? item.imageUrl : item.imageUrl2;
     const url = await this.media.replaceMediaPath(shopId, oldUrl, file);
-    const data =
-      slot === "1" ? { imageUrl: url } : { imageUrl2: url };
+    const data = slot === '1' ? { imageUrl: url } : { imageUrl2: url };
     await this.prisma.menuItem.update({ where: { id }, data });
     await this.audit.record(actor, {
-      section: "menu",
-      action: "menu.item.image",
+      section: 'menu',
+      action: 'menu.item.image',
       summary: `Updated menu item image (${slot})`,
       meta: { menuItemId: id, slot },
     });
@@ -342,8 +403,8 @@ export class MenuService {
     await this.media.deleteByMediaPath(existing.imageUrl2);
     await this.prisma.menuItem.delete({ where: { id } });
     await this.audit.record(actor, {
-      section: "menu",
-      action: "menu.item.delete",
+      section: 'menu',
+      action: 'menu.item.delete',
       summary: `Deleted menu item "${existing.name}"`,
       meta: { menuItemId: id },
     });
@@ -377,20 +438,22 @@ export class MenuService {
   }
 
   private async ensureSection(shopId: string, id: string) {
-    const s = await this.prisma.menuSection.findFirst({ where: { id, shopId } });
-    if (!s) throw new NotFoundException("Section not found");
+    const s = await this.prisma.menuSection.findFirst({
+      where: { id, shopId },
+    });
+    if (!s) throw new NotFoundException('Section not found');
     return s;
   }
 
   private async ensureTag(shopId: string, id: string) {
     const t = await this.prisma.shopTag.findFirst({ where: { id, shopId } });
-    if (!t) throw new NotFoundException("Tag not found");
+    if (!t) throw new NotFoundException('Tag not found');
     return t;
   }
 
   private async ensureItem(shopId: string, id: string) {
     const i = await this.prisma.menuItem.findFirst({ where: { id, shopId } });
-    if (!i) throw new NotFoundException("Item not found");
+    if (!i) throw new NotFoundException('Item not found');
     return i;
   }
 }

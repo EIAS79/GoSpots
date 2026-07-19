@@ -29,6 +29,7 @@ export function FinanceOverviewPanel() {
   const sessionsHref = useVenueHref("/sessions");
 
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
   const [revenueToday, setRevenueToday] = useState(0);
   const [revenueWeek, setRevenueWeek] = useState(0);
   const [lossesWeek, setLossesWeek] = useState(0);
@@ -38,19 +39,29 @@ export function FinanceOverviewPanel() {
 
   const load = useCallback(async (opts?: { silent?: boolean }) => {
     if (!opts?.silent) setLoading(true);
+    setError(null);
     try {
-      const [overview, analytics] = await Promise.all([
-        fetchDashboardOverview(),
-        fetchFinanceAnalytics(7),
-      ]);
+      const overview = await fetchDashboardOverview();
       setRevenueToday(overview.kpis.revenueToday);
       setRevenueWeek(overview.kpis.revenueWeek);
       setLossesWeek(overview.kpis.lossesWeek);
-      setMenuRevenueWeek(analytics.summary.revenueMenuOrders);
-      setPlayRevenueWeek(analytics.summary.revenuePlaySessions);
-      setReservationRevenueWeek(analytics.summary.revenueReservations);
-    } catch {
-      /* keep last values */
+      try {
+        const analytics = await fetchFinanceAnalytics(7);
+        setMenuRevenueWeek(analytics.summary.revenueMenuOrders);
+        setPlayRevenueWeek(analytics.summary.revenuePlaySessions);
+        setReservationRevenueWeek(analytics.summary.revenueReservations);
+      } catch (e) {
+        setMenuRevenueWeek(0);
+        setPlayRevenueWeek(0);
+        setReservationRevenueWeek(0);
+        setError(
+          e instanceof Error
+            ? e.message
+            : "Could not load revenue breakdown. Check that reports are unlocked on your plan.",
+        );
+      }
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Could not load finance overview.");
     } finally {
       if (!opts?.silent) setLoading(false);
     }
@@ -77,6 +88,11 @@ export function FinanceOverviewPanel() {
 
   return (
     <div className="space-y-6">
+      {error ? (
+        <p className="rounded-lg border border-amber-400/30 bg-amber-500/10 px-3 py-2 text-sm text-amber-100">
+          {error}
+        </p>
+      ) : null}
       <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
         <KpiCard
           label="Revenue today"
@@ -106,13 +122,13 @@ export function FinanceOverviewPanel() {
         />
       </div>
 
-      <div className="grid gap-3 sm:grid-cols-3">
+      <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
         <RevenueSourceCard
           label="Play & tables"
           amount={playRevenueWeek}
           formatMoney={formatMoney}
           href={playHref}
-          hint="Paid game reservations (Operations → Play billing)"
+          hint="Paid game sessions (Game billing)"
           icon={Gamepad2}
         />
         <RevenueSourceCard
@@ -128,7 +144,7 @@ export function FinanceOverviewPanel() {
           amount={menuRevenueWeek}
           formatMoney={formatMoney}
           href={ordersHref}
-          hint="Completed tickets on Operations → Menu orders"
+          hint="Completed tickets on Menu orders"
           icon={ShoppingCart}
         />
       </div>

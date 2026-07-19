@@ -1,6 +1,6 @@
-import { Global, Module } from "@nestjs/common";
-import { MediaController } from "./media.controller";
-import { MediaService } from "./media.service";
+import { Global, Module } from '@nestjs/common';
+import { MediaController } from './media.controller';
+import { MediaService } from './media.service';
 
 @Global()
 @Module({

@@ -193,7 +193,7 @@ export function CategoryDialog({
           <ul className="mt-2 space-y-2">
             {rates.map((r, i) => (
               <li key={i} className="flex items-center gap-2">
-                <div className="grid min-w-0 flex-1 grid-cols-3 gap-2">
+                <div className="grid min-w-0 flex-1 grid-cols-1 gap-2 sm:grid-cols-3">
                   <input
                     placeholder="Label"
                     value={r.label}
@@ -202,8 +202,9 @@ export function CategoryDialog({
                       next[i] = { ...r, label: e.target.value };
                       setRates(next);
                     }}
-                    className="rounded-lg border border-white/10 bg-zinc-900 px-2 py-1.5 text-xs text-white"
+                    className="rounded-lg border border-white/10 bg-zinc-900 px-2 py-1.5 text-xs text-white sm:col-span-1"
                   />
+                  <div className="grid grid-cols-2 gap-2 sm:contents">
                   <input
                     placeholder="Mins"
                     value={r.durationMinutes}
@@ -224,6 +225,7 @@ export function CategoryDialog({
                     }}
                     className="rounded-lg border border-white/10 bg-zinc-900 px-2 py-1.5 text-xs text-white"
                   />
+                  </div>
                 </div>
                 <button
                   type="button"

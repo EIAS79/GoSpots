@@ -1,4 +1,4 @@
-import type { PrismaService } from "../prisma/prisma.service";
+import type { PrismaService } from '../prisma/prisma.service';
 
 export type MenuItemStockRow = {
   id: string;

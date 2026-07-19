@@ -1,5 +1,7 @@
 import { api } from "./api";
 
+export type ShopReviewsMode = "ENABLED" | "DISABLED" | "HIDDEN";
+
 export type ShopSettings = {
   id: string;
   name: string;
@@ -15,6 +17,8 @@ export type ShopSettings = {
   locale: string;
   currency: string;
   isPublished: boolean;
+  advertiseOnVenuesPage: boolean;
+  reviewsMode: ShopReviewsMode;
   floorCount: number;
 };
 
@@ -55,6 +59,8 @@ export function updateShopSettings(body: Partial<{
   phone: string | null;
   email: string | null;
   isPublished: boolean;
+  advertiseOnVenuesPage: boolean;
+  reviewsMode: ShopReviewsMode;
   floorCount: number;
 }>) {
   return api<ShopSettingsResponse>("/shop/settings", {
@@ -80,30 +86,140 @@ export function convertCurrency(body: {
   });
 }
 
+export type PublicOpeningHour = {
+  weekday: number;
+  opensAt: string;
+  closesAt: string;
+  isClosed: boolean;
+};
+
+export type PublicVenueReview = {
+  id: string;
+  guestName: string;
+  rating: number;
+  comment: string | null;
+  createdAt: string;
+};
+
 export type PublicVenue = {
   id: string;
   slug: string;
   name: string;
   displayName: string | null;
+  address: string | null;
   city: string | null;
   country: string | null;
   description: string | null;
   coverImage: string | null;
   locale: string;
   currency: string;
+  gameOfferingCount?: number;
+  averageRating?: number | null;
+  reviewCount?: number;
+  reviewsMode?: ShopReviewsMode;
+  canSubmitReview?: boolean;
+  showReviews?: boolean;
   tags?: VenueCategoryTag[];
+  openingHours?: PublicOpeningHour[];
+  scheduleExceptions?: PublicScheduleException[];
+};
+
+export type PublicVenuesResponse = {
+  items: PublicVenue[];
+  total: number;
+  facets: {
+    countries: string[];
+    cities: string[];
+  };
+};
+
+export type PublicGamingOffering = {
+  id: string;
+  type: string;
+  name: string;
+  description: string | null;
+  imageUrl: string | null;
+  bookingMode: "TIME" | "GAME" | "PERSON" | "MIXED";
+  playstationGames: string[];
+  offeringConfig: Record<string, unknown> | null;
+  slotMinutes: number;
+  unitCount: number;
+  rates: {
+    label: string;
+    price: number;
+    durationMinutes: number | null;
+  }[];
+};
+
+export type PublicScheduleException = {
+  id: string;
+  date: string;
+  label: string | null;
+  isClosed: boolean;
+  opensAt: string | null;
+  closesAt: string | null;
+};
+
+export type PublicMenuSection = {
+  id: string;
+  name: string;
+  sortOrder: number;
+  mealPeriod: string | null;
+  availableFrom: string | null;
+  availableTo: string | null;
+  availableDays: string;
+  imageUrl: string | null;
+};
+
+export type PublicMenuItem = {
+  id: string;
+  sectionId: string | null;
+  name: string;
+  description: string | null;
+  imageUrl: string | null;
+  imageUrl2: string | null;
+  price: number;
+  trackStock: boolean;
+  inStock: boolean;
+  useSectionTiming: boolean;
+  availableFrom: string | null;
+  availableTo: string | null;
+  availableDays: string;
+  tags: VenueCategoryTag[];
+};
+
+export type PublicVenueMenu = {
+  sections: PublicMenuSection[];
+  items: PublicMenuItem[];
+};
+
+export type PublicVenueFeatures = {
+  hasMenu: boolean;
+  hasGaming: boolean;
+  hasDigitalDining?: boolean;
+  hasTableReservations: boolean;
+  hasGuestChat?: boolean;
 };
 
 export type PublicVenueDetail = PublicVenue & {
   address: string | null;
   phone: string | null;
   email: string | null;
+  reviews?: PublicVenueReview[];
+  reviewsMode?: ShopReviewsMode;
+  canSubmitReview?: boolean;
+  showReviews?: boolean;
   galleryItems: {
     id: string;
     imageUrl: string;
     caption: string | null;
     sortOrder: number;
   }[];
+  gamingOfferings?: PublicGamingOffering[];
+  diningOfferings?: PublicGamingOffering[];
+  scheduleExceptions?: PublicScheduleException[];
+  menu?: PublicVenueMenu | null;
+  features?: PublicVenueFeatures;
 };
 
 export function syncVenueCategories(body: {
@@ -130,7 +246,7 @@ export function fetchPublicVenues(params?: {
     sp.set("categories", params.categories.join(","));
   }
   const qs = sp.toString();
-  return api<PublicVenue[]>(`/public/venues${qs ? `?${qs}` : ""}`);
+  return api<PublicVenuesResponse>(`/public/venues${qs ? `?${qs}` : ""}`);
 }
 
 export function fetchPublicVenue(slug: string) {

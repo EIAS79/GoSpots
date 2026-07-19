@@ -6,7 +6,7 @@ import { useEffect, useState, type ReactNode } from "react";
 import { api } from "@/lib/api";
 import {
   dashboardBase,
-  resolveVenuePathFromMemberships,
+  hasMembershipForVenuePath,
 } from "@/lib/venue-dashboard";
 import type { ShopSettings } from "@/lib/shop-settings-client";
 import { VenuePathProvider } from "@/lib/venue-context";
@@ -38,13 +38,8 @@ export function VenueGate({ children }: { children: ReactNode }) {
       return;
     }
 
-    const allowed = resolveVenuePathFromMemberships(state.user.memberships);
-    if (!allowed) {
+    if (!hasMembershipForVenuePath(state.user.memberships, venuePath)) {
       setError(true);
-      return;
-    }
-    if (allowed !== venuePath) {
-      router.replace(dashboardBase(allowed));
       return;
     }
 

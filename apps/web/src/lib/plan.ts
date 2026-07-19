@@ -1,3 +1,10 @@
+import {
+  legacyModulesFromTier,
+  modulesForPackAndAddOns,
+  TRIAL_DURATION_DAYS as PACK_TRIAL_DAYS,
+  type ModuleKey,
+} from "./venue-packs";
+
 export type SubscriptionTier =
   | "FREE"
   | "STARTER"
@@ -7,6 +14,9 @@ export type SubscriptionTier =
 
 export type SubscriptionStatus = "TRIAL" | "ACTIVE" | "PAST_DUE" | "CANCELED";
 
+/** Free trial employee seat cap. */
+export const TRIAL_STAFF_SEAT_LIMIT = 3;
+
 export const ALL_FEATURES = [
   "menu",
   "resource",
@@ -14,12 +24,18 @@ export const ALL_FEATURES = [
   "transaction",
   "gallery",
   "hours",
+  "notes",
   "bar",
   "reports",
   "roles",
   "memberships",
   "multi_shop",
   "integrations",
+  "audit",
+  "notifications",
+  "reviews",
+  "messaging",
+  "marketing",
 ] as const;
 
 export type FeatureKey = (typeof ALL_FEATURES)[number];
@@ -33,6 +49,7 @@ const UNLOCKED: Record<SubscriptionTier, Set<FeatureKey>> = {
     "transaction",
     "gallery",
     "hours",
+    "notes",
   ]),
   STANDARD: new Set([
     "menu",
@@ -41,6 +58,7 @@ const UNLOCKED: Record<SubscriptionTier, Set<FeatureKey>> = {
     "transaction",
     "gallery",
     "hours",
+    "notes",
     "bar",
     "reports",
   ]),
@@ -51,6 +69,7 @@ const UNLOCKED: Record<SubscriptionTier, Set<FeatureKey>> = {
     "transaction",
     "gallery",
     "hours",
+    "notes",
     "bar",
     "reports",
     "memberships",
@@ -59,7 +78,7 @@ const UNLOCKED: Record<SubscriptionTier, Set<FeatureKey>> = {
   ENTERPRISE: new Set([...ALL_FEATURES]),
 };
 
-export const TRIAL_DURATION_DAYS = 7;
+export const TRIAL_DURATION_DAYS = PACK_TRIAL_DAYS;
 
 export const STAFF_LIMITS: Record<SubscriptionTier, number> = {
   FREE: 0,
@@ -76,16 +95,30 @@ export type SubscriptionAccess = {
   trialExpired: boolean;
   trialEndsAt: string | null;
   trialDaysRemaining: number;
+  enabledModules: Set<ModuleKey>;
+  packId: string | null;
+  addOns: string;
 };
 
 type SubInput = {
   tier: SubscriptionTier;
   status: SubscriptionStatus;
   trialEndsAt: string | null;
+  packId?: string | null;
+  addOns?: string | null;
 } | null;
 
 function trialExpiredAt(trialEndsAt: string | null): boolean {
   return !!trialEndsAt && new Date(trialEndsAt).getTime() < Date.now();
+}
+
+function syntheticTier(modules: Set<string>): SubscriptionTier {
+  if (modules.has("multi_shop") || modules.has("integrations"))
+    return "ENTERPRISE";
+  if (modules.has("roles")) return "PRO";
+  if (modules.has("reports")) return "STANDARD";
+  if (modules.size > 0) return "STARTER";
+  return "FREE";
 }
 
 export function resolveSubscriptionAccess(sub: SubInput): SubscriptionAccess {
@@ -96,6 +129,9 @@ export function resolveSubscriptionAccess(sub: SubInput): SubscriptionAccess {
     trialExpired: false,
     trialEndsAt: null,
     trialDaysRemaining: 0,
+    enabledModules: new Set(),
+    packId: null,
+    addOns: "",
   };
   if (!sub) return empty;
 
@@ -112,35 +148,58 @@ export function resolveSubscriptionAccess(sub: SubInput): SubscriptionAccess {
         )
       : 0;
 
-  const base = {
+  const locked =
+    sub.status === "CANCELED" ||
+    sub.status === "PAST_DUE" ||
+    (sub.status === "TRIAL" && !!sub.trialEndsAt && expired);
+
+  const modules = locked
+    ? new Set<ModuleKey>()
+    : sub.packId
+      ? modulesForPackAndAddOns(sub.packId, sub.addOns)
+      : (legacyModulesFromTier(sub.tier) as Set<ModuleKey>);
+
+  return {
     billedTier: sub.tier,
+    effectiveTier: locked ? "FREE" : syntheticTier(modules),
     trialEndsAt: sub.trialEndsAt,
     trialActive,
     trialExpired: sub.status === "TRIAL" && !!sub.trialEndsAt && expired,
     trialDaysRemaining: daysRemaining,
+    enabledModules: modules,
+    packId: sub.packId ?? null,
+    addOns: sub.addOns ?? "",
   };
-
-  if (sub.status === "CANCELED" || sub.status === "PAST_DUE") {
-    return { ...base, effectiveTier: "FREE" };
-  }
-  if (base.trialExpired) {
-    return { ...base, effectiveTier: "FREE" };
-  }
-  if (trialActive || sub.status === "ACTIVE") {
-    return { ...base, effectiveTier: sub.tier };
-  }
-  return { ...base, effectiveTier: sub.tier };
 }
 
 export function resolveEffectiveTier(sub: SubInput): SubscriptionTier {
   return resolveSubscriptionAccess(sub).effectiveTier;
 }
 
+export function resolveEnabledModules(sub: SubInput): Set<ModuleKey> {
+  return resolveSubscriptionAccess(sub).enabledModules;
+}
+
+export function resolveStaffSeatLimit(
+  sub: SubInput & { staffSeatQuantity?: number | null },
+): number {
+  const access = resolveSubscriptionAccess(sub);
+  if (!access.enabledModules.has("roles")) return 0;
+  if (access.trialActive) return TRIAL_STAFF_SEAT_LIMIT;
+  return Math.max(0, Math.floor(sub?.staffSeatQuantity ?? 0));
+}
+
+/** Prefer modules set when available; tier string still works for legacy callers. */
 export function isFeatureUnlocked(
-  tier: SubscriptionTier,
+  tierOrModules: SubscriptionTier | Set<string> | readonly string[],
   feature: FeatureKey,
 ): boolean {
-  return UNLOCKED[tier].has(feature);
+  if (typeof tierOrModules === "string") {
+    return UNLOCKED[tierOrModules].has(feature);
+  }
+  const set =
+    tierOrModules instanceof Set ? tierOrModules : new Set(tierOrModules);
+  return set.has(feature);
 }
 
 export const FEATURE_LABELS: Record<FeatureKey, string> = {
@@ -150,12 +209,18 @@ export const FEATURE_LABELS: Record<FeatureKey, string> = {
   transaction: "Sales & transactions",
   gallery: "Gallery",
   hours: "Opening hours",
+  notes: "Shift notes",
   bar: "Bar service",
   reports: "Reports",
   roles: "Employee accounts",
   memberships: "Memberships",
   multi_shop: "Multiple venues",
   integrations: "Integrations",
+  audit: "Audit log",
+  notifications: "Notifications",
+  reviews: "Reviews",
+  messaging: "Guest messaging",
+  marketing: "Venue page & discovery",
 };
 
 export const FEATURE_HINTS: Partial<Record<FeatureKey, string>> = {
@@ -165,12 +230,18 @@ export const FEATURE_HINTS: Partial<Record<FeatureKey, string>> = {
   transaction: "Sessions, receipts, and daily sales.",
   gallery: "Photos on your public venue page.",
   hours: "Weekly schedule and special hours.",
+  notes: "Handoff notes for the next shift — who wrote it, when, and how urgent.",
   bar: "Drinks and snacks on live sessions.",
   reports: "Revenue, losses, and shift summaries.",
   roles: "Staff logins with permissions (Pro+).",
   memberships: "Loyalty and member pricing.",
   multi_shop: "One login, many branches.",
   integrations: "POS, payments, and custom hooks.",
+  audit: "Searchable trail of staff and system actions.",
+  notifications: "Inbox for booking and order alerts.",
+  reviews: "Guest ratings and comments on your public venue page.",
+  messaging: "Live guest↔staff chat on your public venue page.",
+  marketing: "Public venue page and directory ads.",
 };
 
 export const MARKETING_FEATURES = [
@@ -228,7 +299,7 @@ export const PLAN_CATEGORIES: PlanCategory[] = [
     title: "Venue operations",
     description: "Run shifts, tables, bookings, and how your venue looks day to day.",
     kind: "dashboard",
-    keys: ["resource", "reservation", "hours", "gallery"],
+    keys: ["resource", "reservation", "hours", "gallery", "notes"],
   },
   {
     id: "revenue",
@@ -305,7 +376,7 @@ export const SUBSCRIPTION_PLANS: SubscriptionPlanOffer[] = [
     unlocks: [
       ...dashboardUnlocks("STARTER"),
       ...marketingUnlocks("STARTER"),
-      "7-day full Starter trial on signup",
+      "90-day free trial on your venue pack",
     ],
     cta: "Start with Starter",
   },

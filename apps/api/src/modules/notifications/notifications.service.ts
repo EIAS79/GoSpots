@@ -1,21 +1,26 @@
-import { Injectable, NotFoundException } from "@nestjs/common";
+import { Injectable, NotFoundException, ForbiddenException } from '@nestjs/common';
 import {
   NotificationType,
   SubscriptionStatus,
   UserAccountType,
   type Prisma,
-} from "@prisma/client";
-import type { NotificationSection } from "../../common/notification.constants";
+} from '@prisma/client';
+import type { NotificationSection } from '../../common/notification.constants';
+import {
+  classifyReservationNotificationTab,
+} from '../../common/reservation-notification-href';
 import {
   resolveSubscriptionAccess,
   TRIAL_DURATION_DAYS,
-} from "../../common/subscription-tier";
-import { requireShopId } from "../../common/tenant";
-import type { JwtAccessPayload } from "../auth/auth.service";
-import { AuditService } from "../audit/audit.service";
-import { PrismaService } from "../../prisma/prisma.service";
-import type { ArchiveNotificationsDto } from "./dto/archive-notifications.dto";
-import type { NotificationQueryDto } from "./dto/notification-query.dto";
+} from '../../common/subscription-tier';
+import { requireShopId } from '../../common/tenant';
+import { hasPermission, PERMISSIONS } from '../../common/permissions';
+import type { JwtAccessPayload } from '../auth/auth.service';
+import { AuditService } from '../audit/audit.service';
+import { PrismaService } from '../../prisma/prisma.service';
+import type { ArchiveNotificationsDto } from './dto/archive-notifications.dto';
+import type { MarkReservationTabReadDto } from './dto/mark-reservation-tab-read.dto';
+import type { NotificationQueryDto } from './dto/notification-query.dto';
 
 export type NotificationQuery = {
   from?: string;
@@ -34,7 +39,30 @@ export class NotificationsService {
     private readonly audit: AuditService,
   ) {}
 
+  private assertRead(actor: JwtAccessPayload) {
+    if (actor.shopRole === 'OWNER') return;
+    if (!hasPermission(actor.perms ?? '', PERMISSIONS.NOTIFICATIONS_READ)) {
+      throw new ForbiddenException('Missing notifications.read permission.');
+    }
+  }
+
+  private assertReservationBadges(actor: JwtAccessPayload) {
+    if (actor.shopRole === 'OWNER') return;
+    const perms = actor.perms ?? '';
+    if (perms === '*') return;
+    if (
+      hasPermission(perms, PERMISSIONS.NOTIFICATIONS_READ) ||
+      hasPermission(perms, PERMISSIONS.RESERVATION_READ)
+    ) {
+      return;
+    }
+    throw new ForbiddenException(
+      'Missing reservation.read or notifications.read permission.',
+    );
+  }
+
   async list(actor: JwtAccessPayload, q: NotificationQuery = {}) {
+    this.assertRead(actor);
     const shopId = requireShopId(actor);
     await this.syncTrialNotifications(shopId, actor.sub);
 
@@ -45,13 +73,13 @@ export class NotificationsService {
     const [items, total, unreadCount] = await Promise.all([
       this.prisma.notification.findMany({
         where,
-        orderBy: { createdAt: "desc" },
+        orderBy: { createdAt: 'desc' },
         take,
         skip,
       }),
       this.prisma.notification.count({ where }),
       this.prisma.notification.count({
-        where: this.buildWhere(actor, { status: "unread" }),
+        where: this.buildWhere(actor, { status: 'unread' }),
       }),
     ]);
 
@@ -62,13 +90,14 @@ export class NotificationsService {
       take,
       skip,
       sections: await this.sectionCounts(actor, q),
+      canDelete: actor.shopRole === 'OWNER' || actor.sysRole === 'SUPER_ADMIN',
     };
   }
 
   async recent(actor: JwtAccessPayload, since?: string) {
+    this.assertRead(actor);
     const shopId = requireShopId(actor);
-    const sinceDate =
-      since ? new Date(since) : new Date(Date.now() - 60_000);
+    const sinceDate = since ? new Date(since) : new Date(Date.now() - 60_000);
 
     const items = await this.prisma.notification.findMany({
       where: {
@@ -77,12 +106,12 @@ export class NotificationsService {
         createdAt: { gt: sinceDate },
         OR: [{ userId: null }, { userId: actor.sub }],
       },
-      orderBy: { createdAt: "desc" },
+      orderBy: { createdAt: 'desc' },
       take: 10,
     });
 
     const unreadCount = await this.prisma.notification.count({
-      where: this.buildWhere(actor, { status: "unread" }),
+      where: this.buildWhere(actor, { status: 'unread' }),
     });
 
     return {
@@ -92,10 +121,67 @@ export class NotificationsService {
   }
 
   async unreadCount(actor: JwtAccessPayload) {
+    this.assertRead(actor);
     const count = await this.prisma.notification.count({
-      where: this.buildWhere(actor, { status: "unread" }),
+      where: this.buildWhere(actor, { status: 'unread' }),
     });
     return { unreadCount: count };
+  }
+
+  async reservationBadges(actor: JwtAccessPayload) {
+    this.assertReservationBadges(actor);
+    const rows = await this.prisma.notification.findMany({
+      where: {
+        ...this.buildWhere(actor, { status: 'unread' }),
+        section: 'reservation',
+      },
+      select: { href: true, title: true },
+    });
+
+    let dining = 0;
+    let gaming = 0;
+    let events = 0;
+    for (const row of rows) {
+      const tab = classifyReservationNotificationTab(row);
+      if (tab === 'dining') dining += 1;
+      else if (tab === 'events') events += 1;
+      else if (tab === 'schedule') gaming += 1;
+    }
+
+    return {
+      dining,
+      gaming,
+      events,
+      total: dining + gaming + events,
+    };
+  }
+
+  async markReservationTabRead(
+    actor: JwtAccessPayload,
+    dto: MarkReservationTabReadDto,
+  ) {
+    this.assertReservationBadges(actor);
+    const tab = dto.tab;
+    const rows = await this.prisma.notification.findMany({
+      where: {
+        ...this.buildWhere(actor, { status: 'unread' }),
+        section: 'reservation',
+      },
+      select: { id: true, href: true, title: true },
+    });
+
+    const ids = rows
+      .filter((row) => classifyReservationNotificationTab(row) === tab)
+      .map((row) => row.id);
+
+    if (ids.length === 0) return { updated: 0 };
+
+    const result = await this.prisma.notification.updateMany({
+      where: { id: { in: ids } },
+      data: { readAt: new Date() },
+    });
+
+    return { updated: result.count };
   }
 
   async markRead(actor: JwtAccessPayload, id: string) {
@@ -118,7 +204,7 @@ export class NotificationsService {
 
   async markAllRead(actor: JwtAccessPayload) {
     const result = await this.prisma.notification.updateMany({
-      where: this.buildWhere(actor, { status: "unread" }),
+      where: this.buildWhere(actor, { status: 'unread' }),
       data: { readAt: new Date() },
     });
     return { updated: result.count };
@@ -145,7 +231,7 @@ export class NotificationsService {
           from: dto.from,
           to: dto.to,
           section: dto.section,
-          status: dto.status ?? "all",
+          status: dto.status ?? 'all',
         }),
         archivedAt: null,
         ...access,
@@ -182,7 +268,7 @@ export class NotificationsService {
           from: dto.from,
           to: dto.to,
           section: dto.section,
-          status: "archived",
+          status: 'archived',
         }),
         ...access,
       };
@@ -195,6 +281,94 @@ export class NotificationsService {
       data: { archivedAt: null },
     });
     return { updated: result.count };
+  }
+
+  private assertOwnerDelete(actor: JwtAccessPayload) {
+    if (actor.shopRole === 'OWNER' || actor.sysRole === 'SUPER_ADMIN') return;
+    throw new ForbiddenException(
+      'Only the venue owner can permanently delete notifications.',
+    );
+  }
+
+  async exportCsv(actor: JwtAccessPayload, q: NotificationQuery = {}) {
+    this.assertRead(actor);
+    const where = this.buildWhere(actor, q);
+    const rows = await this.prisma.notification.findMany({
+      where,
+      orderBy: { createdAt: 'desc' },
+      take: 10_000,
+    });
+
+    const header = [
+      'id',
+      'createdAt',
+      'section',
+      'type',
+      'title',
+      'body',
+      'href',
+      'readAt',
+      'archivedAt',
+    ];
+    const lines = rows.map((r) => {
+      const s = this.serialize(r);
+      return [
+        s.id,
+        s.createdAt,
+        s.section,
+        s.type,
+        csvEscape(s.title),
+        csvEscape(s.body),
+        s.href ?? '',
+        s.readAt ?? '',
+        s.archivedAt ?? '',
+      ].join(',');
+    });
+
+    return [header.join(','), ...lines].join('\n');
+  }
+
+  async removeMany(
+    actor: JwtAccessPayload,
+    dto: ArchiveNotificationsDto & { status?: string },
+  ) {
+    this.assertOwnerDelete(actor);
+    const shopId = requireShopId(actor);
+    const access: Prisma.NotificationWhereInput = {
+      OR: [{ userId: null }, { userId: actor.sub }],
+    };
+
+    let where: Prisma.NotificationWhereInput;
+    if (dto.ids?.length) {
+      where = { shopId, id: { in: dto.ids }, ...access };
+    } else if (dto.allMatching) {
+      where = {
+        ...this.buildWhere(actor, {
+          from: dto.from,
+          to: dto.to,
+          section: dto.section,
+          status: (dto.status as NotificationQuery['status']) ?? 'all',
+        }),
+        ...access,
+      };
+    } else {
+      return { deleted: 0 };
+    }
+
+    const result = await this.prisma.notification.deleteMany({ where });
+
+    await this.audit.record(actor, {
+      section: 'system',
+      action: 'notifications.delete',
+      summary: `Deleted ${result.count} notification${result.count === 1 ? '' : 's'}`,
+      meta: {
+        deleted: result.count,
+        ids: dto.ids?.slice(0, 50),
+        allMatching: dto.allMatching ?? false,
+      },
+    });
+
+    return { deleted: result.count };
   }
 
   /** Sign-in events → notify managers/owners + audit log */
@@ -212,7 +386,7 @@ export class NotificationsService {
     const display = input.name ?? input.email;
     const actor: JwtAccessPayload = {
       sub: input.userId,
-      sysRole: "USER",
+      sysRole: 'USER',
       email: input.email,
       shopId: input.shopId,
       shopRole: input.shopRole,
@@ -222,15 +396,15 @@ export class NotificationsService {
       await this.create({
         shopId: input.shopId,
         userId: null,
-        section: "team",
+        section: 'team',
         type: NotificationType.STAFF,
-        title: "Employee signed in",
+        title: 'Employee signed in',
         body: `${display} signed in to the venue dashboard.`,
-        href: "/staff",
+        href: '/staff',
       });
       await this.audit.record(actor, {
-        section: "team",
-        action: "staff.sign_in",
+        section: 'team',
+        action: 'staff.sign_in',
         summary: `${display} signed in`,
         meta: { email: input.email },
         ipAddress: input.ip,
@@ -238,19 +412,19 @@ export class NotificationsService {
       return;
     }
 
-    if (input.shopRole === "OWNER" || input.shopRole === "MANAGER") {
+    if (input.shopRole === 'OWNER' || input.shopRole === 'MANAGER') {
       await this.create({
         shopId: input.shopId,
         userId: null,
-        section: "team",
+        section: 'team',
         type: NotificationType.STAFF,
-        title: "Admin signed in",
+        title: 'Admin signed in',
         body: `${display} (${input.shopRole}) opened the dashboard.`,
-        href: "/audit",
+        href: '/audit',
       });
       await this.audit.record(actor, {
-        section: "team",
-        action: "admin.sign_in",
+        section: 'team',
+        action: 'admin.sign_in',
         summary: `${display} signed in as ${input.shopRole}`,
         meta: { email: input.email, role: input.shopRole },
         ipAddress: input.ip,
@@ -271,7 +445,7 @@ export class NotificationsService {
     return this.create({
       shopId,
       userId: null,
-      section: "team",
+      section: 'team',
       type: NotificationType.STAFF,
       ...input,
     });
@@ -289,9 +463,9 @@ export class NotificationsService {
     return this.create({
       shopId,
       userId: null,
-      section: "reservation",
+      section: 'reservation',
       type: NotificationType.RESERVATION,
-      href: input.href ?? "/sessions",
+      href: input.href ?? '/sessions',
       ...input,
     });
   }
@@ -308,9 +482,49 @@ export class NotificationsService {
     return this.create({
       shopId,
       userId: null,
-      section: "operations",
+      section: 'operations',
       type: NotificationType.OPERATIONS,
-      href: input.href ?? "/resources",
+      href: input.href ?? '/resources',
+      ...input,
+    });
+  }
+
+  /** Venue profile, hours, gallery, and settings changes */
+  async recordVenueEvent(
+    shopId: string,
+    input: {
+      title: string;
+      body: string;
+      href?: string;
+      dedupeKey?: string;
+    },
+  ) {
+    return this.create({
+      shopId,
+      userId: null,
+      section: 'operations',
+      type: NotificationType.OPERATIONS,
+      href: input.href ?? '/settings',
+      ...input,
+    });
+  }
+
+  /** In-venue finance events (awaiting payment, large loss, payment received). */
+  async recordFinanceEvent(
+    shopId: string,
+    input: {
+      title: string;
+      body: string;
+      href?: string;
+      dedupeKey?: string;
+    },
+  ) {
+    return this.create({
+      shopId,
+      userId: null,
+      section: 'operations',
+      type: NotificationType.OPERATIONS,
+      href: input.href ?? '/finance',
       ...input,
     });
   }
@@ -323,22 +537,22 @@ export class NotificationsService {
     await this.upsert({
       shopId,
       userId,
-      dedupeKey: "welcome",
-      section: "system",
+      dedupeKey: 'welcome',
+      section: 'system',
       type: NotificationType.SYSTEM,
       title: `Welcome to GoSpots, ${shopName}`,
-      body: "Your venue dashboard is ready. Set up your menu, tables, and hours to go live.",
-      href: "/settings",
+      body: 'Your venue dashboard is ready. Set up your menu, tables, and hours to go live.',
+      href: '/settings',
     });
     await this.upsert({
       shopId,
       userId,
-      dedupeKey: "trial_started",
-      section: "subscription",
+      dedupeKey: 'trial_started',
+      section: 'subscription',
       type: NotificationType.TRIAL,
-      title: `${TRIAL_DURATION_DAYS}-day Starter trial started`,
-      body: `Explore Starter features free for ${TRIAL_DURATION_DAYS} days. Employee accounts unlock on Standard and Pro.`,
-      href: "/subscription",
+      title: `${TRIAL_DURATION_DAYS}-day free trial started`,
+      body: `Your venue pack is free for ${TRIAL_DURATION_DAYS} days. Customize modules anytime from Subscription.`,
+      href: '/subscription',
     });
   }
 
@@ -356,12 +570,12 @@ export class NotificationsService {
       await this.upsert({
         shopId,
         userId,
-        dedupeKey: "trial_ending_soon",
-        section: "subscription",
+        dedupeKey: 'trial_ending_soon',
+        section: 'subscription',
         type: NotificationType.TRIAL,
-        title: "Trial ending soon",
-        body: `${access.trialDaysRemaining} day${access.trialDaysRemaining === 1 ? "" : "s"} left on your Starter trial. Subscribe to keep features unlocked.`,
-        href: "/subscription",
+        title: 'Trial ending soon',
+        body: `${access.trialDaysRemaining} day${access.trialDaysRemaining === 1 ? '' : 's'} left on your free trial. Keep your pack active to stay unlocked.`,
+        href: '/subscription',
       });
     }
 
@@ -369,12 +583,19 @@ export class NotificationsService {
       await this.upsert({
         shopId,
         userId,
-        dedupeKey: "trial_ended",
-        section: "subscription",
+        dedupeKey: 'trial_ended',
+        section: 'subscription',
         type: NotificationType.SUBSCRIPTION,
-        title: "Your free trial has ended",
-        body: "Dashboard features are locked until you choose a paid plan. Compare pricing on your subscription page.",
-        href: "/subscription",
+        title: 'Your free trial has ended',
+        body: 'Dashboard features are locked until you choose a paid plan. Compare pricing on your subscription page.',
+        href: '/subscription',
+      });
+      await this.audit.recordForShop(shopId, {
+        section: 'subscription',
+        action: 'subscription.trial_expired',
+        summary: 'Free trial ended',
+        meta: { tier: sub.tier, status: sub.status },
+        actorName: 'System',
       });
     }
 
@@ -382,12 +603,19 @@ export class NotificationsService {
       await this.upsert({
         shopId,
         userId: null,
-        dedupeKey: "subscription_past_due",
-        section: "billing",
+        dedupeKey: 'subscription_past_due',
+        section: 'billing',
         type: NotificationType.BILLING,
-        title: "Payment past due",
-        body: "Update your billing details to avoid losing access to paid features.",
-        href: "/subscription",
+        title: 'Payment past due',
+        body: 'Update your billing details to avoid losing access to paid features.',
+        href: '/subscription',
+      });
+      await this.audit.recordForShop(shopId, {
+        section: 'subscription',
+        action: 'subscription.past_due',
+        summary: 'Subscription payment past due',
+        meta: { tier: sub.tier, status: sub.status },
+        actorName: 'System',
       });
     }
   }
@@ -402,16 +630,16 @@ export class NotificationsService {
       OR: [{ userId: null }, { userId: actor.sub }],
     };
 
-    const status = q.status ?? "all";
-    if (status === "archived") {
+    const status = q.status ?? 'all';
+    if (status === 'archived') {
       where.archivedAt = { not: null };
     } else {
       where.archivedAt = null;
-      if (status === "unread") where.readAt = null;
-      if (status === "read") where.readAt = { not: null };
+      if (status === 'unread') where.readAt = null;
+      if (status === 'read') where.readAt = { not: null };
     }
 
-    if (q.section && q.section !== "all") {
+    if (q.section && q.section !== 'all') {
       where.section = q.section;
     }
 
@@ -426,20 +654,20 @@ export class NotificationsService {
     }
 
     if (q.since) {
-      where.createdAt = { ...(where.createdAt as object), gt: new Date(q.since) };
+      where.createdAt = {
+        ...(where.createdAt as object),
+        gt: new Date(q.since),
+      };
     }
 
     return where;
   }
 
-  private async sectionCounts(
-    actor: JwtAccessPayload,
-    q: NotificationQuery,
-  ) {
+  private async sectionCounts(actor: JwtAccessPayload, q: NotificationQuery) {
     const shopId = requireShopId(actor);
     const base: Prisma.NotificationWhereInput = {
       shopId,
-      archivedAt: q.status === "archived" ? { not: null } : null,
+      archivedAt: q.status === 'archived' ? { not: null } : null,
       OR: [{ userId: null }, { userId: actor.sub }],
     };
     if (q.from || q.to) {
@@ -453,7 +681,7 @@ export class NotificationsService {
     }
 
     const counts = await this.prisma.notification.groupBy({
-      by: ["section"],
+      by: ['section'],
       where: base,
       _count: { id: true },
     });
@@ -472,7 +700,7 @@ export class NotificationsService {
         OR: [{ userId: null }, { userId: actor.sub }],
       },
     });
-    if (!row) throw new NotFoundException("Notification not found.");
+    if (!row) throw new NotFoundException('Notification not found.');
     return row;
   }
 
@@ -548,4 +776,11 @@ export class NotificationsService {
       createdAt: row.createdAt.toISOString(),
     };
   }
+}
+
+function csvEscape(value: string) {
+  if (/[",\n]/.test(value)) {
+    return `"${value.replace(/"/g, '""')}"`;
+  }
+  return value;
 }

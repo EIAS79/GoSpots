@@ -1,7 +1,7 @@
-import { ForbiddenException } from "@nestjs/common";
-import { parseDashboardPath } from "./dashboard-path";
-import type { JwtAccessPayload } from "../modules/auth/auth.service";
-import { PrismaService } from "../prisma/prisma.service";
+import { ForbiddenException } from '@nestjs/common';
+import { parseDashboardPath } from './dashboard-path';
+import type { JwtAccessPayload } from '../modules/auth/auth.service';
+import { PrismaService } from '../prisma/prisma.service';
 
 /** Resolve tenant shop id from JWT and/or dashboard URL segment. */
 export async function resolveVenueShopId(
@@ -13,13 +13,13 @@ export async function resolveVenueShopId(
 
   if (!venuePath?.trim()) {
     throw new ForbiddenException(
-      "Open a venue dashboard first, then try again.",
+      'Open a venue dashboard first, then try again.',
     );
   }
 
   const parsed = parseDashboardPath(venuePath.trim());
   if (!parsed) {
-    throw new ForbiddenException("Invalid venue dashboard path.");
+    throw new ForbiddenException('Invalid venue dashboard path.');
   }
 
   const shop = await prisma.shop.findFirst({
@@ -27,10 +27,10 @@ export async function resolveVenueShopId(
     select: { id: true },
   });
   if (!shop) {
-    throw new ForbiddenException("Venue not found.");
+    throw new ForbiddenException('Venue not found.');
   }
 
-  if (actor.sysRole === "SUPER_ADMIN") {
+  if (actor.sysRole === 'SUPER_ADMIN') {
     return shop.id;
   }
 
@@ -39,7 +39,7 @@ export async function resolveVenueShopId(
     select: { id: true },
   });
   if (!membership) {
-    throw new ForbiddenException("You do not have access to this venue.");
+    throw new ForbiddenException('You do not have access to this venue.');
   }
 
   return shop.id;

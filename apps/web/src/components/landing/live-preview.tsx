@@ -27,17 +27,25 @@ const tickerPool = [
 ] as const;
 
 const tickerTones = {
-  emerald: "border-emerald-400/40 bg-emerald-500/15 text-emerald-100",
-  amber: "border-amber-400/40 bg-amber-500/15 text-amber-100",
-  cyan: "border-cyan-400/40 bg-cyan-500/15 text-cyan-100",
-  violet: "border-violet-400/40 bg-violet-500/15 text-violet-100",
+  emerald:
+    "border-emerald-500/35 bg-emerald-500/15 text-emerald-900 dark:border-emerald-400/40 dark:bg-emerald-500/15 dark:text-emerald-100",
+  amber:
+    "border-amber-500/40 bg-amber-500/15 text-amber-950 dark:border-amber-400/40 dark:bg-amber-500/15 dark:text-amber-100",
+  cyan:
+    "border-sky-500/35 bg-sky-500/15 text-sky-950 dark:border-cyan-400/40 dark:bg-cyan-500/15 dark:text-cyan-100",
+  violet:
+    "border-violet-500/35 bg-violet-500/15 text-violet-950 dark:border-violet-400/40 dark:bg-violet-500/15 dark:text-violet-100",
 } as const;
 
 const statusStyles: Record<LiveTable["status"], string> = {
-  available: "border-emerald-500/30 bg-emerald-500/5 text-emerald-300",
-  busy: "border-amber-500/40 bg-amber-500/5 text-amber-300",
-  reserved: "border-cyan-500/40 bg-cyan-500/5 text-cyan-300",
-  maintenance: "border-zinc-700 bg-zinc-900/40 text-zinc-500",
+  available:
+    "border-emerald-500/30 bg-emerald-500/10 text-emerald-900 dark:border-emerald-500/30 dark:bg-emerald-500/5 dark:text-emerald-300",
+  busy:
+    "border-amber-500/40 bg-amber-500/10 text-amber-950 dark:border-amber-500/40 dark:bg-amber-500/5 dark:text-amber-300",
+  reserved:
+    "border-sky-500/35 bg-sky-500/10 text-sky-950 dark:border-cyan-500/40 dark:bg-cyan-500/5 dark:text-cyan-300",
+  maintenance:
+    "border-zinc-400/50 bg-zinc-500/10 text-zinc-600 dark:border-zinc-700 dark:bg-zinc-900/40 dark:text-zinc-500",
 };
 
 const statusLabel: Record<LiveTable["status"], string> = {
@@ -85,22 +93,25 @@ export function LivePreview() {
 
   return (
     <div className="relative w-full">
-      <div className="absolute -inset-x-12 -inset-y-10 -z-10 rounded-[40px] bg-gradient-to-br from-emerald-500/20 via-cyan-500/10 to-violet-500/20 blur-2xl" />
+      <p className="mb-3 text-center text-[11px] font-medium uppercase tracking-wider text-zinc-500">
+        Illustrative operations UI · demo numbers
+      </p>
+      <div className="absolute inset-x-0 -inset-y-10 -z-10 rounded-[40px] bg-gradient-to-br from-amber-400/20 via-orange-400/10 to-rose-400/15 blur-2xl sm:-inset-x-4 dark:from-emerald-500/20 dark:via-cyan-500/10 dark:to-violet-500/20" />
 
-      <div className="relative overflow-hidden rounded-3xl border border-white/10 bg-zinc-950/95 shadow-2xl">
-        <div className="flex items-center justify-between border-b border-white/5 bg-zinc-900/60 px-5 py-3">
-          <div className="flex items-center gap-2">
-            <span className="h-2.5 w-2.5 rounded-full bg-rose-500/80" />
-            <span className="h-2.5 w-2.5 rounded-full bg-amber-400/80" />
-            <span className="h-2.5 w-2.5 rounded-full bg-emerald-400/80" />
-            <span className="ml-3 text-xs text-zinc-500">
+      <div className="relative overflow-hidden rounded-3xl border border-[var(--color-border)] bg-[var(--color-surface)]/95 shadow-2xl backdrop-blur-xl dark:border-white/10 dark:bg-zinc-950/95">
+        <div className="flex min-w-0 flex-wrap items-center justify-between gap-2 border-b border-[var(--color-border)] bg-[var(--color-surface-2)]/70 px-4 py-3 sm:px-5 dark:border-white/5 dark:bg-zinc-900/60">
+          <div className="flex min-w-0 items-center gap-2">
+            <span className="h-2.5 w-2.5 shrink-0 rounded-full bg-rose-500/80" />
+            <span className="h-2.5 w-2.5 shrink-0 rounded-full bg-amber-400/80" />
+            <span className="h-2.5 w-2.5 shrink-0 rounded-full bg-emerald-400/80" />
+            <span className="ml-2 truncate text-xs text-zinc-500 sm:ml-3">
               gospots.app / operations
             </span>
           </div>
-          <div className="flex items-center gap-2 text-xs text-zinc-400">
+          <div className="hidden items-center gap-2 text-xs text-zinc-600 sm:flex dark:text-zinc-400">
             <span className="relative flex h-2 w-2">
-              <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-emerald-400 opacity-75" />
-              <span className="relative inline-flex h-2 w-2 rounded-full bg-emerald-400" />
+              <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-emerald-500 opacity-75 dark:bg-emerald-400" />
+              <span className="relative inline-flex h-2 w-2 rounded-full bg-emerald-600 dark:bg-emerald-400" />
             </span>
             Live · Mokotów branch
           </div>
@@ -129,7 +140,7 @@ export function LivePreview() {
           </AnimatePresence>
         </div>
 
-        <div className="grid grid-cols-3 gap-3 border-b border-white/5 px-5 py-4 text-sm">
+        <div className="grid grid-cols-1 gap-3 border-b border-[var(--color-border)] px-4 py-4 text-sm sm:grid-cols-3 sm:px-5 dark:border-white/5">
           <Stat
             label="Active sessions"
             value={`${active.length} / ${total}`}
@@ -143,7 +154,7 @@ export function LivePreview() {
           />
         </div>
 
-        <div className="grid grid-cols-2 gap-3 p-5 md:grid-cols-3 lg:grid-cols-4">
+        <div className="grid grid-cols-1 gap-3 p-4 sm:grid-cols-2 sm:p-5 md:grid-cols-3 lg:grid-cols-4">
           {tables.map((t, i) => (
             <motion.div
               key={t.id}
@@ -152,31 +163,31 @@ export function LivePreview() {
               viewport={{ once: true }}
               transition={{ duration: 0.4, delay: i * 0.04 }}
               className={cn(
-                "group relative overflow-hidden rounded-xl border bg-zinc-900/60 p-3 transition-all",
+                "group relative overflow-hidden rounded-xl border bg-[var(--color-surface-2)]/50 p-3 transition-all dark:bg-zinc-900/60",
                 statusStyles[t.status],
               )}
             >
-              <div className="flex items-start justify-between">
-                <div>
+              <div className="flex min-w-0 items-start justify-between gap-2">
+                <div className="min-w-0">
                   <p className="text-xs uppercase tracking-wider text-zinc-500">
                     {t.type}
                   </p>
-                  <p className="mt-0.5 text-sm font-semibold text-white">
+                  <p className="mt-0.5 truncate text-sm font-semibold text-[var(--color-foreground)] dark:text-white">
                     {t.name}
                   </p>
                 </div>
                 <span
                   className={cn(
-                    "rounded-full border px-2 py-0.5 text-[10px] uppercase tracking-wider",
+                    "shrink-0 rounded-full border px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wider",
                     statusStyles[t.status],
                   )}
                 >
-                  {statusLabel[t.status]}
+                  {t.status === "maintenance" ? "Maint." : statusLabel[t.status]}
                 </span>
               </div>
 
               <div className="mt-4 flex items-end justify-between">
-                <div className="font-mono text-lg text-white tabular-nums">
+                <div className="font-mono text-lg text-[var(--color-foreground)] tabular-nums dark:text-white">
                   <AnimatePresence mode="wait">
                     {t.status === "busy" && t.minutes !== undefined ? (
                       <motion.span
@@ -189,13 +200,13 @@ export function LivePreview() {
                         {fmtTime(t.minutes)}
                       </motion.span>
                     ) : (
-                      <span className="text-zinc-600">--:--</span>
+                      <span className="text-zinc-400 dark:text-zinc-600">--:--</span>
                     )}
                   </AnimatePresence>
                 </div>
                 <div className="text-right">
                   <p className="text-[10px] uppercase text-zinc-500">Bill</p>
-                  <p className="text-sm font-semibold text-white tabular-nums">
+                  <p className="text-sm font-semibold text-[var(--color-foreground)] tabular-nums dark:text-white">
                     {t.status === "busy" && t.amount !== undefined
                       ? `€${t.amount.toFixed(2)}`
                       : `€${t.rate}/h`}
@@ -203,7 +214,7 @@ export function LivePreview() {
                 </div>
               </div>
 
-              <div className="mt-3 flex gap-1">
+              <div className="mt-3 flex flex-wrap gap-1">
                 {t.status === "busy" ? (
                   <>
                     <ActionPill>
@@ -230,7 +241,7 @@ export function LivePreview() {
 
               {t.status === "busy" && (
                 <div
-                  className="pointer-events-none absolute inset-x-0 bottom-0 h-px bg-gradient-to-r from-transparent via-amber-400/60 to-transparent"
+                  className="pointer-events-none absolute inset-x-0 bottom-0 h-px bg-gradient-to-r from-transparent via-amber-500/60 to-transparent"
                   aria-hidden
                 />
               )}
@@ -252,15 +263,13 @@ function Stat({
   tone: "emerald" | "cyan" | "violet";
 }) {
   const toneClass = {
-    emerald: "text-emerald-300",
-    cyan: "text-cyan-300",
-    violet: "text-violet-300",
+    emerald: "text-emerald-800 dark:text-emerald-300",
+    cyan: "text-sky-800 dark:text-cyan-300",
+    violet: "text-violet-800 dark:text-violet-300",
   }[tone];
   return (
     <div>
-      <p className="text-[10px] uppercase tracking-wider text-zinc-500">
-        {label}
-      </p>
+      <p className="text-[10px] uppercase tracking-wider text-zinc-500">{label}</p>
       <p className={cn("mt-0.5 text-base font-semibold tabular-nums", toneClass)}>
         {value}
       </p>
@@ -276,10 +285,14 @@ function ActionPill({
   tone?: "emerald" | "rose" | "cyan" | "zinc";
 }) {
   const tones = {
-    emerald: "border-emerald-500/40 bg-emerald-500/10 text-emerald-200",
-    rose: "border-rose-500/40 bg-rose-500/10 text-rose-200",
-    cyan: "border-cyan-500/40 bg-cyan-500/10 text-cyan-200",
-    zinc: "border-white/10 bg-white/5 text-zinc-300",
+    emerald:
+      "border-emerald-600/35 bg-emerald-500/15 text-emerald-900 dark:border-emerald-500/40 dark:bg-emerald-500/10 dark:text-emerald-200",
+    rose:
+      "border-rose-600/35 bg-rose-500/15 text-rose-900 dark:border-rose-500/40 dark:bg-rose-500/10 dark:text-rose-200",
+    cyan:
+      "border-sky-600/35 bg-sky-500/15 text-sky-900 dark:border-cyan-500/40 dark:bg-cyan-500/10 dark:text-cyan-200",
+    zinc:
+      "border-[var(--color-border)] bg-black/5 text-zinc-700 dark:border-white/10 dark:bg-white/5 dark:text-zinc-300",
   };
   return (
     <span

@@ -2,12 +2,13 @@ import {
   ForbiddenException,
   Injectable,
   NotFoundException,
-} from "@nestjs/common";
-import { Prisma } from "@prisma/client";
-import type { AuditSection } from "../../common/audit.constants";
-import { resolveVenueShopId } from "../../common/resolve-venue-shop";
-import type { JwtAccessPayload } from "../auth/auth.service";
-import { PrismaService } from "../../prisma/prisma.service";
+} from '@nestjs/common';
+import { Prisma } from '@prisma/client';
+import type { AuditSection } from '../../common/audit.constants';
+import { hasPermission, PERMISSIONS } from '../../common/permissions';
+import { resolveVenueShopId } from '../../common/resolve-venue-shop';
+import type { JwtAccessPayload } from '../auth/auth.service';
+import { PrismaService } from '../../prisma/prisma.service';
 
 export type AuditQuery = {
   from?: string;
@@ -23,6 +24,13 @@ export type AuditQuery = {
 @Injectable()
 export class AuditService {
   constructor(private readonly prisma: PrismaService) {}
+
+  private assertRead(actor: JwtAccessPayload) {
+    if (actor.shopRole === 'OWNER') return;
+    if (!hasPermission(actor.perms ?? '', PERMISSIONS.AUDIT_READ)) {
+      throw new ForbiddenException('Missing audit.read permission.');
+    }
+  }
 
   async record(
     actor: JwtAccessPayload,
@@ -58,14 +66,39 @@ export class AuditService {
     });
   }
 
+  async recordForShop(
+    shopId: string,
+    input: {
+      section: AuditSection;
+      action: string;
+      summary: string;
+      meta?: Record<string, unknown>;
+      actorName?: string;
+    },
+  ) {
+    return this.prisma.auditLog.create({
+      data: {
+        shopId,
+        userId: null,
+        section: input.section,
+        action: input.action,
+        summary: input.summary,
+        meta: input.meta ? JSON.stringify(input.meta) : null,
+        actorRole: null,
+        actorName: input.actorName ?? 'Guest',
+        actorEmail: null,
+      },
+    });
+  }
+
   private buildWhere(shopId: string, q: AuditQuery): Prisma.AuditLogWhereInput {
     const where: Prisma.AuditLogWhereInput = { shopId };
 
-    if (q.section && q.section !== "all") {
+    if (q.section && q.section !== 'all') {
       where.section = q.section;
     }
 
-    if (q.action && q.action !== "all") {
+    if (q.action && q.action !== 'all') {
       where.action = { startsWith: q.action };
     }
 
@@ -86,10 +119,10 @@ export class AuditService {
     if (q.search?.trim()) {
       const term = q.search.trim();
       where.OR = [
-        { summary: { contains: term, mode: "insensitive" } },
-        { action: { contains: term, mode: "insensitive" } },
-        { actorEmail: { contains: term, mode: "insensitive" } },
-        { actorName: { contains: term, mode: "insensitive" } },
+        { summary: { contains: term, mode: 'insensitive' } },
+        { action: { contains: term, mode: 'insensitive' } },
+        { actorEmail: { contains: term, mode: 'insensitive' } },
+        { actorName: { contains: term, mode: 'insensitive' } },
       ];
     }
 
@@ -97,6 +130,7 @@ export class AuditService {
   }
 
   async list(actor: JwtAccessPayload, q: AuditQuery) {
+    this.assertRead(actor);
     const shopId = await resolveVenueShopId(this.prisma, actor, q.venuePath);
     const take = Math.min(q.take ?? 100, 500);
     const skip = q.skip ?? 0;
@@ -105,7 +139,7 @@ export class AuditService {
     const [items, total] = await Promise.all([
       this.prisma.auditLog.findMany({
         where,
-        orderBy: { createdAt: "desc" },
+        orderBy: { createdAt: 'desc' },
         take,
         skip,
       }),
@@ -117,30 +151,32 @@ export class AuditService {
       total,
       take,
       skip,
-      canDelete: actor.sysRole === "SUPER_ADMIN",
+      canDelete:
+        actor.shopRole === 'OWNER' || actor.sysRole === 'SUPER_ADMIN',
     };
   }
 
   async exportCsv(actor: JwtAccessPayload, q: AuditQuery) {
+    this.assertRead(actor);
     const shopId = await resolveVenueShopId(this.prisma, actor, q.venuePath);
     const where = this.buildWhere(shopId, q);
     const rows = await this.prisma.auditLog.findMany({
       where,
-      orderBy: { createdAt: "desc" },
+      orderBy: { createdAt: 'desc' },
       take: 10_000,
     });
 
     const header = [
-      "id",
-      "createdAt",
-      "section",
-      "action",
-      "summary",
-      "actorRole",
-      "actorName",
-      "actorEmail",
-      "ipAddress",
-      "meta",
+      'id',
+      'createdAt',
+      'section',
+      'action',
+      'summary',
+      'actorRole',
+      'actorName',
+      'actorEmail',
+      'ipAddress',
+      'meta',
     ];
     const lines = rows.map((r) => {
       const s = this.serialize(r);
@@ -150,30 +186,67 @@ export class AuditService {
         s.section,
         s.action,
         csvEscape(s.summary),
-        s.actorRole ?? "",
-        csvEscape(s.actorName ?? ""),
-        s.actorEmail ?? "",
-        s.ipAddress ?? "",
-        csvEscape(s.meta ?? ""),
-      ].join(",");
+        s.actorRole ?? '',
+        csvEscape(s.actorName ?? ''),
+        s.actorEmail ?? '',
+        s.ipAddress ?? '',
+        csvEscape(s.meta ?? ''),
+      ].join(',');
     });
 
-    return [header.join(","), ...lines].join("\n");
+    return [header.join(','), ...lines].join('\n');
+  }
+
+  private assertOwnerDelete(actor: JwtAccessPayload) {
+    if (actor.shopRole === 'OWNER' || actor.sysRole === 'SUPER_ADMIN') return;
+    throw new ForbiddenException(
+      'Only the venue owner can delete audit records.',
+    );
   }
 
   async remove(actor: JwtAccessPayload, id: string) {
-    if (actor.sysRole !== "SUPER_ADMIN") {
-      throw new ForbiddenException(
-        "Only the platform developer can delete audit records.",
-      );
-    }
+    this.assertOwnerDelete(actor);
     const shopId = await resolveVenueShopId(this.prisma, actor);
     const row = await this.prisma.auditLog.findFirst({
       where: { id, shopId },
     });
-    if (!row) throw new NotFoundException("Audit entry not found.");
+    if (!row) throw new NotFoundException('Audit entry not found.');
     await this.prisma.auditLog.delete({ where: { id } });
     return { ok: true };
+  }
+
+  async removeMany(
+    actor: JwtAccessPayload,
+    input: { ids?: string[]; allMatching?: boolean } & AuditQuery,
+  ) {
+    this.assertOwnerDelete(actor);
+    const shopId = await resolveVenueShopId(this.prisma, actor, input.venuePath);
+
+    let where: Prisma.AuditLogWhereInput;
+    if (input.ids?.length) {
+      where = { shopId, id: { in: input.ids } };
+    } else if (input.allMatching) {
+      where = this.buildWhere(shopId, input);
+    } else {
+      return { deleted: 0 };
+    }
+
+    const result = await this.prisma.auditLog.deleteMany({ where });
+
+    if (result.count > 0) {
+      await this.record(actor, {
+        section: 'system',
+        action: 'audit.delete',
+        summary: `Deleted ${result.count} audit entr${result.count === 1 ? 'y' : 'ies'}`,
+        meta: {
+          deleted: result.count,
+          ids: input.ids?.slice(0, 50),
+          allMatching: input.allMatching ?? false,
+        },
+      });
+    }
+
+    return { deleted: result.count };
   }
 
   private serialize(row: {
