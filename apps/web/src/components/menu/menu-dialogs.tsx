@@ -13,6 +13,7 @@ import { validateImageUploadFile } from "@/lib/image-upload";
 import { resolveMediaUrl } from "@/lib/media-url";
 import { sectionTimingLabel } from "@/lib/menu-timing";
 import { ModalPortal } from "@/components/ui/modal-portal";
+import { useVenueSettingsOptional } from "@/lib/venue-settings-context";
 
 const WEEKDAYS = [
   { v: 0, label: "Sun" },
@@ -468,6 +469,8 @@ export function ItemDialog({
   ) => Promise<void>;
   saving: boolean;
 }) {
+  const venueSettings = useVenueSettingsOptional();
+  const currency = venueSettings?.currency ?? "EUR";
   const [name, setName] = useState(item?.name ?? "");
   const [description, setDescription] = useState(item?.description ?? "");
   const [price, setPrice] = useState(String(item?.price ?? ""));
@@ -629,7 +632,7 @@ export function ItemDialog({
 
         <div className="grid grid-cols-2 gap-3">
           <label className="block text-xs text-zinc-500">
-            Price
+            Price ({currency})
             <input
               required
               type="number"

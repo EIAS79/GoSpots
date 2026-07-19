@@ -1,4 +1,4 @@
-import { Body, Controller, Get, Patch, Post, UseGuards } from '@nestjs/common';
+import { Body, Controller, Get, Patch, Post, Query, UseGuards } from '@nestjs/common';
 import { ApiTags } from '@nestjs/swagger';
 import { CurrentUser } from '../auth/decorators/current-user.decorator';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
@@ -40,6 +40,16 @@ export class ShopController {
   @Get('currencies')
   listCurrencies() {
     return this.shop.listCurrencies();
+  }
+
+  /** Live FX rate for dashboard display (no audit spam). */
+  @Get('currency/rate')
+  getRate(
+    @CurrentUser() user: JwtAccessPayload,
+    @Query('from') from = 'EUR',
+    @Query('to') to?: string,
+  ) {
+    return this.shop.getDisplayRate(user, from, to);
   }
 
   @Post('currency/convert')

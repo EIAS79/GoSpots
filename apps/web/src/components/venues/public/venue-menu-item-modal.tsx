@@ -11,6 +11,7 @@ import {
   type PublicMenuAvailability,
 } from "@/lib/menu-timing";
 import { resolveMediaUrl } from "@/lib/media-url";
+import { usePublicPrefs } from "@/lib/public-prefs-context";
 import type {
   PublicMenuItem,
   PublicMenuSection,
@@ -26,21 +27,18 @@ export function VenueMenuItemModal({
   item: PublicMenuItem;
   section: PublicMenuSection | null;
   currency: string;
+  locale?: string;
   reviewsMode?: "ENABLED" | "DISABLED" | "HIDDEN";
   onClose: () => void;
 }) {
+  const { formatMoney } = usePublicPrefs();
   const images = [item.imageUrl, item.imageUrl2]
     .map((url) => resolveMediaUrl(url))
     .filter((url): url is string => Boolean(url));
   const [activeImage, setActiveImage] = useState(0);
 
   const availability = getPublicMenuItemAvailability(item, section);
-  const formatPrice = (n: number) =>
-    new Intl.NumberFormat(undefined, {
-      style: "currency",
-      currency,
-      maximumFractionDigits: 2,
-    }).format(n);
+  const formatPrice = (n: number) => formatMoney(n, currency);
 
   useEffect(() => {
     function onKey(e: KeyboardEvent) {

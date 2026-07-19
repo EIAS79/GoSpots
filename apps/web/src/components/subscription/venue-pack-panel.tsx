@@ -16,6 +16,7 @@ import {
   type AddOnId,
   type VenuePackId,
 } from "@/lib/venue-packs";
+import { useVenueSettings } from "@/lib/venue-settings-context";
 
 function FeatureInfoTip({ details }: { details: string }) {
   return (
@@ -56,6 +57,7 @@ export function VenuePackPanel({
   data: SubscriptionResponse;
   onUpdated: (next: SubscriptionResponse) => void;
 }) {
+  const { formatFromEur } = useVenueSettings();
   const trialActive = data.trialActive;
   const paidActive =
     data.subscription?.status === "ACTIVE" && !data.trialActive;
@@ -183,7 +185,7 @@ export function VenuePackPanel({
               ? ` on ${new Date(data.pendingAppliesAt).toLocaleDateString()}`
               : " at period end"}
             {data.pendingMonthlyTotal != null
-              ? ` · then €${data.pendingMonthlyTotal}/mo`
+              ? ` · then ${formatFromEur(data.pendingMonthlyTotal)}/mo`
               : ""}
             . Current access stays until then. Your data is never deleted.
           </p>
@@ -196,7 +198,7 @@ export function VenuePackPanel({
           <p className="mt-1 text-xs text-amber-200/80">
             Saved selection
             {data.pendingMonthlyTotal != null
-              ? ` · €${data.pendingMonthlyTotal}/mo`
+              ? ` · ${formatFromEur(data.pendingMonthlyTotal)}/mo`
               : ""}
             . Complete payment to unlock these modules in the dashboard.
           </p>
@@ -259,7 +261,7 @@ export function VenuePackPanel({
           </div>
           <p className="text-right">
             <span className="text-2xl font-semibold text-emerald-300">
-              €{total}
+              {formatFromEur(total)}
             </span>
             <span className="text-sm text-zinc-500">/mo</span>
           </p>
@@ -336,7 +338,7 @@ export function VenuePackPanel({
                         ) : null}
                       </span>
                       <span className="text-sm text-emerald-300">
-                        €{feature.monthlyPrice}
+                        {formatFromEur(feature.monthlyPrice)}
                         <span className="text-xs text-zinc-500">
                           {VENUE_ADD_ONS[id]?.pricedPerSeat ||
                           feature.pricedPerSeat
@@ -362,8 +364,8 @@ export function VenuePackPanel({
             </label>
             <p className="mt-1 text-xs text-zinc-500">
               {trialActive
-                ? `Free during trial — max ${trialSeatMax} logins. After trial you buy seats (€${VENUE_ADD_ONS.team_accounts.monthlyPrice}/seat).`
-                : `Choose how many logins to buy, then create accounts on Employees. €${VENUE_ADD_ONS.team_accounts.monthlyPrice} × seats / month.`}
+                ? `Free during trial — max ${trialSeatMax} logins. After trial you buy seats (${formatFromEur(VENUE_ADD_ONS.team_accounts.monthlyPrice)}/seat).`
+                : `Choose how many logins to buy, then create accounts on Employees. ${formatFromEur(VENUE_ADD_ONS.team_accounts.monthlyPrice)} × seats / month.`}
             </p>
             <div className="mt-3 flex flex-wrap items-center gap-3">
               <button
@@ -406,9 +408,11 @@ export function VenuePackPanel({
               </button>
               {!trialActive ? (
                 <span className="text-sm text-emerald-300">
-                  = €
-                  {VENUE_ADD_ONS.team_accounts.monthlyPrice *
-                    Math.max(1, seatQty)}
+                  ={" "}
+                  {formatFromEur(
+                    VENUE_ADD_ONS.team_accounts.monthlyPrice *
+                      Math.max(1, seatQty),
+                  )}
                   /mo
                 </span>
               ) : (

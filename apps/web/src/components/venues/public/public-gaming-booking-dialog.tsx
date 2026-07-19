@@ -26,6 +26,7 @@ import { bookingCollectsPartySize } from "@/lib/booking-unit-kind";
 import { hasWindowOverlapWithBookings } from "@/lib/gaming-window-availability";
 import { submitPublicGamingReservation } from "@/lib/public-gaming-client";
 import { submitPublicDiningReservation } from "@/lib/public-dining-client";
+import { usePublicPrefs } from "@/lib/public-prefs-context";
 import {
   combineLocalDateTime,
   todayDateInput,
@@ -67,9 +68,11 @@ export function PublicGamingBookingDialog({
     durationMinutes: number | null;
   }[];
   currency?: string;
+  locale?: string;
   onClose: () => void;
   onBooked?: () => void;
 }) {
+  const { formatMoney } = usePublicPrefs();
   const isDining = bookingKind === "dining";
   const slotMinutes = category.slotMinutes || (isDining ? 90 : 60);
   const noShowMinutes = parseNoShowMinutes(category.offeringConfig);
@@ -239,11 +242,7 @@ export function PublicGamingBookingDialog({
   ]);
 
   const formatEstPrice = (amount: number) =>
-    new Intl.NumberFormat(undefined, {
-      style: "currency",
-      currency: currency ?? "PLN",
-      maximumFractionDigits: 2,
-    }).format(amount);
+    formatMoney(amount, currency ?? "EUR");
 
   async function submit(e: React.FormEvent) {
     e.preventDefault();

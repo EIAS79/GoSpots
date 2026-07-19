@@ -238,7 +238,7 @@ export const VENUE_ADD_ONS: Record<AddOnId, VenueAddOn> = {
   team_accounts: {
     id: 'team_accounts',
     name: 'Team accounts',
-    tagline: 'Employee seats — €4 each / month.',
+    tagline: 'Employee seats — priced per seat / month.',
     details:
       'Buy how many employee seats you need (starts at 0). Then create one login per seat with roles and permissions. Each seat is one person.',
     monthlyPrice: 4,

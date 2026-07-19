@@ -23,6 +23,7 @@ import { CreatePublicEventRequestDto } from '../reservations/dto/event-requests.
 import { EventRequestsService } from '../reservations/event-requests.service';
 import { ReservationsService } from '../reservations/reservations.service';
 import { CreatePublicGamingReservationDto } from '../guest/dto/public-gaming.dto';
+import { CurrencyRatesService } from '../shop/currency-rates.service';
 import { ShopService } from '../shop/shop.service';
 
 @ApiTags('public')
@@ -30,12 +31,30 @@ import { ShopService } from '../shop/shop.service';
 export class PublicController {
   constructor(
     private readonly shop: ShopService,
+    private readonly rates: CurrencyRatesService,
     private readonly eventRequests: EventRequestsService,
     private readonly reservations: ReservationsService,
     private readonly reviews: VenueReviewsService,
     private readonly contact: ContactMessagesService,
     private readonly guestChats: GuestChatService,
   ) {}
+
+  @Public()
+  @Get('currency/rate')
+  async currencyRate(
+    @Query('from') from = 'EUR',
+    @Query('to') to = 'USD',
+  ) {
+    const { rate, ratesAt } = await this.rates.getRate(from, to, {
+      forceRefresh: false,
+    });
+    return {
+      from: from.toUpperCase(),
+      to: to.toUpperCase(),
+      rate,
+      ratesAt,
+    };
+  }
 
   @Public()
   @Get('venues')

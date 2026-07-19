@@ -421,15 +421,14 @@ export const playerFaqs: Faq[] = [
   },
 ];
 
-export type NavLink = { label: string; href: string };
+export type NavLink = { labelKey: string; href: string; fallback: string };
 
 export const navLinks: NavLink[] = [
-  { label: "Explore", href: "/venues" },
-  { label: "Who it's for", href: "#who" },
-  { label: "How it works", href: "#how" },
-  { label: "Features", href: "#features" },
-  { label: "Pricing", href: "#pricing" },
-  { label: "FAQ", href: "#faq" },
+  { labelKey: "nav.explore", href: "/venues", fallback: "Explore" },
+  { labelKey: "nav.how", href: "#how", fallback: "How it works" },
+  { labelKey: "nav.features", href: "#features", fallback: "Features" },
+  { labelKey: "nav.pricing", href: "#pricing", fallback: "Pricing" },
+  { labelKey: "nav.faq", href: "#faq", fallback: "FAQ" },
 ];
 
 export const trustIcons: { label: string; icon: LucideIcon }[] = [

@@ -6,7 +6,6 @@ import { HoursPanel, weeklyToDraft } from "@/components/hours/hours-panel";
 import { FeatureGate } from "@/components/subscription/feature-gate";
 import { TenantPage } from "@/components/layout/tenant-page";
 import { hasPermission } from "@/lib/auth-client";
-import { DASHBOARD_SECTION_GUIDES } from "@/lib/dashboard-section-guides";
 import {
   createScheduleException,
   deleteScheduleException,
@@ -18,13 +17,15 @@ import {
 import { isFeatureUnlocked } from "@/lib/plan";
 import { useAuth } from "@/lib/use-auth";
 import { useCurrentMembership } from "@/lib/use-current-membership";
+import { useDashboardGuide } from "@/lib/use-dashboard-guide";
 import { useVenueAccess } from "@/lib/use-venue-access";
-
-const GUIDE = DASHBOARD_SECTION_GUIDES.hours;
+import { useVenueSettingsOptional } from "@/lib/venue-settings-context";
 
 export default function HoursPage() {
   const { state } = useAuth();
   const access = useVenueAccess();
+  const guide = useDashboardGuide("hours");
+  const t = useVenueSettingsOptional()?.t;
   const [schedule, setSchedule] = useState<VenueSchedule | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -62,9 +63,9 @@ export default function HoursPage() {
 
   return (
     <TenantPage
-      title={GUIDE.title}
-      description={GUIDE.description}
-      capabilities={GUIDE.capabilities}
+      title={guide.title}
+      description={guide.description}
+      capabilities={guide.capabilities}
     >
       <FeatureGate feature="hours" unlocked={hoursUnlocked}>
         {loading ? (
@@ -77,7 +78,8 @@ export default function HoursPage() {
           <>
             {!canWrite ? (
               <p className="mb-4 text-xs text-zinc-500">
-                View-only — ask your admin for hours edit access.
+                {t?.("hours.viewOnly") ??
+                  "View-only — ask your admin for hours edit access."}
               </p>
             ) : null}
             <HoursPanel

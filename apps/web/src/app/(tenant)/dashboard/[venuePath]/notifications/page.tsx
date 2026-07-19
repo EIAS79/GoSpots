@@ -36,16 +36,14 @@ import {
   type NotificationRow,
   type NotificationStatus,
 } from "@/lib/notifications-client";
-import { DASHBOARD_SECTION_GUIDES } from "@/lib/dashboard-section-guides";
 import { hasPermission } from "@/lib/auth-client";
 import { isFeatureUnlocked } from "@/lib/plan";
 import { useAuth } from "@/lib/use-auth";
 import { useCurrentMembership } from "@/lib/use-current-membership";
+import { useDashboardGuide } from "@/lib/use-dashboard-guide";
 import { useVenueAccess } from "@/lib/use-venue-access";
 import { useVenueHref } from "@/lib/venue-context";
 import { useLiveData } from "@/lib/use-live-data";
-
-const GUIDE = DASHBOARD_SECTION_GUIDES.notifications;
 
 const TYPE_ICON: Record<string, typeof Bell> = {
   SYSTEM: Bell,
@@ -183,6 +181,7 @@ function NotificationItem({
 }
 
 export default function NotificationsPage() {
+  const guide = useDashboardGuide("notifications");
   const { state } = useAuth();
   const membership = useCurrentMembership();
   const access = useVenueAccess();
@@ -400,7 +399,7 @@ export default function NotificationsPage() {
 
   if (state.status === "authed" && !canViewNotifications) {
     return (
-      <TenantPage title={GUIDE.title} description={GUIDE.description}>
+      <TenantPage title={guide.title} description={guide.description}>
         <p className="text-sm text-zinc-400">
           You do not have permission to view notifications.
         </p>
@@ -410,13 +409,13 @@ export default function NotificationsPage() {
 
   return (
     <TenantPage
-      title={isArchivedView ? "Archived notifications" : GUIDE.title}
+      title={isArchivedView ? "Archived notifications" : guide.title}
       description={
         isArchivedView
           ? "Restore items to your inbox with Unarchive. Owners can permanently delete."
-          : GUIDE.description
+          : guide.description
       }
-      capabilities={GUIDE.capabilities}
+      capabilities={guide.capabilities}
       actions={
         unlocked ? (
         <div className="flex flex-wrap items-center gap-2">

@@ -3,16 +3,15 @@
 import { MenuOrdersPanel } from "@/components/finance/menu-orders-panel";
 import { TenantPage } from "@/components/layout/tenant-page";
 import { FeatureGate } from "@/components/subscription/feature-gate";
-import { DASHBOARD_SECTION_GUIDES } from "@/lib/dashboard-section-guides";
 import { hasPermission } from "@/lib/auth-client";
 import { isFeatureUnlocked } from "@/lib/plan";
 import { useAuth } from "@/lib/use-auth";
 import { useCurrentMembership } from "@/lib/use-current-membership";
+import { useDashboardGuide } from "@/lib/use-dashboard-guide";
 import { useVenueAccess } from "@/lib/use-venue-access";
 
-const GUIDE = DASHBOARD_SECTION_GUIDES.orders;
-
 export default function OrdersPage() {
+  const guide = useDashboardGuide("orders");
   const { state } = useAuth();
   const access = useVenueAccess();
   const membership = useCurrentMembership();
@@ -25,9 +24,9 @@ export default function OrdersPage() {
 
   return (
     <TenantPage
-      title={GUIDE.title}
-      description={GUIDE.description}
-      capabilities={GUIDE.capabilities}
+      title={guide.title}
+      description={guide.description}
+      capabilities={guide.capabilities}
     >
       {!canWrite ? (
         <p className="mb-4 text-xs text-zinc-500">

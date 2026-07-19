@@ -144,11 +144,35 @@ export class ShopService {
       });
     }
 
+    const nextCurrency =
+      dto.currency != null ? dto.currency.toUpperCase() : before.currency;
+    const currencyChanged =
+      dto.currency != null && nextCurrency !== before.currency;
+
+    let currencyConversion: {
+      from: string;
+      to: string;
+      rate: number;
+      ratesAt: string;
+      menuItems: number;
+      resourceRates: number;
+      resources: number;
+      offerings: number;
+    } | null = null;
+
+    if (currencyChanged) {
+      currencyConversion = await this.repriceCatalogToCurrency(
+        shopId,
+        before.currency,
+        nextCurrency,
+      );
+    }
+
     const shop = await this.prisma.shop.update({
       where: { id: shopId },
       data: {
         ...(dto.locale != null && { locale: dto.locale }),
-        ...(dto.currency != null && { currency: dto.currency.toUpperCase() }),
+        ...(dto.currency != null && { currency: nextCurrency }),
         ...(dto.name != null && { name: dto.name.trim() }),
         ...(dto.displayName !== undefined && {
           displayName: dto.displayName?.trim() || null,
@@ -179,11 +203,13 @@ export class ShopService {
     if (dto.locale != null && dto.locale !== before.locale) {
       changes.push(`language → ${dto.locale}`);
     }
-    if (
-      dto.currency != null &&
-      dto.currency.toUpperCase() !== before.currency
-    ) {
-      changes.push(`currency → ${dto.currency.toUpperCase()}`);
+    if (currencyChanged) {
+      changes.push(
+        `currency → ${nextCurrency}` +
+          (currencyConversion
+            ? ` (catalog ×${currencyConversion.rate.toFixed(6)})`
+            : ''),
+      );
     }
     if (dto.name != null && dto.name.trim() !== before.name) {
       changes.push(`name → ${shop.name}`);
@@ -272,7 +298,89 @@ export class ShopService {
       });
     }
 
-    return this.getSettings(actor);
+    return {
+      ...(await this.getSettings(actor)),
+      currencyConversion,
+    };
+  }
+
+  /**
+   * Rewrite live catalog amounts into the new shop currency using a fresh FX rate.
+   * Historical orders/transactions keep their original numbers (past sales).
+   */
+  private async repriceCatalogToCurrency(
+    shopId: string,
+    from: string,
+    to: string,
+  ) {
+    const { rate, ratesAt } = await this.rates.getRate(from, to, {
+      forceRefresh: true,
+    });
+
+    const menuItems = await this.prisma.menuItem.findMany({
+      where: { shopId },
+      select: { id: true, price: true },
+    });
+    for (const item of menuItems) {
+      await this.prisma.menuItem.update({
+        where: { id: item.id },
+        data: { price: this.rates.convertAmount(item.price, rate) },
+      });
+    }
+
+    const categories = await this.prisma.resourceCategory.findMany({
+      where: { shopId },
+      select: {
+        id: true,
+        offeringConfig: true,
+        rates: { select: { id: true, price: true } },
+      },
+    });
+
+    let resourceRates = 0;
+    let offerings = 0;
+    for (const cat of categories) {
+      for (const r of cat.rates) {
+        await this.prisma.resourceRate.update({
+          where: { id: r.id },
+          data: { price: this.rates.convertAmount(r.price, rate) },
+        });
+        resourceRates += 1;
+      }
+      const nextConfig = scaleOfferingConfigPrices(cat.offeringConfig, (n) =>
+        this.rates.convertAmount(n, rate),
+      );
+      if (nextConfig !== cat.offeringConfig) {
+        await this.prisma.resourceCategory.update({
+          where: { id: cat.id },
+          data: { offeringConfig: nextConfig as object },
+        });
+        offerings += 1;
+      }
+    }
+
+    const resources = await this.prisma.resource.findMany({
+      where: { shopId },
+      select: { id: true, hourlyRate: true },
+    });
+    for (const res of resources) {
+      if (res.hourlyRate === 0) continue;
+      await this.prisma.resource.update({
+        where: { id: res.id },
+        data: { hourlyRate: this.rates.convertAmount(res.hourlyRate, rate) },
+      });
+    }
+
+    return {
+      from: from.toUpperCase(),
+      to: to.toUpperCase(),
+      rate,
+      ratesAt,
+      menuItems: menuItems.length,
+      resourceRates,
+      resources: resources.filter((r) => r.hourlyRate !== 0).length,
+      offerings,
+    };
   }
 
   async syncVenueCategories(
@@ -373,6 +481,27 @@ export class ShopService {
       meta: { ...dto, result },
     });
     return result;
+  }
+
+  /** Rate for UI: 1 `from` = `rate` units of shop currency (or `to`). */
+  async getDisplayRate(
+    actor: JwtAccessPayload,
+    from = 'EUR',
+    to?: string,
+  ) {
+    const shopId = requireShopId(actor);
+    let target = to?.toUpperCase();
+    if (!target) {
+      const shop = await this.prisma.shop.findUnique({
+        where: { id: shopId },
+        select: { currency: true },
+      });
+      target = shop?.currency ?? 'EUR';
+    }
+    const { rate, ratesAt } = await this.rates.getRate(from, target, {
+      forceRefresh: false,
+    });
+    return { from: from.toUpperCase(), to: target, rate, ratesAt };
   }
 
   listCurrencies() {
@@ -780,4 +909,48 @@ export class ShopService {
       },
     };
   }
+}
+
+const OFFERING_PRICE_KEYS = new Set([
+  'pricePerPerson',
+  'pricePerGame',
+  'pricePerHour',
+  'price',
+  'hourlyRate',
+  'basePrice',
+]);
+
+/** Deep-scale known price fields inside ResourceCategory.offeringConfig JSON. */
+function scaleOfferingConfigPrices(
+  config: unknown,
+  scale: (n: number) => number,
+): unknown {
+  if (config == null || typeof config !== 'object') return config;
+  let changed = false;
+
+  const walk = (value: unknown): unknown => {
+    if (Array.isArray(value)) {
+      return value.map((v) => walk(v));
+    }
+    if (value && typeof value === 'object') {
+      const out: Record<string, unknown> = {};
+      for (const [k, v] of Object.entries(value as Record<string, unknown>)) {
+        if (
+          OFFERING_PRICE_KEYS.has(k) &&
+          typeof v === 'number' &&
+          Number.isFinite(v)
+        ) {
+          out[k] = scale(v);
+          if (out[k] !== v) changed = true;
+        } else {
+          out[k] = walk(v);
+        }
+      }
+      return out;
+    }
+    return value;
+  };
+
+  const next = walk(config);
+  return changed ? next : config;
 }

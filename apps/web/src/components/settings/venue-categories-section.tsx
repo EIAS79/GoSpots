@@ -9,8 +9,10 @@ import {
   type VenueCategoryPreset,
   type VenueCategoryTag,
 } from "@/lib/shop-settings-client";
+import { useVenueSettings } from "@/lib/venue-settings-context";
 
 export function VenueCategoriesSection({ canWrite = true }: { canWrite?: boolean }) {
+  const { t } = useVenueSettings();
   const [presets, setPresets] = useState<VenueCategoryPreset[]>([]);
   const [selected, setSelected] = useState<VenueCategoryTag[]>([]);
   const [selectedSlugs, setSelectedSlugs] = useState<Set<string>>(new Set());
@@ -110,21 +112,15 @@ export function VenueCategoriesSection({ canWrite = true }: { canWrite?: boolean
       <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
         <div className="flex items-center gap-2 text-amber-300">
           <Tags size={18} />
-          <h2 className="font-semibold text-white">Venue categories</h2>
+          <h2 className="font-semibold text-white">{t("settings.categories")}</h2>
         </div>
         {saving ? (
-          <span className="text-xs text-zinc-500">Saving…</span>
+          <span className="text-xs text-zinc-500">{t("common.saving")}</span>
         ) : saved ? (
-          <span className="text-xs text-emerald-400">Saved</span>
+          <span className="text-xs text-emerald-400">{t("common.saved")}</span>
         ) : null}
       </div>
-      <p className="mb-4 text-sm text-zinc-500">
-        How players find you on{" "}
-        <a href="/venues" className="text-amber-300/90 underline-offset-2 hover:underline">
-          /venues
-        </a>
-        . Pick presets (gaming center, bar, lounge…) or add your own.
-      </p>
+      <p className="mb-4 text-sm text-zinc-500">{t("settings.categoriesHint")}</p>
 
       {error ? (
         <p className="mb-3 rounded-lg border border-rose-500/30 bg-rose-500/10 px-3 py-2 text-sm text-rose-200">
@@ -134,22 +130,22 @@ export function VenueCategoriesSection({ canWrite = true }: { canWrite?: boolean
 
       {selected.length > 0 && (
         <div className="mb-4 flex flex-wrap gap-2">
-          {selected.map((t) => (
+          {selected.map((tag) => (
             <button
-              key={t.id}
+              key={tag.id}
               type="button"
-              onClick={() => removeTag(t.slug)}
+              onClick={() => removeTag(tag.slug)}
               className="inline-flex items-center gap-1.5 rounded-full border border-white/15 bg-zinc-950/80 py-1 pl-3 pr-2 text-xs font-medium text-zinc-200 transition hover:border-rose-500/40"
               style={{
-                borderColor: t.color ? `${t.color}55` : undefined,
-                boxShadow: t.color ? `0 0 12px ${t.color}33` : undefined,
+                borderColor: tag.color ? `${tag.color}55` : undefined,
+                boxShadow: tag.color ? `0 0 12px ${tag.color}33` : undefined,
               }}
             >
               <span
                 className="size-1.5 rounded-full"
-                style={{ backgroundColor: t.color ?? "#fbbf24" }}
+                style={{ backgroundColor: tag.color ?? "#fbbf24" }}
               />
-              {t.name}
+              {tag.name}
               <X size={12} className="text-zinc-500" />
             </button>
           ))}
@@ -191,7 +187,7 @@ export function VenueCategoriesSection({ canWrite = true }: { canWrite?: boolean
             value={customName}
             onChange={(e) => setCustomName(e.target.value)}
             onKeyDown={(e) => e.key === "Enter" && addCustom()}
-            placeholder="Custom category (e.g. Rooftop terrace)"
+            placeholder={t("settings.categoriesPlaceholder")}
             disabled={saving}
             className="w-full bg-transparent text-sm text-white placeholder:text-zinc-600 outline-none"
           />
@@ -203,7 +199,7 @@ export function VenueCategoriesSection({ canWrite = true }: { canWrite?: boolean
           className="inline-flex items-center gap-1.5 rounded-lg bg-amber-500/20 px-4 py-2 text-sm font-medium text-amber-100 transition hover:bg-amber-500/30 disabled:opacity-40"
         >
           <Plus size={16} />
-          Add
+          {t("common.add")}
         </button>
       </div>
       ) : null}

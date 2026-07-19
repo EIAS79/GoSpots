@@ -34,7 +34,7 @@ import { useVenueSettings } from "@/lib/venue-settings-context";
 type SaveState = "idle" | "pending" | "saving" | "saved";
 
 export function ShopSettingsPanel({ canWrite = true }: { canWrite?: boolean }) {
-  const { shop, refresh, formatMoney } = useVenueSettings();
+  const { shop, refresh, formatMoney, t, locale } = useVenueSettings();
   const access = useVenueAccess();
   const marketingUnlocked = isFeatureUnlocked(
     access.enabledModules,
@@ -58,6 +58,7 @@ export function ShopSettingsPanel({ canWrite = true }: { canWrite?: boolean }) {
     ReturnType<typeof convertCurrency>
   > | null>(null);
   const [converting, setConverting] = useState(false);
+  const [catalogFxNote, setCatalogFxNote] = useState<string | null>(null);
 
   useEffect(() => {
     if (!shop) return;
@@ -84,11 +85,39 @@ export function ShopSettingsPanel({ canWrite = true }: { canWrite?: boolean }) {
 
     setSaveState("pending");
     const timer = window.setTimeout(() => {
+      const currencyChanging = draft.currency !== shop.currency;
+      if (currencyChanging) {
+        const ok = window.confirm(
+          t("settings.currencyConfirm", {
+            from: shop.currency,
+            to: draft.currency,
+          }),
+        );
+        if (!ok) {
+          setDraft((d) => (d ? { ...d, currency: shop.currency } : d));
+          setSaveState("idle");
+          return;
+        }
+      }
+
       setSaveState("saving");
       const before = shop;
       void updateShopSettings(profileDraftToPayload(draft))
         .then((data) => {
           const after = data.shop;
+          if (data.currencyConversion) {
+            const c = data.currencyConversion;
+            setCatalogFxNote(
+              t("settings.catalogConverted", {
+                from: c.from,
+                to: c.to,
+                rate: c.rate.toFixed(4),
+                menu: c.menuItems,
+                rates: c.resourceRates,
+                when: new Date(c.ratesAt).toLocaleString(locale),
+              }),
+            );
+          }
           if (identityChanged(before, after)) {
             setReloading(true);
             window.setTimeout(() => window.location.reload(), 400);
@@ -107,7 +136,7 @@ export function ShopSettingsPanel({ canWrite = true }: { canWrite?: boolean }) {
     }, 2000);
 
     return () => window.clearTimeout(timer);
-  }, [draft, shop, refresh, canWrite]);
+  }, [draft, shop, refresh, canWrite, t, locale]);
 
   function patch(partial: Partial<ShopProfileDraft>) {
     setDraft((d) => (d ? { ...d, ...partial } : d));
@@ -200,7 +229,7 @@ export function ShopSettingsPanel({ canWrite = true }: { canWrite?: boolean }) {
       });
       setConvertResult(result);
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Conversion failed.");
+      setError(err instanceof Error ? err.message : t("settings.conversionFailed"));
     } finally {
       setConverting(false);
     }
@@ -225,7 +254,7 @@ export function ShopSettingsPanel({ canWrite = true }: { canWrite?: boolean }) {
   return (
     <>
       {reloading ? (
-        <VenueReloadOverlay message="Updating venue name across your dashboard…" />
+        <VenueReloadOverlay message={t("settings.reloadOverlay")} />
       ) : null}
 
       <div className="mx-auto max-w-4xl space-y-6">
@@ -237,14 +266,14 @@ export function ShopSettingsPanel({ canWrite = true }: { canWrite?: boolean }) {
 
         <div className="flex flex-wrap items-center justify-between gap-2 rounded-xl border border-white/10 bg-zinc-900/40 px-4 py-3">
           <p className="text-xs text-zinc-500">
-            Public URL:{" "}
+            {t("settings.publicUrl")}{" "}
             <span className="text-zinc-300">/venue/{shop.slug}</span>
           </p>
           <p className="text-xs text-zinc-500">
-            {saveState === "pending" && "Will save…"}
-            {saveState === "saving" && "Saving…"}
+            {saveState === "pending" && t("common.willSave")}
+            {saveState === "saving" && t("common.saving")}
             {saveState === "saved" && (
-              <span className="text-emerald-400">All changes saved</span>
+              <span className="text-emerald-400">{t("common.allSaved")}</span>
             )}
           </p>
         </div>
@@ -252,15 +281,14 @@ export function ShopSettingsPanel({ canWrite = true }: { canWrite?: boolean }) {
         <section className="rounded-2xl border border-white/10 bg-zinc-900/50 p-5 shadow-lg shadow-black/20">
           <div className="mb-4 flex items-center gap-2 text-emerald-300">
             <Building2 size={18} />
-            <h2 className="font-semibold text-white">Venue identity</h2>
+            <h2 className="font-semibold text-white">{t("settings.identity")}</h2>
           </div>
           <p className="mb-4 text-sm text-zinc-500">
-            Internal name appears in your dashboard sidebar. Display name is what
-            players see on marketing and your public page.
+            {t("settings.identityHint")}
           </p>
           <div className="grid gap-4 sm:grid-cols-2">
             <label className="block text-xs text-zinc-500">
-              Dashboard venue name
+              {t("settings.dashboardName")}
               <input
                 value={draft.name}
                 onChange={(e) => patch({ name: e.target.value })}
@@ -269,22 +297,22 @@ export function ShopSettingsPanel({ canWrite = true }: { canWrite?: boolean }) {
               />
             </label>
             <label className="block text-xs text-zinc-500">
-              Marketing display name
+              {t("settings.marketingName")}
               <input
                 value={draft.displayName}
                 onChange={(e) => patch({ displayName: e.target.value })}
                 disabled={fieldDisabled}
-                placeholder={draft.name || "Same as venue name"}
+                placeholder={draft.name || t("settings.marketingPlaceholder")}
                 className="mt-1 w-full rounded-lg border border-white/10 bg-zinc-950 px-3 py-2.5 text-sm text-white placeholder:text-zinc-600"
               />
             </label>
           </div>
           <p className="mt-3 text-xs text-zinc-600">
-            Preview:{" "}
+            {t("common.preview")}:{" "}
             <span className="text-zinc-300">{marketingPreview}</span>
           </p>
           <label className="mt-4 block text-xs text-zinc-500">
-            Short description
+            {t("settings.shortDescription")}
             <textarea
               value={draft.description}
               onChange={(e) => patch({ description: e.target.value })}
@@ -293,87 +321,96 @@ export function ShopSettingsPanel({ canWrite = true }: { canWrite?: boolean }) {
               className="mt-1 w-full resize-none rounded-lg border border-white/10 bg-zinc-950 px-3 py-2.5 text-sm text-white"
             />
           </label>
-          <label
-            className={cn(
-              "mt-4 flex items-center gap-2 text-sm text-zinc-400",
-              marketingUnlocked ? "cursor-pointer" : "cursor-not-allowed opacity-70",
-            )}
-          >
-            <input
-              type="checkbox"
-              checked={draft.isPublished}
-              onChange={(e) => void onPublishToggle(e.target.checked)}
-              disabled={fieldDisabled || !marketingUnlocked}
-              className="rounded border-white/20"
-            />
-            <Megaphone size={16} className="text-violet-400" />
-            Public venue page is live
-          </label>
-          <p className="mt-1 pl-6 text-[11px] text-zinc-600">
-            {marketingUnlocked
-              ? `Guests can open your page at /venue/${shop?.slug ?? "…"}. Separate from directory advertising below.`
-              : "Requires the Venue page & discovery add-on to publish."}
-          </p>
+          <div className="mt-4 space-y-3 rounded-xl border border-white/10 bg-zinc-950/50 p-3">
+            <p className="text-[10px] font-semibold uppercase tracking-widest text-zinc-500">
+              {t("settings.visibility")}
+            </p>
+            <label
+              className={cn(
+                "flex items-start gap-2.5 text-sm",
+                marketingUnlocked
+                  ? "cursor-pointer text-zinc-300"
+                  : "cursor-not-allowed text-zinc-500 opacity-70",
+              )}
+            >
+              <input
+                type="checkbox"
+                checked={draft.isPublished}
+                onChange={(e) => void onPublishToggle(e.target.checked)}
+                disabled={fieldDisabled || !marketingUnlocked}
+                className="mt-0.5 rounded border-white/20"
+              />
+              <span className="min-w-0">
+                <span className="inline-flex items-center gap-1.5 font-medium text-zinc-200">
+                  <Megaphone size={15} className="shrink-0 text-violet-400" />
+                  {t("settings.publishPage")}
+                </span>
+                <span className="mt-0.5 block text-[11px] leading-relaxed text-zinc-600">
+                  {marketingUnlocked
+                    ? t("settings.publishPageHint", {
+                        slug: shop?.slug ?? "…",
+                      })
+                    : t("settings.publishLocked")}
+                </span>
+              </span>
+            </label>
 
-          <label
-            className={cn(
-              "mt-4 flex items-start gap-2 text-sm text-zinc-400",
-              marketingUnlocked && draft.isPublished
-                ? "cursor-pointer"
-                : "cursor-not-allowed opacity-70",
-            )}
-          >
-            <input
-              type="checkbox"
-              checked={shop?.advertiseOnVenuesPage ?? true}
-              onChange={(e) => void onAdvertiseToggle(e.target.checked)}
-              disabled={
-                fieldDisabled || !draft.isPublished || !marketingUnlocked
-              }
-              className="mt-0.5 rounded border-white/20"
-            />
-            <span>
-              <span className="inline-flex items-center gap-1.5 text-zinc-300">
-                Show on{" "}
-                <a
-                  href="/venues"
-                  className="text-amber-300/90 underline-offset-2 hover:underline"
-                >
-                  /venues
-                </a>{" "}
-                directory
+            <div className="border-t border-white/5" />
+
+            <label
+              className={cn(
+                "flex items-start gap-2.5 text-sm",
+                marketingUnlocked && draft.isPublished
+                  ? "cursor-pointer text-zinc-300"
+                  : "cursor-not-allowed text-zinc-500 opacity-70",
+              )}
+            >
+              <input
+                type="checkbox"
+                checked={shop?.advertiseOnVenuesPage ?? true}
+                onChange={(e) => void onAdvertiseToggle(e.target.checked)}
+                disabled={
+                  fieldDisabled || !draft.isPublished || !marketingUnlocked
+                }
+                className="mt-0.5 rounded border-white/20"
+              />
+              <span className="min-w-0">
+                <span className="font-medium text-zinc-200">
+                  {t("settings.listDirectory")}
+                </span>
+                <span className="mt-0.5 block text-[11px] leading-relaxed text-zinc-600">
+                  {marketingUnlocked
+                    ? t("settings.listDirectoryHint")
+                    : t("settings.listLocked")}
+                </span>
               </span>
-              <span className="mt-0.5 block text-[11px] text-zinc-600">
-                {marketingUnlocked
-                  ? "Even with Venue page & discovery subscribed, turn this off to stay off the browse list. Requires a live public page."
-                  : "Unlock Venue page & discovery to appear in the directory."}
-              </span>
-            </span>
-          </label>
+            </label>
+          </div>
 
           <div className="mt-5 border-t border-white/10 pt-4">
-            <p className="text-xs font-medium text-zinc-400">Guest reviews</p>
+            <p className="text-xs font-medium text-zinc-400">
+              {t("settings.reviewsTitle")}
+            </p>
             <p className="mt-1 text-[11px] text-zinc-600">
-              Applies to venue reviews guests leave on your public page.
-              Staff publish approved reviews from the Reviews dashboard.
+              {t("settings.reviewsHint")}
             </p>
             <div className="mt-3 space-y-2">
               {(
                 [
                   {
                     value: "ENABLED" as const,
-                    label: "On — accept; staff publish",
-                    hint: "Guests can leave venue reviews; ratings appear publicly after you publish them from Reviews.",
+                    label: t("settings.reviewsOn"),
+                    hint: t("settings.reviewsOnHint"),
                   },
                   {
                     value: "HIDDEN" as const,
-                    label: "Hidden — accept but don’t show",
-                    hint: "Guests can still submit; you get notified, but ratings stay off the public page.",
+                    label: t("settings.reviewsHidden"),
+                    hint: t("settings.reviewsHiddenHint"),
                   },
                   {
                     value: "DISABLED" as const,
-                    label: "Off — no reviews at all",
-                    hint: "Nobody can leave reviews on this venue.",
+                    label: t("settings.reviewsOff"),
+                    hint: t("settings.reviewsOffHint"),
                   },
                 ] as const
               ).map((opt) => {
@@ -417,11 +454,11 @@ export function ShopSettingsPanel({ canWrite = true }: { canWrite?: boolean }) {
         <section className="rounded-2xl border border-white/10 bg-zinc-900/50 p-5">
           <div className="mb-4 flex items-center gap-2 text-sky-300">
             <MapPin size={18} />
-            <h2 className="font-semibold text-white">Location & contact</h2>
+            <h2 className="font-semibold text-white">{t("settings.location")}</h2>
           </div>
           <div className="grid gap-4 sm:grid-cols-2">
             <label className="block text-xs text-zinc-500 sm:col-span-2">
-              Street address
+              {t("settings.street")}
               <input
                 value={draft.address}
                 onChange={(e) => patch({ address: e.target.value })}
@@ -430,7 +467,7 @@ export function ShopSettingsPanel({ canWrite = true }: { canWrite?: boolean }) {
               />
             </label>
             <label className="block text-xs text-zinc-500">
-              City
+              {t("settings.city")}
               <input
                 value={draft.city}
                 onChange={(e) => patch({ city: e.target.value })}
@@ -439,7 +476,7 @@ export function ShopSettingsPanel({ canWrite = true }: { canWrite?: boolean }) {
               />
             </label>
             <label className="block text-xs text-zinc-500">
-              Country
+              {t("settings.country")}
               <input
                 value={draft.country}
                 onChange={(e) => patch({ country: e.target.value })}
@@ -448,7 +485,7 @@ export function ShopSettingsPanel({ canWrite = true }: { canWrite?: boolean }) {
               />
             </label>
             <label className="block text-xs text-zinc-500">
-              Phone
+              {t("common.phone")}
               <input
                 value={draft.phone}
                 onChange={(e) => patch({ phone: e.target.value })}
@@ -457,7 +494,7 @@ export function ShopSettingsPanel({ canWrite = true }: { canWrite?: boolean }) {
               />
             </label>
             <label className="block text-xs text-zinc-500">
-              Email
+              {t("common.email")}
               <input
                 type="email"
                 value={draft.email}
@@ -472,11 +509,11 @@ export function ShopSettingsPanel({ canWrite = true }: { canWrite?: boolean }) {
         <section className="rounded-2xl border border-white/10 bg-zinc-900/50 p-5">
           <div className="mb-4 flex items-center gap-2 text-emerald-300">
             <Globe size={18} />
-            <h2 className="font-semibold text-white">Regional preferences</h2>
+            <h2 className="font-semibold text-white">{t("settings.regional")}</h2>
           </div>
           <div className="grid gap-4 sm:grid-cols-2">
             <label className="block text-xs text-zinc-500">
-              Dashboard language
+              {t("settings.language")}
               <select
                 value={draft.locale}
                 onChange={(e) => patch({ locale: e.target.value })}
@@ -491,7 +528,7 @@ export function ShopSettingsPanel({ canWrite = true }: { canWrite?: boolean }) {
               </select>
             </label>
             <label className="block text-xs text-zinc-500">
-              Venue currency
+              {t("settings.currency")}
               <select
                 value={draft.currency}
                 onChange={(e) => patch({ currency: e.target.value })}
@@ -507,8 +544,19 @@ export function ShopSettingsPanel({ canWrite = true }: { canWrite?: boolean }) {
             </label>
           </div>
           <p className="mt-3 text-xs text-zinc-600">
-            Preview: {formatMoneyAmount(49.99, draft.currency, draft.locale)}
+            {t("settings.currencyHint", {
+              currency: draft.currency,
+              preview: formatMoneyAmount(49.99, draft.currency, draft.locale),
+            })}
           </p>
+          <p className="mt-1 text-xs text-zinc-600">
+            {t("settings.currencyConvertHint")}
+          </p>
+          {catalogFxNote ? (
+            <p className="mt-2 rounded-lg border border-emerald-400/20 bg-emerald-500/10 px-3 py-2 text-[11px] text-emerald-200">
+              {catalogFxNote}
+            </p>
+          ) : null}
         </section>
 
         <form
@@ -517,11 +565,11 @@ export function ShopSettingsPanel({ canWrite = true }: { canWrite?: boolean }) {
         >
           <div className="mb-4 flex items-center gap-2 text-violet-300">
             <ArrowRightLeft size={18} />
-            <h2 className="font-semibold text-white">Currency converter</h2>
+            <h2 className="font-semibold text-white">{t("settings.converter")}</h2>
           </div>
           <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
             <label className="block text-xs text-zinc-500">
-              Amount
+              {t("common.amount")}
               <input
                 type="number"
                 min={0}
@@ -532,7 +580,7 @@ export function ShopSettingsPanel({ canWrite = true }: { canWrite?: boolean }) {
               />
             </label>
             <label className="block text-xs text-zinc-500">
-              From
+              {t("common.from")}
               <select
                 value={convertFrom}
                 onChange={(e) => setConvertFrom(e.target.value)}
@@ -547,7 +595,7 @@ export function ShopSettingsPanel({ canWrite = true }: { canWrite?: boolean }) {
             </label>
             {!multiTargets ? (
               <label className="block text-xs text-zinc-500">
-                To
+                {t("common.to")}
                 <select
                   value={convertTo}
                   onChange={(e) => setConvertTo(e.target.value)}
@@ -568,7 +616,7 @@ export function ShopSettingsPanel({ canWrite = true }: { canWrite?: boolean }) {
               checked={multiTargets}
               onChange={(e) => setMultiTargets(e.target.checked)}
             />
-            Multiple targets
+            {t("settings.multiTargets")}
           </label>
           {multiTargets ? (
             <div className="mt-2 flex flex-wrap gap-2">
@@ -607,7 +655,7 @@ export function ShopSettingsPanel({ canWrite = true }: { canWrite?: boolean }) {
             ) : (
               <ArrowRightLeft size={16} />
             )}
-            Convert
+            {t("common.convert")}
           </button>
           {convertResult ? (
             <ul className="mt-4 space-y-1 text-sm">

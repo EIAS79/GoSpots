@@ -3,16 +3,15 @@
 import { GameBillingPanel } from "@/components/finance/game-billing-panel";
 import { TenantPage } from "@/components/layout/tenant-page";
 import { FeatureGate } from "@/components/subscription/feature-gate";
-import { DASHBOARD_SECTION_GUIDES } from "@/lib/dashboard-section-guides";
 import { hasPermission } from "@/lib/auth-client";
 import { isFeatureUnlocked } from "@/lib/plan";
 import { useAuth } from "@/lib/use-auth";
 import { useCurrentMembership } from "@/lib/use-current-membership";
+import { useDashboardGuide } from "@/lib/use-dashboard-guide";
 import { useVenueAccess } from "@/lib/use-venue-access";
 
-const GUIDE = DASHBOARD_SECTION_GUIDES.gameBilling;
-
 export default function GameBillingPage() {
+  const guide = useDashboardGuide("playBilling");
   const { state } = useAuth();
   const membership = useCurrentMembership();
   const access = useVenueAccess();
@@ -25,9 +24,9 @@ export default function GameBillingPage() {
 
   return (
     <TenantPage
-      title={GUIDE.title}
-      description={GUIDE.description}
-      capabilities={GUIDE.capabilities}
+      title={guide.title}
+      description={guide.description}
+      capabilities={guide.capabilities}
     >
       <FeatureGate feature="transaction" unlocked={unlocked} title="Game billing">
         <GameBillingPanel canWrite={canWrite} />

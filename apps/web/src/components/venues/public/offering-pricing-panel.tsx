@@ -7,15 +7,8 @@ import {
   listBowlingModes,
   type BowlingModeDefinition,
 } from "@/lib/bowling-modes";
+import { usePublicPrefs } from "@/lib/public-prefs-context";
 import type { PublicGamingOffering } from "@/lib/shop-settings-client";
-
-function formatMoney(n: number, currency: string) {
-  return new Intl.NumberFormat(undefined, {
-    style: "currency",
-    currency,
-    maximumFractionDigits: 2,
-  }).format(n);
-}
 
 function chargeTypeMeta(type: BowlingModeDefinition["chargeType"]) {
   switch (type) {
@@ -62,7 +55,9 @@ export function OfferingPricingPanel({
 }: {
   offering: PublicGamingOffering;
   currency: string;
+  locale?: string;
 }) {
+  const { formatMoney } = usePublicPrefs();
   const formatPrice = (n: number) => formatMoney(n, currency);
 
   if (offering.type === "BOWLING") {

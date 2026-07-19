@@ -6,69 +6,23 @@ import Link from "next/link";
 import { Magnetic } from "@/components/effects/magnetic";
 import { cn } from "@/lib/cn";
 import { trustIcons } from "@/lib/mock-data";
+import { usePublicPrefs } from "@/lib/public-prefs-context";
 import { HeroCollage } from "./hero-collage";
 import { LivePreview } from "./live-preview";
 import { type Mode, useMode } from "./mode-context";
 import { VenueFinder } from "./venue-finder";
 
-const copy: Record<
-  Mode,
-  {
-    badge: string;
-    titleA: string;
-    titleB: string;
-    subtitle: React.ReactNode;
-    ctaPrimary: { label: string; href: string };
-    ctaSecondary: { label: string; href: string };
-    accent: "cyan" | "emerald";
-  }
-> = {
-  manage: {
-    badge: "Venue operations · private beta",
-    titleA: "Run the floor",
-    titleB: "from one live screen.",
-    subtitle: (
-      <>
-        Sessions, reservations, billing, and staff control —{" "}
-        <span className="text-zinc-100">
-          built for billiard halls, gaming lounges, and busy entertainment floors.
-        </span>{" "}
-        We&apos;re onboarding operators first while the public directory grows.
-      </>
-    ),
-    ctaPrimary: { label: "List your venue — free trial", href: "/register" },
-    ctaSecondary: { label: "Sign in", href: "/login" },
-    accent: "emerald",
-  },
-  play: {
-    badge: "Discover & reserve",
-    titleA: "Find your next",
-    titleB: "favorite spot.",
-    subtitle: (
-      <>
-        Billiard halls, gaming lounges, restaurants, cafés, bars, and karaoke rooms —{" "}
-        <span className="text-zinc-100">
-          search by city and category, then reserve when the venue enables it.
-        </span>
-      </>
-    ),
-    ctaPrimary: { label: "Browse venues", href: "/venues" },
-    ctaSecondary: { label: "I run a venue", href: "/register" },
-    accent: "cyan",
-  },
+const accentByMode: Record<Mode, "cyan" | "emerald"> = {
+  manage: "emerald",
+  play: "cyan",
 };
 
-const pillarsByMode: Record<Mode, string[]> = {
-  manage: [
-    "Live table & console status",
-    "Timers, tabs, and handovers without guesswork",
-    "Honest beta — onboarding venues first",
-  ],
-  play: [
-    "From billiards to brunch — one directory",
-    "Filter by city, category, and vibe",
-    "Reserve when the venue enables it",
-  ],
+const ctaHrefs: Record<
+  Mode,
+  { primary: string; secondary: string }
+> = {
+  manage: { primary: "/register", secondary: "/login" },
+  play: { primary: "/venues", secondary: "/register" },
 };
 
 /** Word-by-word staggered headline line. */
@@ -107,8 +61,29 @@ function StaggeredLine({
 
 export function Hero() {
   const { mode, setMode } = useMode();
+  const { t } = usePublicPrefs();
   const reduced = useReducedMotion();
-  const c = copy[mode];
+  const prefix = mode === "manage" ? "hero.manage" : "hero.play";
+  const c = {
+    badge: t(`${prefix}.badge`),
+    titleA: t(`${prefix}.titleA`),
+    titleB: t(`${prefix}.titleB`),
+    subtitle: t(`${prefix}.subtitle`),
+    ctaPrimary: {
+      label: t(`${prefix}.ctaPrimary`),
+      href: ctaHrefs[mode].primary,
+    },
+    ctaSecondary: {
+      label: t(`${prefix}.ctaSecondary`),
+      href: ctaHrefs[mode].secondary,
+    },
+    accent: accentByMode[mode],
+    pillars: [
+      t(`${prefix}.pillar1`),
+      t(`${prefix}.pillar2`),
+      t(`${prefix}.pillar3`),
+    ],
+  };
 
   return (
     <section className="relative isolate overflow-hidden pt-24 sm:pt-28 md:pt-32">
@@ -234,7 +209,7 @@ export function Hero() {
           </AnimatePresence>
 
           <ul className="mt-7 flex max-w-2xl flex-wrap justify-center gap-x-5 gap-y-2 text-[11px] text-zinc-400 sm:mt-8 sm:text-xs">
-            {pillarsByMode[mode].map((line) => (
+            {c.pillars.map((line) => (
               <li key={line} className="inline-flex items-center gap-2">
                 <span
                   className="h-1 w-1 shrink-0 rounded-full bg-amber-400/70"

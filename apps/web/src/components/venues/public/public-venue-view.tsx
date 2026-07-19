@@ -6,6 +6,7 @@ import { AnimatePresence, motion } from "framer-motion";
 import { useRouter, useSearchParams } from "next/navigation";
 import { useCallback, useMemo, useState } from "react";
 import { GoSpotsLogo } from "@/components/brand/gospots-logo";
+import { LocaleCurrencySwitcher } from "@/components/public/locale-currency-switcher";
 import { VenueCoverImage } from "@/components/ui/venue-cover-image";
 import { VenueBookTab } from "@/components/venues/public/venue-book-tab";
 import { VenueDiningTab } from "@/components/venues/public/venue-dining-tab";
@@ -17,6 +18,7 @@ import { StarRatingDisplay } from "@/components/venues/public/venue-reviews-sect
 import { VenueGuestChatWidget } from "@/components/venues/public/venue-guest-chat-widget";
 import { VenueTabBar } from "@/components/venues/public/venue-tab-bar";
 import { cn } from "@/lib/cn";
+import { usePublicPrefs } from "@/lib/public-prefs-context";
 import {
   buildVenueTabs,
   type VenueTabId,
@@ -32,6 +34,7 @@ export function PublicVenueView({
   venue: PublicVenueDetail;
   slug: string;
 }) {
+  const { t, currency } = usePublicPrefs();
   const tabs = useMemo(() => buildVenueTabs(venue), [venue]);
   const searchParams = useSearchParams();
   const router = useRouter();
@@ -40,7 +43,7 @@ export function PublicVenueView({
   const initialCategory = searchParams.get("category") ?? undefined;
 
   const [activeTab, setActiveTab] = useState<VenueTabId>(() => {
-    if (initialTab && tabs.some((t) => t.id === initialTab)) {
+    if (initialTab && tabs.some((tab) => tab.id === initialTab)) {
       return initialTab as VenueTabId;
     }
     return "overview";
@@ -104,9 +107,12 @@ export function PublicVenueView({
               href="/venues"
               className="text-xs text-zinc-500 transition hover:text-zinc-300"
             >
-              All venues
+              {t("nav.allVenues")}
             </Link>
-            <span className="hidden text-xs text-zinc-600 sm:inline">{venue.currency}</span>
+            <span className="hidden text-xs text-zinc-600 sm:inline">
+              {currency}
+            </span>
+            <LocaleCurrencySwitcher tone="dark" compact />
           </div>
         </div>
       </header>

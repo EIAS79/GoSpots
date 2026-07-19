@@ -18,13 +18,14 @@ import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { GoSpotsLogo } from "@/components/brand/gospots-logo";
+import { LocaleCurrencySwitcher } from "@/components/public/locale-currency-switcher";
 import { VenueCoverImage } from "@/components/ui/venue-cover-image";
 import {
   VenueSearchForm,
   type VenueSearchFormValues,
 } from "@/components/venues/venue-search-form";
 import { cn } from "@/lib/cn";
-import { BRAND_TAGLINE } from "@/lib/brand";
+import { usePublicPrefs } from "@/lib/public-prefs-context";
 import {
   fetchPublicVenues,
   type PublicVenue,
@@ -60,6 +61,7 @@ function valuesFromParams(searchParams: URLSearchParams): VenueSearchFormValues 
 export function VenuesDiscovery() {
   const router = useRouter();
   const searchParams = useSearchParams();
+  const { t } = usePublicPrefs();
   const [form, setForm] = useState<VenueSearchFormValues>(() =>
     valuesFromParams(searchParams),
   );
@@ -156,13 +158,16 @@ export function VenuesDiscovery() {
             className="hidden min-w-0 sm:inline-flex"
           />
           <GoSpotsLogo href="/" size="sm" className="min-w-0 sm:hidden" />
-          <Link
-            href="/register"
-            className="shrink-0 rounded-full bg-amber-400 px-3 py-2 text-xs font-semibold text-zinc-950 transition hover:bg-amber-300 sm:px-4 sm:text-sm"
-          >
-            <span className="sm:hidden">List venue</span>
-            <span className="hidden sm:inline">List your venue</span>
-          </Link>
+          <div className="flex shrink-0 items-center gap-2 sm:gap-3">
+            <LocaleCurrencySwitcher tone="dark" compact />
+            <Link
+              href="/register"
+              className="shrink-0 rounded-full bg-amber-400 px-3 py-2 text-xs font-semibold text-zinc-950 transition hover:bg-amber-300 sm:px-4 sm:text-sm"
+            >
+              <span className="sm:hidden">{t("nav.listVenueShort")}</span>
+              <span className="hidden sm:inline">{t("nav.listVenue")}</span>
+            </Link>
+          </div>
         </div>
       </header>
 
@@ -175,15 +180,20 @@ export function VenuesDiscovery() {
           <p className="inline-flex items-center gap-2 rounded-full border border-amber-500/30 bg-amber-500/10 px-3 py-1 text-xs font-medium text-amber-200">
             <Globe2 size={14} />
             {facets.countries.length > 0
-              ? `${total} published venue${total === 1 ? "" : "s"} · ${facets.countries.length} countries`
-              : "Worldwide venues"}
+              ? t(
+                  total === 1 ? "venues.publishedOne" : "venues.published",
+                  {
+                    total,
+                    countries: facets.countries.length,
+                  },
+                )
+              : t("venues.worldwide")}
           </p>
           <h1 className="mt-5 text-balance text-4xl font-bold tracking-tight md:text-6xl">
-            <span className="text-gradient">{BRAND_TAGLINE}</span>
+            <span className="text-gradient">{t("venues.tagline")}</span>
           </h1>
           <p className="mt-4 max-w-xl text-lg text-zinc-400">
-            Gaming lounges, billiard halls, bars, and nightlife — search by name,
-            city, country, or category.
+            {t("venues.subtitle")}
           </p>
         </motion.div>
 
@@ -206,15 +216,19 @@ export function VenuesDiscovery() {
         <div className="mb-5 flex flex-wrap items-center justify-between gap-3">
           <div className="min-w-0">
             <p className="text-sm font-medium text-zinc-300">
-              {loading ? "Searching…" : `${total} venue${total === 1 ? "" : "s"} found`}
+              {loading
+                ? t("venues.searching")
+                : t(total === 1 ? "venues.foundOne" : "venues.found", {
+                    total,
+                  })}
             </p>
             {filterSummary.length > 0 ? (
               <p className="mt-0.5 truncate text-xs text-zinc-500">
-                Filters: {filterSummary.join(" · ")}
+                {t("venues.filters", { summary: filterSummary.join(" · ") })}
               </p>
             ) : (
               <p className="mt-0.5 text-xs text-zinc-500">
-                Showing all published venues on GoSpots
+                {t("venues.showingAll")}
               </p>
             )}
           </div>
@@ -541,11 +555,12 @@ function RatingBadge({ venue }: { venue: PublicVenue }) {
 }
 
 function VenueMetaBadges({ venue }: { venue: PublicVenue }) {
+  const { t, currency } = usePublicPrefs();
   return (
     <div className="flex flex-wrap items-center justify-end gap-1.5">
       <span className="inline-flex items-center gap-1 rounded-full border border-white/15 bg-black/60 px-2 py-0.5 text-[10px] text-zinc-200 backdrop-blur">
         <Banknote size={10} />
-        {venue.currency}
+        {t("venues.pricesIn", { currency })}
       </span>
       {(venue.gameOfferingCount ?? 0) > 0 ? (
         <span className="inline-flex items-center gap-1 rounded-full border border-emerald-400/25 bg-emerald-500/15 px-2 py-0.5 text-[10px] text-emerald-200 backdrop-blur">

@@ -4,6 +4,7 @@ import { CircleCheck, Info } from "lucide-react";
 import { useCallback, useEffect, useId, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { cn } from "@/lib/cn";
+import { useVenueSettingsOptional } from "@/lib/venue-settings-context";
 
 export function SectionInfoTip({
   description,
@@ -12,6 +13,9 @@ export function SectionInfoTip({
   description?: string;
   capabilities?: readonly string[];
 }) {
+  const t = useVenueSettingsOptional()?.t;
+  const whatYouCanDo = t?.("common.whatYouCanDo") ?? "What you can do here";
+  const aboutSection = t?.("common.aboutSection") ?? "About this section";
   const [open, setOpen] = useState(false);
   const [mounted, setMounted] = useState(false);
   const [coords, setCoords] = useState({ top: 0, left: 0 });
@@ -81,7 +85,7 @@ export function SectionInfoTip({
           {capabilities && capabilities.length > 0 ? (
             <div className={cn(description && "mt-3 border-t border-white/10 pt-3")}>
               <p className="mb-2 text-[11px] font-medium text-zinc-300">
-                What you can do here
+                {whatYouCanDo}
               </p>
               <ul className="flex flex-wrap gap-2">
                 {capabilities.map((item) => (
@@ -116,7 +120,7 @@ export function SectionInfoTip({
           "focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-emerald-500/50",
           open && "border-emerald-400/30 bg-emerald-500/10 text-emerald-300",
         )}
-        aria-label="About this section"
+        aria-label={aboutSection}
         aria-expanded={open}
         aria-controls={open ? id : undefined}
         onClick={() => {

@@ -3,16 +3,7 @@
 import { CalendarOff, Loader2, Pencil, Plus, Trash2, X } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 import type { OpeningHourRow, ScheduleException } from "@/lib/hours-client";
-
-const DAY_LABELS = [
-  "Sunday",
-  "Monday",
-  "Tuesday",
-  "Wednesday",
-  "Thursday",
-  "Friday",
-  "Saturday",
-];
+import { useVenueSettings } from "@/lib/venue-settings-context";
 
 export type WeeklyDraft = {
   weekday: number;
@@ -55,6 +46,7 @@ export function HoursPanel({
   ) => Promise<void>;
   onDeleteException: (id: string) => Promise<void>;
 }) {
+  const { t, locale } = useVenueSettings();
   const [draft, setDraft] = useState(weekly);
   const [dirty, setDirty] = useState(false);
 
@@ -106,10 +98,8 @@ export function HoursPanel({
   return (
     <div className="space-y-8">
       <section className="rounded-xl border border-white/10 bg-zinc-900/50 p-5 md:p-6">
-        <h2 className="text-base font-semibold text-white">Weekly hours</h2>
-        <p className="mt-1 text-xs text-zinc-500">
-          Regular opening times guests see on your venue page.
-        </p>
+        <h2 className="text-base font-semibold text-white">{t("hours.weekly")}</h2>
+        <p className="mt-1 text-xs text-zinc-500">{t("hours.weeklyHint")}</p>
         <ul className="mt-4 divide-y divide-white/5">
           {draft.map((row) => (
             <li
@@ -117,7 +107,7 @@ export function HoursPanel({
               className="flex flex-wrap items-center gap-3 py-3 first:pt-0 last:pb-0"
             >
               <span className="w-28 shrink-0 text-sm text-zinc-300">
-                {DAY_LABELS[row.weekday]}
+                {t(`hours.day.${row.weekday}`)}
               </span>
               <label className="flex items-center gap-2 text-xs text-zinc-400">
                 <input
@@ -129,7 +119,7 @@ export function HoursPanel({
                   }
                   className="rounded border-white/20"
                 />
-                Closed
+                {t("hours.closed")}
               </label>
               {!row.isClosed ? (
                 <div className="flex flex-wrap items-center gap-2">
@@ -154,7 +144,7 @@ export function HoursPanel({
                   />
                 </div>
               ) : (
-                <span className="text-xs text-zinc-600">No service</span>
+                <span className="text-xs text-zinc-600">{t("hours.noService")}</span>
               )}
             </li>
           ))}
@@ -169,7 +159,7 @@ export function HoursPanel({
             className="mt-4 inline-flex items-center gap-2 rounded-lg bg-emerald-600 px-4 py-2 text-sm text-white disabled:opacity-50"
           >
             {saving ? <Loader2 size={14} className="animate-spin" /> : null}
-            Save weekly hours
+            {t("hours.saveWeekly")}
           </button>
         ) : null}
       </section>
@@ -179,10 +169,10 @@ export function HoursPanel({
           <CalendarOff className="mt-0.5 shrink-0 text-amber-400/80" size={18} />
           <div className="min-w-0 flex-1">
             <h2 className="text-base font-semibold text-white">
-              Closures & special days
+              {t("hours.exceptions")}
             </h2>
             <p className="mt-1 text-xs text-zinc-500">
-              Private events, holidays, or different hours on a specific date.
+              {t("hours.exceptionsHint")}
             </p>
           </div>
         </div>
@@ -210,7 +200,7 @@ export function HoursPanel({
             }}
           >
             <label className="block text-xs text-zinc-500 sm:col-span-2">
-              Date
+              {t("common.date")}
               <input
                 type="date"
                 required
@@ -220,11 +210,11 @@ export function HoursPanel({
               />
             </label>
             <label className="block text-xs text-zinc-500 sm:col-span-2">
-              Note (optional)
+              {t("hours.noteOptional")}
               <input
                 value={exLabel}
                 onChange={(e) => setExLabel(e.target.value)}
-                placeholder="e.g. Staff party, maintenance"
+                placeholder={t("hours.notePlaceholder")}
                 className="mt-1 w-full rounded-lg border border-white/10 bg-zinc-900 px-3 py-2 text-sm text-white"
               />
             </label>
@@ -235,12 +225,12 @@ export function HoursPanel({
                 onChange={(e) => setExClosed(e.target.checked)}
                 className="rounded border-white/20"
               />
-              Closed all day
+              {t("hours.closedAllDay")}
             </label>
             {!exClosed ? (
               <>
                 <label className="block text-xs text-zinc-500">
-                  Opens
+                  {t("common.opens")}
                   <input
                     type="time"
                     required
@@ -250,7 +240,7 @@ export function HoursPanel({
                   />
                 </label>
                 <label className="block text-xs text-zinc-500">
-                  Closes
+                  {t("common.closes")}
                   <input
                     type="time"
                     required
@@ -271,14 +261,14 @@ export function HoursPanel({
               ) : (
                 <Plus size={14} />
               )}
-              Add date
+              {t("hours.addDate")}
             </button>
           </form>
         ) : null}
 
         <ul className="mt-4 space-y-2">
           {upcoming.length === 0 ? (
-            <li className="text-sm text-zinc-600">No upcoming exceptions.</li>
+            <li className="text-sm text-zinc-600">{t("hours.noExceptions")}</li>
           ) : (
             upcoming.map((ex) => (
               <li
@@ -287,9 +277,12 @@ export function HoursPanel({
               >
                 <div className="flex flex-wrap items-center justify-between gap-2">
                   <div>
-                    <p className="text-sm text-white">{formatDate(ex.date)}</p>
+                    <p className="text-sm text-white">
+                      {formatDate(ex.date, locale)}
+                    </p>
                     <p className="text-xs text-zinc-500">
-                      {ex.label || (ex.isClosed ? "Closed" : "Special hours")}
+                      {ex.label ||
+                        (ex.isClosed ? t("hours.closed") : t("hours.specialHours"))}
                       {ex.isClosed
                         ? ""
                         : ex.opensAt && ex.closesAt
@@ -303,7 +296,7 @@ export function HoursPanel({
                         type="button"
                         onClick={() => startEditing(ex)}
                         className="rounded-lg p-2 text-zinc-500 hover:bg-white/5 hover:text-zinc-200"
-                        aria-label="Edit"
+                        aria-label={t("common.edit")}
                       >
                         <Pencil size={14} />
                       </button>
@@ -311,7 +304,7 @@ export function HoursPanel({
                         type="button"
                         onClick={() => void onDeleteException(ex.id)}
                         className="rounded-lg p-2 text-zinc-500 hover:bg-rose-500/10 hover:text-rose-300"
-                        aria-label="Remove"
+                        aria-label={t("common.remove")}
                       >
                         <Trash2 size={14} />
                       </button>
@@ -338,19 +331,19 @@ export function HoursPanel({
                   >
                     <div className="flex items-center justify-between sm:col-span-2">
                       <p className="text-xs font-medium uppercase tracking-wide text-zinc-500">
-                        Edit exception
+                        {t("hours.editException")}
                       </p>
                       <button
                         type="button"
                         onClick={cancelEditing}
                         className="rounded-lg p-1 text-zinc-500 hover:bg-white/5 hover:text-zinc-200"
-                        aria-label="Cancel edit"
+                        aria-label={t("common.cancel")}
                       >
                         <X size={14} />
                       </button>
                     </div>
                     <label className="block text-xs text-zinc-500 sm:col-span-2">
-                      Date
+                      {t("common.date")}
                       <input
                         type="date"
                         required
@@ -360,11 +353,11 @@ export function HoursPanel({
                       />
                     </label>
                     <label className="block text-xs text-zinc-500 sm:col-span-2">
-                      Note (optional)
+                      {t("hours.noteOptional")}
                       <input
                         value={editLabel}
                         onChange={(e) => setEditLabel(e.target.value)}
-                        placeholder="e.g. Staff party, maintenance"
+                        placeholder={t("hours.notePlaceholder")}
                         className="mt-1 w-full rounded-lg border border-white/10 bg-zinc-900 px-3 py-2 text-sm text-white"
                       />
                     </label>
@@ -375,12 +368,12 @@ export function HoursPanel({
                         onChange={(e) => setEditClosed(e.target.checked)}
                         className="rounded border-white/20"
                       />
-                      Closed all day
+                      {t("hours.closedAllDay")}
                     </label>
                     {!editClosed ? (
                       <>
                         <label className="block text-xs text-zinc-500">
-                          Opens
+                          {t("common.opens")}
                           <input
                             type="time"
                             required
@@ -390,7 +383,7 @@ export function HoursPanel({
                           />
                         </label>
                         <label className="block text-xs text-zinc-500">
-                          Closes
+                          {t("common.closes")}
                           <input
                             type="time"
                             required
@@ -407,7 +400,7 @@ export function HoursPanel({
                         onClick={cancelEditing}
                         className="rounded-lg border border-white/10 px-3 py-2 text-sm text-zinc-300"
                       >
-                        Cancel
+                        {t("common.cancel")}
                       </button>
                       <button
                         type="submit"
@@ -417,7 +410,7 @@ export function HoursPanel({
                         {editSaving ? (
                           <Loader2 size={14} className="animate-spin" />
                         ) : null}
-                        Save changes
+                        {t("hours.saveChanges")}
                       </button>
                     </div>
                   </form>
@@ -444,9 +437,9 @@ export function weeklyToDraft(rows: OpeningHourRow[]): WeeklyDraft[] {
   });
 }
 
-function formatDate(iso: string) {
+function formatDate(iso: string, locale: string) {
   const d = new Date(iso + "T12:00:00");
-  return d.toLocaleDateString(undefined, {
+  return d.toLocaleDateString(locale, {
     weekday: "short",
     month: "short",
     day: "numeric",

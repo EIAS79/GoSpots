@@ -12,7 +12,6 @@ import { TenantPage } from "@/components/layout/tenant-page";
 import { FeatureGate } from "@/components/subscription/feature-gate";
 import { cn } from "@/lib/cn";
 import { hasPermission } from "@/lib/auth-client";
-import { DASHBOARD_SECTION_GUIDES } from "@/lib/dashboard-section-guides";
 import { formatDate } from "@/lib/format";
 import { isFeatureUnlocked } from "@/lib/plan";
 import {
@@ -24,11 +23,10 @@ import {
 } from "@/lib/reviews-client";
 import { useAuth } from "@/lib/use-auth";
 import { useCurrentMembership } from "@/lib/use-current-membership";
+import { useDashboardGuide } from "@/lib/use-dashboard-guide";
 import { useLiveData } from "@/lib/use-live-data";
 import { useVenueAccess } from "@/lib/use-venue-access";
 import { publishLiveEvent } from "@/lib/live-events";
-
-const GUIDE = DASHBOARD_SECTION_GUIDES.reviews;
 
 type Filter = "ALL" | VenueReviewStatus;
 
@@ -62,6 +60,7 @@ function statusStyle(status: VenueReviewStatus) {
 }
 
 export default function ReviewsPage() {
+  const guide = useDashboardGuide("reviews");
   const { state } = useAuth();
   const membership = useCurrentMembership();
   const access = useVenueAccess();
@@ -154,9 +153,9 @@ export default function ReviewsPage() {
 
   return (
     <TenantPage
-      title={GUIDE.title}
-      description={GUIDE.description}
-      capabilities={GUIDE.capabilities}
+      title={guide.title}
+      description={guide.description}
+      capabilities={guide.capabilities}
     >
       <FeatureGate feature="reviews" unlocked={unlocked}>
         {!canRead ? (

@@ -25,14 +25,12 @@ import {
   type AuditEntry,
 } from "@/lib/audit-client";
 import { formatDate } from "@/lib/format";
-import { DASHBOARD_SECTION_GUIDES } from "@/lib/dashboard-section-guides";
 import { hasPermission } from "@/lib/auth-client";
 import { isFeatureUnlocked } from "@/lib/plan";
 import { useAuth } from "@/lib/use-auth";
 import { useCurrentMembership } from "@/lib/use-current-membership";
+import { useDashboardGuide } from "@/lib/use-dashboard-guide";
 import { useVenueAccess } from "@/lib/use-venue-access";
-
-const GUIDE = DASHBOARD_SECTION_GUIDES.audit;
 
 function todayIso() {
   return new Date().toISOString().slice(0, 10);
@@ -245,6 +243,7 @@ function AuditRow({
 }
 
 export default function AuditPage() {
+  const guide = useDashboardGuide("audit");
   const { state } = useAuth();
   const membership = useCurrentMembership();
   const access = useVenueAccess();
@@ -365,7 +364,7 @@ export default function AuditPage() {
 
   if (state.status === "authed" && !canViewAudit) {
     return (
-      <TenantPage title={GUIDE.title} description={GUIDE.description}>
+      <TenantPage title={guide.title} description={guide.description}>
         <p className="text-sm text-zinc-400">
           You do not have permission to view the audit log.
         </p>
@@ -375,9 +374,9 @@ export default function AuditPage() {
 
   return (
     <TenantPage
-      title={GUIDE.title}
-      description={GUIDE.description}
-      capabilities={GUIDE.capabilities}
+      title={guide.title}
+      description={guide.description}
+      capabilities={guide.capabilities}
       actions={
         <button
           type="button"

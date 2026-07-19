@@ -5,11 +5,10 @@ import { GalleryPanel } from "@/components/gallery/gallery-panel";
 import { hasPermission } from "@/lib/auth-client";
 import { useAuth } from "@/lib/use-auth";
 import { useCurrentMembership } from "@/lib/use-current-membership";
-import { DASHBOARD_SECTION_GUIDES } from "@/lib/dashboard-section-guides";
-
-const GUIDE = DASHBOARD_SECTION_GUIDES.gallery;
+import { useDashboardGuide } from "@/lib/use-dashboard-guide";
 
 export default function GalleryPage() {
+  const guide = useDashboardGuide("gallery");
   const { state } = useAuth();
   const membership = useCurrentMembership();
   const canWrite =
@@ -19,9 +18,9 @@ export default function GalleryPage() {
 
   return (
     <TenantPage
-      title={GUIDE.title}
-      description="Upload your main marketing image and gallery photos customers see on your public venue page."
-      capabilities={GUIDE.capabilities}
+      title={guide.title}
+      description={guide.description}
+      capabilities={guide.capabilities}
     >
       <GalleryPanel canWrite={canWrite} />
     </TenantPage>

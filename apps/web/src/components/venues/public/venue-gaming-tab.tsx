@@ -222,7 +222,11 @@ export function VenueGamingTab({
       </section>
 
       {selectedOffering && hasOfferingDetails(selectedOffering) ? (
-        <OfferingDetailCard offering={selectedOffering} currency={venue.currency} />
+        <OfferingDetailCard
+          offering={selectedOffering}
+          currency={venue.currency}
+          locale={venue.locale}
+        />
       ) : null}
 
       {/* Floor map */}
@@ -320,6 +324,7 @@ export function VenueGamingTab({
           initialEndTime={windowEndTime}
           offeringRates={selectedOffering?.rates ?? []}
           currency={venue.currency}
+          locale={venue.locale}
           onClose={() => {
             setBookingUnit(null);
             setHighlightedUnitId(null);
@@ -411,9 +416,11 @@ function hasOfferingDetails(offering: PublicGamingOffering): boolean {
 function OfferingDetailCard({
   offering,
   currency,
+  locale = "en",
 }: {
   offering: PublicGamingOffering;
   currency: string;
+  locale?: string;
 }) {
   return (
     <div className="rounded-xl border border-white/10 bg-zinc-900/40 p-3 md:p-4">
@@ -439,7 +446,11 @@ function OfferingDetailCard({
           </div>
         </div>
       ) : null}
-      <OfferingPricingPanel offering={offering} currency={currency} />
+      <OfferingPricingPanel
+        offering={offering}
+        currency={currency}
+        locale={locale}
+      />
     </div>
   );
 }

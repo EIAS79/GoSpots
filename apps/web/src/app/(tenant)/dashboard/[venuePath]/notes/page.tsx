@@ -12,7 +12,6 @@ import { FeatureGate } from "@/components/subscription/feature-gate";
 import { TenantPage } from "@/components/layout/tenant-page";
 import { cn } from "@/lib/cn";
 import { hasPermission } from "@/lib/auth-client";
-import { DASHBOARD_SECTION_GUIDES } from "@/lib/dashboard-section-guides";
 import {
   archiveNote,
   createNote,
@@ -23,9 +22,8 @@ import {
 import { isFeatureUnlocked } from "@/lib/plan";
 import { useAuth } from "@/lib/use-auth";
 import { useCurrentMembership } from "@/lib/use-current-membership";
+import { useDashboardGuide } from "@/lib/use-dashboard-guide";
 import { useVenueAccess } from "@/lib/use-venue-access";
-
-const GUIDE = DASHBOARD_SECTION_GUIDES.notes;
 
 const IMPORTANCE_OPTIONS: {
   id: NoteImportance;
@@ -84,6 +82,7 @@ function defaultStaffName(user: {
 }
 
 function NotesContent() {
+  const guide = useDashboardGuide("notes");
   const { state } = useAuth();
   const membership = useCurrentMembership();
   const perms = membership?.permissions ?? "";
@@ -181,7 +180,7 @@ function NotesContent() {
 
   if (!canView) {
     return (
-      <TenantPage title={GUIDE.title} description={GUIDE.description}>
+      <TenantPage title={guide.title} description={guide.description}>
         <p className="text-sm text-zinc-400">
           You do not have permission to view shift notes.
         </p>
@@ -191,9 +190,9 @@ function NotesContent() {
 
   return (
     <TenantPage
-      title={GUIDE.title}
-      description={GUIDE.description}
-      capabilities={GUIDE.capabilities}
+      title={guide.title}
+      description={guide.description}
+      capabilities={guide.capabilities}
       actions={
         canWrite ? (
           <button

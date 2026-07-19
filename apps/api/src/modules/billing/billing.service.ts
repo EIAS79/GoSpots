@@ -20,6 +20,7 @@ import { hasPermission, PERMISSIONS } from '../../common/permissions';
 import { AuditService } from '../audit/audit.service';
 import type { JwtAccessPayload } from '../auth/auth.service';
 import { PrismaService } from '../../prisma/prisma.service';
+import { CurrencyRatesService } from '../shop/currency-rates.service';
 import { LemonSqueezyClient } from './lemon-squeezy.client';
 
 @Injectable()
@@ -31,6 +32,7 @@ export class BillingService {
     private readonly lemon: LemonSqueezyClient,
     private readonly config: ConfigService,
     private readonly audit: AuditService,
+    private readonly rates: CurrencyRatesService,
   ) {}
 
   status() {
@@ -86,7 +88,11 @@ export class BillingService {
       0;
     const eurTotal = monthlyTotal(packId, addOns, seats);
     const currency = (shop.currency || 'EUR').toUpperCase();
-    const cents = Math.round(eurTotal * 100);
+    const { rate, ratesAt } = await this.rates.getRate('EUR', currency, {
+      forceRefresh: true,
+    });
+    const localTotal = this.rates.convertAmount(eurTotal, rate);
+    const cents = Math.round(localTotal * 100);
 
     const webApp =
       this.config.get<string>('WEB_APP_URL') ??
@@ -107,17 +113,27 @@ export class BillingService {
         add_ons: addOns,
         staff_seats: String(seats),
         billing_currency: currency,
+        amount_eur: String(eurTotal),
+        fx_rate: String(rate),
+        fx_rates_at: ratesAt,
       },
     });
 
     await this.audit.record(actor, {
       section: 'subscription',
       action: 'billing.checkout_start',
-      summary: `Started Lemon Squeezy checkout for ${packId} (€${eurTotal}/mo)`,
-      meta: { packId, addOns, eurTotal, currency },
+      summary: `Started Lemon Squeezy checkout for ${packId} (${localTotal} ${currency}/mo · €${eurTotal} @ ${rate.toFixed(6)})`,
+      meta: { packId, addOns, eurTotal, localTotal, currency, rate, ratesAt },
     });
 
-    return { url, mode: 'checkout' as const, amountEur: eurTotal, currency };
+    return {
+      url,
+      mode: 'checkout' as const,
+      amountEur: eurTotal,
+      amount: localTotal,
+      currency,
+      rate,
+    };
   }
 
   async openPortal(actor: JwtAccessPayload) {

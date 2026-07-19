@@ -7,6 +7,7 @@ import {
   startBillingCheckout,
 } from "@/lib/dashboard-client";
 import { cn } from "@/lib/cn";
+import { useVenueSettings } from "@/lib/venue-settings-context";
 
 export function BillingCheckoutCard({
   monthlyTotal,
@@ -15,12 +16,14 @@ export function BillingCheckoutCard({
   trialActive,
   trialExpired,
 }: {
+  /** Monthly total in EUR catalog units — converted for display. */
   monthlyTotal: number;
   configured: boolean;
   hasLemonSub: boolean;
   trialActive: boolean;
   trialExpired: boolean;
 }) {
+  const { formatFromEur } = useVenueSettings();
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -52,7 +55,7 @@ export function BillingCheckoutCard({
             Record) — multi-currency checkout, VAT/tax handled for you. Your
             pack + add-ons total{" "}
             <span className="font-medium text-emerald-300">
-              €{monthlyTotal}/mo
+              {formatFromEur(monthlyTotal)}/mo
             </span>
             .
           </p>

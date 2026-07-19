@@ -35,6 +35,7 @@ import {
 import type { Reservation, ReservationStatus } from "@/lib/reservations-client";
 import type { ResourceCatalog } from "@/lib/resources-client";
 import { RESOURCE_TYPE_LABELS } from "@/lib/resource-types";
+import { useVenueSettingsOptional } from "@/lib/venue-settings-context";
 
 export function ReservationDialog({
   catalog,
@@ -76,6 +77,9 @@ export function ReservationDialog({
   onDelete?: () => Promise<void>;
   saving: boolean;
 }) {
+  const { formatMoney } = useVenueSettingsOptional() ?? {
+    formatMoney: (n: number) => n.toFixed(2),
+  };
   const units = catalog.categories.flatMap((c) =>
     c.resources.map((r) => ({
       ...r,
@@ -484,7 +488,7 @@ export function ReservationDialog({
 
             {estimatedPrice != null ? (
               <p className="rounded-lg border border-emerald-400/20 bg-emerald-500/5 px-3 py-2 text-xs text-emerald-200">
-                Estimated charge: {estimatedPrice.toFixed(2)}
+                Estimated charge: {formatMoney(estimatedPrice)}
               </p>
             ) : null}
 

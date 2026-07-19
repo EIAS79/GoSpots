@@ -11,24 +11,38 @@ import {
 } from "react";
 import type { ShopPreferences } from "./locale-currency";
 import {
+  fetchCurrencyRate,
   fetchShopSettings,
   updateShopSettings,
   type ShopSettings,
 } from "./shop-settings-client";
+import { isRtlLocale, translate, translateList, type MessageKey } from "./i18n";
 
 type VenueSettingsContextValue = {
   shop: ShopSettings | null;
   locale: string;
   currency: string;
   loading: boolean;
+  /** 1 EUR = this many units of venue currency (live). */
+  eurToVenueRate: number;
   refresh: () => Promise<void>;
   updatePreferences: (prefs: Partial<ShopPreferences>) => Promise<void>;
   formatMoney: (amount: number, currencyOverride?: string) => string;
+  /** Convert a catalog/plan amount stored in EUR into venue currency. */
+  fromEur: (amountEur: number) => number;
+  /** Format an EUR catalog price in the venue currency. */
+  formatFromEur: (amountEur: number) => string;
+  t: (key: MessageKey, vars?: Record<string, string | number>) => string;
+  tList: (key: MessageKey) => string[];
 };
 
 const VenueSettingsContext = createContext<VenueSettingsContextValue | null>(
   null,
 );
+
+function roundMoney(n: number) {
+  return Math.round(n * 100) / 100;
+}
 
 export function VenueSettingsProvider({
   initial,
@@ -61,24 +75,40 @@ export function VenueSettingsProvider({
     : null,
   );
   const [loading, setLoading] = useState(!initial?.locale);
+  const [eurToVenueRate, setEurToVenueRate] = useState(1);
 
   const locale = shop?.locale ?? "en";
   const currency = shop?.currency ?? "EUR";
 
   useEffect(() => {
-    if (initial?.locale) {
-      document.documentElement.lang = initial.locale;
+    if (typeof document === "undefined") return;
+    document.documentElement.lang = locale;
+    document.documentElement.dir = isRtlLocale(locale) ? "rtl" : "ltr";
+  }, [locale]);
+
+  useEffect(() => {
+    if (currency === "EUR") {
+      setEurToVenueRate(1);
+      return;
     }
-  }, [initial?.locale]);
+    let cancelled = false;
+    void fetchCurrencyRate("EUR", currency)
+      .then((r) => {
+        if (!cancelled && r.rate > 0) setEurToVenueRate(r.rate);
+      })
+      .catch(() => {
+        if (!cancelled) setEurToVenueRate(1);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [currency]);
 
   const refresh = useCallback(async () => {
     setLoading(true);
     try {
       const data = await fetchShopSettings();
       setShop(data.shop);
-      if (typeof document !== "undefined") {
-        document.documentElement.lang = data.shop.locale;
-      }
     } finally {
       setLoading(false);
     }
@@ -99,9 +129,6 @@ export function VenueSettingsProvider({
     async (prefs: Partial<ShopPreferences>) => {
       const data = await updateShopSettings(prefs);
       setShop(data.shop);
-      if (typeof document !== "undefined") {
-        document.documentElement.lang = data.shop.locale;
-      }
     },
     [],
   );
@@ -121,17 +148,56 @@ export function VenueSettingsProvider({
     [locale, currency],
   );
 
+  const fromEur = useCallback(
+    (amountEur: number) => roundMoney(amountEur * eurToVenueRate),
+    [eurToVenueRate],
+  );
+
+  const formatFromEur = useCallback(
+    (amountEur: number) => formatMoney(fromEur(amountEur)),
+    [formatMoney, fromEur],
+  );
+
+  const t = useCallback(
+    (key: MessageKey, vars?: Record<string, string | number>) =>
+      translate(locale, key, vars),
+    [locale],
+  );
+
+  const tList = useCallback(
+    (key: MessageKey) => translateList(locale, key),
+    [locale],
+  );
+
   const value = useMemo(
     () => ({
       shop,
       locale,
       currency,
       loading,
+      eurToVenueRate,
       refresh,
       updatePreferences,
       formatMoney,
+      fromEur,
+      formatFromEur,
+      t,
+      tList,
     }),
-    [shop, locale, currency, loading, refresh, updatePreferences, formatMoney],
+    [
+      shop,
+      locale,
+      currency,
+      loading,
+      eurToVenueRate,
+      refresh,
+      updatePreferences,
+      formatMoney,
+      fromEur,
+      formatFromEur,
+      t,
+      tList,
+    ],
   );
 
   return (

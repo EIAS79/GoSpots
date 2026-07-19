@@ -14,7 +14,7 @@ type RateTable = {
   fetchedAt: number;
 };
 
-const CACHE_TTL_MS = 60 * 60 * 1000;
+const CACHE_TTL_MS = 15 * 60 * 1000; // 15 minutes — fresher live rates
 const PIVOT: SupportedCurrency = 'EUR';
 
 @Injectable()
@@ -54,7 +54,7 @@ export class CurrencyRatesService {
       throw new BadRequestException('Provide at least one target currency.');
     }
 
-    const { rates, fetchedAt } = await this.getRateTable();
+    const { rates, fetchedAt } = await this.getRateTable({ forceRefresh: true });
     const fromPivot = rates[fromCode];
     if (fromPivot == null || fromPivot <= 0) {
       throw new BadRequestException(
@@ -85,9 +85,47 @@ export class CurrencyRatesService {
     };
   }
 
-  private async getRateTable(): Promise<RateTable> {
+  /** Live rate: 1 unit of `from` = `rate` units of `to`. Refreshes rates if stale. */
+  async getRate(
+    from: string,
+    to: string,
+    opts?: { forceRefresh?: boolean },
+  ): Promise<{ rate: number; ratesAt: string }> {
+    const fromCode = normalizeCurrency(from);
+    const toCode = normalizeCurrency(to);
+    if (fromCode === toCode) {
+      return { rate: 1, ratesAt: new Date().toISOString() };
+    }
+    const { rates, fetchedAt } = await this.getRateTable({
+      forceRefresh: opts?.forceRefresh ?? true,
+    });
+    const fromPivot = rates[fromCode];
+    const toPivot = rates[toCode];
+    if (fromPivot == null || fromPivot <= 0 || toPivot == null || toPivot <= 0) {
+      throw new BadRequestException(
+        `Exchange rate unavailable for ${fromCode} → ${toCode}.`,
+      );
+    }
+    return {
+      rate: toPivot / fromPivot,
+      ratesAt: new Date(fetchedAt).toISOString(),
+    };
+  }
+
+  convertAmount(amount: number, rate: number): number {
+    if (!Number.isFinite(amount)) return 0;
+    return roundMoney(amount * rate);
+  }
+
+  private async getRateTable(opts?: {
+    forceRefresh?: boolean;
+  }): Promise<RateTable> {
     const hit = this.tableCache;
-    if (hit && Date.now() - hit.fetchedAt < CACHE_TTL_MS) {
+    if (
+      !opts?.forceRefresh &&
+      hit &&
+      Date.now() - hit.fetchedAt < CACHE_TTL_MS
+    ) {
       return hit;
     }
 

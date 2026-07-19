@@ -6,11 +6,9 @@ import { FeatureGate } from "@/components/subscription/feature-gate";
 import { TenantPage } from "@/components/layout/tenant-page";
 import { StaffAccessEditor } from "@/components/staff/staff-access-editor";
 import { ManagerAccessExtras } from "@/components/staff/manager-access-extras";
-import { DASHBOARD_SECTION_GUIDES } from "@/lib/dashboard-section-guides";
 import { useAuth } from "@/lib/use-auth";
 import { useCurrentMembership } from "@/lib/use-current-membership";
-
-const GUIDE = DASHBOARD_SECTION_GUIDES.staff;
+import { useDashboardGuide } from "@/lib/use-dashboard-guide";
 import { cn } from "@/lib/cn";
 import {
   buildManagerPerms,
@@ -38,6 +36,7 @@ import Link from "next/link";
 type PageTab = "accounts" | "access";
 
 function EmployeeAccountsContent() {
+  const guide = useDashboardGuide("staff");
   const { state } = useAuth();
   const subscriptionHref = useVenueHref("/subscription");
   const membership = useCurrentMembership();
@@ -209,9 +208,9 @@ function EmployeeAccountsContent() {
   if (!canViewStaff) {
     return (
       <TenantPage
-        title={GUIDE.title}
-        description={GUIDE.description}
-        capabilities={GUIDE.capabilities}
+        title={guide.title}
+        description={guide.description}
+        capabilities={guide.capabilities}
       >
         <p className="text-sm text-zinc-400">
           You do not have permission to view employee accounts.
@@ -222,7 +221,7 @@ function EmployeeAccountsContent() {
 
   if (loading) {
     return (
-      <TenantPage title={GUIDE.title} description={GUIDE.description}>
+      <TenantPage title={guide.title} description={guide.description}>
         <Loader2 className="h-6 w-6 animate-spin text-emerald-400" />
       </TenantPage>
     );
@@ -236,9 +235,9 @@ function EmployeeAccountsContent() {
 
   return (
     <TenantPage
-      title={GUIDE.title}
-      description={GUIDE.description}
-      capabilities={GUIDE.capabilities}
+      title={guide.title}
+      description={guide.description}
+      capabilities={guide.capabilities}
       actions={
         pageTab === "accounts" && canCreate ? (
           <button

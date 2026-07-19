@@ -8,7 +8,6 @@ import { ConfirmDialog } from "@/components/ui/confirm-dialog";
 import { FeatureGate } from "@/components/subscription/feature-gate";
 import { TenantPage } from "@/components/layout/tenant-page";
 import { hasPermission } from "@/lib/auth-client";
-import { DASHBOARD_SECTION_GUIDES } from "@/lib/dashboard-section-guides";
 import { ApiError } from "@/lib/api";
 import { publishLiveEvent } from "@/lib/live-events";
 import {
@@ -29,17 +28,17 @@ import type { MealPeriod } from "@/lib/menu-periods";
 import { isFeatureUnlocked } from "@/lib/plan";
 import { useAuth } from "@/lib/use-auth";
 import { useCurrentMembership } from "@/lib/use-current-membership";
+import { useDashboardGuide } from "@/lib/use-dashboard-guide";
 import { useLiveData } from "@/lib/use-live-data";
 import { useVenueAccess } from "@/lib/use-venue-access";
 import { useVenueSettings } from "@/lib/venue-settings-context";
-
-const GUIDE = DASHBOARD_SECTION_GUIDES.menu;
 
 function notifyMenuChanged() {
   publishLiveEvent({ section: "menu" });
 }
 
 export default function MenuPage() {
+  const guide = useDashboardGuide("menu");
   const { state } = useAuth();
   const { formatMoney } = useVenueSettings();
   const access = useVenueAccess();
@@ -323,9 +322,9 @@ export default function MenuPage() {
 
   return (
     <TenantPage
-      title={GUIDE.title}
-      description={GUIDE.description}
-      capabilities={GUIDE.capabilities}
+      title={guide.title}
+      description={guide.description}
+      capabilities={guide.capabilities}
       actions={
         canWrite ? (
           <div className="flex flex-wrap items-center gap-2">

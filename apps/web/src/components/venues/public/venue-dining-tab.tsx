@@ -397,6 +397,7 @@ export function VenueDiningTab({
           initialEndTime={windowEndTime}
           initialPartySize={partySize}
           currency={venue.currency}
+          locale={venue.locale}
           onClose={() => {
             setBookingUnit(null);
             setHighlightedUnitId(null);

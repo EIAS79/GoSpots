@@ -13,9 +13,11 @@ import {
 import { TRIAL_DURATION_DAYS } from "@/lib/plan";
 import { VENUE_PACKS, type VenuePackId } from "@/lib/venue-packs";
 import { useAuth } from "@/lib/use-auth";
+import { useVenueSettings } from "@/lib/venue-settings-context";
 
 function SubscriptionPageInner() {
   const { reload } = useAuth();
+  const { formatFromEur } = useVenueSettings();
   const searchParams = useSearchParams();
   const [data, setData] = useState<SubscriptionResponse | null>(null);
   const [loading, setLoading] = useState(true);
@@ -93,7 +95,8 @@ function SubscriptionPageInner() {
                         data.subscription.trialEndsAt,
                       ).toLocaleDateString()
                     : "trial ends"}
-                  , everything turns off until you pay (€{data.monthlyTotal}
+                  , everything turns off until you pay (
+                  {formatFromEur(data.monthlyTotal)}
                   /mo) — no charge without checkout. Your data stays.
                 </p>
               </div>
@@ -111,10 +114,10 @@ function SubscriptionPageInner() {
                   Trial ended — features are off until you pay
                 </p>
                 <p className="mt-1 text-xs text-rose-200/80">
-                  Adjust your plan below if needed, then start billing for €
-                  {data.monthlyTotal}/mo. Nothing is charged without your
-                  consent. All your data is still here and returns when features
-                  turn back on.
+                  Adjust your plan below if needed, then start billing for{" "}
+                  {formatFromEur(data.monthlyTotal)}/mo. Nothing is charged
+                  without your consent. All your data is still here and returns
+                  when features turn back on.
                 </p>
               </div>
             </div>
@@ -138,7 +141,7 @@ function SubscriptionPageInner() {
             <p className="mt-2 text-sm text-zinc-400">
               Features total{" "}
               <span className="font-medium text-emerald-300">
-                €{data.monthlyTotal}/mo
+                {formatFromEur(data.monthlyTotal)}/mo
               </span>
               {staffLimit > 0
                 ? ` · Staff seats ${staffUsed}/${staffLimit}`

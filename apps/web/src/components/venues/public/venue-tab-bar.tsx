@@ -2,6 +2,7 @@
 
 import { motion } from "framer-motion";
 import { cn } from "@/lib/cn";
+import { usePublicPrefs } from "@/lib/public-prefs-context";
 import type { VenueTabDef, VenueTabId } from "@/lib/public-venue-tabs";
 
 export function VenueTabBar({
@@ -16,6 +17,8 @@ export function VenueTabBar({
   /** Match wide tab panels (menu / maps / reviews). */
   wide?: boolean;
 }) {
+  const { t } = usePublicPrefs();
+
   if (tabs.length <= 1) return null;
 
   return (
@@ -45,7 +48,7 @@ export function VenueTabBar({
                   : "text-zinc-500 hover:text-zinc-300",
               )}
             >
-              {tab.label}
+              {t(tab.labelKey)}
               {isActive ? (
                 <motion.span
                   layoutId="venue-tab-underline"

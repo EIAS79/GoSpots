@@ -13,6 +13,7 @@ import {
 import { type ResourceStatus, type ResourceType } from "@/lib/resource-types";
 import { resolveMediaUrl } from "@/lib/media-url";
 import { ModalPortal } from "@/components/ui/modal-portal";
+import { useVenueSettingsOptional } from "@/lib/venue-settings-context";
 
 function Shell({
   title,
@@ -70,6 +71,7 @@ export function CategoryDialog({
   onUploadImage?: (slot: "1" | "2", file: File) => Promise<void>;
   saving: boolean;
 }) {
+  const currency = useVenueSettingsOptional()?.currency ?? "EUR";
   const [type, setType] = useState<ResourceType>(category?.type ?? "PC");
   const [name, setName] = useState(category?.name ?? "");
   const [description, setDescription] = useState(category?.description ?? "");
@@ -216,7 +218,7 @@ export function CategoryDialog({
                     className="rounded-lg border border-white/10 bg-zinc-900 px-2 py-1.5 text-xs text-white"
                   />
                   <input
-                    placeholder="Price"
+                    placeholder={`Price (${currency})`}
                     value={r.price}
                     onChange={(e) => {
                       const next = [...rates];

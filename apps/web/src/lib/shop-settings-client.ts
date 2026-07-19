@@ -35,12 +35,24 @@ export type VenueCategoryPreset = {
   color: string;
 };
 
+export type CurrencyConversionResult = {
+  from: string;
+  to: string;
+  rate: number;
+  ratesAt: string;
+  menuItems: number;
+  resourceRates: number;
+  resources: number;
+  offerings: number;
+};
+
 export type ShopSettingsResponse = {
   shop: ShopSettings;
   locales: { code: string; label: string }[];
   currencies: { code: string; label: string; symbol: string }[];
   venueCategoryPresets?: VenueCategoryPreset[];
   venueCategories?: VenueCategoryTag[];
+  currencyConversion?: CurrencyConversionResult | null;
 };
 
 export function fetchShopSettings() {
@@ -84,6 +96,15 @@ export function convertCurrency(body: {
     method: "POST",
     body: JSON.stringify(body),
   });
+}
+
+/** Live FX: 1 `from` = `rate` of shop currency (or `to`). */
+export function fetchCurrencyRate(from = "EUR", to?: string) {
+  const q = new URLSearchParams({ from });
+  if (to) q.set("to", to);
+  return api<{ from: string; to: string; rate: number; ratesAt: string }>(
+    `/shop/currency/rate?${q.toString()}`,
+  );
 }
 
 export type PublicOpeningHour = {

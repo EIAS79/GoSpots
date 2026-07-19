@@ -8,6 +8,6 @@ import { CurrencyRatesService } from './currency-rates.service';
   imports: [NotificationsModule],
   controllers: [ShopController],
   providers: [ShopService, CurrencyRatesService],
-  exports: [ShopService],
+  exports: [ShopService, CurrencyRatesService],
 })
 export class ShopModule {}

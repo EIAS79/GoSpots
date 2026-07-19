@@ -11,6 +11,7 @@ import {
   type BowlingModeDefinition,
 } from "@/lib/bowling-modes";
 import type { BowlingChargeMode } from "@/lib/bowling-booking";
+import { useVenueSettingsOptional } from "@/lib/venue-settings-context";
 
 type RateRow = { label: string; durationMinutes: string; price: string };
 
@@ -92,6 +93,7 @@ export function BowlingModesEditor({
   onChange: (modes: BowlingModeDraft[]) => void;
   defaultSlotMinutes: number;
 }) {
+  const currency = useVenueSettingsOptional()?.currency ?? "EUR";
   function updateMode(index: number, patch: Partial<BowlingModeDraft>) {
     const next = [...modes];
     next[index] = { ...next[index], ...patch };
@@ -194,7 +196,7 @@ export function BowlingModesEditor({
           {mode.chargeType === "PERSON" ? (
             <div className="grid gap-2 sm:grid-cols-2">
               <label className="block text-[10px] text-zinc-500">
-                Price per person
+                Price per person ({currency})
                 <input
                   value={mode.pricePerPerson}
                   onChange={(e) =>
@@ -233,7 +235,7 @@ export function BowlingModesEditor({
           {mode.chargeType === "GAME" ? (
             <div className="grid gap-2 sm:grid-cols-2">
               <label className="block text-[10px] text-zinc-500">
-                Price per game
+                Price per game ({currency})
                 <input
                   value={mode.pricePerGame}
                   onChange={(e) =>
@@ -310,7 +312,7 @@ export function BowlingModesEditor({
                       className="w-14 rounded border border-white/10 bg-zinc-900 px-1 py-1 text-xs text-white"
                     />
                     <input
-                      placeholder="Price"
+                      placeholder={`Price (${currency})`}
                       value={r.price}
                       onChange={(e) => {
                         const rates = [...mode.rates];

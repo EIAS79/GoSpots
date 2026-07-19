@@ -10,30 +10,30 @@ export type VenueTabId =
 
 export type VenueTabDef = {
   id: VenueTabId;
-  label: string;
+  labelKey: string;
 };
 
 export function buildVenueTabs(venue: PublicVenueDetail): VenueTabDef[] {
-  const tabs: VenueTabDef[] = [{ id: "overview", label: "Overview" }];
+  const tabs: VenueTabDef[] = [{ id: "overview", labelKey: "venue.tab.overview" }];
 
   if (venue.features?.hasMenu && venue.menu?.items.length) {
-    tabs.push({ id: "menu", label: "Menu" });
+    tabs.push({ id: "menu", labelKey: "venue.tab.menu" });
   }
   if (venue.features?.hasGaming && venue.gamingOfferings?.length) {
-    tabs.push({ id: "activities", label: "Gaming floor" });
+    tabs.push({ id: "activities", labelKey: "venue.tab.activities" });
   }
   if (venue.features?.hasDigitalDining && venue.diningOfferings?.length) {
-    tabs.push({ id: "dining", label: "Book a table" });
+    tabs.push({ id: "dining", labelKey: "venue.tab.dining" });
   }
 
   if (
     venue.reviewsMode !== "DISABLED" &&
     (venue.showReviews || venue.canSubmitReview)
   ) {
-    tabs.push({ id: "reviews", label: "Reviews" });
+    tabs.push({ id: "reviews", labelKey: "venue.tab.reviews" });
   }
 
-  tabs.push({ id: "book", label: "Reserve" });
+  tabs.push({ id: "book", labelKey: "venue.tab.book" });
 
   return tabs;
 }

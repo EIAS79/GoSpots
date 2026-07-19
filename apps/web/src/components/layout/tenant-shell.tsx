@@ -47,10 +47,13 @@ import { hasPermission } from "@/lib/auth-client";
 import { useVenueHref } from "@/lib/venue-context";
 import { useCurrentMembership } from "@/lib/use-current-membership";
 import { useAuth } from "@/lib/use-auth";
+import type { MessageKey } from "@/lib/i18n";
+import { translate } from "@/lib/i18n";
+import { useVenueSettingsOptional } from "@/lib/venue-settings-context";
 
 type NavItem = {
   segment: string;
-  label: string;
+  labelKey: MessageKey;
   icon: typeof LayoutDashboard;
   perms?: string[];
   feature?: FeatureKey;
@@ -62,38 +65,38 @@ type NavItem = {
 };
 
 type NavGroup = {
-  label: string;
+  labelKey: MessageKey;
   items: NavItem[];
 };
 
 const NAV_GROUPS: NavGroup[] = [
   {
-    label: "Overview",
+    labelKey: "nav.group.overview",
     items: [
-      { segment: "", label: "Overview", icon: LayoutDashboard },
+      { segment: "", labelKey: "nav.overview", icon: LayoutDashboard },
       {
         segment: "/subscription",
-        label: "Subscription & plan",
+        labelKey: "nav.subscription",
         icon: Crown,
         perms: ["subscription.manage"],
       },
       {
         segment: "/notifications",
-        label: "Notifications",
+        labelKey: "nav.notifications",
         icon: Bell,
         perms: ["notifications.read"],
         feature: "notifications",
       },
       {
         segment: "/audit",
-        label: "Audit log",
+        labelKey: "nav.audit",
         icon: FileText,
         perms: ["audit.read"],
         feature: "audit",
       },
       {
         segment: "/reviews",
-        label: "Reviews",
+        labelKey: "nav.reviews",
         icon: Star,
         perms: ["reviews.read"],
         feature: "reviews",
@@ -101,46 +104,52 @@ const NAV_GROUPS: NavGroup[] = [
     ],
   },
   {
-    label: "Venue",
+    labelKey: "nav.group.venue",
     items: [
       {
         segment: "/settings",
-        label: "Shop settings",
+        labelKey: "nav.settings",
         icon: Settings,
         perms: ["shop.manage"],
       },
       {
         segment: "/messages",
-        label: "Guest messages",
+        labelKey: "nav.messages",
         icon: MessageSquare,
         perms: ["shop.manage", "messaging.read", "notifications.read"],
         feature: "messaging",
       },
-      { segment: "/menu", label: "Menu", icon: BookOpen, perms: ["menu.read"], feature: "menu" },
+      {
+        segment: "/menu",
+        labelKey: "nav.menu",
+        icon: BookOpen,
+        perms: ["menu.read"],
+        feature: "menu",
+      },
       {
         segment: "/gallery",
-        label: "Gallery",
+        labelKey: "nav.gallery",
         icon: Images,
         perms: ["gallery.read"],
         feature: "gallery",
       },
       {
         segment: "/hours",
-        label: "Hours & schedule",
+        labelKey: "nav.hours",
         icon: Clock,
         perms: ["hours.read", "hours.write"],
         feature: "hours",
       },
       {
         segment: "/notes",
-        label: "Shift notes",
+        labelKey: "nav.notes",
         icon: StickyNote,
         perms: ["notes.read", "notes.write"],
         feature: "notes",
       },
       {
         segment: "/resources",
-        label: "Gaming setup",
+        labelKey: "nav.gaming",
         icon: Gamepad2,
         perms: ["resource.read"],
         feature: "resource",
@@ -148,7 +157,7 @@ const NAV_GROUPS: NavGroup[] = [
       },
       {
         segment: "/dining",
-        label: "Dining layout",
+        labelKey: "nav.dining",
         icon: UtensilsCrossed,
         perms: ["resource.read"],
         feature: "resource",
@@ -157,25 +166,25 @@ const NAV_GROUPS: NavGroup[] = [
     ],
   },
   {
-    label: "Operations",
+    labelKey: "nav.group.operations",
     items: [
       {
         segment: "/sessions",
-        label: "Reservations",
+        labelKey: "nav.sessions",
         icon: CalendarRange,
         perms: ["reservation.read"],
         feature: "reservation",
       },
       {
         segment: "/orders",
-        label: "Menu orders",
+        labelKey: "nav.orders",
         icon: ShoppingCart,
         perms: ["transaction.read"],
         feature: "transaction",
       },
       {
         segment: "/play-billing",
-        label: "Game billing",
+        labelKey: "nav.playBilling",
         icon: Gamepad2,
         perms: ["transaction.read"],
         feature: "transaction",
@@ -184,11 +193,11 @@ const NAV_GROUPS: NavGroup[] = [
     ],
   },
   {
-    label: "Finance",
+    labelKey: "nav.group.finance",
     items: [
       {
         segment: "/finance",
-        label: "Finance",
+        labelKey: "nav.finance",
         icon: Wallet,
         perms: ["transaction.read"],
         feature: "transaction",
@@ -196,11 +205,11 @@ const NAV_GROUPS: NavGroup[] = [
     ],
   },
   {
-    label: "Team",
+    labelKey: "nav.group.team",
     items: [
       {
         segment: "/staff",
-        label: "Employee accounts",
+        labelKey: "nav.staff",
         icon: UserCog,
         perms: ["staff.read"],
         feature: "roles",
@@ -213,10 +222,12 @@ function NavLink({
   item,
   pathname,
   badge,
+  label,
 }: {
   item: NavItem;
   pathname: string;
   badge?: number;
+  label: string;
 }) {
   const href = useVenueHref(item.segment);
   const Icon = item.icon;
@@ -239,7 +250,7 @@ function NavLink({
           active ? "text-emerald-400" : "text-zinc-500 group-hover:text-zinc-300",
         )}
       />
-      <span className="flex-1">{item.label}</span>
+      <span className="flex-1">{label}</span>
       {badge && badge > 0 ? (
         <span className="min-w-[1.25rem] rounded-full bg-emerald-500 px-1.5 py-0.5 text-center text-[10px] font-semibold text-zinc-950">
           {badge > 99 ? "99+" : badge}
@@ -363,6 +374,11 @@ export function TenantShell({ children }: { children: ReactNode }) {
   };
 
   const showAdminLinks = user.systemRole === "SUPER_ADMIN";
+  const venueSettings = useVenueSettingsOptional();
+  const t =
+    venueSettings?.t ??
+    ((key: MessageKey, vars?: Record<string, string | number>) =>
+      translate("en", key, vars));
 
   function NavContent() {
     return (
@@ -372,9 +388,9 @@ export function TenantShell({ children }: { children: ReactNode }) {
             const items = group.items.filter(canSee);
             if (items.length === 0) return null;
             return (
-              <div key={group.label} className="mb-4">
+              <div key={group.labelKey} className="mb-4">
                 <p className="mb-1 px-3 text-[10px] uppercase tracking-widest text-zinc-600">
-                  {group.label}
+                  {t(group.labelKey)}
                 </p>
                 <ul className="flex flex-col gap-0.5">
                   {items.map((item) => (
@@ -382,6 +398,7 @@ export function TenantShell({ children }: { children: ReactNode }) {
                       <NavLink
                         item={item}
                         pathname={pathname}
+                        label={t(item.labelKey)}
                         badge={
                           item.segment === "/notifications"
                             ? unreadNotifications

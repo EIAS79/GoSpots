@@ -8,13 +8,12 @@ import {
   fetchDashboardOverview,
   type DashboardOverview,
 } from "@/lib/dashboard-client";
-import { DASHBOARD_SECTION_GUIDES } from "@/lib/dashboard-section-guides";
+import { useDashboardGuide } from "@/lib/use-dashboard-guide";
 import { useVenueHref } from "@/lib/venue-context";
 import { useVenueSettings } from "@/lib/venue-settings-context";
 
-const GUIDE = DASHBOARD_SECTION_GUIDES.overview;
-
 export default function VenueOverviewPage() {
+  const guide = useDashboardGuide("overview");
   const { formatMoney, locale } = useVenueSettings();
   const links = {
     reports: useVenueHref("/finance?tab=reports"),
@@ -60,9 +59,9 @@ export default function VenueOverviewPage() {
 
   return (
     <TenantPage
-      title={GUIDE.title}
-      description={`${data.shop.name ?? "Your venue"} — ${GUIDE.description}`}
-      capabilities={GUIDE.capabilities}
+      title={guide.title}
+      description={`${data.shop.name ?? "Your venue"} — ${guide.description}`}
+      capabilities={guide.capabilities}
     >
       <OverviewDashboard
         data={data}
