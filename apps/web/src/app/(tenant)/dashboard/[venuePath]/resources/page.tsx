@@ -25,6 +25,7 @@ import { isFeatureUnlocked } from "@/lib/plan";
 import { showsGamingUi } from "@/lib/venue-packs";
 import { useAuth } from "@/lib/use-auth";
 import { useCurrentMembership } from "@/lib/use-current-membership";
+import { useDashboardGuide } from "@/lib/use-dashboard-guide";
 import { useLiveData } from "@/lib/use-live-data";
 import { useVenueAccess } from "@/lib/use-venue-access";
 import { useVenueSettings } from "@/lib/venue-settings-context";
@@ -33,21 +34,10 @@ function todayDateInput() {
   return new Date().toISOString().slice(0, 10);
 }
 
-const GUIDE = {
-  title: "Gaming",
-  description:
-    "Your venue’s game menu — only add what you offer. Set seats, tables, or lanes, specs, pricing, and photos. Reservations reduce live availability.",
-  capabilities: [
-    "PC & PlayStation: cinema-style live seat map by zone and floor — green free, red busy, gray out of service.",
-    "Billiard: tables · Bowling: lanes — each with its own photo.",
-    "Price per hour, 30 min, or custom tiers.",
-    "Live stock: bookings subtract from free seats/tables/lanes.",
-  ],
-};
-
 export default function ResourcesPage() {
   const { state } = useAuth();
   const { formatMoney } = useVenueSettings();
+  const guide = useDashboardGuide("resources");
   const access = useVenueAccess();
   const [menu, setMenu] = useState<GamingMenuResponse | null>(null);
   const [schedule, setSchedule] = useState<DaySchedule | null>(null);
@@ -101,9 +91,9 @@ export default function ResourcesPage() {
 
   return (
     <TenantPage
-      title={GUIDE.title}
-      description={GUIDE.description}
-      capabilities={GUIDE.capabilities}
+      title={guide.title}
+      description={guide.description}
+      capabilities={guide.capabilities}
     >
       <FeatureGate feature="resource" unlocked={unlocked}>
         {loading ? (

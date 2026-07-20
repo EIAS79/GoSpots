@@ -9,6 +9,7 @@ import {
   useState,
   type ReactNode,
 } from "react";
+import { usePathname } from "next/navigation";
 
 export type Theme = "dark" | "light";
 
@@ -18,6 +19,8 @@ type ThemeContextValue = {
   toggleTheme: () => void;
   /** True while hydrating from localStorage */
   ready: boolean;
+  /** Public marketing pages honor light/dark; dashboard stays dark. */
+  isPublicTheme: boolean;
 };
 
 const STORAGE_KEY = "gospots-theme";
@@ -42,7 +45,19 @@ function applyDom(theme: Theme) {
   root.dataset.theme = theme;
 }
 
+function isAppShellPath(pathname: string | null) {
+  if (!pathname) return false;
+  return (
+    pathname.startsWith("/dashboard") ||
+    pathname.startsWith("/admin") ||
+    pathname.startsWith("/login") ||
+    pathname.startsWith("/register")
+  );
+}
+
 export function ThemeProvider({ children }: { children: ReactNode }) {
+  const pathname = usePathname();
+  const isAppShell = isAppShellPath(pathname);
   const [theme, setThemeState] = useState<Theme>("dark");
   const [ready, setReady] = useState(false);
 
@@ -51,15 +66,20 @@ export function ThemeProvider({ children }: { children: ReactNode }) {
     setReady(true);
   }, []);
 
+  // Dashboard / auth always render dark so the public home theme toggle
+  // cannot wash out the tenant sidebar (shared html.dark + translucent panels).
   useEffect(() => {
     if (!ready) return;
-    applyDom(theme);
-    try {
-      window.localStorage.setItem(STORAGE_KEY, theme);
-    } catch {
-      /* ignore */
+    const effective: Theme = isAppShell ? "dark" : theme;
+    applyDom(effective);
+    if (!isAppShell) {
+      try {
+        window.localStorage.setItem(STORAGE_KEY, theme);
+      } catch {
+        /* ignore */
+      }
     }
-  }, [theme, ready]);
+  }, [theme, ready, isAppShell]);
 
   const setTheme = useCallback((t: Theme) => {
     setThemeState(t);
@@ -70,8 +90,14 @@ export function ThemeProvider({ children }: { children: ReactNode }) {
   }, []);
 
   const value = useMemo(
-    () => ({ theme, setTheme, toggleTheme, ready }),
-    [theme, setTheme, toggleTheme, ready],
+    () => ({
+      theme: isAppShell ? ("dark" as const) : theme,
+      setTheme,
+      toggleTheme,
+      ready,
+      isPublicTheme: !isAppShell,
+    }),
+    [theme, setTheme, toggleTheme, ready, isAppShell],
   );
 
   return (

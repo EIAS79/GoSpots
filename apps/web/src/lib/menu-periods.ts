@@ -28,3 +28,11 @@ export function mealPeriodLabel(period: MealPeriod | null | undefined) {
   if (!period) return null;
   return MEAL_PERIOD_PRESETS.find((p) => p.value === period)?.label ?? period;
 }
+
+/** i18n key for public UI — use with `t(\`meal.${period}\`)` or `t(mealPeriodKey(period)!)`. */
+export function mealPeriodKey(
+  period: MealPeriod | null | undefined,
+): `meal.${MealPeriod}` | null {
+  if (!period) return null;
+  return `meal.${period}`;
+}

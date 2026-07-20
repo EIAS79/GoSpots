@@ -22,16 +22,14 @@ import {
 import Link from "next/link";
 import { Reveal } from "@/components/effects/reveal";
 import { cn } from "@/lib/cn";
+import { usePublicPrefs } from "@/lib/public-prefs-context";
 import { venuesSearchHref } from "@/lib/venue-search";
 
 const EASE = [0.22, 1, 0.36, 1] as const;
 
 type CategoryTile = {
   slug: string;
-  name: string;
-  blurb: string;
   icon: LucideIcon;
-  /** Tailwind gradient for the tile glow */
   glow: string;
   iconTone: string;
   span?: string;
@@ -40,8 +38,6 @@ type CategoryTile = {
 const TILES: CategoryTile[] = [
   {
     slug: "billiard-hall",
-    name: "Billiards & snooker",
-    blurb: "Rack up on a clean table",
     icon: Target,
     glow: "from-emerald-500/25 to-emerald-500/0",
     iconTone: "text-emerald-700 dark:text-emerald-300",
@@ -49,8 +45,6 @@ const TILES: CategoryTile[] = [
   },
   {
     slug: "restaurant",
-    name: "Restaurants",
-    blurb: "Book a table, skip the wait",
     icon: UtensilsCrossed,
     glow: "from-rose-500/25 to-rose-500/0",
     iconTone: "text-rose-700 dark:text-rose-300",
@@ -58,96 +52,72 @@ const TILES: CategoryTile[] = [
   },
   {
     slug: "gaming-lounge",
-    name: "Gaming lounges",
-    blurb: "Consoles, PCs, and squads",
     icon: Gamepad2,
     glow: "from-cyan-500/25 to-cyan-500/0",
     iconTone: "text-cyan-700 dark:text-cyan-300",
   },
   {
     slug: "cafe",
-    name: "Cafés",
-    blurb: "Coffee, boards, and chill",
     icon: Coffee,
     glow: "from-amber-500/25 to-amber-500/0",
     iconTone: "text-amber-700 dark:text-amber-300",
   },
   {
     slug: "bar",
-    name: "Bars & lounges",
-    blurb: "Good drinks, better nights",
     icon: Martini,
     glow: "from-orange-500/25 to-orange-500/0",
     iconTone: "text-orange-700 dark:text-orange-300",
   },
   {
     slug: "esports-cafe",
-    name: "Esports cafés",
-    blurb: "Low ping, high stakes",
     icon: Monitor,
     glow: "from-indigo-500/25 to-indigo-500/0",
     iconTone: "text-indigo-700 dark:text-indigo-300",
   },
   {
     slug: "karaoke",
-    name: "Karaoke",
-    blurb: "Your stage is waiting",
     icon: Music,
     glow: "from-pink-500/25 to-pink-500/0",
     iconTone: "text-pink-700 dark:text-pink-300",
   },
   {
     slug: "bowling",
-    name: "Bowling",
-    blurb: "Strikes with friends",
     icon: Dices,
     glow: "from-violet-500/25 to-violet-500/0",
     iconTone: "text-violet-700 dark:text-violet-300",
   },
   {
     slug: "sports-bar",
-    name: "Sports bars",
-    blurb: "Every match, big screen",
     icon: Trophy,
     glow: "from-lime-500/25 to-lime-500/0",
     iconTone: "text-lime-700 dark:text-lime-300",
   },
   {
     slug: "pub",
-    name: "Pubs",
-    blurb: "Classics done right",
     icon: Beer,
     glow: "from-yellow-500/25 to-yellow-500/0",
     iconTone: "text-yellow-700 dark:text-yellow-300",
   },
   {
     slug: "night-club",
-    name: "Night clubs",
-    blurb: "Dance until late",
     icon: Sparkles,
     glow: "from-fuchsia-500/25 to-fuchsia-500/0",
     iconTone: "text-fuchsia-700 dark:text-fuchsia-300",
   },
   {
     slug: "vr-experience",
-    name: "VR experiences",
-    blurb: "Step into another world",
     icon: Glasses,
     glow: "from-purple-500/25 to-purple-500/0",
     iconTone: "text-purple-700 dark:text-purple-300",
   },
   {
     slug: "cinema",
-    name: "Cinema & shows",
-    blurb: "Screenings and events",
     icon: Film,
     glow: "from-blue-500/25 to-blue-500/0",
     iconTone: "text-blue-700 dark:text-blue-300",
   },
   {
     slug: "family-entertainment",
-    name: "Family fun",
-    blurb: "Something for everyone",
     icon: Users,
     glow: "from-teal-500/25 to-teal-500/0",
     iconTone: "text-teal-700 dark:text-teal-300",
@@ -157,21 +127,21 @@ const TILES: CategoryTile[] = [
 
 /** Guest view — browse the directory by the kind of night you want. */
 export function CategoryShowcase() {
+  const { t } = usePublicPrefs();
+
   return (
     <section id="categories" className="relative py-20 sm:py-24">
       <div className="mx-auto max-w-7xl px-4 sm:px-6 md:px-8">
         <Reveal className="mx-auto max-w-2xl text-center">
           <span className="text-xs font-medium uppercase tracking-widest text-cyan-700 dark:text-cyan-400">
-            Every kind of night
+            {t("cat.eyebrow")}
           </span>
           <h2 className="mt-3 text-balance text-3xl font-bold md:text-5xl">
-            Play, eat, sing —{" "}
-            <span className="text-gradient">whatever tonight needs.</span>
+            {t("cat.title")}{" "}
+            <span className="text-gradient">{t("cat.titleAccent")}</span>
           </h2>
           <p className="mt-4 text-base text-zinc-600 dark:text-zinc-400 md:text-lg">
-            GoSpots isn&apos;t just for gamers. Billiard halls and gaming
-            lounges, yes — but also restaurants, cafés, bars, karaoke rooms,
-            and family spots. Pick a vibe to jump straight into the directory.
+            {t("cat.subtitle")}
           </p>
         </Reveal>
 
@@ -215,10 +185,10 @@ export function CategoryShowcase() {
                   </div>
                   <div className="relative">
                     <h3 className="text-sm font-semibold text-[var(--color-foreground)] dark:text-white sm:text-base">
-                      {tile.name}
+                      {t(`cat.${tile.slug}.name`)}
                     </h3>
                     <p className="mt-0.5 text-[11px] text-zinc-500 sm:text-xs">
-                      {tile.blurb}
+                      {t(`cat.${tile.slug}.blurb`)}
                     </p>
                   </div>
                 </Link>
@@ -232,7 +202,7 @@ export function CategoryShowcase() {
             href="/venues"
             className="group inline-flex items-center gap-2 rounded-full border border-[var(--color-border)] bg-[var(--color-surface)]/60 px-5 py-2.5 text-sm font-medium text-[var(--color-foreground)] backdrop-blur transition hover:border-cyan-400/40 hover:bg-cyan-500/10 hover:text-cyan-700 dark:border-white/15 dark:bg-white/5 dark:text-white dark:hover:text-cyan-200"
           >
-            Browse all venues
+            {t("cat.cta")}
             <ArrowRight
               size={15}
               className="transition-transform group-hover:translate-x-1"

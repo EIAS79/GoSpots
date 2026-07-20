@@ -3,44 +3,49 @@
 import Link from "next/link";
 import { GoSpotsLogo } from "@/components/brand/gospots-logo";
 import { BRAND_TAGLINE } from "@/lib/brand";
+import { usePublicPrefs } from "@/lib/public-prefs-context";
 import { useMode } from "./mode-context";
 
 type FooterLink = { label: string; href: string; external?: boolean };
 
 export function Footer() {
   const { mode } = useMode();
+  const { t } = usePublicPrefs();
   const isPlay = mode === "play";
 
   const productLinks: FooterLink[] = isPlay
     ? [
-        { label: "Find a spot", href: "/venues" },
-        { label: "Directory", href: "#venues" },
-        { label: "FAQ", href: "#faq" },
+        { label: t("footer.findSpot"), href: "/venues" },
+        { label: t("footer.directory"), href: "#venues" },
+        { label: t("footer.faq"), href: "#faq" },
       ]
     : [
-        { label: "Operations", href: "#features" },
-        { label: "Sessions", href: "#features" },
-        { label: "Billing", href: "#features" },
-        { label: "Reports", href: "#features" },
+        { label: t("footer.operations"), href: "#features" },
+        { label: t("footer.sessions"), href: "#features" },
+        { label: t("footer.billing"), href: "#features" },
+        { label: t("footer.reports"), href: "#features" },
       ];
 
   const guestLinks: FooterLink[] = [
-    { label: "Find a spot", href: "/venues" },
-    { label: "Reservations", href: "/venues" },
+    { label: t("footer.findSpot"), href: "/venues" },
+    { label: t("footer.reservations"), href: "/venues" },
   ];
 
   const companyLinks: FooterLink[] = [
-    ...(isPlay ? [] : [{ label: "Pricing", href: "#pricing" }]),
-    { label: "FAQ", href: "#faq" },
-    { label: "Contact", href: "mailto:hello@gospots.app", external: true },
-    { label: "Privacy", href: "/privacy" },
-    { label: "Terms", href: "/terms" },
+    ...(isPlay ? [] : [{ label: t("footer.pricing"), href: "#pricing" }]),
+    { label: t("footer.faq"), href: "#faq" },
+    { label: t("footer.contact"), href: "mailto:hello@gospots.app", external: true },
+    { label: t("footer.privacy"), href: "/privacy" },
+    { label: t("footer.terms"), href: "/terms" },
   ];
 
   const sections: { title: string; links: FooterLink[] }[] = [
-    { title: isPlay ? "Explore" : "Product", links: productLinks },
-    { title: "For guests", links: guestLinks },
-    { title: "Company", links: companyLinks },
+    {
+      title: isPlay ? t("footer.explore") : t("footer.product"),
+      links: productLinks,
+    },
+    { title: t("footer.forGuests"), links: guestLinks },
+    { title: t("footer.company"), links: companyLinks },
   ];
 
   return (
@@ -50,8 +55,7 @@ export function Footer() {
           <div className="md:col-span-2">
             <GoSpotsLogo href="/" size="md" showTagline />
             <p className="mt-4 max-w-xs text-sm text-zinc-600 dark:text-zinc-400">
-              {BRAND_TAGLINE} — billiard halls, gaming lounges, and entertainment
-              venues near you. Owners run nights from one realtime dashboard.
+              {BRAND_TAGLINE} — {t("footer.blurb")}
             </p>
           </div>
 

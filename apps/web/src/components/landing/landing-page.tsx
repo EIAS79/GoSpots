@@ -20,6 +20,7 @@ import { VenuePainPoints } from "./venue-pain-points";
 import { Venues } from "./venues";
 import { WhoItsFor } from "./who-its-for";
 import { useMode } from "./mode-context";
+import { ScrollToTopButton } from "@/components/effects/scroll-to-top-button";
 
 const EASE = [0.22, 1, 0.36, 1] as const;
 
@@ -88,6 +89,7 @@ export function LandingPage() {
         <Cta />
       </main>
       <Footer />
+      <ScrollToTopButton />
     </>
   );
 }

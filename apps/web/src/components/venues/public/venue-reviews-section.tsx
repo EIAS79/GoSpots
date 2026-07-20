@@ -173,7 +173,7 @@ export function VenueReviewsSection({
 
   if (reviewsMode === "DISABLED") {
     return (
-      <p className="rounded-xl border border-white/10 bg-zinc-900/40 px-4 py-5 text-sm text-zinc-500">
+      <p className="rounded-xl border border-[var(--color-border)] bg-[var(--color-surface)] px-4 py-5 text-sm text-zinc-500">
         This venue is not accepting reviews.
       </p>
     );
@@ -189,7 +189,7 @@ export function VenueReviewsSection({
             <Star size={18} className="shrink-0 text-amber-400/50" />
           )}
           <div className="min-w-0">
-            <p className="truncate text-sm font-medium text-zinc-200">{summaryLabel}</p>
+            <p className="truncate text-sm font-medium text-[var(--color-foreground)]">{summaryLabel}</p>
             <p className="text-xs text-zinc-500">
               {allowSubmit
                 ? reviewsMode === "HIDDEN"
@@ -206,7 +206,7 @@ export function VenueReviewsSection({
               setShowForm((v) => !v);
               setThanks(null);
             }}
-            className="w-full rounded-lg border border-amber-500/30 bg-amber-500/10 px-4 py-2 text-sm font-medium text-amber-200 transition hover:bg-amber-500/20 sm:w-auto"
+            className="w-full rounded-lg border border-amber-500/30 bg-amber-500/10 px-4 py-2 text-sm font-medium text-amber-800 transition hover:bg-amber-500/20 dark:text-amber-200 sm:w-auto"
           >
             {showForm ? "Cancel" : "Write a review"}
           </button>
@@ -214,7 +214,7 @@ export function VenueReviewsSection({
       </div>
 
       {thanks ? (
-        <p className="rounded-lg border border-emerald-500/30 bg-emerald-500/10 px-3 py-2 text-sm text-emerald-100">
+        <p className="rounded-lg border border-emerald-500/30 bg-emerald-500/10 px-3 py-2 text-sm text-emerald-800 dark:text-emerald-100">
           {thanks}
         </p>
       ) : null}
@@ -222,46 +222,46 @@ export function VenueReviewsSection({
       {showForm && allowSubmit ? (
         <form
           onSubmit={(e) => void submit(e)}
-          className="rounded-xl border border-white/10 bg-zinc-900/60 p-5"
+          className="rounded-xl border border-[var(--color-border)] bg-[var(--color-surface)] p-5"
         >
           {error ? (
-            <p className="mb-4 rounded-lg border border-rose-500/30 bg-rose-500/10 px-3 py-2 text-xs text-rose-200">
+            <p className="mb-4 rounded-lg border border-rose-500/30 bg-rose-500/10 px-3 py-2 text-xs text-rose-700 dark:text-rose-200">
               {error}
             </p>
           ) : null}
           <div className="grid gap-4 sm:grid-cols-2">
-            <label className="block text-xs text-zinc-400">
+            <label className="block text-xs text-zinc-600 dark:text-zinc-400">
               Your name
               <input
                 required
                 value={guestName}
                 onChange={(e) => setGuestName(e.target.value)}
-                className="mt-1 w-full rounded-lg border border-white/10 bg-zinc-950 px-3 py-2.5 text-sm text-white"
+                className="mt-1 w-full rounded-lg border border-[var(--color-border)] bg-[var(--color-background)] px-3 py-2.5 text-sm text-[var(--color-foreground)] outline-none focus:border-amber-500/40"
               />
             </label>
-            <label className="block text-xs text-zinc-400">
+            <label className="block text-xs text-zinc-600 dark:text-zinc-400">
               Email (optional)
               <input
                 type="email"
                 value={guestEmail}
                 onChange={(e) => setGuestEmail(e.target.value)}
-                className="mt-1 w-full rounded-lg border border-white/10 bg-zinc-950 px-3 py-2.5 text-sm text-white"
+                className="mt-1 w-full rounded-lg border border-[var(--color-border)] bg-[var(--color-background)] px-3 py-2.5 text-sm text-[var(--color-foreground)] outline-none focus:border-amber-500/40"
               />
             </label>
             <div className="sm:col-span-2">
-              <p className="text-xs text-zinc-400">Your rating</p>
+              <p className="text-xs text-zinc-600 dark:text-zinc-400">Your rating</p>
               <div className="mt-1">
                 <StarRatingInput value={rating} onChange={setRating} />
               </div>
             </div>
-            <label className="block text-xs text-zinc-400 sm:col-span-2">
+            <label className="block text-xs text-zinc-600 dark:text-zinc-400 sm:col-span-2">
               Comment (optional)
               <textarea
                 value={comment}
                 onChange={(e) => setComment(e.target.value)}
                 rows={3}
                 placeholder="Food, service, atmosphere, gaming setup…"
-                className="mt-1 w-full rounded-lg border border-white/10 bg-zinc-950 px-3 py-2.5 text-sm text-white"
+                className="mt-1 w-full rounded-lg border border-[var(--color-border)] bg-[var(--color-background)] px-3 py-2.5 text-sm text-[var(--color-foreground)] outline-none focus:border-amber-500/40"
               />
             </label>
           </div>
@@ -281,10 +281,10 @@ export function VenueReviewsSection({
           {reviews.map((r) => (
             <li
               key={r.id}
-              className="rounded-xl border border-white/10 bg-zinc-900/40 px-4 py-4"
+              className="rounded-xl border border-[var(--color-border)] bg-[var(--color-surface)] px-4 py-4"
             >
               <div className="flex flex-wrap items-center justify-between gap-2">
-                <p className="text-sm font-medium text-zinc-200">{r.guestName}</p>
+                <p className="text-sm font-medium text-[var(--color-foreground)]">{r.guestName}</p>
                 <span className="text-[11px] text-zinc-500">
                   {formatReviewDate(r.createdAt)}
                 </span>

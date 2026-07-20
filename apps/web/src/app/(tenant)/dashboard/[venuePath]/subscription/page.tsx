@@ -11,13 +11,15 @@ import {
   type SubscriptionResponse,
 } from "@/lib/dashboard-client";
 import { TRIAL_DURATION_DAYS } from "@/lib/plan";
-import { VENUE_PACKS, type VenuePackId } from "@/lib/venue-packs";
+import { useDashboardGuide } from "@/lib/use-dashboard-guide";
 import { useAuth } from "@/lib/use-auth";
 import { useVenueSettings } from "@/lib/venue-settings-context";
+import type { VenuePackId } from "@/lib/venue-packs";
 
 function SubscriptionPageInner() {
   const { reload } = useAuth();
-  const { formatFromEur } = useVenueSettings();
+  const { formatFromEur, t } = useVenueSettings();
+  const guide = useDashboardGuide("subscription");
   const searchParams = useSearchParams();
   const [data, setData] = useState<SubscriptionResponse | null>(null);
   const [loading, setLoading] = useState(true);
@@ -29,7 +31,7 @@ function SubscriptionPageInner() {
   }, []);
 
   const packId = (data?.packId ?? "gaming") as VenuePackId;
-  const packName = VENUE_PACKS[packId]?.name ?? "Venue";
+  const packName = t(`pack.${packId}.name`);
   const trialActive = data?.trialActive ?? false;
   const trialExpired = data?.trialExpired ?? false;
   const staffLimit = data?.staffLimit ?? 0;
@@ -39,14 +41,9 @@ function SubscriptionPageInner() {
 
   return (
     <TenantPage
-      title="Subscription & features"
-      description="Pay only for features you keep. Nothing is charged without you starting checkout. Turning a feature off never deletes your data."
-      capabilities={[
-        `${TRIAL_DURATION_DAYS}-day free trial — add/remove features anytime; sidebar updates on save.`,
-        `Up to 3 employee logins during trial when Team accounts is on.`,
-        "After trial: all features stay off until you pay — no auto-charge.",
-        "On a paid plan, feature changes apply next billing month (no mid-cycle refunds).",
-      ]}
+      title={guide.title}
+      description={guide.description}
+      capabilities={guide.capabilities}
     >
       {loading ? (
         <Loader2 className="h-6 w-6 animate-spin text-emerald-400" />
@@ -54,26 +51,19 @@ function SubscriptionPageInner() {
         <div className="space-y-6">
           {billingSuccess ? (
             <p className="rounded-xl border border-emerald-400/30 bg-emerald-500/10 px-4 py-3 text-sm text-emerald-100">
-              Payment submitted. If modules are still locked, wait a few seconds
-              for the webhook — then refresh.
+              {t("subscription.paymentSubmitted")}
             </p>
           ) : null}
 
           {needsFeatureSetup && trialActive ? (
             <p className="rounded-xl border border-sky-400/25 bg-sky-500/10 px-4 py-3 text-sm text-sky-100">
-              Pick features for{" "}
-              <span className="font-medium text-white">{packName}</span> and
-              save — matching dashboard sections unlock. You can change them
-              freely during the trial.
+              {t("subscription.setupTrial", { pack: packName })}
             </p>
           ) : null}
 
           {needsFeatureSetup && !trialActive ? (
             <p className="rounded-xl border border-sky-400/25 bg-sky-500/10 px-4 py-3 text-sm text-sky-100">
-              Choose the features below for{" "}
-              <span className="font-medium text-white">{packName}</span>, save,
-              then start billing when you’re ready. Nothing is charged until
-              then.
+              {t("subscription.setupPaid", { pack: packName })}
             </p>
           ) : null}
 
@@ -82,22 +72,25 @@ function SubscriptionPageInner() {
               <Clock size={18} className="mt-0.5 shrink-0 text-emerald-400" />
               <div>
                 <p className="font-medium">
-                  {TRIAL_DURATION_DAYS}-day free trial ·{" "}
-                  {data.trialDaysRemaining} day
-                  {data.trialDaysRemaining === 1 ? "" : "s"} left
+                  {t("subscription.trialHeadline", {
+                    days: TRIAL_DURATION_DAYS,
+                    left: data.trialDaysRemaining,
+                    dayWord:
+                      data.trialDaysRemaining === 1
+                        ? t("subscription.day")
+                        : t("subscription.days"),
+                  })}
                 </p>
                 <p className="mt-1 text-xs text-emerald-200/80">
-                  Add/remove features anytime — visibility updates when you
-                  save. Up to {data.trialStaffSeatLimit ?? 3} employee seats
-                  free with Team accounts. After{" "}
-                  {data.subscription?.trialEndsAt
-                    ? new Date(
-                        data.subscription.trialEndsAt,
-                      ).toLocaleDateString()
-                    : "trial ends"}
-                  , everything turns off until you pay (
-                  {formatFromEur(data.monthlyTotal)}
-                  /mo) — no charge without checkout. Your data stays.
+                  {t("subscription.trialBody", {
+                    seats: data.trialStaffSeatLimit ?? 3,
+                    ends: data.subscription?.trialEndsAt
+                      ? new Date(
+                          data.subscription.trialEndsAt,
+                        ).toLocaleDateString()
+                      : t("subscription.trialEndsFallback"),
+                    price: formatFromEur(data.monthlyTotal),
+                  })}
                 </p>
               </div>
             </div>
@@ -110,14 +103,11 @@ function SubscriptionPageInner() {
                 className="mt-0.5 shrink-0 text-rose-400"
               />
               <div>
-                <p className="font-medium">
-                  Trial ended — features are off until you pay
-                </p>
+                <p className="font-medium">{t("subscription.trialEndedTitle")}</p>
                 <p className="mt-1 text-xs text-rose-200/80">
-                  Adjust your plan below if needed, then start billing for{" "}
-                  {formatFromEur(data.monthlyTotal)}/mo. Nothing is charged
-                  without your consent. All your data is still here and returns
-                  when features turn back on.
+                  {t("subscription.trialEndedBody", {
+                    price: formatFromEur(data.monthlyTotal),
+                  })}
                 </p>
               </div>
             </div>
@@ -129,23 +119,25 @@ function SubscriptionPageInner() {
               <span className="text-lg font-semibold">{packName}</span>
               {trialActive ? (
                 <span className="inline-flex items-center gap-1 rounded-full bg-emerald-500/15 px-2 py-0.5 text-xs text-emerald-200">
-                  <Sparkles size={12} /> Active trial
+                  <Sparkles size={12} /> {t("subscription.activeTrial")}
                 </span>
               ) : null}
               {data.subscription?.status === "ACTIVE" && !trialActive ? (
                 <span className="rounded-full bg-emerald-500/15 px-2 py-0.5 text-xs text-emerald-200">
-                  Paid · active
+                  {t("subscription.paidActive")}
                 </span>
               ) : null}
             </div>
             <p className="mt-2 text-sm text-zinc-400">
-              Features total{" "}
-              <span className="font-medium text-emerald-300">
-                {formatFromEur(data.monthlyTotal)}/mo
-              </span>
+              {t("subscription.featuresTotal", {
+                price: formatFromEur(data.monthlyTotal),
+              })}
               {staffLimit > 0
-                ? ` · Staff seats ${staffUsed}/${staffLimit}`
-                : " · Employee seats 0/0 (buy on Team accounts)"}
+                ? t("subscription.staffSeats", {
+                    used: staffUsed,
+                    limit: staffLimit,
+                  })
+                : t("subscription.employeeSeatsNone")}
             </p>
           </div>
 
@@ -168,7 +160,7 @@ function SubscriptionPageInner() {
           ) : null}
         </div>
       ) : (
-        <p className="text-sm text-zinc-500">Could not load subscription.</p>
+        <p className="text-sm text-zinc-500">{t("subscription.loadError")}</p>
       )}
     </TenantPage>
   );

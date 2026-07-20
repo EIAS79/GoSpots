@@ -467,16 +467,16 @@ export function TenantShell({ children }: { children: ReactNode }) {
   }
 
   return (
-    <div className="flex h-dvh max-h-dvh min-h-0 w-full max-w-[100vw] overflow-hidden bg-[var(--color-background)] text-zinc-100">
-      <aside className="hidden h-full min-h-0 w-64 shrink-0 flex-col border-r border-white/5 bg-zinc-950/60 backdrop-blur lg:flex">
+    <div className="flex h-dvh max-h-dvh min-h-0 w-full max-w-[100vw] overflow-hidden bg-zinc-950 text-zinc-100">
+      <aside className="hidden h-full min-h-0 w-64 shrink-0 flex-col border-r border-white/5 bg-zinc-950 lg:flex">
         <div className="shrink-0 space-y-2.5 border-b border-white/5 px-4 py-3">
-          <GoSpotsLogo href="/" size="sm" showTagline={false} />
+          <GoSpotsLogo href="/" size="sm" showTagline={false} tone="onDark" />
           <VenueSwitcher />
         </div>
         <NavContent />
       </aside>
 
-      <main className="relative flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden bg-zinc-950/95">
+      <main className="relative flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden bg-zinc-950">
         <header className="flex shrink-0 items-center justify-between gap-3 border-b border-white/5 px-4 py-2 pt-[max(0.5rem,env(safe-area-inset-top))] sm:px-5 md:px-6 lg:justify-end lg:px-8">
           <div className="flex min-w-0 flex-1 items-center gap-2 lg:hidden">
             <button

@@ -19,6 +19,7 @@ import { useRouter, useSearchParams } from "next/navigation";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { GoSpotsLogo } from "@/components/brand/gospots-logo";
 import { LocaleCurrencySwitcher } from "@/components/public/locale-currency-switcher";
+import { ThemeToggle } from "@/components/theme/theme-toggle";
 import { VenueCoverImage } from "@/components/ui/venue-cover-image";
 import {
   VenueSearchForm,
@@ -133,33 +134,40 @@ export function VenuesDiscovery() {
   }, [activeQuery]);
 
   return (
-    <div className="relative min-h-screen bg-zinc-950 text-zinc-100">
+    <div className="relative min-h-screen bg-[var(--color-background)] text-[var(--color-foreground)]">
       <div className="pointer-events-none absolute inset-0 -z-10 overflow-hidden">
-        <div className="aurora-mesh absolute inset-0 opacity-50" />
+        <div className="aurora-mesh absolute inset-0 opacity-40 dark:opacity-50" />
         <motion.div
-          className="absolute -left-32 top-20 h-96 w-96 rounded-full bg-amber-500/20 blur-[100px]"
+          className="absolute -left-32 top-20 h-96 w-96 rounded-full bg-amber-500/15 blur-[100px] dark:bg-amber-500/20"
           animate={{ x: [0, 40, 0], y: [0, 20, 0] }}
           transition={{ duration: 14, repeat: Infinity, ease: "easeInOut" }}
         />
         <motion.div
-          className="absolute -right-24 bottom-10 h-80 w-80 rounded-full bg-cyan-500/15 blur-[90px]"
+          className="absolute -right-24 bottom-10 h-80 w-80 rounded-full bg-cyan-500/10 blur-[90px] dark:bg-cyan-500/15"
           animate={{ x: [0, -30, 0], y: [0, -25, 0] }}
           transition={{ duration: 11, repeat: Infinity, ease: "easeInOut" }}
         />
       </div>
 
-      <header className="sticky top-0 z-40 border-b border-white/5 bg-zinc-950/80 backdrop-blur-xl">
+      <header className="sticky top-0 z-40 border-b border-[var(--color-border)] bg-[color-mix(in_srgb,var(--color-background)_88%,transparent)] backdrop-blur-xl dark:border-white/5">
         <div className="mx-auto flex max-w-7xl items-center justify-between gap-3 px-4 py-3 sm:px-6 sm:py-4 md:px-8">
           <GoSpotsLogo
             href="/"
             size="md"
             showTagline
             animated
+            tone="auto"
             className="hidden min-w-0 sm:inline-flex"
           />
-          <GoSpotsLogo href="/" size="sm" className="min-w-0 sm:hidden" />
+          <GoSpotsLogo
+            href="/"
+            size="sm"
+            tone="auto"
+            className="min-w-0 sm:hidden"
+          />
           <div className="flex shrink-0 items-center gap-2 sm:gap-3">
-            <LocaleCurrencySwitcher tone="dark" compact />
+            <LocaleCurrencySwitcher tone="auto" compact />
+            <ThemeToggle />
             <Link
               href="/register"
               className="shrink-0 rounded-full bg-amber-400 px-3 py-2 text-xs font-semibold text-zinc-950 transition hover:bg-amber-300 sm:px-4 sm:text-sm"
@@ -177,7 +185,7 @@ export function VenuesDiscovery() {
           animate={{ opacity: 1, y: 0 }}
           className="max-w-3xl"
         >
-          <p className="inline-flex items-center gap-2 rounded-full border border-amber-500/30 bg-amber-500/10 px-3 py-1 text-xs font-medium text-amber-200">
+          <p className="inline-flex items-center gap-2 rounded-full border border-amber-500/30 bg-amber-500/10 px-3 py-1 text-xs font-medium text-amber-800 dark:text-amber-200">
             <Globe2 size={14} />
             {facets.countries.length > 0
               ? t(
@@ -192,7 +200,7 @@ export function VenuesDiscovery() {
           <h1 className="mt-5 text-balance text-4xl font-bold tracking-tight md:text-6xl">
             <span className="text-gradient">{t("venues.tagline")}</span>
           </h1>
-          <p className="mt-4 max-w-xl text-lg text-zinc-400">
+          <p className="mt-4 max-w-xl text-lg text-zinc-600 dark:text-zinc-400">
             {t("venues.subtitle")}
           </p>
         </motion.div>
@@ -215,7 +223,7 @@ export function VenuesDiscovery() {
       <section className="mx-auto max-w-7xl px-4 pb-24 sm:px-6 md:px-8">
         <div className="mb-5 flex flex-wrap items-center justify-between gap-3">
           <div className="min-w-0">
-            <p className="text-sm font-medium text-zinc-300">
+            <p className="text-sm font-medium text-zinc-800 dark:text-zinc-300">
               {loading
                 ? t("venues.searching")
                 : t(total === 1 ? "venues.foundOne" : "venues.found", {
@@ -232,15 +240,15 @@ export function VenuesDiscovery() {
               </p>
             )}
           </div>
-          <div className="flex items-center gap-1 rounded-lg border border-white/10 bg-zinc-900/60 p-1">
+          <div className="flex items-center gap-1 rounded-lg border border-[var(--color-border)] bg-[var(--color-surface)] p-1">
             <button
               type="button"
               onClick={() => setView("grid")}
               className={cn(
                 "grid size-8 place-items-center rounded-md transition",
                 view === "grid"
-                  ? "bg-amber-500/20 text-amber-200"
-                  : "text-zinc-500 hover:text-zinc-300",
+                  ? "bg-amber-500/20 text-amber-800 dark:text-amber-200"
+                  : "text-zinc-500 hover:text-zinc-800 dark:hover:text-zinc-300",
               )}
               aria-label="Grid view"
             >
@@ -252,8 +260,8 @@ export function VenuesDiscovery() {
               className={cn(
                 "grid size-8 place-items-center rounded-md transition",
                 view === "list"
-                  ? "bg-amber-500/20 text-amber-200"
-                  : "text-zinc-500 hover:text-zinc-300",
+                  ? "bg-amber-500/20 text-amber-800 dark:text-amber-200"
+                  : "text-zinc-500 hover:text-zinc-800 dark:hover:text-zinc-300",
               )}
               aria-label="List view"
             >
@@ -270,18 +278,18 @@ export function VenuesDiscovery() {
           <motion.div
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
-            className="rounded-2xl border border-dashed border-white/15 bg-zinc-900/40 py-20 text-center"
+            className="rounded-2xl border border-dashed border-[var(--color-border)] bg-[var(--color-surface)] py-20 text-center"
           >
             <Sparkles className="mx-auto size-10 text-amber-400/60" />
-            <p className="mt-4 text-lg font-medium text-zinc-300">No spots match yet</p>
-            <p className="mt-2 text-sm text-zinc-500">
-              Try another city or category — or list your venue on GoSpots.
+            <p className="mt-4 text-lg font-medium text-zinc-800 dark:text-zinc-300">
+              {t("venues.emptyTitle")}
             </p>
+            <p className="mt-2 text-sm text-zinc-500">{t("venues.emptyBody")}</p>
             <Link
               href="/register"
               className="mt-6 inline-flex items-center gap-2 rounded-full bg-amber-400 px-5 py-2.5 text-sm font-semibold text-zinc-950"
             >
-              Get listed <ArrowRight size={16} />
+              {t("venues.getListed")} <ArrowRight size={16} />
             </Link>
           </motion.div>
         ) : (
@@ -334,22 +342,22 @@ function VenueCard({
       >
         <Link
           href={`/venue/${venue.slug}`}
-          className="group flex flex-col gap-4 overflow-hidden rounded-2xl border border-white/10 bg-zinc-900/50 p-4 transition hover:border-amber-400/30 sm:flex-row"
+          className="group flex flex-col gap-4 overflow-hidden rounded-2xl border border-[var(--color-border)] bg-[var(--color-surface)] p-4 transition hover:border-amber-400/40 sm:flex-row"
         >
           <div className="relative h-36 w-full shrink-0 overflow-hidden rounded-xl sm:h-28 sm:w-44">
             <VenueCoverImage src={venue.coverImage} sizes="176px" />
           </div>
           <div className="min-w-0 flex-1">
             <div className="flex flex-wrap items-start justify-between gap-2">
-              <h2 className="text-lg font-semibold text-white group-hover:text-amber-100">
+              <h2 className="text-lg font-semibold text-[var(--color-foreground)] group-hover:text-amber-700 dark:group-hover:text-amber-100">
                 {title}
               </h2>
               <VenueMetaBadges venue={venue} />
             </div>
-            <div className="mt-1 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-zinc-400">
+            <div className="mt-1 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-zinc-600 dark:text-zinc-400">
               {location ? (
                 <span className="inline-flex items-center gap-1">
-                  <MapPin size={12} className="shrink-0 text-amber-400/80" />
+                  <MapPin size={12} className="shrink-0 text-amber-500/80" />
                   {location}
                 </span>
               ) : null}
@@ -395,7 +403,7 @@ function VenueCard({
       />
       <Link
         href={`/venue/${venue.slug}`}
-        className="relative flex h-full flex-col overflow-hidden rounded-2xl border border-white/10 bg-zinc-900/60 shadow-lg backdrop-blur-sm transition-[border-color,box-shadow] duration-300 group-hover:border-white/20"
+        className="relative flex h-full flex-col overflow-hidden rounded-2xl border border-[var(--color-border)] bg-[var(--color-surface)] shadow-lg backdrop-blur-sm transition-[border-color,box-shadow] duration-300 group-hover:border-amber-400/35"
         style={{
           boxShadow: `0 20px 50px -28px ${accent}00`,
         }}
@@ -441,11 +449,11 @@ function VenueCard({
 
         <div className="flex flex-1 flex-col gap-1.5 p-3 pt-2.5">
           {venue.description ? (
-            <p className="line-clamp-2 text-[11px] leading-relaxed text-zinc-400">
+            <p className="line-clamp-2 text-[11px] leading-relaxed text-zinc-600 dark:text-zinc-400">
               {venue.description}
             </p>
           ) : (
-            <p className="text-[11px] italic text-zinc-600">
+            <p className="text-[11px] italic text-zinc-500">
               No description yet.
             </p>
           )}
@@ -456,7 +464,7 @@ function VenueCard({
                 <CategoryPill key={t.id} tag={t} />
               ))}
               {venue.tags!.length > 2 ? (
-                <span className="rounded-full border border-white/10 px-1.5 py-0.5 text-[9.5px] text-zinc-500">
+                <span className="rounded-full border border-[var(--color-border)] px-1.5 py-0.5 text-[9.5px] text-zinc-500">
                   +{venue.tags!.length - 2}
                 </span>
               ) : null}
@@ -464,18 +472,18 @@ function VenueCard({
           ) : null}
 
           {location ? (
-            <p className="flex items-center gap-1 text-[11px] text-zinc-400">
-              <MapPin size={11} className="shrink-0 text-amber-400/80" />
+            <p className="flex items-center gap-1 text-[11px] text-zinc-600 dark:text-zinc-400">
+              <MapPin size={11} className="shrink-0 text-amber-500/80" />
               <span className="truncate">{location}</span>
             </p>
           ) : null}
 
-          <div className="mt-auto flex items-center justify-between border-t border-white/[0.06] pt-2">
-            <span className="text-[10.5px] font-semibold uppercase tracking-wide text-amber-300/90 transition-colors group-hover:text-amber-200">
+          <div className="mt-auto flex items-center justify-between border-t border-[var(--color-border)] pt-2">
+            <span className="text-[10.5px] font-semibold uppercase tracking-wide text-amber-700 transition-colors group-hover:text-amber-600 dark:text-amber-300/90 dark:group-hover:text-amber-200">
               More details
             </span>
             <span
-              className="grid size-6 place-items-center rounded-full border border-white/10 bg-white/[0.04] text-zinc-400 transition-all duration-300 group-hover:border-amber-400/40 group-hover:bg-amber-400/15 group-hover:text-amber-200"
+              className="grid size-6 place-items-center rounded-full border border-[var(--color-border)] bg-[var(--color-background)]/40 text-zinc-500 transition-all duration-300 group-hover:border-amber-400/40 group-hover:bg-amber-400/15 group-hover:text-amber-700 dark:text-zinc-400 dark:group-hover:text-amber-200"
             >
               <ArrowRight
                 size={12}
@@ -533,6 +541,7 @@ function OpenStatusPill({
 }
 
 function RatingBadge({ venue }: { venue: PublicVenue }) {
+  const { t } = usePublicPrefs();
   const count = venue.reviewCount ?? 0;
   const avg = venue.averageRating;
 
@@ -549,23 +558,26 @@ function RatingBadge({ venue }: { venue: PublicVenue }) {
   return (
     <span className="inline-flex items-center gap-1 rounded-full border border-white/15 bg-black/60 px-2 py-0.5 text-[10px] font-medium text-zinc-300 backdrop-blur-md">
       <Star size={10} className="text-amber-400/70" />
-      New
+      {t("venues.new")}
     </span>
   );
 }
 
 function VenueMetaBadges({ venue }: { venue: PublicVenue }) {
   const { t, currency } = usePublicPrefs();
+  const gameCount = venue.gameOfferingCount ?? 0;
   return (
     <div className="flex flex-wrap items-center justify-end gap-1.5">
       <span className="inline-flex items-center gap-1 rounded-full border border-white/15 bg-black/60 px-2 py-0.5 text-[10px] text-zinc-200 backdrop-blur">
         <Banknote size={10} />
         {t("venues.pricesIn", { currency })}
       </span>
-      {(venue.gameOfferingCount ?? 0) > 0 ? (
+      {gameCount > 0 ? (
         <span className="inline-flex items-center gap-1 rounded-full border border-emerald-400/25 bg-emerald-500/15 px-2 py-0.5 text-[10px] text-emerald-200 backdrop-blur">
           <Gamepad2 size={10} />
-          {venue.gameOfferingCount} game{venue.gameOfferingCount === 1 ? "" : "s"}
+          {t(gameCount === 1 ? "venues.gameOne" : "venues.games", {
+            count: gameCount,
+          })}
         </span>
       ) : null}
     </div>

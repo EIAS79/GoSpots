@@ -38,16 +38,16 @@ export function VenueBookTab({
   return (
     <div className="space-y-12">
       <div className="rounded-xl border border-amber-500/20 bg-amber-500/[0.06] px-4 py-4">
-        <p className="text-sm font-medium text-zinc-200">
+        <p className="text-sm font-medium text-[var(--color-foreground)]">
           Dining &amp; events
         </p>
-        <p className="mt-1 text-sm text-zinc-500">
+        <p className="mt-1 text-sm text-zinc-600 dark:text-zinc-500">
           {hasDigitalDining ? (
             <>
               Instant tables are on the{" "}
               <Link
                 href={`/venue/${slug}?tab=dining`}
-                className="font-medium text-amber-200 underline-offset-2 hover:underline"
+                className="font-medium text-amber-700 underline-offset-2 hover:underline dark:text-amber-200"
               >
                 Book a table
               </Link>{" "}
@@ -57,7 +57,7 @@ export function VenueBookTab({
                   ; for gaming stations use{" "}
                   <Link
                     href={`/venue/${slug}?tab=activities`}
-                    className="font-medium text-amber-200 underline-offset-2 hover:underline"
+                    className="font-medium text-amber-700 underline-offset-2 hover:underline dark:text-amber-200"
                   >
                     Gaming floor
                   </Link>
@@ -71,7 +71,7 @@ export function VenueBookTab({
             <>
               Request a table or private event. For gaming — PCs, consoles,
               billiards — use the{" "}
-              <strong className="font-medium text-zinc-300">
+              <strong className="font-medium text-zinc-800 dark:text-zinc-300">
                 Gaming floor
               </strong>{" "}
               tab when available.
@@ -85,7 +85,7 @@ export function VenueBookTab({
           {venue.phone ? (
             <a
               href={`tel:${venue.phone}`}
-              className="inline-flex max-w-full items-center gap-2 rounded-lg border border-white/10 bg-zinc-900/50 px-4 py-2.5 text-zinc-300 transition hover:border-white/20 hover:text-amber-200"
+              className="inline-flex max-w-full items-center gap-2 rounded-lg border border-[var(--color-border)] bg-[var(--color-surface)] px-4 py-2.5 text-zinc-700 transition hover:border-amber-400/40 hover:text-amber-700 dark:text-zinc-300 dark:hover:text-amber-200"
             >
               <Phone size={16} className="shrink-0" />
               <span className="truncate">
@@ -97,7 +97,7 @@ export function VenueBookTab({
           {venue.email ? (
             <a
               href={`mailto:${venue.email}`}
-              className="inline-flex items-center gap-2 rounded-lg border border-white/10 bg-zinc-900/50 px-4 py-2.5 text-zinc-300 transition hover:border-white/20 hover:text-amber-200"
+              className="inline-flex items-center gap-2 rounded-lg border border-[var(--color-border)] bg-[var(--color-surface)] px-4 py-2.5 text-zinc-700 transition hover:border-amber-400/40 hover:text-amber-700 dark:text-zinc-300 dark:hover:text-amber-200"
             >
               Email venue
             </a>

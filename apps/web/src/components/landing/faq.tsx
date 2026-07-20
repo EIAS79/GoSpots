@@ -6,12 +6,15 @@ import { useEffect, useState } from "react";
 import { Reveal } from "@/components/effects/reveal";
 import { ownerFaqs, playerFaqs } from "@/lib/mock-data";
 import { cn } from "@/lib/cn";
+import { usePublicPrefs } from "@/lib/public-prefs-context";
 import { useMode } from "./mode-context";
 
 export function Faq() {
   const { mode } = useMode();
+  const { t } = usePublicPrefs();
   const isPlay = mode === "play";
   const items = isPlay ? playerFaqs : ownerFaqs;
+  const prefix = isPlay ? "faq.player" : "faq.owner";
   const [openIdx, setOpenIdx] = useState<number | null>(0);
 
   useEffect(() => {
@@ -30,11 +33,11 @@ export function Faq() {
                 : "text-emerald-700 dark:text-emerald-400",
             )}
           >
-            Common questions
+            {t("faq.eyebrow")}
           </span>
           <h2 className="mt-3 text-balance text-3xl font-bold md:text-5xl">
-            Everything you might want to{" "}
-            <span className="text-gradient">ask first.</span>
+            {t("faq.title")}{" "}
+            <span className="text-gradient">{t("faq.titleAccent")}</span>
           </h2>
         </Reveal>
 
@@ -48,10 +51,12 @@ export function Faq() {
               transition={{ duration: 0.3, ease: [0.22, 1, 0.36, 1] }}
               className="divide-y divide-[var(--color-border)] rounded-2xl border border-[var(--color-border)] bg-[var(--color-surface)]/60 backdrop-blur dark:divide-white/5 dark:border-white/10 dark:bg-white/[0.025]"
             >
-              {items.map((f, i) => {
+              {items.map((_, i) => {
                 const open = openIdx === i;
+                const q = t(`${prefix}.${i + 1}.q`);
+                const a = t(`${prefix}.${i + 1}.a`);
                 return (
-                  <div key={f.q} className="relative">
+                  <div key={`${prefix}-${i}`} className="relative">
                     <button
                       type="button"
                       onClick={() => setOpenIdx(open ? null : i)}
@@ -66,7 +71,7 @@ export function Faq() {
                             : "text-zinc-800 group-hover:text-zinc-900 dark:text-zinc-200 dark:group-hover:text-white",
                         )}
                       >
-                        {f.q}
+                        {q}
                       </span>
                       <motion.span
                         animate={{ rotate: open ? 45 : 0 }}
@@ -94,7 +99,7 @@ export function Faq() {
                           className="overflow-hidden"
                         >
                           <p className="px-5 pb-5 text-sm leading-relaxed text-zinc-600 dark:text-zinc-400">
-                            {f.a}
+                            {a}
                           </p>
                         </motion.div>
                       )}

@@ -39,7 +39,7 @@ import type {
 } from "@/lib/shop-settings-client";
 import { todayDateInput } from "@/lib/seating-event-datetime";
 import { useLiveData } from "@/lib/use-live-data";
-import { RESOURCE_TYPE_LABELS } from "@/lib/resource-types";
+import { usePublicPrefs } from "@/lib/public-prefs-context";
 import type { ResourceType } from "@/lib/resource-types";
 import { BilliardTableIcon } from "@/components/icons/billiard-table-icon";
 import { ArcadeCabinetIcon } from "@/components/icons/arcade-cabinet-icon";
@@ -57,6 +57,7 @@ export function VenueGamingTab({
   initialCategoryId?: string;
   onCategoryChange?: (categoryId: string) => void;
 }) {
+  const { t } = usePublicPrefs();
   const offerings = venue.gamingOfferings ?? [];
   const [selectedCategoryId, setSelectedCategoryId] = useState(
     initialCategoryId ?? offerings[0]?.id ?? "",
@@ -160,9 +161,9 @@ export function VenueGamingTab({
 
   if (!offerings.length) {
     return (
-      <div className="rounded-2xl border border-dashed border-white/15 bg-zinc-900/30 px-6 py-16 text-center">
-        <Gamepad2 className="mx-auto text-zinc-600" size={32} />
-        <p className="mt-3 text-sm text-zinc-400">No gaming activities listed yet.</p>
+      <div className="rounded-2xl border border-dashed border-[var(--color-border)] bg-[var(--color-surface)] px-6 py-16 text-center">
+        <Gamepad2 className="mx-auto text-zinc-400" size={32} />
+        <p className="mt-3 text-sm text-zinc-600 dark:text-zinc-400">{t("gaming.noActivities")}</p>
       </div>
     );
   }
@@ -170,31 +171,29 @@ export function VenueGamingTab({
   return (
     <div className="space-y-8">
       {/* Hero strip */}
-      <div className="relative overflow-hidden rounded-2xl border border-emerald-500/20 bg-gradient-to-br from-emerald-950/50 via-zinc-900/80 to-zinc-950 p-5 md:p-6">
+      <div className="relative overflow-hidden rounded-2xl border border-emerald-500/20 bg-gradient-to-br from-emerald-500/10 via-[var(--color-surface)] to-[var(--color-background)] p-5 md:p-6">
         <div
           aria-hidden
           className="pointer-events-none absolute -right-8 -top-8 h-40 w-40 rounded-full bg-emerald-500/10 blur-3xl"
         />
         <div className="relative flex flex-col gap-4 sm:flex-row sm:flex-wrap sm:items-start sm:justify-between">
           <div className="min-w-0">
-            <p className="flex items-center gap-1.5 text-[10px] font-semibold uppercase tracking-widest text-emerald-400/90">
+            <p className="flex items-center gap-1.5 text-[10px] font-semibold uppercase tracking-widest text-emerald-700 dark:text-emerald-400/90">
               <Sparkles size={12} />
-              Live floor booking
+              {t("gaming.liveFloor")}
             </p>
-            <h2 className="mt-1 text-xl font-bold text-white md:text-2xl">
-              Pick your station on the digital map
+            <h2 className="mt-1 text-xl font-bold text-[var(--color-foreground)] md:text-2xl">
+              {t("gaming.pickStation")}
             </h2>
-            <p className="mt-2 max-w-xl text-sm text-zinc-400">
-              See PCs, consoles, billiard tables, and more — exactly like the venue
-              floor. Tap an available seat or table, register, and staff are notified
-              instantly.
+            <p className="mt-2 max-w-xl text-sm text-zinc-600 dark:text-zinc-400">
+              {t("gaming.pickStationBody")}
             </p>
           </div>
           {activeCategory ? (
-            <div className="w-full rounded-xl border border-white/10 bg-black/40 px-4 py-3 text-left backdrop-blur-sm sm:w-auto sm:text-right">
-              <p className="text-2xl font-bold text-emerald-300">{freeCount}</p>
+            <div className="w-full rounded-xl border border-[var(--color-border)] bg-[var(--color-background)]/70 px-4 py-3 text-left backdrop-blur-sm sm:w-auto sm:text-right">
+              <p className="text-2xl font-bold text-emerald-700 dark:text-emerald-300">{freeCount}</p>
               <p className="text-[11px] text-zinc-500">
-                free of {totalCount} stations at this time
+                {t("gaming.freeOfStations", { total: totalCount })}
               </p>
             </div>
           ) : null}
@@ -204,7 +203,7 @@ export function VenueGamingTab({
       {/* Activity picker */}
       <section>
         <h3 className="mb-3 text-xs font-semibold uppercase tracking-widest text-zinc-500">
-          Choose activity
+          {t("gaming.chooseActivity")}
         </h3>
         <div className="venue-tab-scroll flex gap-2.5 overflow-x-auto pb-1 snap-x snap-mandatory">
           {offerings.map((o) => (
@@ -230,7 +229,7 @@ export function VenueGamingTab({
       ) : null}
 
       {/* Floor map */}
-      <section className="overflow-hidden rounded-2xl border border-white/10 bg-zinc-900/40 shadow-xl">
+      <section className="overflow-hidden rounded-2xl border border-[var(--color-border)] bg-[var(--color-surface)] shadow-xl">
         {loading ? (
           <>
             <GamingFloorMapControls
@@ -245,7 +244,7 @@ export function VenueGamingTab({
             />
             <div className="flex flex-col items-center justify-center gap-3 py-24 text-zinc-500">
               <Loader2 size={28} className="animate-spin text-emerald-400/80" />
-              <p className="text-sm">Loading live floor…</p>
+              <p className="text-sm">{t("gaming.loadingFloor")}</p>
             </div>
           </>
         ) : error ? (
@@ -267,7 +266,7 @@ export function VenueGamingTab({
                 onClick={() => void loadSchedule()}
                 className="mt-3 text-xs text-amber-300 underline"
               >
-                Try again
+                {t("gaming.tryAgain")}
               </button>
             </div>
           </>
@@ -307,8 +306,7 @@ export function VenueGamingTab({
               windowError={windowError}
             />
             <div className="px-6 py-16 text-center text-sm text-zinc-500">
-              Could not load stations for this activity. Try another date or
-              activity.
+              {t("gaming.couldNotLoad")}
             </div>
           </>
         )}
@@ -353,10 +351,9 @@ function OfferingPill({
   selected: boolean;
   onSelect: () => void;
 }) {
+  const { t } = usePublicPrefs();
   const cover = resolveMediaUrl(offering.imageUrl);
-  const typeLabel =
-    RESOURCE_TYPE_LABELS[offering.type as keyof typeof RESOURCE_TYPE_LABELS] ??
-    offering.type;
+  const typeLabel = t(`resource.${offering.type as ResourceType}`);
 
   return (
     <button
@@ -365,18 +362,18 @@ function OfferingPill({
       className={cn(
         "flex min-w-[9.5rem] shrink-0 snap-start items-center gap-3 rounded-xl border px-3.5 py-3 text-left transition",
         selected
-          ? "border-emerald-400/40 bg-emerald-500/15 text-white shadow-[0_0_20px_rgba(52,211,153,0.1)]"
-          : "border-white/10 bg-zinc-900/60 text-zinc-300 hover:border-white/20 hover:text-white",
+          ? "border-emerald-400/40 bg-emerald-500/15 text-emerald-950 shadow-[0_0_20px_rgba(52,211,153,0.08)] dark:text-white"
+          : "border-[var(--color-border)] bg-[var(--color-surface)] text-zinc-700 hover:border-emerald-400/30 hover:text-[var(--color-foreground)] dark:bg-zinc-900/60 dark:text-zinc-300 dark:hover:text-white",
       )}
     >
       {cover ? (
-        <div className="relative h-11 w-11 shrink-0 overflow-hidden rounded-lg border border-white/10">
+        <div className="relative h-11 w-11 shrink-0 overflow-hidden rounded-lg border border-[var(--color-border)]">
           <Image src={cover} alt="" fill className="object-cover" unoptimized />
         </div>
       ) : (
         <div
           className={cn(
-            "grid shrink-0 place-items-center overflow-hidden rounded-lg border border-white/10 bg-zinc-800 text-amber-400/80",
+            "grid shrink-0 place-items-center overflow-hidden rounded-lg border border-[var(--color-border)] bg-[var(--color-background)] text-amber-600 dark:bg-zinc-800 dark:text-amber-400/80",
             offeringIconShellClass(offering.type),
           )}
         >
@@ -388,7 +385,11 @@ function OfferingPill({
           {offering.name}
         </p>
         <p className="mt-0.5 text-[11px] text-zinc-500">
-          {typeLabel} · {offering.unitCount} units
+          {typeLabel} ·{" "}
+          {t(
+            offering.unitCount === 1 ? "resource.unitOne" : "resource.units",
+            { count: offering.unitCount },
+          )}
         </p>
       </div>
     </button>
@@ -422,17 +423,18 @@ function OfferingDetailCard({
   currency: string;
   locale?: string;
 }) {
+  const { t } = usePublicPrefs();
   return (
-    <div className="rounded-xl border border-white/10 bg-zinc-900/40 p-3 md:p-4">
+    <div className="rounded-xl border border-[var(--color-border)] bg-[var(--color-surface)] p-3 md:p-4">
       {offering.description ? (
-        <p className="text-sm leading-relaxed text-zinc-400">
+        <p className="text-sm leading-relaxed text-zinc-600 dark:text-zinc-400">
           {offering.description}
         </p>
       ) : null}
       {offering.type === "PLAYSTATION" && offering.playstationGames.length > 0 ? (
         <div className={offering.description ? "mt-3" : undefined}>
           <p className="mb-2 text-[10px] font-medium uppercase tracking-wide text-zinc-500">
-            Games on deck
+            {t("gaming.gamesOnDeck")}
           </p>
           <div className="flex flex-wrap gap-1.5">
             {offering.playstationGames.map((game) => (

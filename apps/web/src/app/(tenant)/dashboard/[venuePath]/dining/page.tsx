@@ -22,6 +22,7 @@ import { isFeatureUnlocked } from "@/lib/plan";
 import { showsDiningUi } from "@/lib/venue-packs";
 import { useAuth } from "@/lib/use-auth";
 import { useCurrentMembership } from "@/lib/use-current-membership";
+import { useDashboardGuide } from "@/lib/use-dashboard-guide";
 import { useLiveData } from "@/lib/use-live-data";
 import { useVenueAccess } from "@/lib/use-venue-access";
 import { useVenueSettings } from "@/lib/venue-settings-context";
@@ -30,21 +31,10 @@ function todayDateInput() {
   return new Date().toISOString().slice(0, 10);
 }
 
-const GUIDE = {
-  title: "Dining layout",
-  description:
-    "Digital restaurant floor plan — create areas by floor, add mixed table types, and guests book instantly on your public venue page.",
-  capabilities: [
-    "Create floors here — ground, first, second, etc.",
-    "Add dining areas with name, floor, and indoors/outdoors only.",
-    "Inside each area, add table types — mix 1–8 seats, photos, descriptions, and map layout.",
-    "Live table map for guest instant booking on your venue site.",
-  ],
-};
-
 export default function DiningPage() {
   const { state } = useAuth();
   const { formatMoney } = useVenueSettings();
+  const guide = useDashboardGuide("dining");
   const access = useVenueAccess();
   const [menu, setMenu] = useState<GamingMenuResponse | null>(null);
   const [schedule, setSchedule] = useState<DaySchedule | null>(null);
@@ -98,9 +88,9 @@ export default function DiningPage() {
 
   return (
     <TenantPage
-      title={GUIDE.title}
-      description={GUIDE.description}
-      capabilities={GUIDE.capabilities}
+      title={guide.title}
+      description={guide.description}
+      capabilities={guide.capabilities}
     >
       <FeatureGate feature="resource" unlocked={unlocked}>
         {loading ? (

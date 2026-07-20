@@ -54,19 +54,19 @@ export function VenueOverviewTab({
       {/* 1. Rating + About — trust first, then story */}
       <section className="grid gap-4 md:grid-cols-[minmax(0,14rem)_minmax(0,1fr)] md:gap-5">
         {showRating ? (
-          <div className="flex flex-col justify-center rounded-2xl border border-amber-400/20 bg-gradient-to-br from-amber-500/10 via-zinc-900/80 to-zinc-950 px-5 py-6">
-            <p className="text-[10px] font-semibold uppercase tracking-widest text-amber-200/70">
+          <div className="flex flex-col justify-center rounded-2xl border border-amber-400/20 bg-gradient-to-br from-amber-500/10 via-[var(--color-surface)] to-[var(--color-background)] px-5 py-6">
+            <p className="text-[10px] font-semibold uppercase tracking-widest text-amber-700/80 dark:text-amber-200/70">
               Guest rating
             </p>
             {hasReviews ? (
               <>
-                <p className="mt-3 text-4xl font-bold tracking-tight text-white tabular-nums">
+                <p className="mt-3 text-4xl font-bold tracking-tight text-[var(--color-foreground)] tabular-nums">
                   {venue.averageRating!.toFixed(1)}
                 </p>
                 <div className="mt-2">
                   <StarRatingDisplay rating={venue.averageRating!} size={18} />
                 </div>
-                <p className="mt-2 text-xs text-zinc-400">
+                <p className="mt-2 text-xs text-zinc-600 dark:text-zinc-400">
                   Average of {venue.reviewCount} review
                   {venue.reviewCount === 1 ? "" : "s"}
                 </p>
@@ -74,8 +74,8 @@ export function VenueOverviewTab({
             ) : (
               <>
                 <div className="mt-4 flex items-center gap-2 text-zinc-500">
-                  <Star size={22} className="text-zinc-600" />
-                  <span className="text-lg font-medium text-zinc-400">
+                  <Star size={22} className="text-zinc-400 dark:text-zinc-600" />
+                  <span className="text-lg font-medium text-zinc-600 dark:text-zinc-400">
                     No reviews yet
                   </span>
                 </div>
@@ -89,13 +89,13 @@ export function VenueOverviewTab({
 
         <div
           className={cn(
-            "rounded-2xl border border-white/10 bg-zinc-900/40 px-5 py-6",
+            "rounded-2xl border border-[var(--color-border)] bg-[var(--color-surface)] px-5 py-6",
             !showRating && "md:col-span-2",
           )}
         >
           <SectionHeading title="About" className="mb-3" />
           {venue.description ? (
-            <p className="text-base leading-relaxed text-zinc-300">
+            <p className="text-base leading-relaxed text-zinc-700 dark:text-zinc-300">
               {venue.description}
             </p>
           ) : (
@@ -121,7 +121,7 @@ export function VenueOverviewTab({
           hasContact ? "lg:grid-cols-2" : "grid-cols-1",
         )}
       >
-        <div className="rounded-2xl border border-white/10 bg-zinc-900/40 p-5">
+        <div className="rounded-2xl border border-[var(--color-border)] bg-[var(--color-surface)] p-5">
           <SectionHeading title="Opening hours" className="mb-3" />
           <VenueWeeklyHours hours={venue.openingHours} />
         </div>
@@ -161,7 +161,7 @@ function FindUsPanel({
     : null;
 
   return (
-    <div className="relative overflow-hidden rounded-2xl border border-white/10 bg-gradient-to-br from-zinc-900/90 via-zinc-950 to-zinc-950 p-5 sm:p-6">
+    <div className="relative overflow-hidden rounded-2xl border border-[var(--color-border)] bg-gradient-to-br from-[var(--color-surface)] via-[var(--color-surface)] to-[var(--color-background)] p-5 sm:p-6">
       <div
         aria-hidden
         className="pointer-events-none absolute -right-20 -top-24 h-48 w-48 rounded-full bg-amber-500/[0.12] blur-3xl"
@@ -183,9 +183,9 @@ function FindUsPanel({
               href={mapsHref}
               target="_blank"
               rel="noopener noreferrer"
-              className="group mb-3 flex items-start gap-4 rounded-xl border border-white/10 bg-white/[0.03] p-4 transition duration-300 hover:border-amber-400/35 hover:bg-amber-500/[0.07]"
+              className="group mb-3 flex items-start gap-4 rounded-xl border border-[var(--color-border)] bg-[var(--color-background)]/50 p-4 transition duration-300 hover:border-amber-400/35 hover:bg-amber-500/[0.07]"
             >
-              <span className="grid h-11 w-11 shrink-0 place-items-center rounded-xl border border-amber-400/25 bg-amber-500/15 text-amber-300 transition duration-300 group-hover:scale-105 group-hover:border-amber-400/40">
+              <span className="grid h-11 w-11 shrink-0 place-items-center rounded-xl border border-amber-400/25 bg-amber-500/15 text-amber-700 dark:text-amber-300 transition duration-300 group-hover:scale-105 group-hover:border-amber-400/40">
                 <MapPin size={18} />
               </span>
               <div className="min-w-0 flex-1">
@@ -193,25 +193,27 @@ function FindUsPanel({
                   Address
                 </p>
                 {street ? (
-                  <p className="mt-1 text-sm font-medium leading-snug text-zinc-100">
+                  <p className="mt-1 text-sm font-medium leading-snug text-[var(--color-foreground)]">
                     {street}
                   </p>
                 ) : null}
                 {locality ? (
                   <p
                     className={cn(
-                      "text-sm text-zinc-400",
-                      street ? "mt-0.5" : "mt-1 font-medium text-zinc-100",
+                      "text-sm text-zinc-600 dark:text-zinc-400",
+                      street
+                        ? "mt-0.5"
+                        : "mt-1 font-medium text-[var(--color-foreground)]",
                     )}
                   >
                     {locality}
                   </p>
                 ) : !street && location ? (
-                  <p className="mt-1 text-sm font-medium leading-snug text-zinc-100">
+                  <p className="mt-1 text-sm font-medium leading-snug text-[var(--color-foreground)]">
                     {location}
                   </p>
                 ) : null}
-                <span className="mt-2.5 inline-flex items-center gap-1 text-xs font-medium text-amber-300/90 transition group-hover:text-amber-200">
+                <span className="mt-2.5 inline-flex items-center gap-1 text-xs font-medium text-amber-700 transition group-hover:text-amber-600 dark:text-amber-300/90 dark:group-hover:text-amber-200">
                   Open in Maps
                   <ArrowUpRight
                     size={13}
@@ -221,15 +223,15 @@ function FindUsPanel({
               </div>
             </a>
           ) : (
-            <div className="mb-3 flex items-start gap-4 rounded-xl border border-white/10 bg-white/[0.03] p-4">
-              <span className="grid h-11 w-11 shrink-0 place-items-center rounded-xl border border-amber-400/25 bg-amber-500/15 text-amber-300">
+            <div className="mb-3 flex items-start gap-4 rounded-xl border border-[var(--color-border)] bg-[var(--color-background)]/50 p-4">
+              <span className="grid h-11 w-11 shrink-0 place-items-center rounded-xl border border-amber-400/25 bg-amber-500/15 text-amber-700 dark:text-amber-300">
                 <MapPin size={18} />
               </span>
               <div className="min-w-0 flex-1">
                 <p className="text-[11px] font-semibold uppercase tracking-wider text-zinc-500">
                   Address
                 </p>
-                <p className="mt-1 text-sm font-medium text-zinc-100">
+                <p className="mt-1 text-sm font-medium text-[var(--color-foreground)]">
                   {location}
                 </p>
               </div>
@@ -276,22 +278,22 @@ function ContactAction({
   return (
     <a
       href={href}
-      className="group flex items-center gap-3 rounded-xl border border-white/10 bg-white/[0.02] px-3.5 py-3 transition duration-300 hover:border-white/20 hover:bg-white/[0.05]"
+      className="group flex items-center gap-3 rounded-xl border border-[var(--color-border)] bg-[var(--color-background)]/40 px-3.5 py-3 transition duration-300 hover:border-amber-400/30 hover:bg-amber-500/[0.06]"
     >
-      <span className="grid h-9 w-9 shrink-0 place-items-center rounded-lg border border-white/10 bg-zinc-900 text-zinc-300 transition duration-300 group-hover:border-amber-400/30 group-hover:text-amber-200">
+      <span className="grid h-9 w-9 shrink-0 place-items-center rounded-lg border border-[var(--color-border)] bg-[var(--color-surface)] text-zinc-600 transition duration-300 group-hover:border-amber-400/30 group-hover:text-amber-700 dark:text-zinc-300 dark:group-hover:text-amber-200">
         <Icon size={15} />
       </span>
       <span className="min-w-0 flex-1">
         <span className="block text-[10px] font-semibold uppercase tracking-wider text-zinc-500">
           {label}
         </span>
-        <span className="mt-0.5 block truncate text-sm text-zinc-200 transition group-hover:text-white">
+        <span className="mt-0.5 block truncate text-sm text-zinc-800 transition group-hover:text-[var(--color-foreground)] dark:text-zinc-200">
           {value}
         </span>
       </span>
       <ArrowUpRight
         size={14}
-        className="shrink-0 text-zinc-600 transition duration-300 group-hover:text-amber-300/90 group-hover:translate-x-0.5 group-hover:-translate-y-0.5"
+        className="shrink-0 text-zinc-400 transition duration-300 group-hover:text-amber-600 dark:text-zinc-600 dark:group-hover:text-amber-300/90 group-hover:translate-x-0.5 group-hover:-translate-y-0.5"
       />
     </a>
   );
@@ -395,7 +397,7 @@ function ScheduleExceptionRow({
 }) {
   const Icon = exception.isClosed ? CalendarOff : CalendarRange;
   return (
-    <li className="flex items-start gap-3 rounded-xl border border-white/10 bg-zinc-900/40 px-4 py-3">
+    <li className="flex items-start gap-3 rounded-xl border border-[var(--color-border)] bg-[var(--color-surface)] px-4 py-3">
       <Icon
         size={18}
         className={
@@ -403,10 +405,10 @@ function ScheduleExceptionRow({
         }
       />
       <div className="min-w-0 flex-1">
-        <p className="text-sm font-medium text-zinc-200">
+        <p className="text-sm font-medium text-[var(--color-foreground)]">
           {formatExceptionDate(exception.date)}
           {exception.label ? (
-            <span className="font-normal text-zinc-400">
+            <span className="font-normal text-zinc-600 dark:text-zinc-400">
               {" "}
               · {exception.label}
             </span>

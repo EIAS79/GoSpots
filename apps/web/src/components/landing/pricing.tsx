@@ -29,6 +29,7 @@ import { useEffect, useMemo, useState } from "react";
 import { Magnetic } from "@/components/effects/magnetic";
 import { Reveal } from "@/components/effects/reveal";
 import { cn } from "@/lib/cn";
+import { usePublicPrefs } from "@/lib/public-prefs-context";
 import {
   TRIAL_DURATION_DAYS,
   VENUE_ADD_ONS,
@@ -64,9 +65,15 @@ const FLAT_ADDONS = Object.values(VENUE_ADD_ONS).filter(
 );
 const SEAT_ADDON = VENUE_ADD_ONS.team_accounts;
 
-function AnimatedPrice({ value }: { value: number }) {
+function AnimatedPrice({
+  value,
+  format,
+}: {
+  value: number;
+  format: (n: number) => string;
+}) {
   const mv = useMotionValue(value);
-  const text = useTransform(mv, (v) => `€${Math.round(v)}`);
+  const text = useTransform(mv, (v) => format(Math.round(v)));
 
   useEffect(() => {
     const controls = animate(mv, value, { duration: 0.5, ease: EASE });
@@ -77,6 +84,7 @@ function AnimatedPrice({ value }: { value: number }) {
 }
 
 export function Pricing() {
+  const { t, formatMoney, convertAmount, currency, locale } = usePublicPrefs();
   const [packId, setPackId] = useState<VenuePackId>("gaming");
   const [selected, setSelected] = useState<Set<AddOnId>>(
     () => new Set(VENUE_PACKS.gaming.recommendedFeatures),
@@ -84,19 +92,25 @@ export function Pricing() {
   const [seats, setSeats] = useState(0);
 
   const pack = VENUE_PACKS[packId];
+  const freePrice = formatMoney(0);
+  const displayTotal = convertAmount(totalEur(selected, seats), "EUR");
 
-  const total = useMemo(() => {
-    let sum = 0;
-    for (const id of selected) {
-      const addOn = VENUE_ADD_ONS[id];
-      if (!addOn.pricedPerSeat) sum += addOn.monthlyPrice;
-    }
-    return sum + seats * SEAT_ADDON.monthlyPrice;
-  }, [selected, seats]);
+  const formatDisplay = useMemo(() => {
+    return (n: number) => {
+      try {
+        return new Intl.NumberFormat(locale, {
+          style: "currency",
+          currency,
+          maximumFractionDigits: 0,
+        }).format(n);
+      } catch {
+        return `${n} ${currency}`;
+      }
+    };
+  }, [locale, currency]);
 
   function choosePack(id: VenuePackId) {
     setPackId(id);
-    // Applying the pack's suggested features keeps the calculator honest and quick.
     setSelected(new Set(VENUE_PACKS[id].recommendedFeatures));
     if (VENUE_PACKS[id].recommendedFeatures.includes("team_accounts")) {
       setSeats((s) => (s > 0 ? s : 2));
@@ -125,32 +139,35 @@ export function Pricing() {
 
   const featureCount =
     [...selected].filter((id) => !VENUE_ADD_ONS[id].pricedPerSeat).length;
+  const seatLabel =
+    seats === 1 ? t("pricing.seat") : t("pricing.seatsWord");
+  const seatsPart =
+    seats > 0
+      ? t("pricing.teamPart", { count: seats, seatLabel })
+      : "";
 
   return (
     <section id="pricing" className="relative py-20 sm:py-24">
       <div className="mx-auto max-w-7xl px-4 sm:px-6 md:px-8">
         <Reveal className="mx-auto max-w-2xl text-center">
           <span className="text-xs font-medium uppercase tracking-widest text-emerald-700 dark:text-emerald-400">
-            Pricing
+            {t("pricing.eyebrow")}
           </span>
           <h2 className="mt-3 text-balance text-3xl font-bold md:text-5xl">
-            Your venue type is free.{" "}
-            <span className="text-gradient">Pay only for what you run.</span>
+            {t("pricing.title")}{" "}
+            <span className="text-gradient">{t("pricing.titleAccent")}</span>
           </h2>
           <p className="mt-4 text-base text-zinc-600 dark:text-zinc-400 md:text-lg">
-            No tiers, no bundles you don&apos;t need. Pick your venue type,
-            switch on the features you actually use, and watch your monthly
-            price build itself — after a {TRIAL_DURATION_DAYS}-day free trial.
+            {t("pricing.subtitle", { days: TRIAL_DURATION_DAYS })}
           </p>
         </Reveal>
 
-        {/* Step 1 — venue type (always free) */}
         <Reveal delay={0.05} className="mt-12">
           <div className="flex items-center justify-center gap-2 text-xs font-medium uppercase tracking-widest text-zinc-500">
             <span className="grid h-6 w-6 place-items-center rounded-full border border-emerald-400/30 bg-emerald-500/10 font-mono text-[10px] text-emerald-700 dark:text-emerald-300">
               1
             </span>
-            Choose your venue type — always €0
+            {t("pricing.step1", { price: freePrice })}
           </div>
           <div className="mt-5 flex flex-wrap justify-center gap-2.5">
             {VENUE_PACK_LIST.map((p) => {
@@ -184,7 +201,7 @@ export function Pricing() {
                         : "text-zinc-500 group-hover:text-zinc-700 dark:group-hover:text-zinc-300"
                     }
                   />
-                  {p.name}
+                  {t(`pack.${p.id}.name`)}
                   <span
                     className={cn(
                       "rounded-full px-1.5 py-0.5 text-[10px] font-bold",
@@ -193,24 +210,23 @@ export function Pricing() {
                         : "bg-black/5 text-zinc-600 dark:bg-white/10 dark:text-zinc-400",
                     )}
                   >
-                    €0
+                    {freePrice}
                   </span>
                 </button>
               );
             })}
           </div>
           <p className="mt-3 text-center text-xs text-zinc-500">
-            {pack.tagline}
+            {t(`pack.${pack.id}.tagline`)}
           </p>
         </Reveal>
 
-        {/* Step 2 — features */}
         <Reveal delay={0.08} className="mt-12">
           <div className="flex items-center justify-center gap-2 text-xs font-medium uppercase tracking-widest text-zinc-500">
             <span className="grid h-6 w-6 place-items-center rounded-full border border-emerald-400/30 bg-emerald-500/10 font-mono text-[10px] text-emerald-700 dark:text-emerald-300">
               2
             </span>
-            Switch on the features you need
+            {t("pricing.step2")}
           </div>
         </Reveal>
 
@@ -268,16 +284,16 @@ export function Pricing() {
 
                 <div className="relative mt-4 flex items-baseline justify-between gap-2">
                   <h3 className="text-base font-semibold text-[var(--color-foreground)] dark:text-white">
-                    {addOn.name}
+                    {t(`addon.${addOn.id}.name`)}
                   </h3>
                   {suggested && !active && (
                     <span className="inline-flex items-center gap-1 rounded-full border border-amber-400/30 bg-amber-500/10 px-2 py-0.5 text-[10px] font-medium text-amber-700 dark:text-amber-300">
-                      <Sparkles size={9} /> Suggested
+                      <Sparkles size={9} /> {t("pricing.suggested")}
                     </span>
                   )}
                 </div>
                 <p className="relative mt-1.5 flex-1 text-sm leading-relaxed text-zinc-600 dark:text-zinc-400">
-                  {addOn.tagline}
+                  {t(`addon.${addOn.id}.tagline`)}
                 </p>
                 <p className="relative mt-4 text-sm">
                   <span
@@ -288,15 +304,14 @@ export function Pricing() {
                         : "text-[var(--color-foreground)] dark:text-white",
                     )}
                   >
-                    €{addOn.monthlyPrice}
+                    {formatMoney(addOn.monthlyPrice)}
                   </span>
-                  <span className="text-zinc-500"> /month</span>
+                  <span className="text-zinc-500"> {t("pricing.perMonth")}</span>
                 </p>
               </motion.button>
             );
           })}
 
-          {/* Team seats — priced per seat */}
           <motion.div
             initial={{ opacity: 0, y: 18 }}
             whileInView={{ opacity: 1, y: 0 }}
@@ -322,11 +337,12 @@ export function Pricing() {
               </span>
               <div>
                 <h3 className="text-base font-semibold text-[var(--color-foreground)] dark:text-white">
-                  {SEAT_ADDON.name}
+                  {t("addon.team_accounts.name")}
                 </h3>
                 <p className="mt-1 text-sm text-zinc-600 dark:text-zinc-400">
-                  €{SEAT_ADDON.monthlyPrice} per employee seat / month — during
-                  the trial you get 3 seats free.
+                  {t("pricing.seatHint", {
+                    price: formatMoney(SEAT_ADDON.monthlyPrice),
+                  })}
                 </p>
               </div>
             </div>
@@ -345,7 +361,7 @@ export function Pricing() {
                   {seats}
                 </span>
                 <span className="block text-[10px] uppercase tracking-wider text-zinc-500">
-                  seats
+                  {t("pricing.seats")}
                 </span>
               </span>
               <button
@@ -356,14 +372,14 @@ export function Pricing() {
               >
                 <Plus size={15} />
               </button>
-              <span className="w-full text-right text-sm font-semibold text-cyan-700 tabular-nums sm:ml-2 sm:w-20 dark:text-cyan-300">
-                €{seats * SEAT_ADDON.monthlyPrice}/mo
+              <span className="w-full text-right text-sm font-semibold text-cyan-700 tabular-nums sm:ml-2 sm:w-24 dark:text-cyan-300">
+                {formatMoney(seats * SEAT_ADDON.monthlyPrice)}
+                {t("pricing.perMonthShort")}
               </span>
             </div>
           </motion.div>
         </div>
 
-        {/* Step 3 — live total */}
         <Reveal delay={0.1} className="mt-8">
           <div className="relative overflow-hidden rounded-3xl border border-emerald-400/25 bg-gradient-to-r from-emerald-500/[0.08] via-transparent to-cyan-500/[0.06] p-6 sm:p-8">
             <div
@@ -373,18 +389,31 @@ export function Pricing() {
             <div className="relative flex flex-col items-center justify-between gap-6 lg:flex-row">
               <div className="text-center lg:text-left">
                 <p className="text-xs font-medium uppercase tracking-widest text-emerald-700 dark:text-emerald-300">
-                  Your estimated plan
+                  {t("pricing.estimate")}
                 </p>
                 <div className="mt-2 flex flex-col items-center gap-0.5 sm:flex-row sm:items-baseline sm:justify-center sm:gap-2 lg:justify-start">
                   <span className="text-4xl font-bold tracking-tight text-[var(--color-foreground)] dark:text-white sm:text-5xl md:text-6xl">
-                    <AnimatedPrice value={total} />
+                    <AnimatedPrice
+                      key={`${currency}-${locale}`}
+                      value={displayTotal}
+                      format={formatDisplay}
+                    />
                   </span>
-                  <span className="text-sm text-zinc-600 dark:text-zinc-400">/month after trial</span>
+                  <span className="text-sm text-zinc-600 dark:text-zinc-400">
+                    {t("pricing.afterTrial")}
+                  </span>
                 </div>
                 <p className="mt-2 text-sm text-zinc-600 dark:text-zinc-400">
-                  {pack.name} (€0) · {featureCount}{" "}
-                  {featureCount === 1 ? "feature" : "features"}
-                  {seats > 0 ? ` · ${seats} team ${seats === 1 ? "seat" : "seats"}` : ""}
+                  {t("pricing.summary", {
+                    pack: t(`pack.${pack.id}.name`),
+                    price: freePrice,
+                    features: featureCount,
+                    featureLabel:
+                      featureCount === 1
+                        ? t("pricing.feature")
+                        : t("pricing.features"),
+                    seatsPart,
+                  })}
                 </p>
               </div>
               <div className="flex flex-col items-center gap-3 lg:items-end">
@@ -394,7 +423,7 @@ export function Pricing() {
                     className="group relative inline-flex items-center gap-2 overflow-hidden rounded-full bg-emerald-400 px-7 py-3.5 text-sm font-semibold text-zinc-950 shadow-[0_20px_60px_-15px_rgba(52,211,153,0.6)] transition hover:bg-emerald-300"
                   >
                     <span className="relative z-10">
-                      Start {TRIAL_DURATION_DAYS} days free
+                      {t("pricing.startTrial", { days: TRIAL_DURATION_DAYS })}
                     </span>
                     <ArrowRight
                       size={16}
@@ -403,21 +432,25 @@ export function Pricing() {
                     <span className="absolute inset-0 -translate-x-full bg-gradient-to-r from-transparent via-white/40 to-transparent transition-transform duration-700 group-hover:translate-x-full" />
                   </Link>
                 </Magnetic>
-                <p className="text-xs text-zinc-500">
-                  No card required · nothing is charged without your consent
-                </p>
+                <p className="text-xs text-zinc-500">{t("pricing.noCard")}</p>
               </div>
             </div>
           </div>
         </Reveal>
 
         <p className="mx-auto mt-8 max-w-3xl text-center text-xs leading-relaxed text-zinc-500">
-          Prices in EUR. Change features anytime — during the trial changes
-          apply instantly; on a paid plan, removals take effect from the next
-          billing month. Turning a feature off never deletes your data — it
-          only hides the section until you switch it back on.
+          {t("pricing.footnote", { currency })}
         </p>
       </div>
     </section>
   );
+}
+
+function totalEur(selected: Set<AddOnId>, seats: number) {
+  let sum = 0;
+  for (const id of selected) {
+    const addOn = VENUE_ADD_ONS[id];
+    if (!addOn.pricedPerSeat) sum += addOn.monthlyPrice;
+  }
+  return sum + seats * SEAT_ADDON.monthlyPrice;
 }

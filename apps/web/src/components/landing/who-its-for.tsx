@@ -13,6 +13,7 @@ import {
 import Link from "next/link";
 import { Reveal } from "@/components/effects/reveal";
 import { cn } from "@/lib/cn";
+import { usePublicPrefs } from "@/lib/public-prefs-context";
 import {
   VENUE_PACK_LIST,
   type VenuePackId,
@@ -77,6 +78,7 @@ const PACK_EXAMPLES: Record<VenuePackId, string[]> = {
  * Even bento grid: 3 on top, 2 on bottom (no empty holes).
  */
 export function WhoItsFor() {
+  const { t, formatMoney } = usePublicPrefs();
   return (
     <section id="who" className="relative py-20 sm:py-24">
       <div className="mx-auto max-w-7xl px-4 sm:px-6 md:px-8">
@@ -139,15 +141,15 @@ export function WhoItsFor() {
                       <Icon size={20} />
                     </span>
                     <span className="rounded-full border border-emerald-400/30 bg-emerald-500/10 px-2.5 py-0.5 text-[10px] font-bold uppercase tracking-wider text-emerald-700 dark:text-emerald-300">
-                      €0 venue type
+                      {formatMoney(0)}
                     </span>
                   </div>
 
                   <h3 className="mt-4 text-lg font-semibold text-[var(--color-foreground)] dark:text-white sm:text-xl">
-                    {pack.name}
+                    {t(`pack.${pack.id}.name`)}
                   </h3>
                   <p className="mt-1.5 text-sm leading-relaxed text-zinc-600 dark:text-zinc-400">
-                    {pack.tagline}
+                    {t(`pack.${pack.id}.tagline`)}
                   </p>
 
                   <ul className="mt-auto flex flex-wrap gap-1.5 pt-5">

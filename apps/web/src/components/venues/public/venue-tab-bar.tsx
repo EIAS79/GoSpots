@@ -23,7 +23,7 @@ export function VenueTabBar({
 
   return (
     <nav
-      className="sticky top-0 z-30 border-b border-white/10 bg-zinc-950/85 pt-[env(safe-area-inset-top)] backdrop-blur-xl supports-[backdrop-filter]:bg-zinc-950/70"
+      className="sticky top-0 z-30 border-b border-[var(--color-border)] bg-[color-mix(in_srgb,var(--color-background)_88%,transparent)] pt-[env(safe-area-inset-top)] backdrop-blur-xl dark:border-white/10 dark:bg-zinc-950/85 dark:supports-[backdrop-filter]:bg-zinc-950/70"
       aria-label="Venue sections"
     >
       <div
@@ -44,8 +44,8 @@ export function VenueTabBar({
               className={cn(
                 "relative shrink-0 snap-start px-3 py-3 text-[13px] font-medium transition-colors duration-200 sm:px-4 sm:py-3.5 sm:text-sm",
                 isActive
-                  ? "text-amber-200"
-                  : "text-zinc-500 hover:text-zinc-300",
+                  ? "text-amber-700 dark:text-amber-200"
+                  : "text-zinc-500 hover:text-zinc-800 dark:hover:text-zinc-300",
               )}
             >
               {t(tab.labelKey)}

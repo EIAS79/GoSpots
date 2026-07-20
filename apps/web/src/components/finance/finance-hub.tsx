@@ -17,6 +17,7 @@ import { InvoicesPanel } from "@/components/finance/invoices-panel";
 import { LossesPanel } from "@/components/finance/losses-panel";
 import { fetchDashboardOverview } from "@/lib/dashboard-client";
 import { useVenueHref } from "@/lib/venue-context";
+import { useVenueSettings } from "@/lib/venue-settings-context";
 
 /** Finance = ledger & reporting only (no kitchen queue or floor bookings). */
 export type FinanceHubTab =
@@ -28,14 +29,13 @@ export type FinanceHubTab =
 
 const TABS: {
   id: FinanceHubTab;
-  label: string;
   icon: typeof Wallet;
 }[] = [
-  { id: "overview", label: "Overview", icon: LayoutGrid },
-  { id: "transactions", label: "Transactions", icon: Wallet },
-  { id: "invoices", label: "Invoices", icon: Receipt },
-  { id: "losses", label: "Losses", icon: TrendingDown },
-  { id: "reports", label: "Reports", icon: ChartColumn },
+  { id: "overview", icon: LayoutGrid },
+  { id: "transactions", icon: Wallet },
+  { id: "invoices", icon: Receipt },
+  { id: "losses", icon: TrendingDown },
+  { id: "reports", icon: ChartColumn },
 ];
 
 const LEGACY_TAB_REDIRECT: Record<string, "/orders" | "/play-billing"> = {
@@ -58,6 +58,7 @@ export function FinanceHub({
   const router = useRouter();
   const pathname = usePathname();
   const searchParams = useSearchParams();
+  const { t } = useVenueSettings();
   const ordersHref = useVenueHref("/orders");
   const playHref = useVenueHref("/play-billing");
   const rawTab = searchParams.get("tab") ?? (initialTab !== "overview" ? initialTab : null);
@@ -140,14 +141,14 @@ export function FinanceHub({
         className="sticky top-0 z-10 -mx-1 flex gap-1 overflow-x-auto rounded-xl border border-white/10 bg-zinc-950/90 p-1 backdrop-blur-md scrollbar-none"
         aria-label="Finance sections"
       >
-        {TABS.map((t) => {
-          const Icon = t.icon;
-          const active = tab === t.id;
+        {TABS.map((item) => {
+          const Icon = item.icon;
+          const active = tab === item.id;
           return (
             <button
-              key={t.id}
+              key={item.id}
               type="button"
-              onClick={() => setTab(t.id)}
+              onClick={() => setTab(item.id)}
               className={cn(
                 "flex shrink-0 items-center gap-1.5 rounded-lg px-3 py-2 text-xs font-medium transition",
                 active
@@ -156,7 +157,7 @@ export function FinanceHub({
               )}
             >
               <Icon size={14} className={active ? "text-emerald-400" : ""} />
-              {t.label}
+              {t(`financeHub.${item.id}`)}
             </button>
           );
         })}

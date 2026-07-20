@@ -117,24 +117,13 @@ export const features: Feature[] = [
   },
 ];
 
-export type OwnerStep = { title: string; description: string; icon: LucideIcon };
+export type OwnerStep = { icon: LucideIcon };
 
+/** Icons only — titles/bodies come from public i18n `how.step{n}` */
 export const ownerSteps: OwnerStep[] = [
-  {
-    title: "Add your venue",
-    description: "Create your account, add branches, tables, consoles. Set hourly rates in seconds.",
-    icon: Crown,
-  },
-  {
-    title: "Run live shifts",
-    description: "Cashiers start and end sessions from the operations screen. Bills generate on close.",
-    icon: Activity,
-  },
-  {
-    title: "Track every dollar",
-    description: "Daily reports, staff actions, and revenue by table — across every branch you own.",
-    icon: Wallet,
-  },
+  { icon: Crown },
+  { icon: Activity },
+  { icon: Wallet },
 ];
 
 export type PlayerStep = { title: string; description: string; icon: LucideIcon };
@@ -178,7 +167,9 @@ export type VenueCard = {
   accent: string;
   image: string;
   description: string;
-  rateLabel: string;
+  /** Demo rate in EUR — format via public i18n + formatMoney */
+  rateFromEur: number;
+  rateUnit: "hr" | "session";
   /** Visitors currently inside (demo) */
   visitorsInside: number;
   /** Max venue capacity for occupancy bar */
@@ -212,7 +203,8 @@ export const venues: VenueCard[] = [
     image:
       "https://images.unsplash.com/photo-1551845041-63e8e76836ea?auto=format&fit=crop&w=900&q=70",
     description: "Twelve tables, full bar, late-night league nights.",
-    rateLabel: "from zł 28/hr",
+    rateFromEur: 6.5,
+    rateUnit: "hr",
     visitorsInside: 54,
     maxVisitors: 120,
   },
@@ -231,7 +223,8 @@ export const venues: VenueCard[] = [
     image:
       "https://images.unsplash.com/photo-1542751371-adc38448a05e?auto=format&fit=crop&w=900&q=70",
     description: "LAN boxes, console lounges, and weekend brackets.",
-    rateLabel: "from zł 22/hr",
+    rateFromEur: 5.1,
+    rateUnit: "hr",
     visitorsInside: 98,
     maxVisitors: 140,
   },
@@ -250,7 +243,8 @@ export const venues: VenueCard[] = [
     image:
       "https://images.unsplash.com/photo-1551845041-63e8e76836ea?auto=format&fit=crop&w=900&q=70",
     description: "Dim lights, soul music, and eight championship tables.",
-    rateLabel: "from zł 35/hr",
+    rateFromEur: 8.1,
+    rateUnit: "hr",
     visitorsInside: 31,
     maxVisitors: 90,
   },
@@ -269,7 +263,8 @@ export const venues: VenueCard[] = [
     image:
       "https://images.unsplash.com/photo-1529699211952-734e80c4d42b?auto=format&fit=crop&w=900&q=70",
     description: "Quiet boards, specialty coffee, and weekly chess ladders.",
-    rateLabel: "from zł 12/session",
+    rateFromEur: 2.8,
+    rateUnit: "session",
     visitorsInside: 0,
     maxVisitors: 45,
   },
@@ -288,7 +283,8 @@ export const venues: VenueCard[] = [
     image:
       "https://images.unsplash.com/photo-1556438064-2d7646166914?auto=format&fit=crop&w=900&q=70",
     description: "Retro cabinets mixed with modern VR bays and snack bar.",
-    rateLabel: "from €8/hr",
+    rateFromEur: 8,
+    rateUnit: "hr",
     visitorsInside: 72,
     maxVisitors: 110,
   },
@@ -307,7 +303,8 @@ export const venues: VenueCard[] = [
     image:
       "https://images.unsplash.com/photo-1572116469696-31de0f17cc34?auto=format&fit=crop&w=900&q=70",
     description: "Members-first snooker suites with table-side service.",
-    rateLabel: "from €45/hr",
+    rateFromEur: 45,
+    rateUnit: "hr",
     visitorsInside: 22,
     maxVisitors: 48,
   },

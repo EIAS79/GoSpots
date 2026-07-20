@@ -13,11 +13,12 @@ import {
   MenuAvailabilityPill,
 } from "@/components/venues/public/venue-menu-item-modal";
 import { cn } from "@/lib/cn";
-import { mealPeriodLabel, type MealPeriod } from "@/lib/menu-periods";
+import { type MealPeriod } from "@/lib/menu-periods";
 import {
   getPublicMenuItemAvailability,
   publicMenuScheduleLabel,
 } from "@/lib/menu-timing";
+import { usePublicPrefs } from "@/lib/public-prefs-context";
 import type {
   PublicMenuItem,
   PublicMenuSection,
@@ -31,6 +32,7 @@ type CatalogSection = PublicMenuSection & { id: string };
 function buildCatalogSections(
   sections: PublicMenuSection[],
   uncategorized: PublicMenuItem[],
+  moreExploreLabel: string,
 ): CatalogSection[] {
   const list: CatalogSection[] = [...sections].sort(
     (a, b) => a.sortOrder - b.sortOrder,
@@ -38,7 +40,7 @@ function buildCatalogSections(
   if (uncategorized.length > 0) {
     list.push({
       id: UNCATEGORIZED_ID,
-      name: "More to explore",
+      name: moreExploreLabel,
       sortOrder: 999,
       mealPeriod: null,
       availableFrom: null,
@@ -89,6 +91,8 @@ export function PublicMenuBoard({
   formatPrice: (n: number) => string;
   onOpenItem: (item: PublicMenuItem, section: PublicMenuSection | null) => void;
 }) {
+  const { t } = usePublicPrefs();
+
   const itemsBySection = useMemo(() => {
     const map = new Map<string, PublicMenuItem[]>();
     const uncategorized: PublicMenuItem[] = [];
@@ -106,8 +110,12 @@ export function PublicMenuBoard({
 
   const catalogSections = useMemo(
     () =>
-      buildCatalogSections(sections, itemsBySection.uncategorized),
-    [sections, itemsBySection.uncategorized],
+      buildCatalogSections(
+        sections,
+        itemsBySection.uncategorized,
+        t("menu.moreExplore"),
+      ),
+    [sections, itemsBySection.uncategorized, t],
   );
 
   const [activeId, setActiveId] = useState<string | null>(null);
@@ -177,9 +185,11 @@ export function PublicMenuBoard({
     return (
       <div className="mx-auto w-full max-w-lg">
         <div className="overflow-hidden rounded-[1.75rem] border border-stone-200/80 bg-[#faf8f5] px-6 py-16 text-center text-stone-700 shadow-2xl shadow-black/30">
-          <p className="font-serif text-2xl text-stone-900">Menu coming soon</p>
+          <p className="font-serif text-2xl text-stone-900">
+            {t("menu.comingSoon")}
+          </p>
           <p className="mt-2 text-sm text-stone-500">
-            This venue is still setting up their menu.
+            {t("menu.comingSoonBody")}
           </p>
         </div>
       </div>
@@ -208,7 +218,7 @@ export function PublicMenuBoard({
         >
           <div className="shrink-0 border-b border-stone-200/80 bg-[#ebe6dc] px-4 py-3 sm:px-5">
             <p className="font-serif text-xl tracking-tight text-stone-800">
-              Menu
+              {t("menu.title")}
             </p>
             <label className="relative mt-2.5 block">
               <Search
@@ -219,13 +229,13 @@ export function PublicMenuBoard({
                 type="search"
                 value={sectionSearch}
                 onChange={(e) => setSectionSearch(e.target.value)}
-                placeholder="Search sections…"
+                placeholder={t("menu.searchSections")}
                 className="w-full rounded-full border border-stone-200 bg-white py-2.5 pl-9 pr-9 text-sm text-stone-800 outline-none placeholder:text-stone-400 focus:border-amber-400 focus:ring-2 focus:ring-amber-500/30"
               />
               {sectionSearch ? (
                 <button
                   type="button"
-                  aria-label="Clear"
+                  aria-label={t("menu.clear")}
                   onClick={() => setSectionSearch("")}
                   className="absolute right-2 top-1/2 grid h-7 w-7 -translate-y-1/2 place-items-center rounded-full text-stone-400 hover:bg-stone-100"
                 >
@@ -270,7 +280,9 @@ export function PublicMenuBoard({
                         {s.name}
                       </span>
                       <span className="text-[11px] text-stone-500">
-                        {count} item{count === 1 ? "" : "s"}
+                        {t(count === 1 ? "menu.itemOne" : "menu.items", {
+                          count,
+                        })}
                       </span>
                     </span>
                   </button>
@@ -320,13 +332,13 @@ export function PublicMenuBoard({
                     type="search"
                     value={itemSearch}
                     onChange={(e) => setItemSearch(e.target.value)}
-                    placeholder="Search dishes in this section…"
+                    placeholder={t("menu.searchItems")}
                     className="w-full rounded-full border border-stone-200 bg-white py-2 pl-9 pr-9 text-sm outline-none placeholder:text-stone-400 focus:border-amber-400 focus:ring-2 focus:ring-amber-500/30"
                   />
                   {itemSearch ? (
                     <button
                       type="button"
-                      aria-label="Clear"
+                      aria-label={t("menu.clear")}
                       onClick={() => setItemSearch("")}
                       className="absolute right-2 top-1/2 grid h-7 w-7 -translate-y-1/2 place-items-center rounded-full text-stone-400 hover:bg-stone-100"
                     >
@@ -336,8 +348,12 @@ export function PublicMenuBoard({
                 </label>
                 {itemQ && totalItemMatches > 0 ? (
                   <p className="mt-2 text-[11px] text-stone-500">
-                    {totalItemMatches} match{totalItemMatches === 1 ? "" : "es"}{" "}
-                    across menu
+                    {t(
+                      totalItemMatches === 1
+                        ? "menu.matchOne"
+                        : "menu.matchesAcross",
+                      { count: totalItemMatches },
+                    )}
                   </p>
                 ) : null}
               </div>
@@ -353,17 +369,17 @@ export function PublicMenuBoard({
                 </div>
               ) : (
                 <p className="border-b border-stone-200/60 px-4 py-2.5 text-xs text-stone-500 sm:px-5">
-                  {filteredItems.length} item
-                  {filteredItems.length === 1 ? "" : "s"}
+                  {t(
+                    filteredItems.length === 1 ? "menu.itemOne" : "menu.items",
+                    { count: filteredItems.length },
+                  )}
                 </p>
               )}
 
               <ul className="min-h-0 flex-1 divide-y divide-stone-200/80 overflow-y-auto overscroll-contain">
                 {pageItems.length === 0 ? (
                   <li className="px-5 py-12 text-center text-sm text-stone-500">
-                    {itemQ
-                      ? "No items match your search."
-                      : "No items in this section yet."}
+                    {itemQ ? t("menu.noMatch") : t("menu.emptySection")}
                   </li>
                 ) : (
                   pageItems.map((item) => (
@@ -382,27 +398,28 @@ export function PublicMenuBoard({
             </>
           ) : (
             <div className="grid flex-1 place-items-center p-8 text-sm text-stone-500">
-              Select a section
+              {t("menu.selectSection")}
             </div>
           )}
         </div>
       </div>
 
       <p className="mt-2 text-center text-[10px] text-zinc-500">
-        Scroll inside the menu · tap a dish for details
+        {t("menu.scrollHint")}
       </p>
     </div>
   );
 }
 
 function SectionHero({ section }: { section: CatalogSection }) {
+  const { t } = usePublicPrefs();
   const timing =
     section.id === UNCATEGORIZED_ID
       ? null
       : sectionScheduleLabel(section);
   const period =
     section.mealPeriod && section.id !== UNCATEGORIZED_ID
-      ? mealPeriodLabel(section.mealPeriod as MealPeriod)
+      ? t(`meal.${section.mealPeriod as MealPeriod}`)
       : null;
 
   return (
@@ -534,6 +551,7 @@ function PaginationBar({
   total: number;
   onPage: (p: number) => void;
 }) {
+  const { t } = usePublicPrefs();
   const from = page * ITEMS_PER_PAGE + 1;
   const to = Math.min(total, (page + 1) * ITEMS_PER_PAGE);
 
@@ -544,7 +562,7 @@ function PaginationBar({
           {page + 1}/{pageCount}
         </span>
         <span className="hidden sm:inline">
-          {from}–{to} of {total}
+          {t("menu.pageOf", { from, to, total })}
         </span>
       </p>
       <div className="ml-auto flex items-center gap-1">
@@ -553,7 +571,7 @@ function PaginationBar({
           disabled={page <= 0}
           onClick={() => onPage(page - 1)}
           className="grid h-9 w-9 place-items-center rounded-full border border-stone-200 bg-white text-stone-600 disabled:opacity-40"
-          aria-label="Previous page"
+          aria-label={t("menu.prevPage")}
         >
           <ChevronLeft size={18} />
         </button>
@@ -567,7 +585,7 @@ function PaginationBar({
                 "h-2 w-2 rounded-full transition",
                 i === page ? "w-5 bg-amber-500" : "bg-stone-300 hover:bg-stone-400",
               )}
-              aria-label={`Page ${i + 1}`}
+              aria-label={t("menu.pageN", { n: i + 1 })}
             />
           ))}
         </div>
@@ -576,7 +594,7 @@ function PaginationBar({
           disabled={page >= pageCount - 1}
           onClick={() => onPage(page + 1)}
           className="grid h-9 w-9 place-items-center rounded-full border border-stone-200 bg-white text-stone-600 disabled:opacity-40"
-          aria-label="Next page"
+          aria-label={t("menu.nextPage")}
         >
           <ChevronRight size={18} />
         </button>

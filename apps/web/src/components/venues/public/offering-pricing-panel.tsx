@@ -10,25 +10,28 @@ import {
 import { usePublicPrefs } from "@/lib/public-prefs-context";
 import type { PublicGamingOffering } from "@/lib/shop-settings-client";
 
-function chargeTypeMeta(type: BowlingModeDefinition["chargeType"]) {
+function chargeTypeMeta(
+  type: BowlingModeDefinition["chargeType"],
+  t: (key: string, vars?: Record<string, string | number>) => string,
+) {
   switch (type) {
     case "PERSON":
       return {
-        label: "Per person",
+        label: t("pricing.perPerson"),
         icon: Users,
-        blurb: "Price scales with party size — ideal for groups sharing a lane.",
+        blurb: t("pricing.personBlurb"),
       };
     case "GAME":
       return {
-        label: "Per game",
+        label: t("pricing.perGame"),
         icon: Gamepad2,
-        blurb: "Charge by games played — duration can follow minutes-per-game.",
+        blurb: t("pricing.gameBlurb"),
       };
     default:
       return {
-        label: "By time",
+        label: t("pricing.byTime"),
         icon: Clock,
-        blurb: "Lane rental by timed blocks — hour, half-hour, or custom slots.",
+        blurb: t("pricing.timeBlurb"),
       };
   }
 }
@@ -36,17 +39,26 @@ function chargeTypeMeta(type: BowlingModeDefinition["chargeType"]) {
 function modeSummaryLine(
   mode: BowlingModeDefinition,
   formatPrice: (n: number) => string,
+  t: (key: string, vars?: Record<string, string | number>) => string,
 ) {
   if (mode.chargeType === "PERSON" && mode.pricePerPerson != null) {
-    return `${formatPrice(mode.pricePerPerson)} / person · ${mode.slotMinutes} min`;
+    return t("pricing.personMin", {
+      price: formatPrice(mode.pricePerPerson),
+      slashPerson: t("pricing.slashPerson"),
+      minutes: mode.slotMinutes,
+      min: t("pricing.min"),
+    });
   }
   if (mode.chargeType === "GAME" && mode.pricePerGame != null) {
-    return `${formatPrice(mode.pricePerGame)} / game`;
+    return `${formatPrice(mode.pricePerGame)} ${t("pricing.slashGame")}`;
   }
   if (mode.chargeType === "TIME" && mode.rates[0]) {
-    return `From ${formatPrice(mode.rates[0].price)} · ${mode.rates[0].label}`;
+    return t("pricing.fromLine", {
+      price: formatPrice(mode.rates[0].price),
+      label: mode.rates[0].label,
+    });
   }
-  return chargeTypeMeta(mode.chargeType).label;
+  return chargeTypeMeta(mode.chargeType, t).label;
 }
 
 export function OfferingPricingPanel({
@@ -57,7 +69,7 @@ export function OfferingPricingPanel({
   currency: string;
   locale?: string;
 }) {
-  const { formatMoney } = usePublicPrefs();
+  const { formatMoney, t } = usePublicPrefs();
   const formatPrice = (n: number) => formatMoney(n, currency);
 
   if (offering.type === "BOWLING") {
@@ -72,7 +84,11 @@ export function OfferingPricingPanel({
     <RatesPricingDropdown
       rates={offering.rates}
       formatPrice={formatPrice}
-      unitHint={offering.type === "PC" || offering.type === "PLAYSTATION" ? "station" : "table"}
+      unitHint={
+        offering.type === "PC" || offering.type === "PLAYSTATION"
+          ? t("pricing.station")
+          : t("pricing.table")
+      }
     />
   );
 }
@@ -86,6 +102,7 @@ function RatesPricingDropdown({
   formatPrice: (n: number) => string;
   unitHint: string;
 }) {
+  const { t } = usePublicPrefs();
   const [open, setOpen] = useState(true);
   const fromPrice = rates.reduce(
     (min, r) => (r.price < min ? r.price : min),
@@ -102,12 +119,15 @@ function RatesPricingDropdown({
       >
         <div>
           <p className="text-[10px] font-semibold uppercase tracking-wider text-amber-400/80">
-            Pricing
+            {t("pricing.pricing")}
           </p>
           <p className="mt-0.5 text-sm font-medium text-amber-50">
-            From {formatPrice(fromPrice)}
+            {t("pricing.from", { price: formatPrice(fromPrice) })}
             <span className="ml-1.5 font-normal text-zinc-500">
-              · {rates.length} rate{rates.length === 1 ? "" : "s"}
+              ·{" "}
+              {t(rates.length === 1 ? "pricing.rateOne" : "pricing.ratesCount", {
+                count: rates.length,
+              })}
             </span>
           </p>
         </div>
@@ -123,27 +143,27 @@ function RatesPricingDropdown({
       {open ? (
         <div className="border-t border-amber-500/15 px-3.5 pb-3.5 pt-3">
           <p className="mb-2.5 text-[11px] leading-relaxed text-zinc-500">
-            Venues set custom rate labels and durations — hour blocks, short
-            sessions, flat packages, or full-day. Pick a {unitHint} on the map
-            to book.
+            {t("pricing.ratesHint", { unit: unitHint })}
           </p>
           <ul className="space-y-1.5">
             {rates.map((rate, i) => (
               <li
                 key={`${rate.label}-${i}`}
-                className="flex items-center justify-between gap-3 rounded-lg border border-white/10 bg-zinc-950/50 px-3 py-2"
+                className="flex items-center justify-between gap-3 rounded-lg border border-[var(--color-border)] bg-[var(--color-background)]/60 px-3 py-2"
               >
                 <div className="min-w-0">
                   <p className="truncate text-sm text-zinc-200">{rate.label}</p>
                   {rate.durationMinutes != null ? (
                     <p className="text-[10px] text-zinc-500">
-                      {rate.durationMinutes} minutes
+                      {t("pricing.minutes", { count: rate.durationMinutes })}
                     </p>
                   ) : (
-                    <p className="text-[10px] text-zinc-500">Flat / open duration</p>
+                    <p className="text-[10px] text-zinc-500">
+                      {t("pricing.flatOpen")}
+                    </p>
                   )}
                 </div>
-                <p className="shrink-0 text-sm font-semibold tabular-nums text-amber-100">
+                <p className="shrink-0 text-sm font-semibold tabular-nums text-amber-800 dark:text-amber-100">
                   {formatPrice(rate.price)}
                 </p>
               </li>
@@ -162,6 +182,7 @@ function BowlingPricingDropdown({
   offering: PublicGamingOffering;
   formatPrice: (n: number) => string;
 }) {
+  const { t } = usePublicPrefs();
   const modes = useMemo(
     () =>
       listBowlingModes(
@@ -192,30 +213,32 @@ function BowlingPricingDropdown({
 
   if (!modes.length || !selected) return null;
 
-  const meta = chargeTypeMeta(selected.chargeType);
+  const meta = chargeTypeMeta(selected.chargeType, t);
   const MetaIcon = meta.icon;
 
   return (
     <div className="mt-3 space-y-3">
       <div className="rounded-xl border border-violet-500/25 bg-violet-500/[0.07] px-3.5 py-3">
         <p className="text-[10px] font-semibold uppercase tracking-wider text-violet-300/90">
-          Flexible bowling pricing
+          {t("pricing.bowlingTitle")}
         </p>
         <p className="mt-1 text-[11px] leading-relaxed text-zinc-400">
-          Alleys often mix several charge models on the same lanes — per person,
-          per game, or timed lane rental. This venue configured{" "}
-          <span className="font-medium text-zinc-200">
-            {modes.length} booking mode{modes.length === 1 ? "" : "s"}
-          </span>
-          ; guests pick one when reserving.
+          {t("pricing.bowlingBody", {
+            modes: t(
+              modes.length === 1
+                ? "pricing.bookingModeOne"
+                : "pricing.bookingModes",
+              { count: modes.length },
+            ),
+          })}
         </p>
         <ul className="mt-2.5 flex flex-wrap gap-1.5">
-          {(["TIME", "PERSON", "GAME"] as const).map((t) => {
-            const available = modes.some((m) => m.chargeType === t);
-            const m = chargeTypeMeta(t);
+          {(["TIME", "PERSON", "GAME"] as const).map((charge) => {
+            const available = modes.some((m) => m.chargeType === charge);
+            const m = chargeTypeMeta(charge, t);
             return (
               <li
-                key={t}
+                key={charge}
                 className={cn(
                   "rounded-full border px-2.5 py-0.5 text-[10px] font-medium",
                   available
@@ -233,12 +256,12 @@ function BowlingPricingDropdown({
       <div className="overflow-hidden rounded-xl border border-amber-500/20 bg-amber-500/[0.06]">
         <div className="px-3.5 pt-3">
           <label className="block text-[10px] font-semibold uppercase tracking-wider text-amber-400/80">
-            Pricing · booking mode
+            {t("pricing.bookingMode")}
             <div className="relative mt-1.5">
               <select
                 value={selected.id}
                 onChange={(e) => setSelectedId(e.target.value)}
-                className="w-full appearance-none rounded-lg border border-white/10 bg-zinc-950 px-3 py-2.5 pr-9 text-sm font-medium text-white outline-none focus:border-amber-400/40"
+                className="w-full appearance-none rounded-lg border border-[var(--color-border)] bg-[var(--color-background)] px-3 py-2.5 pr-9 text-sm font-medium text-[var(--color-foreground)] outline-none focus:border-amber-400/40"
               >
                 {modes.map((mode) => (
                   <option key={mode.id} value={mode.id}>
@@ -261,7 +284,7 @@ function BowlingPricingDropdown({
           aria-expanded={listOpen}
         >
           <div className="flex min-w-0 flex-col items-start gap-2 sm:flex-row sm:items-center">
-            <span className="grid h-7 w-7 shrink-0 place-items-center rounded-md border border-white/10 bg-zinc-950/60 text-amber-200">
+            <span className="grid h-7 w-7 shrink-0 place-items-center rounded-md border border-[var(--color-border)] bg-[var(--color-background)]/60 text-amber-700 dark:text-amber-200">
               <MetaIcon size={14} />
             </span>
             <div className="min-w-0">
@@ -290,19 +313,19 @@ function BowlingPricingDropdown({
               {selected.chargeType === "PERSON" ? (
                 <>
                   <PriceRow
-                    label="Price per person"
+                    label={t("pricing.pricePerPerson")}
                     value={
                       selected.pricePerPerson != null
                         ? formatPrice(selected.pricePerPerson)
-                        : "Set at venue"
+                        : t("pricing.setAtVenue")
                     }
                   />
                   <PriceRow
-                    label="Slot length"
-                    value={`${selected.slotMinutes} min`}
+                    label={t("pricing.slotLength")}
+                    value={`${selected.slotMinutes} ${t("pricing.min")}`}
                   />
                   <PriceRow
-                    label="Players allowed"
+                    label={t("pricing.playersAllowed")}
                     value={`${selected.minPlayers}–${selected.maxPlayers}`}
                   />
                 </>
@@ -311,21 +334,21 @@ function BowlingPricingDropdown({
               {selected.chargeType === "GAME" ? (
                 <>
                   <PriceRow
-                    label="Price per game"
+                    label={t("pricing.pricePerGame")}
                     value={
                       selected.pricePerGame != null
                         ? formatPrice(selected.pricePerGame)
-                        : "Set at venue"
+                        : t("pricing.setAtVenue")
                     }
                   />
                   <PriceRow
-                    label="Default games"
+                    label={t("pricing.defaultGames")}
                     value={String(selected.defaultGames)}
                   />
                   {selected.minutesPerGame != null ? (
                     <PriceRow
-                      label="Minutes per game"
-                      value={`${selected.minutesPerGame} min`}
+                      label={t("pricing.minutesPerGame")}
+                      value={`${selected.minutesPerGame} ${t("pricing.min")}`}
                     />
                   ) : null}
                 </>
@@ -336,7 +359,7 @@ function BowlingPricingDropdown({
                   selected.rates.map((rate, i) => (
                     <li
                       key={`${rate.label}-${i}`}
-                      className="flex items-center justify-between gap-3 rounded-lg border border-white/10 bg-zinc-950/50 px-3 py-2"
+                      className="flex items-center justify-between gap-3 rounded-lg border border-[var(--color-border)] bg-[var(--color-background)]/60 px-3 py-2"
                     >
                       <div className="min-w-0">
                         <p className="truncate text-sm text-zinc-200">
@@ -344,29 +367,34 @@ function BowlingPricingDropdown({
                         </p>
                         {rate.durationMinutes != null ? (
                           <p className="text-[10px] text-zinc-500">
-                            {rate.durationMinutes} minutes
+                            {t("pricing.minutes", {
+                              count: rate.durationMinutes,
+                            })}
                           </p>
                         ) : (
                           <p className="text-[10px] text-zinc-500">
-                            Custom duration
+                            {t("pricing.customDuration")}
                           </p>
                         )}
                       </div>
-                      <p className="shrink-0 text-sm font-semibold tabular-nums text-amber-100">
+                      <p className="shrink-0 text-sm font-semibold tabular-nums text-amber-800 dark:text-amber-100">
                         {formatPrice(rate.price)}
                       </p>
                     </li>
                   ))
                 ) : (
-                  <PriceRow label="Timed rates" value="Configured at venue" />
+                  <PriceRow
+                    label={t("pricing.timedRates")}
+                    value={t("pricing.configuredAtVenue")}
+                  />
                 )
               ) : null}
             </ul>
 
             {modes.length > 1 ? (
-              <div className="mt-3 rounded-lg border border-white/5 bg-zinc-950/40 px-3 py-2">
+              <div className="mt-3 rounded-lg border border-[var(--color-border)] bg-[var(--color-background)]/40 px-3 py-2">
                 <p className="text-[10px] font-medium uppercase tracking-wide text-zinc-500">
-                  All modes at this alley
+                  {t("pricing.allModes")}
                 </p>
                 <ul className="mt-1.5 space-y-1">
                   {modes.map((mode) => (
@@ -375,13 +403,13 @@ function BowlingPricingDropdown({
                       className={cn(
                         "flex items-center justify-between gap-2 text-[11px]",
                         mode.id === selected.id
-                          ? "text-amber-100"
-                          : "text-zinc-400",
+                          ? "text-amber-800 dark:text-amber-100"
+                          : "text-zinc-600 dark:text-zinc-400",
                       )}
                     >
                       <span className="truncate">{mode.name}</span>
                       <span className="shrink-0 tabular-nums text-zinc-500">
-                        {modeSummaryLine(mode, formatPrice)}
+                        {modeSummaryLine(mode, formatPrice, t)}
                       </span>
                     </li>
                   ))}
@@ -390,7 +418,7 @@ function BowlingPricingDropdown({
             ) : null}
 
             <p className="mt-3 text-[10px] text-zinc-600">
-              Choose your mode when you book a lane on the map below.
+              {t("pricing.chooseMode")}
             </p>
           </div>
         ) : null}
@@ -401,9 +429,9 @@ function BowlingPricingDropdown({
 
 function PriceRow({ label, value }: { label: string; value: string }) {
   return (
-    <li className="flex items-center justify-between gap-3 rounded-lg border border-white/10 bg-zinc-950/50 px-3 py-2">
-      <span className="text-sm text-zinc-300">{label}</span>
-      <span className="text-sm font-semibold tabular-nums text-amber-100">
+    <li className="flex items-center justify-between gap-3 rounded-lg border border-[var(--color-border)] bg-[var(--color-background)]/60 px-3 py-2">
+      <span className="text-sm text-zinc-700 dark:text-zinc-300">{label}</span>
+      <span className="text-sm font-semibold tabular-nums text-amber-800 dark:text-amber-100">
         {value}
       </span>
     </li>

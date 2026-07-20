@@ -35,20 +35,9 @@ import {
 import { isFeatureUnlocked } from "@/lib/plan";
 import { useAuth } from "@/lib/use-auth";
 import { useCurrentMembership } from "@/lib/use-current-membership";
+import { useDashboardGuide } from "@/lib/use-dashboard-guide";
 import { useLiveData } from "@/lib/use-live-data";
 import { useVenueAccess } from "@/lib/use-venue-access";
-
-const GUIDE = {
-  title: "Guest messages",
-  description:
-    "Live chat with guests on your public venue page, plus contact form submissions.",
-  capabilities: [
-    "Guests wait in queue until you join.",
-    "Pause when you step away; guests can ping you for attention.",
-    "End or delete finished chats. Reopen ended chats to continue.",
-    "Contact form messages appear under the Contact form tab.",
-  ],
-};
 
 const FILTERS: { id: "ALL" | GuestChatStatus; label: string }[] = [
   { id: "ALL", label: "All" },
@@ -239,6 +228,7 @@ function MessagesPageInner() {
   const searchParams = useSearchParams();
   const membership = useCurrentMembership();
   const access = useVenueAccess();
+  const guide = useDashboardGuide("messages");
   const unlocked = isFeatureUnlocked(access.enabledModules, "messaging");
   const canView =
     state.status === "authed" &&
@@ -385,7 +375,7 @@ function MessagesPageInner() {
 
   if (!canView) {
     return (
-      <TenantPage title={GUIDE.title} description={GUIDE.description}>
+      <TenantPage title={guide.title} description={guide.description}>
         <p className="text-sm text-zinc-500">
           You do not have permission to view guest messages.
         </p>
@@ -395,11 +385,11 @@ function MessagesPageInner() {
 
   return (
     <TenantPage
-      title={GUIDE.title}
-      description={GUIDE.description}
-      capabilities={GUIDE.capabilities}
+      title={guide.title}
+      description={guide.description}
+      capabilities={guide.capabilities}
     >
-      <FeatureGate feature="messaging" unlocked={unlocked} title="Guest messaging">
+      <FeatureGate feature="messaging" unlocked={unlocked} title={guide.title}>
       <div className="mb-4 flex flex-wrap gap-2">
         <button
           type="button"
@@ -739,17 +729,20 @@ function MessagesPageInner() {
   );
 }
 
+function MessagesPageFallback() {
+  const guide = useDashboardGuide("messages");
+  return (
+    <TenantPage title={guide.title} description={guide.description}>
+      <div className="flex justify-center py-16">
+        <Loader2 className="h-6 w-6 animate-spin text-emerald-400" />
+      </div>
+    </TenantPage>
+  );
+}
+
 export default function MessagesPage() {
   return (
-    <Suspense
-      fallback={
-        <TenantPage title={GUIDE.title} description={GUIDE.description}>
-          <div className="flex justify-center py-16">
-            <Loader2 className="h-6 w-6 animate-spin text-emerald-400" />
-          </div>
-        </TenantPage>
-      }
-    >
+    <Suspense fallback={<MessagesPageFallback />}>
       <MessagesPageInner />
     </Suspense>
   );

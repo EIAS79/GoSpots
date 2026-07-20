@@ -21,6 +21,9 @@ type VenueSearchFormProps = {
   className?: string;
 };
 
+const fieldClass =
+  "w-full rounded-xl border border-[var(--color-border)] bg-[var(--color-background)] px-4 py-3 text-base text-[var(--color-foreground)] outline-none placeholder:text-zinc-500 focus:border-amber-500/50 sm:text-sm dark:bg-zinc-950/80 dark:focus:border-amber-400/50";
+
 export function VenueSearchForm({
   values,
   onChange,
@@ -47,7 +50,7 @@ export function VenueSearchForm({
         onSubmit();
       }}
       className={cn(
-        "rounded-2xl border border-white/10 bg-zinc-900/60 shadow-2xl shadow-black/40 backdrop-blur",
+        "rounded-2xl border border-[var(--color-border)] bg-[var(--color-surface)]/90 shadow-xl backdrop-blur dark:border-white/10 dark:bg-zinc-900/60 dark:shadow-black/40",
         compact ? "p-3" : "p-4 md:p-5",
         className,
       )}
@@ -66,7 +69,7 @@ export function VenueSearchForm({
             value={values.q}
             onChange={(e) => onChange({ q: e.target.value })}
             placeholder="Search name or description…"
-            className="w-full rounded-xl border border-white/10 bg-zinc-950/80 py-3 pl-10 pr-4 text-base text-white outline-none focus:border-amber-400/50 sm:text-sm"
+            className={cn(fieldClass, "py-3 pl-10 pr-4")}
           />
         </label>
         <label className="min-w-0">
@@ -76,7 +79,7 @@ export function VenueSearchForm({
             onChange={(e) => onChange({ city: e.target.value })}
             placeholder="City"
             list="venue-search-cities"
-            className="w-full rounded-xl border border-white/10 bg-zinc-950/80 px-4 py-3 text-base text-white outline-none focus:border-amber-400/50 sm:text-sm"
+            className={fieldClass}
           />
         </label>
         <label className="min-w-0">
@@ -86,7 +89,7 @@ export function VenueSearchForm({
             onChange={(e) => onChange({ country: e.target.value })}
             placeholder="Country"
             list="venue-search-countries"
-            className="w-full rounded-xl border border-white/10 bg-zinc-950/80 px-4 py-3 text-base text-white outline-none focus:border-amber-400/50 sm:text-sm"
+            className={fieldClass}
           />
         </label>
         <button
@@ -124,26 +127,16 @@ export function VenueSearchForm({
                 type="button"
                 onClick={() => toggleCategory(p.slug)}
                 className={cn(
-                  "snap-start shrink-0 rounded-full border px-3 py-1.5 text-xs font-medium transition",
+                  "shrink-0 snap-start rounded-full border px-3 py-1.5 text-xs font-medium transition",
                   on
-                    ? "border-amber-400/60 bg-amber-500/20 text-amber-100"
-                    : "border-white/10 text-zinc-500 hover:border-white/20 hover:text-zinc-300",
+                    ? "border-amber-400/50 bg-amber-500/15 text-amber-800 dark:text-amber-100"
+                    : "border-[var(--color-border)] bg-[var(--color-background)]/60 text-zinc-700 hover:border-amber-400/30 dark:border-white/10 dark:bg-white/[0.03] dark:text-zinc-300",
                 )}
-                style={on ? { boxShadow: `0 0 14px ${p.color}55` } : undefined}
               >
                 {p.name}
               </button>
             );
           })}
-          {values.categories.size > 0 ? (
-            <button
-              type="button"
-              onClick={() => onChange({ categories: new Set() })}
-              className="snap-start shrink-0 rounded-full px-2 py-1.5 text-xs text-zinc-500 hover:text-zinc-300"
-            >
-              Clear categories
-            </button>
-          ) : null}
         </div>
       ) : null}
     </form>

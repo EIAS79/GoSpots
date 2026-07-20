@@ -18,14 +18,20 @@ import {
 } from "@/lib/venue-packs";
 import { useVenueSettings } from "@/lib/venue-settings-context";
 
-function FeatureInfoTip({ details }: { details: string }) {
+function FeatureInfoTip({
+  details,
+  ariaLabel,
+}: {
+  details: string;
+  ariaLabel: string;
+}) {
   return (
     <span
       className="group/info relative inline-flex shrink-0"
       onClick={(e) => e.stopPropagation()}
       onPointerDown={(e) => e.stopPropagation()}
       role="note"
-      aria-label="Feature details"
+      aria-label={ariaLabel}
     >
       <Info
         size={14}
@@ -57,7 +63,7 @@ export function VenuePackPanel({
   data: SubscriptionResponse;
   onUpdated: (next: SubscriptionResponse) => void;
 }) {
-  const { formatFromEur } = useVenueSettings();
+  const { formatFromEur, t } = useVenueSettings();
   const trialActive = data.trialActive;
   const paidActive =
     data.subscription?.status === "ACTIVE" && !data.trialActive;
@@ -140,8 +146,8 @@ export function VenuePackPanel({
     if (hasTeam && effectiveSeats < 1) {
       setError(
         trialActive
-          ? `Set 1–${trialSeatMax} employee seats, or turn off Team accounts.`
-          : "Set how many employee seats to buy (at least 1), or turn off Team accounts.",
+          ? t("subscription.seatErrorTrial", { max: trialSeatMax })
+          : t("subscription.seatErrorPaid"),
       );
       return;
     }
@@ -157,63 +163,76 @@ export function VenuePackPanel({
       onUpdated(next);
       setSaved(true);
     } catch (e) {
-      setError(e instanceof Error ? e.message : "Could not save features.");
+      setError(
+        e instanceof Error ? e.message : t("subscription.saveError"),
+      );
     } finally {
       setSaving(false);
     }
   }
 
+  const pendingWhen = data.pendingAppliesAt
+    ? t("subscription.pendingOn", {
+        date: new Date(data.pendingAppliesAt).toLocaleDateString(),
+      })
+    : t("subscription.pendingPeriodEnd");
+  const pendingThenPrice =
+    data.pendingMonthlyTotal != null
+      ? t("subscription.pendingThen", {
+          price: formatFromEur(data.pendingMonthlyTotal),
+        })
+      : "";
+  const checkoutPricePart =
+    data.pendingMonthlyTotal != null
+      ? t("subscription.checkoutPricePart", {
+          price: formatFromEur(data.pendingMonthlyTotal),
+        })
+      : "";
+
   return (
     <div className="space-y-6">
       {awaitingPayment ? (
         <div className="rounded-xl border border-sky-400/25 bg-sky-500/10 px-4 py-3 text-sm text-sky-100">
-          <p className="font-medium">Pay to unlock modules</p>
+          <p className="font-medium">{t("subscription.payToUnlockTitle")}</p>
           <p className="mt-1 text-xs text-sky-200/80">
-            Your feature picks are saved for checkout. Sidebar sections stay
-            hidden until payment succeeds and the subscription is active again.
+            {t("subscription.payToUnlockBody")}
           </p>
         </div>
       ) : null}
 
       {data.hasPendingChanges && paidActive ? (
         <div className="rounded-xl border border-amber-400/25 bg-amber-500/10 px-4 py-3 text-sm text-amber-100">
-          <p className="font-medium">Changes scheduled for next billing month</p>
+          <p className="font-medium">{t("subscription.pendingTitle")}</p>
           <p className="mt-1 text-xs text-amber-200/80">
-            You already paid this period — no mid-cycle refunds or cuts. New
-            features / seats apply
-            {data.pendingAppliesAt
-              ? ` on ${new Date(data.pendingAppliesAt).toLocaleDateString()}`
-              : " at period end"}
-            {data.pendingMonthlyTotal != null
-              ? ` · then ${formatFromEur(data.pendingMonthlyTotal)}/mo`
-              : ""}
-            . Current access stays until then. Your data is never deleted.
+            {t("subscription.pendingBody", {
+              when: pendingWhen,
+              thenPrice: pendingThenPrice,
+            })}
           </p>
         </div>
       ) : null}
 
       {data.hasPendingChanges && awaitingPayment ? (
         <div className="rounded-xl border border-amber-400/25 bg-amber-500/10 px-4 py-3 text-sm text-amber-100">
-          <p className="font-medium">Features ready for checkout</p>
+          <p className="font-medium">{t("subscription.checkoutReadyTitle")}</p>
           <p className="mt-1 text-xs text-amber-200/80">
-            Saved selection
-            {data.pendingMonthlyTotal != null
-              ? ` · ${formatFromEur(data.pendingMonthlyTotal)}/mo`
-              : ""}
-            . Complete payment to unlock these modules in the dashboard.
+            {t("subscription.checkoutReadyBody", {
+              pricePart: checkoutPricePart,
+            })}
           </p>
         </div>
       ) : null}
 
       <section className="rounded-xl border border-white/10 bg-white/[0.02] p-5">
-        <h2 className="text-lg font-semibold text-white">Venue type</h2>
+        <h2 className="text-lg font-semibold text-white">
+          {t("subscription.venueType")}
+        </h2>
         <p className="mt-1 text-sm text-zinc-500">
-          Free. Guides suggestions
           {trialActive
-            ? " — and with features below, updates dashboard visibility when you save."
+            ? t("subscription.venueTypeHintTrial")
             : paidActive
-              ? " — type/feature edits on a paid plan take effect next month."
-              : "."}
+              ? t("subscription.venueTypeHintPaid")
+              : t("subscription.venueTypeHintDefault")}
         </p>
         <div className="mt-4 grid gap-2 sm:grid-cols-2">
           {data.packs.map((pack) => {
@@ -237,8 +256,12 @@ export function VenuePackPanel({
                     : "border-white/10 hover:bg-white/[0.03]",
                 )}
               >
-                <span className="font-medium text-white">{pack.name}</span>
-                <p className="mt-1 text-xs text-zinc-500">{pack.tagline}</p>
+                <span className="font-medium text-white">
+                  {t(`pack.${pack.id}.name`)}
+                </span>
+                <p className="mt-1 text-xs text-zinc-500">
+                  {t(`pack.${pack.id}.tagline`)}
+                </p>
               </button>
             );
           })}
@@ -249,28 +272,27 @@ export function VenuePackPanel({
         <div className="flex flex-wrap items-end justify-between gap-3">
           <div>
             <h2 className="text-lg font-semibold text-white">
-              Features you need
+              {t("subscription.featuresNeeded")}
             </h2>
             <p className="mt-1 text-sm text-zinc-500">
               {trialActive
-                ? "Add or remove anytime during trial. Save to refresh sidebar visibility — data is kept even when a feature is off."
+                ? t("subscription.featuresHintTrial")
                 : paidActive
-                  ? "Edits schedule for the next billing month. No refunds mid-cycle; data stays if you turn something off."
-                  : "Choose what you’ll pay for. Nothing is charged until you start billing below."}
+                  ? t("subscription.featuresHintPaid")
+                  : t("subscription.featuresHintDefault")}
             </p>
           </div>
           <p className="text-right">
             <span className="text-2xl font-semibold text-emerald-300">
               {formatFromEur(total)}
             </span>
-            <span className="text-sm text-zinc-500">/mo</span>
+            <span className="text-sm text-zinc-500">{t("subscription.perMo")}</span>
           </p>
         </div>
 
         {neverConfigured ? (
           <p className="mt-3 rounded-lg border border-amber-400/20 bg-amber-500/10 px-3 py-2 text-xs text-amber-100">
-            Suggested for your venue type — save to unlock matching dashboard
-            sections.
+            {t("subscription.suggestedBanner")}
           </p>
         ) : null}
 
@@ -282,10 +304,7 @@ export function VenuePackPanel({
           {catalog.map((feature) => {
             const id = feature.id as AddOnId;
             const on = features.includes(id);
-            const catalogDetails =
-              ("details" in feature && feature.details) ||
-              VENUE_ADD_ONS[id]?.details ||
-              feature.tagline;
+            const catalogDetails = t(`addon.${id}.details`);
             const recommended =
               "recommendedFor" in feature &&
               Array.isArray(feature.recommendedFor) &&
@@ -328,12 +347,15 @@ export function VenuePackPanel({
                     <span className="flex flex-wrap items-center justify-between gap-2">
                       <span className="flex flex-wrap items-center gap-2">
                         <span className="font-medium text-white">
-                          {feature.name}
+                          {t(`addon.${id}.name`)}
                         </span>
-                        <FeatureInfoTip details={catalogDetails} />
+                        <FeatureInfoTip
+                          details={catalogDetails}
+                          ariaLabel={t("subscription.featureDetails")}
+                        />
                         {recommended ? (
                           <span className="rounded-full bg-white/10 px-2 py-0.5 text-[10px] text-zinc-400">
-                            Suggested
+                            {t("subscription.suggested")}
                           </span>
                         ) : null}
                       </span>
@@ -342,13 +364,13 @@ export function VenuePackPanel({
                         <span className="text-xs text-zinc-500">
                           {VENUE_ADD_ONS[id]?.pricedPerSeat ||
                           feature.pricedPerSeat
-                            ? "/seat"
-                            : "/mo"}
+                            ? t("subscription.perSeat")
+                            : t("subscription.perMo")}
                         </span>
                       </span>
                     </span>
                     <span className="mt-0.5 block text-xs text-zinc-500">
-                      {feature.tagline}
+                      {t(`addon.${id}.tagline`)}
                     </span>
                   </span>
                 </button>
@@ -360,12 +382,21 @@ export function VenuePackPanel({
         {hasTeam ? (
           <div className="mt-4 rounded-xl border border-emerald-400/20 bg-emerald-500/5 p-4">
             <label className="block text-sm font-medium text-white">
-              Employee seats
+              {t("subscription.employeeSeats")}
             </label>
             <p className="mt-1 text-xs text-zinc-500">
               {trialActive
-                ? `Free during trial — max ${trialSeatMax} logins. After trial you buy seats (${formatFromEur(VENUE_ADD_ONS.team_accounts.monthlyPrice)}/seat).`
-                : `Choose how many logins to buy, then create accounts on Employees. ${formatFromEur(VENUE_ADD_ONS.team_accounts.monthlyPrice)} × seats / month.`}
+                ? t("subscription.seatsHintTrial", {
+                    max: trialSeatMax,
+                    price: formatFromEur(
+                      VENUE_ADD_ONS.team_accounts.monthlyPrice,
+                    ),
+                  })
+                : t("subscription.seatsHintPaid", {
+                    price: formatFromEur(
+                      VENUE_ADD_ONS.team_accounts.monthlyPrice,
+                    ),
+                  })}
             </p>
             <div className="mt-3 flex flex-wrap items-center gap-3">
               <button
@@ -413,11 +444,14 @@ export function VenuePackPanel({
                     VENUE_ADD_ONS.team_accounts.monthlyPrice *
                       Math.max(1, seatQty),
                   )}
-                  /mo
+                  {t("subscription.perMo")}
                 </span>
               ) : (
                 <span className="text-sm text-emerald-300">
-                  Trial · {Math.min(maxSeats, seatQty || 1)}/{trialSeatMax}
+                  {t("subscription.trialSeats", {
+                    used: Math.min(maxSeats, seatQty || 1),
+                    max: trialSeatMax,
+                  })}
                 </span>
               )}
             </div>
@@ -433,8 +467,8 @@ export function VenuePackPanel({
       {saved ? (
         <p className="text-sm text-emerald-300">
           {paidActive
-            ? "Scheduled for next billing month. Current access unchanged until then."
-            : "Saved. Sidebar visibility updated — your data was kept."}
+            ? t("subscription.savedScheduled")
+            : t("subscription.savedOk")}
         </p>
       ) : null}
 
@@ -446,15 +480,11 @@ export function VenuePackPanel({
       >
         {saving ? <Loader2 size={16} className="animate-spin" /> : null}
         {paidActive
-          ? "Schedule for next month"
-          : neverConfigured
-            ? "Save features"
-            : "Save features"}
+          ? t("subscription.scheduleNext")
+          : t("subscription.saveFeatures")}
       </button>
       {features.length === 0 ? (
-        <p className="text-xs text-zinc-500">
-          Select at least one feature to continue.
-        </p>
+        <p className="text-xs text-zinc-500">{t("subscription.selectOne")}</p>
       ) : null}
     </div>
   );

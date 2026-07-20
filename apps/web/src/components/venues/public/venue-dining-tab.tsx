@@ -7,6 +7,7 @@ import { PublicGamingFloorExplorer } from "@/components/venues/public/public-gam
 import { PublicGamingBookingDialog } from "@/components/venues/public/public-gaming-booking-dialog";
 import { GamingUnitBlockDialog } from "@/components/venues/public/gaming-unit-block-dialog";
 import { GamingFloorMapControls } from "@/components/venues/public/gaming-floor-map-controls";
+import { OfferingPricingPanel } from "@/components/venues/public/offering-pricing-panel";
 import { cn } from "@/lib/cn";
 import { getBookingUnitKind } from "@/lib/booking-unit-kind";
 import { validateBookingWindow } from "@/lib/booking-time";
@@ -19,6 +20,7 @@ import {
   layoutMapLabel,
 } from "@/lib/gaming-floor-visual";
 import { fetchPublicDiningSchedule } from "@/lib/public-dining-client";
+import { usePublicPrefs } from "@/lib/public-prefs-context";
 import type {
   DaySchedule,
   ScheduleBooking,
@@ -39,6 +41,7 @@ export function VenueDiningTab({
   venue: PublicVenueDetail;
   slug: string;
 }) {
+  const { t } = usePublicPrefs();
   const offerings = useMemo(
     () => (venue.diningOfferings ?? []).filter((o) => o.unitCount > 0),
     [venue.diningOfferings],
@@ -175,16 +178,14 @@ export function VenueDiningTab({
 
   if (!offerings.length) {
     return (
-      <div className="rounded-2xl border border-dashed border-white/15 bg-zinc-900/30 px-6 py-16 text-center">
-        <UtensilsCrossed className="mx-auto text-zinc-600" size={32} />
-        <p className="mt-3 text-sm text-zinc-400">
-          Digital table booking is not set up yet.
-        </p>
+      <div className="rounded-2xl border border-dashed border-[var(--color-border)] bg-[var(--color-surface)] px-6 py-16 text-center">
+        <UtensilsCrossed className="mx-auto text-zinc-400" size={32} />
+        <p className="mt-3 text-sm text-zinc-600 dark:text-zinc-400">{t("dining.notSetup")}</p>
         <Link
           href={`/venue/${slug}?tab=book`}
-          className="mt-4 inline-block text-xs text-amber-300 underline"
+          className="mt-4 inline-block text-xs text-amber-700 underline dark:text-amber-300"
         >
-          Request a table or event instead
+          {t("dining.requestInstead")}
         </Link>
       </div>
     );
@@ -192,33 +193,32 @@ export function VenueDiningTab({
 
   return (
     <div className="space-y-8">
-      <div className="relative overflow-hidden rounded-2xl border border-amber-500/20 bg-gradient-to-br from-amber-950/40 via-zinc-900/80 to-zinc-950 p-5 md:p-6">
+      <div className="relative overflow-hidden rounded-2xl border border-amber-500/20 bg-gradient-to-br from-amber-500/10 via-[var(--color-surface)] to-[var(--color-background)] p-5 md:p-6">
         <div
           aria-hidden
           className="pointer-events-none absolute -right-8 -top-8 h-40 w-40 rounded-full bg-amber-500/10 blur-3xl"
         />
         <div className="relative flex flex-col gap-4 sm:flex-row sm:flex-wrap sm:items-start sm:justify-between">
           <div className="min-w-0">
-            <p className="flex items-center gap-1.5 text-[10px] font-semibold uppercase tracking-widest text-amber-400/90">
+            <p className="flex items-center gap-1.5 text-[10px] font-semibold uppercase tracking-widest text-amber-700 dark:text-amber-400/90">
               <Sparkles size={12} />
-              Instant table booking
+              {t("dining.instantBooking")}
             </p>
-            <h2 className="mt-1 text-xl font-bold text-white md:text-2xl">
-              Pick your table on the live floor map
+            <h2 className="mt-1 text-xl font-bold text-[var(--color-foreground)] md:text-2xl">
+              {t("dining.pickTable")}
             </h2>
-            <p className="mt-2 max-w-xl text-sm text-zinc-400">
-              Same dining layout as the venue dashboard — floors, areas, and
-              table capacities. Choose party size, see what&apos;s free for your
-              arrival window, confirm in seconds, and cancel from your status
-              link anytime before you are seated.
+            <p className="mt-2 max-w-xl text-sm text-zinc-600 dark:text-zinc-400">
+              {t("dining.pickTableBody")}
             </p>
           </div>
           {activeCategory ? (
-            <div className="w-full rounded-xl border border-white/10 bg-black/40 px-4 py-3 text-left backdrop-blur-sm sm:w-auto sm:text-right">
-              <p className="text-2xl font-bold text-amber-300">{freeCount}</p>
+            <div className="w-full rounded-xl border border-[var(--color-border)] bg-[var(--color-background)]/70 px-4 py-3 text-left backdrop-blur-sm sm:w-auto sm:text-right">
+              <p className="text-2xl font-bold text-amber-700 dark:text-amber-300">{freeCount}</p>
               <p className="text-[11px] text-zinc-500">
-                free of {totalCount} tables for {partySize} guest
-                {partySize === 1 ? "" : "s"}
+                {t("pricing.freeOfTables", {
+                  total: totalCount,
+                  party: partySize,
+                })}
               </p>
             </div>
           ) : null}
@@ -226,9 +226,9 @@ export function VenueDiningTab({
       </div>
 
       {offerings.length > 1 ? (
-        <section className="rounded-2xl border border-white/10 bg-zinc-900/40 p-4 md:p-5">
+        <section className="rounded-2xl border border-[var(--color-border)] bg-[var(--color-surface)] p-4 md:p-5">
           <h3 className="text-xs font-semibold uppercase tracking-widest text-zinc-500">
-            Restaurant / area
+            {t("dining.restaurantArea")}
           </h3>
           <div className="mt-3 flex flex-wrap gap-2">
             {offerings.map((o) => (
@@ -239,8 +239,8 @@ export function VenueDiningTab({
                 className={cn(
                   "rounded-full border px-3 py-1.5 text-sm font-medium transition",
                   selectedCategoryId === o.id
-                    ? "border-amber-400/40 bg-amber-500/15 text-amber-100"
-                    : "border-white/10 bg-white/[0.03] text-zinc-400 hover:text-zinc-200",
+                    ? "border-amber-400/40 bg-amber-500/15 text-amber-900 dark:text-amber-100"
+                    : "border-[var(--color-border)] bg-[var(--color-background)]/50 text-zinc-600 hover:text-[var(--color-foreground)] dark:text-zinc-400 dark:hover:text-zinc-200",
                 )}
               >
                 {o.name}
@@ -251,21 +251,41 @@ export function VenueDiningTab({
             ))}
           </div>
           {selectedOffering?.description ? (
-            <p className="mt-3 text-sm text-zinc-400">
+            <p className="mt-3 text-sm text-zinc-600 dark:text-zinc-400">
               {selectedOffering.description}
             </p>
           ) : null}
+          {selectedOffering?.rates?.length ? (
+            <OfferingPricingPanel
+              offering={selectedOffering}
+              currency={venue.currency}
+              locale={venue.locale}
+            />
+          ) : null}
         </section>
-      ) : selectedOffering?.description ? (
-        <p className="text-sm text-zinc-400">{selectedOffering.description}</p>
-      ) : null}
+      ) : (
+        <>
+          {selectedOffering?.description ? (
+            <p className="text-sm text-zinc-600 dark:text-zinc-400">
+              {selectedOffering.description}
+            </p>
+          ) : null}
+          {selectedOffering?.rates?.length ? (
+            <OfferingPricingPanel
+              offering={selectedOffering}
+              currency={venue.currency}
+              locale={venue.locale}
+            />
+          ) : null}
+        </>
+      )}
 
-      <section className="rounded-2xl border border-white/10 bg-zinc-900/40 p-4 md:p-5">
+      <section className="rounded-2xl border border-[var(--color-border)] bg-[var(--color-surface)] p-4 md:p-5">
         <h3 className="text-xs font-semibold uppercase tracking-widest text-zinc-500">
-          Party size
+          {t("dining.partySize")}
         </h3>
-        <p className="mt-1 text-sm text-zinc-400">
-          Only tables with enough seats are shown on the map.
+        <p className="mt-1 text-sm text-zinc-600 dark:text-zinc-400">
+          {t("dining.onlyEnoughSeats")}
         </p>
         <div className="mt-3 flex flex-wrap gap-2">
           {PARTY_SIZE_OPTIONS.map((n) => (
@@ -276,8 +296,8 @@ export function VenueDiningTab({
               className={cn(
                 "rounded-full border px-3 py-1.5 text-sm font-medium transition",
                 partySize === n
-                  ? "border-amber-400/40 bg-amber-500/15 text-amber-100"
-                  : "border-white/10 bg-white/[0.03] text-zinc-400 hover:text-zinc-200",
+                  ? "border-amber-400/40 bg-amber-500/15 text-amber-900 dark:text-amber-100"
+                  : "border-[var(--color-border)] bg-[var(--color-background)]/50 text-zinc-600 hover:text-[var(--color-foreground)] dark:text-zinc-400 dark:hover:text-zinc-200",
               )}
             >
               {n}
@@ -286,22 +306,22 @@ export function VenueDiningTab({
         </div>
         {partySize >= 10 ? (
           <p className="mt-3 flex items-start gap-2 text-xs text-zinc-500">
-            <PartyPopper size={14} className="mt-0.5 shrink-0 text-violet-300" />
+            <PartyPopper size={14} className="mt-0.5 shrink-0 text-violet-500 dark:text-violet-300" />
             <span>
-              Large group?{" "}
+              {t("dining.largeGroup")}{" "}
               <Link
                 href={`/venue/${slug}?tab=book#book-event`}
-                className="text-violet-300 underline-offset-2 hover:underline"
+                className="text-violet-700 underline-offset-2 hover:underline dark:text-violet-300"
               >
-                Request a private event
+                {t("dining.requestEvent")}
               </Link>{" "}
-              so staff can plan against this dining layout.
+              {t("dining.largeGroupSuffix")}
             </span>
           </p>
         ) : null}
       </section>
 
-      <section className="overflow-hidden rounded-2xl border border-white/10 bg-zinc-900/40 shadow-xl">
+      <section className="overflow-hidden rounded-2xl border border-[var(--color-border)] bg-[var(--color-surface)] shadow-xl">
         {loading ? (
           <>
             <GamingFloorMapControls
@@ -316,7 +336,7 @@ export function VenueDiningTab({
             />
             <div className="flex flex-col items-center justify-center gap-3 py-24 text-zinc-500">
               <Loader2 size={28} className="animate-spin text-amber-400/80" />
-              <p className="text-sm">Loading table map…</p>
+              <p className="text-sm">{t("dining.loadingMap")}</p>
             </div>
           </>
         ) : error ? (
@@ -338,7 +358,7 @@ export function VenueDiningTab({
                 onClick={() => void loadSchedule()}
                 className="mt-3 text-xs text-amber-300 underline"
               >
-                Try again
+                {t("dining.tryAgain")}
               </button>
             </div>
           </>
@@ -379,8 +399,7 @@ export function VenueDiningTab({
               windowError={windowError}
             />
             <div className="px-6 py-16 text-center text-sm text-zinc-500">
-              Could not load tables for this date. Try another time or check
-              back later.
+              {t("dining.couldNotLoad")}
             </div>
           </>
         )}

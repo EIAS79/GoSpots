@@ -2,36 +2,39 @@
 
 import { motion } from "framer-motion";
 import { CountUp } from "@/components/effects/count-up";
+import { usePublicPrefs } from "@/lib/public-prefs-context";
 import { TRIAL_DURATION_DAYS, VENUE_ADD_ON_LIST } from "@/lib/venue-packs";
 
 const EASE = [0.22, 1, 0.36, 1] as const;
 
-const stats = [
-  {
-    value: TRIAL_DURATION_DAYS,
-    label: "days free on every new venue",
-    hint: "No card required to start",
-  },
-  {
-    value: 0,
-    prefix: "€",
-    label: "for your venue type — forever",
-    hint: "You only pay for features",
-  },
-  {
-    value: VENUE_ADD_ON_LIST.length,
-    label: "plug-in features to build from",
-    hint: "Switch them on and off anytime",
-  },
-  {
-    value: 1,
-    label: "live screen to run the whole floor",
-    hint: "Tables, consoles, and bills together",
-  },
-];
-
 /** Quick trust numbers — owner view only. */
 export function StatsStrip() {
+  const { formatMoney, t } = usePublicPrefs();
+  const freeLabel = formatMoney(0);
+
+  const stats = [
+    {
+      value: TRIAL_DURATION_DAYS,
+      label: t("stats.days.label"),
+      hint: t("stats.days.hint"),
+    },
+    {
+      display: freeLabel,
+      label: t("stats.free.label"),
+      hint: t("stats.free.hint"),
+    },
+    {
+      value: VENUE_ADD_ON_LIST.length,
+      label: t("stats.features.label"),
+      hint: t("stats.features.hint"),
+    },
+    {
+      value: 1,
+      label: t("stats.screen.label"),
+      hint: t("stats.screen.hint"),
+    },
+  ] as const;
+
   return (
     <section className="relative py-14 sm:py-16">
       <div className="mx-auto max-w-7xl px-4 sm:px-6 md:px-8">
@@ -50,7 +53,11 @@ export function StatsStrip() {
                 aria-hidden
               />
               <p className="text-3xl font-bold tracking-tight text-[var(--color-foreground)] dark:text-white sm:text-4xl">
-                <CountUp to={s.value} prefix={s.prefix ?? ""} duration={1.2} />
+                {"display" in s && s.display != null ? (
+                  s.display
+                ) : (
+                  <CountUp to={"value" in s ? s.value : 0} duration={1.2} />
+                )}
               </p>
               <p className="mt-2 text-xs font-medium text-zinc-700 dark:text-zinc-300 sm:text-sm">
                 {s.label}

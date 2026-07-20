@@ -75,26 +75,26 @@ export function VenueReviewsTab({
 
   return (
     <div className="space-y-8">
-      <div className="rounded-2xl border border-amber-500/20 bg-gradient-to-br from-amber-950/30 via-zinc-900/80 to-zinc-950 p-5 md:p-6">
+      <div className="rounded-2xl border border-amber-500/20 bg-gradient-to-br from-amber-500/10 via-[var(--color-surface)] to-[var(--color-background)] p-5 md:p-6">
         <div className="flex flex-col gap-4 sm:flex-row sm:flex-wrap sm:items-end sm:justify-between">
           <div>
-            <p className="text-[10px] font-semibold uppercase tracking-widest text-amber-400/90">
+            <p className="text-[10px] font-semibold uppercase tracking-widest text-amber-700 dark:text-amber-400/90">
               Guest reviews
             </p>
-            <h2 className="mt-1 text-xl font-bold text-white md:text-2xl">
+            <h2 className="mt-1 text-xl font-bold text-[var(--color-foreground)] md:text-2xl">
               What visitors say
             </h2>
             {showReviews && reviewsMode === "ENABLED" && avg != null && count > 0 ? (
               <div className="mt-3 flex items-center gap-3">
                 <StarRatingDisplay rating={avg} size={18} />
-                <p className="text-sm text-zinc-300">
-                  <span className="font-semibold text-white">{avg.toFixed(1)}</span>
+                <p className="text-sm text-zinc-600 dark:text-zinc-300">
+                  <span className="font-semibold text-[var(--color-foreground)]">{avg.toFixed(1)}</span>
                   {" · "}
                   {count} review{count === 1 ? "" : "s"}
                 </p>
               </div>
             ) : (
-              <p className="mt-2 text-sm text-zinc-400">
+              <p className="mt-2 text-sm text-zinc-500">
                 {reviewsMode === "DISABLED"
                   ? "Reviews are turned off for this venue."
                   : reviewsMode === "HIDDEN"
@@ -111,7 +111,7 @@ export function VenueReviewsTab({
                 <select
                   value={sort}
                   onChange={(e) => setSort(e.target.value as SortKey)}
-                  className="rounded-lg border border-white/10 bg-zinc-950 px-2.5 py-1.5 text-xs text-white sm:ml-2"
+                  className="rounded-lg border border-[var(--color-border)] bg-[var(--color-background)] px-2.5 py-1.5 text-xs text-[var(--color-foreground)] sm:ml-2"
                 >
                   <option value="date">Date</option>
                   <option value="rating">Rating</option>
@@ -122,7 +122,7 @@ export function VenueReviewsTab({
                 onClick={() =>
                   setOrder((o) => (o === "desc" ? "asc" : "desc"))
                 }
-                className="inline-flex w-full items-center justify-center gap-1 rounded-lg border border-white/10 bg-zinc-950 px-2.5 py-1.5 text-xs text-zinc-300 hover:text-white sm:w-auto"
+                className="inline-flex w-full items-center justify-center gap-1 rounded-lg border border-[var(--color-border)] bg-[var(--color-background)] px-2.5 py-1.5 text-xs text-zinc-700 hover:text-[var(--color-foreground)] dark:text-zinc-300 dark:hover:text-white sm:w-auto"
                 title={order === "desc" ? "Highest / newest first" : "Lowest / oldest first"}
               >
                 {order === "desc" ? (
@@ -161,7 +161,7 @@ export function VenueReviewsTab({
         </div>
       ) : showReviews && reviewsMode === "ENABLED" ? (
         reviews.length === 0 ? (
-          <p className="rounded-xl border border-dashed border-white/10 py-12 text-center text-sm text-zinc-500">
+          <p className="rounded-xl border border-dashed border-[var(--color-border)] py-12 text-center text-sm text-zinc-500">
             No published reviews yet.
           </p>
         ) : (
@@ -169,11 +169,11 @@ export function VenueReviewsTab({
             {reviews.map((r) => (
               <li
                 key={r.id}
-                className="rounded-xl border border-white/10 bg-zinc-900/50 p-4"
+                className="rounded-xl border border-[var(--color-border)] bg-[var(--color-surface)] p-4"
               >
                 <div className="flex flex-wrap items-center justify-between gap-2">
                   <div className="flex items-center gap-2">
-                    <p className="text-sm font-medium text-white">{r.guestName}</p>
+                    <p className="text-sm font-medium text-[var(--color-foreground)]">{r.guestName}</p>
                     <span className="inline-flex items-center gap-0.5">
                       {Array.from({ length: 5 }, (_, i) => (
                         <Star

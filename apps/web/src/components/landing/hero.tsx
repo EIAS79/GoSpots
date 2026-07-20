@@ -226,10 +226,19 @@ export function Hero() {
             transition={{ delay: reduced ? 0 : 0.35 }}
             className="mt-6 flex flex-wrap items-center justify-center gap-x-5 gap-y-2 text-[11px] text-zinc-400 sm:mt-8 sm:text-xs"
           >
-            {trustIcons.map((t) => (
-              <span key={t.label} className="inline-flex items-center gap-1.5">
-                <t.icon size={12} className="text-amber-300/80" />
-                {t.label}
+            {trustIcons.map((item, i) => (
+              <span key={item.label} className="inline-flex items-center gap-1.5">
+                <item.icon size={12} className="text-amber-300/80" />
+                {t(
+                  (
+                    [
+                      "hero.trust.audit",
+                      "hero.trust.tenant",
+                      "hero.trust.peak",
+                      "hero.trust.beta",
+                    ] as const
+                  )[i] ?? "hero.trust.audit",
+                )}
               </span>
             ))}
           </motion.div>
@@ -261,10 +270,21 @@ function ModeSwitcher({
   mode: Mode;
   setMode: (m: Mode) => void;
 }) {
+  const { t } = usePublicPrefs();
   /** Owner-first: venue operators appear first */
   const items: { id: Mode; label: string; short: string; icon: typeof Compass }[] = [
-    { id: "manage", label: "I run a venue", short: "Run a venue", icon: Crown },
-    { id: "play", label: "I'm looking for a spot", short: "Find a spot", icon: Compass },
+    {
+      id: "manage",
+      label: t("hero.mode.run"),
+      short: t("hero.mode.runShort"),
+      icon: Crown,
+    },
+    {
+      id: "play",
+      label: t("hero.mode.find"),
+      short: t("hero.mode.findShort"),
+      icon: Compass,
+    },
   ];
   return (
     <div className="mx-auto flex w-fit max-w-full items-center gap-1 rounded-full border border-white/15 bg-zinc-950/55 p-1 backdrop-blur-xl">

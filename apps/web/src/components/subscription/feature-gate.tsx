@@ -4,8 +4,8 @@ import { Lock } from "lucide-react";
 import Link from "next/link";
 import type { ReactNode } from "react";
 import type { FeatureKey } from "@/lib/plan";
-import { FEATURE_LABELS } from "@/lib/plan";
 import { useVenueHref } from "@/lib/venue-context";
+import { useVenueSettings } from "@/lib/venue-settings-context";
 
 export function FeatureGate({
   feature,
@@ -19,8 +19,12 @@ export function FeatureGate({
   title?: string;
 }) {
   const subscriptionHref = useVenueHref("/subscription");
+  const { t } = useVenueSettings();
 
   if (unlocked) return <>{children}</>;
+
+  const featureLabel = t(`featureGate.labels.${feature}`);
+  const displayTitle = title ?? featureLabel;
 
   return (
     <div className="relative min-h-0 rounded-xl border border-amber-400/20 bg-zinc-900/40 p-5 sm:min-h-[240px] sm:p-8">
@@ -29,17 +33,16 @@ export function FeatureGate({
           <Lock className="text-amber-300" size={22} />
         </span>
         <h2 className="text-lg font-semibold text-white">
-          {title ?? FEATURE_LABELS[feature]} is locked
+          {t("featureGate.locked", { title: displayTitle })}
         </h2>
         <p className="max-w-md text-sm text-zinc-400">
-          This module is not included in your current pack or add-ons. Unlock{" "}
-          {FEATURE_LABELS[feature].toLowerCase()} from Subscription to use it.
+          {t("featureGate.body", { feature: featureLabel })}
         </p>
         <Link
           href={subscriptionHref}
           className="mt-2 rounded-lg bg-amber-500 px-4 py-2 text-sm font-semibold text-zinc-950 hover:bg-amber-400"
         >
-          View packs &amp; modules
+          {t("featureGate.cta")}
         </Link>
       </div>
     </div>

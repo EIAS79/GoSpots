@@ -53,9 +53,15 @@ export function Navbar() {
           href="/"
           size="md"
           showTagline
+          tone={scrolled ? "auto" : "onDark"}
           className="hidden min-w-0 lg:inline-flex"
         />
-        <GoSpotsLogo href="/" size="sm" className="min-w-0 lg:hidden" />
+        <GoSpotsLogo
+          href="/"
+          size="sm"
+          tone={scrolled ? "auto" : "onDark"}
+          className="min-w-0 lg:hidden"
+        />
 
         {/* Center links — only when there's room */}
         <nav
@@ -73,8 +79,8 @@ export function Navbar() {
               className={cn(
                 "rounded-full px-3 py-1.5 text-sm transition",
                 scrolled
-                  ? "text-zinc-600 hover:bg-black/5 hover:text-zinc-900 dark:text-zinc-300 dark:hover:bg-white/10 dark:hover:text-white"
-                  : "text-zinc-300 hover:bg-white/10 hover:text-white",
+                  ? "text-zinc-700 hover:bg-black/5 hover:text-zinc-950 dark:text-zinc-200 dark:hover:bg-white/10 dark:hover:text-white"
+                  : "text-zinc-200 hover:bg-white/10 hover:text-white",
               )}
             >
               {t(link.labelKey)}
@@ -87,7 +93,13 @@ export function Navbar() {
             className="hidden sm:block"
             tone={scrolled ? "light" : "dark"}
           />
-          <ThemeToggle className="hidden lg:grid" />
+          <ThemeToggle
+            className={cn(
+              "hidden lg:grid",
+              !scrolled &&
+                "border-white/20 bg-zinc-950/45 text-zinc-100 hover:border-amber-400/40 hover:text-amber-200",
+            )}
+          />
           <div className="hidden items-center gap-2 md:flex">
             <AnimatePresence mode="wait">
               {isPlay ? (
@@ -105,8 +117,8 @@ export function Navbar() {
                     className={cn(
                       "inline-flex items-center gap-1.5 rounded-full border px-3.5 py-2 text-sm backdrop-blur-md transition lg:px-4",
                       scrolled
-                        ? "border-[var(--color-border)] bg-[var(--color-surface)]/60 text-zinc-700 hover:border-amber-500/40 hover:text-zinc-900 dark:border-white/10 dark:bg-white/[0.04] dark:text-zinc-300 dark:hover:border-white/25 dark:hover:text-white"
-                        : "border-white/15 bg-white/[0.06] text-zinc-200 hover:border-white/30 hover:text-white",
+                        ? "border-[var(--color-border)] bg-[var(--color-surface)]/60 text-zinc-800 hover:border-amber-500/40 hover:text-zinc-950 dark:border-white/10 dark:bg-white/[0.04] dark:text-zinc-200 dark:hover:border-white/25 dark:hover:text-white"
+                        : "border-white/15 bg-white/[0.06] text-zinc-100 hover:border-white/30 hover:text-white",
                     )}
                   >
                     <Crown size={14} className="text-amber-400" />
@@ -127,8 +139,8 @@ export function Navbar() {
                     className={cn(
                       "rounded-full border px-3.5 py-2 text-sm font-medium backdrop-blur-md transition lg:px-4",
                       scrolled
-                        ? "border-[var(--color-border)] bg-[var(--color-surface)]/60 text-zinc-800 hover:border-zinc-400/40 dark:border-white/15 dark:bg-white/[0.04] dark:text-zinc-200 dark:hover:border-white/30 dark:hover:bg-white/10"
-                        : "border-white/15 bg-white/[0.06] text-zinc-200 hover:border-white/30 hover:bg-white/10",
+                        ? "border-[var(--color-border)] bg-[var(--color-surface)]/60 text-zinc-800 hover:border-zinc-400/40 dark:border-white/15 dark:bg-white/[0.04] dark:text-zinc-100 dark:hover:border-white/30 dark:hover:bg-white/10"
+                        : "border-white/15 bg-white/[0.06] text-zinc-100 hover:border-white/30 hover:bg-white/10",
                     )}
                   >
                     {t("nav.signIn")}
@@ -145,8 +157,18 @@ export function Navbar() {
             </AnimatePresence>
           </div>
 
-          <LocaleCurrencySwitcher className="sm:hidden" tone="dark" compact />
-          <ThemeToggle className="lg:hidden" />
+          <LocaleCurrencySwitcher
+            className="sm:hidden"
+            tone={scrolled ? "light" : "dark"}
+            compact
+          />
+          <ThemeToggle
+            className={cn(
+              "lg:hidden",
+              !scrolled &&
+                "border-white/20 bg-zinc-950/45 text-zinc-100 hover:border-amber-400/40 hover:text-amber-200",
+            )}
+          />
 
           <button
             type="button"
@@ -156,7 +178,7 @@ export function Navbar() {
             className={cn(
               "grid h-9 w-9 place-items-center rounded-lg border backdrop-blur-md lg:hidden",
               scrolled
-                ? "border-[var(--color-border)] bg-[var(--color-surface)]/70 dark:border-white/10 dark:bg-white/5"
+                ? "border-[var(--color-border)] bg-[var(--color-surface)]/70 text-zinc-800 dark:border-white/10 dark:bg-white/5 dark:text-zinc-100"
                 : "border-white/15 bg-zinc-950/40 text-zinc-100",
             )}
           >

@@ -23,7 +23,7 @@ export function BillingCheckoutCard({
   trialActive: boolean;
   trialExpired: boolean;
 }) {
-  const { formatFromEur } = useVenueSettings();
+  const { formatFromEur, t } = useVenueSettings();
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -36,7 +36,9 @@ export function BillingCheckoutCard({
         : await startBillingCheckout();
       window.location.href = url;
     } catch (e) {
-      setError(e instanceof Error ? e.message : "Billing action failed.");
+      setError(
+        e instanceof Error ? e.message : t("subscription.billingFailed"),
+      );
       setLoading(false);
     }
   }
@@ -47,29 +49,21 @@ export function BillingCheckoutCard({
         <div className="min-w-0">
           <h2 className="flex items-center gap-2 text-lg font-semibold text-white">
             <CreditCard size={18} className="text-emerald-400" />
-            Billing
+            {t("subscription.billingTitle")}
           </h2>
           <p className="mt-1 max-w-xl text-sm text-zinc-400">
-            Payments run through{" "}
-            <span className="text-zinc-200">Lemon Squeezy</span> (Merchant of
-            Record) — multi-currency checkout, VAT/tax handled for you. Your
-            pack + add-ons total{" "}
-            <span className="font-medium text-emerald-300">
-              {formatFromEur(monthlyTotal)}/mo
-            </span>
-            .
+            {t("subscription.billingBody", {
+              price: formatFromEur(monthlyTotal),
+            })}
           </p>
           {hasLemonSub ? (
             <p className="mt-2 text-xs text-zinc-500">
-              Manage payment method, invoices, or cancel in the Lemon Squeezy
-              portal. Pack changes you save here apply at the next billing
-              period.
+              {t("subscription.billingManageHint")}
             </p>
           ) : null}
           {!configured ? (
             <p className="mt-2 text-xs text-amber-200/90">
-              Billing keys are not set on the API yet. Add LEMON_SQUEEZY_* env
-              vars to enable checkout.
+              {t("subscription.billingNotConfigured")}
             </p>
           ) : null}
         </div>
@@ -90,10 +84,10 @@ export function BillingCheckoutCard({
             <ExternalLink size={16} />
           )}
           {hasLemonSub
-            ? "Manage billing"
+            ? t("subscription.manageBilling")
             : trialActive
-              ? "Add payment method"
-              : "Activate subscription"}
+              ? t("subscription.addPayment")
+              : t("subscription.activate")}
         </button>
       </div>
       {error ? (

@@ -11,7 +11,7 @@ import type {
 } from "@/lib/shop-settings-client";
 
 export function VenueMenuTab({ venue }: { venue: PublicVenueDetail }) {
-  const { formatMoney } = usePublicPrefs();
+  const { formatMoney, t } = usePublicPrefs();
   const menu = venue.menu;
   const [selected, setSelected] = useState<{
     item: PublicMenuItem;
@@ -21,7 +21,7 @@ export function VenueMenuTab({ venue }: { venue: PublicVenueDetail }) {
   const formatPrice = (n: number) => formatMoney(n, venue.currency);
 
   if (!menu?.items.length) {
-    return <p className="text-sm text-zinc-500">Menu not available.</p>;
+    return <p className="text-sm text-zinc-500">{t("menu.notAvailable")}</p>;
   }
 
   return (

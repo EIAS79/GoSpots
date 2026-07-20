@@ -242,14 +242,14 @@ export function PublicBookingRequestForm({
     <form
       onSubmit={(e) => void submit(e)}
       className={cn(
-        "rounded-xl border border-white/10 bg-zinc-900/80 p-5",
+        "rounded-xl border border-[var(--color-border)] bg-[var(--color-surface)] p-5",
         className,
       )}
     >
       <div className="flex items-start gap-3">
-        <Icon className="mt-0.5 shrink-0 text-amber-300" size={22} />
+        <Icon className="mt-0.5 shrink-0 text-amber-600 dark:text-amber-300" size={22} />
         <div>
-          <h3 className="text-lg font-semibold text-white">
+          <h3 className="text-lg font-semibold text-[var(--color-foreground)]">
             {title ?? meta.title}
           </h3>
           <p className="mt-1 text-sm text-zinc-500">
@@ -259,19 +259,19 @@ export function PublicBookingRequestForm({
       </div>
 
       {error ? (
-        <p className="mt-4 rounded-lg border border-rose-500/30 bg-rose-500/10 px-3 py-2 text-xs text-rose-200">
+        <p className="mt-4 rounded-lg border border-rose-500/30 bg-rose-500/10 px-3 py-2 text-xs text-rose-700 dark:text-rose-200">
           {error}
         </p>
       ) : null}
 
       <div className="mt-5 grid gap-4 sm:grid-cols-2">
         {mode === "EVENT" ? (
-          <label className="block text-xs text-zinc-400 sm:col-span-2">
+          <label className="block text-xs text-zinc-600 dark:text-zinc-400 sm:col-span-2">
             Event type
             <select
               value={eventType}
               onChange={(e) => setEventType(e.target.value as EventRequestType)}
-              className="mt-1 w-full rounded-lg border border-white/10 bg-zinc-950 px-3 py-2.5 text-base text-white sm:text-sm"
+              className="mt-1 w-full rounded-lg border border-[var(--color-border)] bg-[var(--color-background)] px-3 py-2.5 text-base text-[var(--color-foreground)] outline-none focus:border-amber-500/40 sm:text-sm"
             >
               {PRIVATE_EVENT_REQUEST_TYPES.map((t) => (
                 <option key={t} value={t}>
@@ -283,7 +283,7 @@ export function PublicBookingRequestForm({
         ) : null}
 
         {useDigitalAreas ? (
-          <label className="block text-xs text-zinc-400 sm:col-span-2">
+          <label className="block text-xs text-zinc-600 dark:text-zinc-400 sm:col-span-2">
             {mode === "GAMING"
               ? "Activity"
               : mode === "TABLE"
@@ -292,7 +292,7 @@ export function PublicBookingRequestForm({
             <select
               value={resourceCategoryId}
               onChange={(e) => setResourceCategoryId(e.target.value)}
-              className="mt-1 w-full rounded-lg border border-white/10 bg-zinc-950 px-3 py-2.5 text-base text-white sm:text-sm"
+              className="mt-1 w-full rounded-lg border border-[var(--color-border)] bg-[var(--color-background)] px-3 py-2.5 text-base text-[var(--color-foreground)] outline-none focus:border-amber-500/40 sm:text-sm"
             >
               {areaOptions.map((o) => (
                 <option key={o.id} value={o.id}>
@@ -304,41 +304,41 @@ export function PublicBookingRequestForm({
           </label>
         ) : null}
 
-        <label className="block text-xs text-zinc-400">
+        <label className="block text-xs text-zinc-600 dark:text-zinc-400">
           Your name
           <input
             required
             value={guestName}
             onChange={(e) => setGuestName(e.target.value)}
-            className="mt-1 w-full rounded-lg border border-white/10 bg-zinc-950 px-3 py-2.5 text-base text-white sm:text-sm"
+            className="mt-1 w-full rounded-lg border border-[var(--color-border)] bg-[var(--color-background)] px-3 py-2.5 text-base text-[var(--color-foreground)] outline-none focus:border-amber-500/40 sm:text-sm"
           />
         </label>
-        <label className="block text-xs text-zinc-400">
+        <label className="block text-xs text-zinc-600 dark:text-zinc-400">
           {partyLabel}
           <input
             type="number"
             min={1}
             value={partySize}
             onChange={(e) => setPartySize(Number(e.target.value) || 1)}
-            className="mt-1 w-full rounded-lg border border-white/10 bg-zinc-950 px-3 py-2.5 text-base text-white sm:text-sm"
+            className="mt-1 w-full rounded-lg border border-[var(--color-border)] bg-[var(--color-background)] px-3 py-2.5 text-base text-[var(--color-foreground)] outline-none focus:border-amber-500/40 sm:text-sm"
           />
         </label>
-        <label className="block text-xs text-zinc-400">
+        <label className="block text-xs text-zinc-600 dark:text-zinc-400">
           Phone
           <input
             type="tel"
             value={guestPhone}
             onChange={(e) => setGuestPhone(e.target.value)}
-            className="mt-1 w-full rounded-lg border border-white/10 bg-zinc-950 px-3 py-2.5 text-base text-white sm:text-sm"
+            className="mt-1 w-full rounded-lg border border-[var(--color-border)] bg-[var(--color-background)] px-3 py-2.5 text-base text-[var(--color-foreground)] outline-none focus:border-amber-500/40 sm:text-sm"
           />
         </label>
-        <label className="block text-xs text-zinc-400">
+        <label className="block text-xs text-zinc-600 dark:text-zinc-400">
           Email
           <input
             type="email"
             value={guestEmail}
             onChange={(e) => setGuestEmail(e.target.value)}
-            className="mt-1 w-full rounded-lg border border-white/10 bg-zinc-950 px-3 py-2.5 text-base text-white sm:text-sm"
+            className="mt-1 w-full rounded-lg border border-[var(--color-border)] bg-[var(--color-background)] px-3 py-2.5 text-base text-[var(--color-foreground)] outline-none focus:border-amber-500/40 sm:text-sm"
           />
         </label>
         <p className="text-[11px] text-zinc-600 sm:col-span-2">
@@ -346,9 +346,9 @@ export function PublicBookingRequestForm({
         </p>
 
         {showLegacyZone ? (
-          <label className="block text-xs text-zinc-400 sm:col-span-2">
+          <label className="block text-xs text-zinc-600 dark:text-zinc-400 sm:col-span-2">
             Preferred area
-            <div className="mt-1 flex gap-1 rounded-lg border border-white/10 bg-zinc-950/80 p-0.5">
+            <div className="mt-1 flex gap-1 rounded-lg border border-[var(--color-border)] bg-[var(--color-background)] p-0.5">
               {SEATING_ZONES.map((z) => (
                 <button
                   key={z}
@@ -357,8 +357,8 @@ export function PublicBookingRequestForm({
                   className={cn(
                     "flex-1 rounded-md px-2 py-2 text-xs font-medium transition",
                     zone === z
-                      ? "bg-amber-500/20 text-amber-100"
-                      : "text-zinc-500 hover:text-zinc-300",
+                      ? "bg-amber-500/20 text-amber-800 dark:text-amber-100"
+                      : "text-zinc-500 hover:text-zinc-800 dark:hover:text-zinc-300",
                   )}
                 >
                   {SEATING_ZONE_LABELS[z]}
@@ -368,34 +368,34 @@ export function PublicBookingRequestForm({
           </label>
         ) : null}
 
-        <label className="block text-xs text-zinc-400 sm:col-span-2">
+        <label className="block text-xs text-zinc-600 dark:text-zinc-400 sm:col-span-2">
           Preferred date
           <input
             type="date"
             value={eventDate}
             onChange={(e) => setEventDate(e.target.value)}
-            className="mt-1 w-full rounded-lg border border-white/10 bg-zinc-950 px-3 py-2.5 text-base text-white sm:text-sm"
+            className="mt-1 w-full rounded-lg border border-[var(--color-border)] bg-[var(--color-background)] px-3 py-2.5 text-base text-[var(--color-foreground)] outline-none focus:border-amber-500/40 sm:text-sm"
           />
         </label>
-        <label className="block text-xs text-zinc-400">
+        <label className="block text-xs text-zinc-600 dark:text-zinc-400">
           Start time
           <input
             type="time"
             value={eventStartTime}
             onChange={(e) => setEventStartTime(e.target.value)}
-            className="mt-1 w-full rounded-lg border border-white/10 bg-zinc-950 px-3 py-2.5 text-base text-white sm:text-sm"
+            className="mt-1 w-full rounded-lg border border-[var(--color-border)] bg-[var(--color-background)] px-3 py-2.5 text-base text-[var(--color-foreground)] outline-none focus:border-amber-500/40 sm:text-sm"
           />
         </label>
-        <label className="block text-xs text-zinc-400">
+        <label className="block text-xs text-zinc-600 dark:text-zinc-400">
           End time
           <input
             type="time"
             value={eventEndTime}
             onChange={(e) => setEventEndTime(e.target.value)}
-            className="mt-1 w-full rounded-lg border border-white/10 bg-zinc-950 px-3 py-2.5 text-base text-white sm:text-sm"
+            className="mt-1 w-full rounded-lg border border-[var(--color-border)] bg-[var(--color-background)] px-3 py-2.5 text-base text-[var(--color-foreground)] outline-none focus:border-amber-500/40 sm:text-sm"
           />
         </label>
-        <label className="block text-xs text-zinc-400 sm:col-span-2">
+        <label className="block text-xs text-zinc-600 dark:text-zinc-400 sm:col-span-2">
           {mode === "TABLE"
             ? "Notes for the venue"
             : mode === "GAMING"
@@ -412,7 +412,7 @@ export function PublicBookingRequestForm({
                   ? "Lane preference, game titles, skill level…"
                   : "Birthday for 12, need projector, dietary needs…"
             }
-            className="mt-1 w-full rounded-lg border border-white/10 bg-zinc-950 px-3 py-2.5 text-base text-white sm:text-sm"
+            className="mt-1 w-full rounded-lg border border-[var(--color-border)] bg-[var(--color-background)] px-3 py-2.5 text-base text-[var(--color-foreground)] outline-none focus:border-amber-500/40 sm:text-sm"
           />
         </label>
       </div>

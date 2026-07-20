@@ -41,10 +41,10 @@ export function LocaleCurrencySwitcher({
 
   const btnTone =
     tone === "light"
-      ? "border-zinc-300/40 bg-white/10 text-zinc-800 hover:bg-white/20 dark:border-white/15 dark:bg-white/5 dark:text-zinc-200"
+      ? "border-zinc-300/50 bg-white/70 text-zinc-800 hover:bg-white dark:border-white/15 dark:bg-white/5 dark:text-zinc-100 dark:hover:bg-white/10"
       : tone === "auto"
-        ? "border-white/15 bg-zinc-950/40 text-zinc-200 hover:bg-white/10"
-        : "border-white/15 bg-zinc-950/50 text-zinc-200 hover:bg-white/10";
+        ? "border-[var(--color-border)] bg-[var(--color-surface)]/70 text-[var(--color-foreground)] hover:bg-[var(--color-surface)]"
+        : "border-white/20 bg-zinc-950/55 text-zinc-100 hover:bg-white/10";
 
   return (
     <div ref={rootRef} className={cn("relative", className)}>

@@ -7,6 +7,7 @@ import { useRouter, useSearchParams } from "next/navigation";
 import { useCallback, useMemo, useState } from "react";
 import { GoSpotsLogo } from "@/components/brand/gospots-logo";
 import { LocaleCurrencySwitcher } from "@/components/public/locale-currency-switcher";
+import { ThemeToggle } from "@/components/theme/theme-toggle";
 import { VenueCoverImage } from "@/components/ui/venue-cover-image";
 import { VenueBookTab } from "@/components/venues/public/venue-book-tab";
 import { VenueDiningTab } from "@/components/venues/public/venue-dining-tab";
@@ -97,34 +98,46 @@ export function PublicVenueView({
     venue.averageRating != null;
 
   return (
-    <div className="min-h-screen bg-zinc-950 text-zinc-100">
-      <header className="border-b border-white/10 bg-zinc-950/80 backdrop-blur">
+    <div className="min-h-screen bg-[var(--color-background)] text-[var(--color-foreground)]">
+      <header className="border-b border-[var(--color-border)] bg-[color-mix(in_srgb,var(--color-background)_88%,transparent)] backdrop-blur dark:border-white/10">
         <div className="mx-auto flex max-w-7xl items-center justify-between gap-2 px-4 py-3 sm:px-6 sm:py-4 md:px-6">
-          <GoSpotsLogo href="/" size="sm" showTagline className="hidden min-w-0 sm:inline-flex" />
-          <GoSpotsLogo href="/" size="sm" className="min-w-0 sm:hidden" />
+          <GoSpotsLogo
+            href="/"
+            size="sm"
+            showTagline
+            tone="auto"
+            className="hidden min-w-0 sm:inline-flex"
+          />
+          <GoSpotsLogo
+            href="/"
+            size="sm"
+            tone="auto"
+            className="min-w-0 sm:hidden"
+          />
           <div className="flex shrink-0 items-center gap-2 sm:gap-3">
             <Link
               href="/venues"
-              className="text-xs text-zinc-500 transition hover:text-zinc-300"
+              className="text-xs text-zinc-500 transition hover:text-zinc-800 dark:hover:text-zinc-300"
             >
               {t("nav.allVenues")}
             </Link>
-            <span className="hidden text-xs text-zinc-600 sm:inline">
+            <span className="hidden text-xs text-zinc-500 sm:inline">
               {currency}
             </span>
-            <LocaleCurrencySwitcher tone="dark" compact />
+            <LocaleCurrencySwitcher tone="auto" compact />
+            <ThemeToggle />
           </div>
         </div>
       </header>
 
-      <div className="relative aspect-[2/1] w-full max-h-[min(40vh,360px)] overflow-hidden border-b border-white/10 sm:aspect-[21/9] sm:max-h-[min(52vh,440px)]">
+      <div className="relative aspect-[2/1] w-full max-h-[min(40vh,360px)] overflow-hidden border-b border-[var(--color-border)] sm:aspect-[21/9] sm:max-h-[min(52vh,440px)]">
         <VenueCoverImage
           src={venue.coverImage}
           alt={title}
           sizes="100vw"
           priority
         />
-        <div className="absolute inset-0 bg-gradient-to-t from-zinc-950 via-zinc-950/50 to-zinc-950/10" />
+        <div className="absolute inset-0 bg-gradient-to-t from-[var(--color-background)] via-zinc-950/50 to-zinc-950/10" />
         <div className="absolute bottom-0 left-0 right-0">
           <div className="mx-auto max-w-7xl px-4 pb-4 pt-12 sm:px-6 sm:pb-6 sm:pt-16 md:pb-8">
             {venue.tags && venue.tags.length > 0 ? (

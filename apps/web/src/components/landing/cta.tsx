@@ -5,37 +5,41 @@ import { ArrowRight } from "lucide-react";
 import Link from "next/link";
 import { Magnetic } from "@/components/effects/magnetic";
 import { cn } from "@/lib/cn";
+import { usePublicPrefs } from "@/lib/public-prefs-context";
 import { useMode } from "./mode-context";
 
 const EASE = [0.22, 1, 0.36, 1] as const;
 
-const copy = {
+const hrefs = {
   manage: {
-    titleA: "Never lose money to",
-    titleB: "forgotten timers.",
-    body: "Put tables, consoles, and boards on one live grid. Close bills with confidence, see reservations next to walk-ins, and get clear daily revenue reports — without running the night from memory.",
-    note: "90-day free trial · pick any features · no card required · nothing charges without your consent.",
-    primary: { label: "Create your venue", href: "/register" },
-    secondary: { label: "I'm a player — browse venues", href: "/venues" },
-    glowA: "bg-emerald-500/25",
-    glowB: "bg-violet-500/20",
+    primary: "/register",
+    secondary: "/venues",
   },
   play: {
-    titleA: "Your next great night",
-    titleB: "starts here.",
-    body: "Billiards, gaming lounges, restaurants, cafés, bars, karaoke, bowling — search by city and category, check the vibe, and reserve your spot when the venue enables it.",
-    note: "Free for guests · no account needed to browse · the directory grows every week.",
-    primary: { label: "Browse venues", href: "/venues" },
-    secondary: { label: "I run a venue — list it free", href: "/register" },
-    glowA: "bg-cyan-500/25",
-    glowB: "bg-amber-500/15",
+    primary: "/venues",
+    secondary: "/register",
   },
+} as const;
+
+const glow = {
+  manage: { glowA: "bg-emerald-500/25", glowB: "bg-violet-500/20" },
+  play: { glowA: "bg-cyan-500/25", glowB: "bg-amber-500/15" },
 } as const;
 
 export function Cta() {
   const reduce = useReducedMotion();
   const { mode } = useMode();
-  const c = copy[mode];
+  const { t } = usePublicPrefs();
+  const prefix = mode === "manage" ? "cta.manage" : "cta.play";
+  const c = {
+    titleA: t(`${prefix}.titleA`),
+    titleB: t(`${prefix}.titleB`),
+    body: t(`${prefix}.body`),
+    note: t(`${prefix}.note`),
+    primary: { label: t(`${prefix}.primary`), href: hrefs[mode].primary },
+    secondary: { label: t(`${prefix}.secondary`), href: hrefs[mode].secondary },
+    ...glow[mode],
+  };
 
   return (
     <section className="relative py-20">

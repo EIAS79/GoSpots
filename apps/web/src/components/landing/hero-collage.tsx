@@ -69,7 +69,13 @@ function CollageColumn({
             : { duration, repeat: Infinity, ease: "linear" }
         }
       >
-        {loop.map((img, i) => (
+        {loop.map((img, i) => {
+          // First pass only (before the seamless duplicate). Eager-load enough
+          // tiles that the detected LCP (/hero/bar.jpg) is covered.
+          const firstPass = i < images.length;
+          const eager =
+            firstPass && (i < 6 || img.src === "/hero/bar.jpg");
+          return (
           <div
             key={`${img.src}-${i}`}
             className={cn(
@@ -84,10 +90,11 @@ function CollageColumn({
               fill
               sizes="(max-width: 640px) 50vw, (max-width: 1024px) 33vw, 25vw"
               className="object-cover"
-              priority={i < 4}
+              priority={eager}
             />
           </div>
-        ))}
+          );
+        })}
       </motion.div>
     </div>
   );

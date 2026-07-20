@@ -5,11 +5,11 @@ import { MapPin, Star } from "lucide-react";
 import { VenueCoverImage } from "@/components/ui/venue-cover-image";
 import {
   formatVenueLocation,
-  shopStatusLabel,
   type ShopStatus,
   type VenueCard,
 } from "@/lib/mock-data";
 import { cn } from "@/lib/cn";
+import { usePublicPrefs } from "@/lib/public-prefs-context";
 
 function statusBadgeClass(status: ShopStatus) {
   if (status === "open")
@@ -19,12 +19,25 @@ function statusBadgeClass(status: ShopStatus) {
   return "border-white/15 bg-zinc-900/90 text-zinc-400";
 }
 
+function statusI18nKey(status: ShopStatus) {
+  if (status === "closing_soon") return "status.closingSoon";
+  return `status.${status}`;
+}
+
 /** Compact venue card for hero atmosphere layer (demo data). */
 export function HeroVenueFloatCard({ venue }: { venue: VenueCard }) {
+  const { t, formatMoney } = usePublicPrefs();
   const fillPct = Math.min(
     100,
     Math.round((venue.visitorsInside / Math.max(1, venue.maxVisitors)) * 100),
   );
+  const unit = t(
+    venue.rateUnit === "hr" ? "homeVenues.unitHr" : "homeVenues.unitSession",
+  );
+  const rateText = t("homeVenues.fromRate", {
+    price: formatMoney(venue.rateFromEur, "EUR"),
+    unit,
+  });
 
   return (
     <div
@@ -51,7 +64,7 @@ export function HeroVenueFloatCard({ venue }: { venue: VenueCard }) {
             statusBadgeClass(venue.shopStatus),
           )}
         >
-          {shopStatusLabel(venue.shopStatus)}
+          {t(statusI18nKey(venue.shopStatus))}
         </span>
         <span className="absolute bottom-1.5 right-2 inline-flex items-center gap-0.5 rounded-full bg-black/55 px-1.5 py-0.5 text-[9px] font-semibold text-amber-200 backdrop-blur">
           <Star size={9} className="fill-amber-300 text-amber-300" />
@@ -68,25 +81,29 @@ export function HeroVenueFloatCard({ venue }: { venue: VenueCard }) {
           <span className="line-clamp-2">{formatVenueLocation(venue)}</span>
         </p>
         <p className="text-[9px] font-medium text-amber-700 dark:text-amber-300/90">
-          {venue.rateLabel}
+          {rateText}
         </p>
         <p className="line-clamp-2 text-[8.5px] leading-relaxed text-zinc-500 dark:text-zinc-500">
           {venue.description}
         </p>
         <div className="flex flex-wrap gap-0.5">
-          {venue.tags.slice(0, 3).map((t) => (
-            <span
-              key={t}
-              className="rounded border border-[var(--color-border)] bg-[var(--color-surface-2)]/50 px-1 py-px text-[8px] text-zinc-600 dark:text-zinc-400"
-            >
-              {t}
-            </span>
-          ))}
+          {venue.tags.slice(0, 3).map((tag) => {
+            const key = `homeVenues.tag.${tag}`;
+            const label = t(key);
+            return (
+              <span
+                key={tag}
+                className="rounded border border-[var(--color-border)] bg-[var(--color-surface-2)]/50 px-1 py-px text-[8px] text-zinc-600 dark:text-zinc-400"
+              >
+                {label === key ? tag : label}
+              </span>
+            );
+          })}
         </div>
 
         <div className="pt-1">
           <div className="flex items-center justify-between text-[8px] text-zinc-500 dark:text-zinc-500">
-            <span>Inside now</span>
+            <span>{t("homeVenues.visitorsInside")}</span>
             <span className="tabular-nums text-zinc-600 dark:text-zinc-400">
               {venue.visitorsInside} / {venue.maxVisitors}
             </span>

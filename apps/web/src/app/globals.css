@@ -690,6 +690,20 @@ html.dashboard-route body {
   overflow: hidden;
 }
 
+/* Tenant dashboard is always dark — ignore public marketing light theme. */
+html.dashboard-route {
+  --app-bg: #04121a;
+  --app-fg: #f0f9fc;
+  --app-muted: #90a5b1;
+  --app-surface: #08202b;
+  --app-surface-2: #0d2a38;
+  --app-border: rgba(199, 248, 254, 0.1);
+  --app-accent: #f7b538;
+  --app-accent-2: #faaa48;
+  --app-accent-3: #fdd20e;
+  color-scheme: dark;
+}
+
 /* Honor user's reduced-motion preference */
 @media (prefers-reduced-motion: reduce) {
   .paint-mesh,

@@ -82,18 +82,23 @@ export function PublicContactForm({
     );
   }
 
+  const fieldClass =
+    "mt-1 w-full rounded-lg border border-[var(--color-border)] bg-[var(--color-background)] px-3 py-2.5 text-base text-[var(--color-foreground)] outline-none placeholder:text-zinc-500 focus:border-amber-500/40 sm:text-sm";
+
   return (
     <form
       onSubmit={(e) => void submit(e)}
       className={cn(
-        "rounded-xl border border-white/10 bg-zinc-900/80 p-5",
+        "rounded-xl border border-[var(--color-border)] bg-[var(--color-surface)] p-5",
         className,
       )}
     >
       <div className="flex items-start gap-3">
-        <Mail className="mt-0.5 shrink-0 text-sky-300" size={22} />
+        <Mail className="mt-0.5 shrink-0 text-sky-600 dark:text-sky-300" size={22} />
         <div>
-          <h3 className="text-lg font-semibold text-white">Contact the venue</h3>
+          <h3 className="text-lg font-semibold text-[var(--color-foreground)]">
+            Contact the venue
+          </h3>
           <p className="mt-1 text-sm text-zinc-500">
             Questions, group inquiries, or anything that is not a booking request.
           </p>
@@ -101,56 +106,56 @@ export function PublicContactForm({
       </div>
 
       {error ? (
-        <p className="mt-4 rounded-lg border border-rose-500/30 bg-rose-500/10 px-3 py-2 text-xs text-rose-200">
+        <p className="mt-4 rounded-lg border border-rose-500/30 bg-rose-500/10 px-3 py-2 text-xs text-rose-700 dark:text-rose-200">
           {error}
         </p>
       ) : null}
 
       <div className="mt-5 grid gap-4 sm:grid-cols-2">
-        <label className="block text-xs text-zinc-400">
+        <label className="block text-xs text-zinc-600 dark:text-zinc-400">
           Your name
           <input
             required
             value={guestName}
             onChange={(e) => setGuestName(e.target.value)}
-            className="mt-1 w-full rounded-lg border border-white/10 bg-zinc-950 px-3 py-2.5 text-base text-white sm:text-sm"
+            className={fieldClass}
           />
         </label>
-        <label className="block text-xs text-zinc-400">
+        <label className="block text-xs text-zinc-600 dark:text-zinc-400">
           Subject
           <input
             value={subject}
             onChange={(e) => setSubject(e.target.value)}
             placeholder="Optional"
-            className="mt-1 w-full rounded-lg border border-white/10 bg-zinc-950 px-3 py-2.5 text-base text-white sm:text-sm"
+            className={fieldClass}
           />
         </label>
-        <label className="block text-xs text-zinc-400">
+        <label className="block text-xs text-zinc-600 dark:text-zinc-400">
           Phone
           <input
             type="tel"
             value={guestPhone}
             onChange={(e) => setGuestPhone(e.target.value)}
-            className="mt-1 w-full rounded-lg border border-white/10 bg-zinc-950 px-3 py-2.5 text-base text-white sm:text-sm"
+            className={fieldClass}
           />
         </label>
-        <label className="block text-xs text-zinc-400">
+        <label className="block text-xs text-zinc-600 dark:text-zinc-400">
           Email
           <input
             type="email"
             value={guestEmail}
             onChange={(e) => setGuestEmail(e.target.value)}
-            className="mt-1 w-full rounded-lg border border-white/10 bg-zinc-950 px-3 py-2.5 text-base text-white sm:text-sm"
+            className={fieldClass}
           />
         </label>
-        <label className="block text-xs text-zinc-400 sm:col-span-2">
+        <label className="block text-xs text-zinc-600 dark:text-zinc-400 sm:col-span-2">
           Message
           <textarea
             required
             value={message}
             onChange={(e) => setMessage(e.target.value)}
             rows={4}
-            className="mt-1 w-full rounded-lg border border-white/10 bg-zinc-950 px-3 py-2.5 text-base text-white sm:text-sm"
+            className={fieldClass}
           />
         </label>
       </div>

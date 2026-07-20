@@ -13,18 +13,38 @@ import {
   Timer,
   Users,
 } from "lucide-react";
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { cn } from "@/lib/cn";
 import { liveTables, type LiveTable } from "@/lib/mock-data";
+import { usePublicPrefs } from "@/lib/public-prefs-context";
 
-const tickerPool = [
-  { icon: Timer, text: "Table 5 · session started", tone: "emerald" },
-  { icon: CircleDollarSign, text: "Bill paid · €82.40", tone: "amber" },
-  { icon: Users, text: "Reservation · 4 people · 21:00", tone: "cyan" },
-  { icon: CircleCheck, text: "Shift closed · €1,284 today", tone: "emerald" },
-  { icon: Sparkles, text: "2× Coke added to Table 3", tone: "violet" },
-  { icon: Timer, text: "Snooker 1 · 1h 27m", tone: "amber" },
-] as const;
+function useTickerPool() {
+  const { formatMoney } = usePublicPrefs();
+  return useMemo(
+    () =>
+      [
+        { icon: Timer, text: "Table 5 · session started", tone: "emerald" as const },
+        {
+          icon: CircleDollarSign,
+          text: `Bill paid · ${formatMoney(82.4)}`,
+          tone: "amber" as const,
+        },
+        {
+          icon: Users,
+          text: "Reservation · 4 people · 21:00",
+          tone: "cyan" as const,
+        },
+        {
+          icon: CircleCheck,
+          text: `Shift closed · ${formatMoney(1284)} today`,
+          tone: "emerald" as const,
+        },
+        { icon: Sparkles, text: "2× Coke added to Table 3", tone: "violet" as const },
+        { icon: Timer, text: "Snooker 1 · 1h 27m", tone: "amber" as const },
+      ] as const,
+    [formatMoney],
+  );
+}
 
 const tickerTones = {
   emerald:
@@ -62,6 +82,8 @@ function fmtTime(min: number) {
 }
 
 export function LivePreview() {
+  const { formatMoney } = usePublicPrefs();
+  const tickerPool = useTickerPool();
   const [tick, setTick] = useState(0);
   const [tickerIdx, setTickerIdx] = useState(0);
   useEffect(() => {
@@ -74,7 +96,7 @@ export function LivePreview() {
       3200,
     );
     return () => clearInterval(id);
-  }, []);
+  }, [tickerPool.length]);
   const ticker = tickerPool[tickerIdx];
 
   const tables = liveTables.map((t) => {
@@ -149,7 +171,7 @@ export function LivePreview() {
           <Stat label="Occupancy" value={`${occupancy}%`} tone="cyan" />
           <Stat
             label="Open revenue"
-            value={`€${revenue.toFixed(2)}`}
+            value={formatMoney(revenue)}
             tone="violet"
           />
         </div>
@@ -208,8 +230,8 @@ export function LivePreview() {
                   <p className="text-[10px] uppercase text-zinc-500">Bill</p>
                   <p className="text-sm font-semibold text-[var(--color-foreground)] tabular-nums dark:text-white">
                     {t.status === "busy" && t.amount !== undefined
-                      ? `€${t.amount.toFixed(2)}`
-                      : `€${t.rate}/h`}
+                      ? formatMoney(t.amount)
+                      : `${formatMoney(t.rate)}/h`}
                   </p>
                 </div>
               </div>

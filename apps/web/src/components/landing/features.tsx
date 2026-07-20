@@ -10,6 +10,7 @@ import { useRef } from "react";
 import { Reveal } from "@/components/effects/reveal";
 import { features } from "@/lib/mock-data";
 import { cn } from "@/lib/cn";
+import { usePublicPrefs } from "@/lib/public-prefs-context";
 
 type Feature = (typeof features)[number];
 
@@ -25,6 +26,7 @@ function formatStep(n: number) {
  * Below lg the rail sits on the left and all cards stack to its right.
  */
 export function Features() {
+  const { t } = usePublicPrefs();
   const reduced = useReducedMotion();
   const railRef = useRef<HTMLDivElement>(null);
 
@@ -43,15 +45,14 @@ export function Features() {
       <div className="mx-auto max-w-7xl px-4 sm:px-6 md:px-8">
         <Reveal className="mx-auto max-w-2xl text-center">
           <span className="text-xs font-medium uppercase tracking-widest text-emerald-700 dark:text-emerald-400">
-            What it does
+            {t("features.eyebrow")}
           </span>
           <h2 className="mt-3 text-balance text-3xl font-bold md:text-5xl">
-            Everything you need to{" "}
-            <span className="text-gradient">control the floor.</span>
+            {t("features.title")}{" "}
+            <span className="text-gradient">{t("features.titleAccent")}</span>
           </h2>
           <p className="mt-4 text-base text-zinc-600 dark:text-zinc-400 md:text-lg">
-            Eight connected steps — from live floor view to reservations and
-            revenue — in one platform built for entertainment venues.
+            {t("features.subtitle")}
           </p>
         </Reveal>
 
@@ -71,8 +72,10 @@ export function Features() {
           <ol className="relative flex flex-col gap-10 sm:gap-12">
             {features.map((feature, i) => (
               <TimelineRow
-                key={feature.title}
+                key={i}
                 feature={feature}
+                title={t(`features.${i + 1}.title`)}
+                body={t(`features.${i + 1}.body`)}
                 step={i + 1}
                 side={i % 2 === 0 ? "left" : "right"}
                 isHeart={i === 0}
@@ -87,11 +90,15 @@ export function Features() {
 
 function TimelineRow({
   feature,
+  title,
+  body,
   step,
   side,
   isHeart,
 }: {
   feature: Feature;
+  title: string;
+  body: string;
   step: number;
   side: "left" | "right";
   isHeart: boolean;
@@ -181,21 +188,21 @@ function TimelineRow({
               isHeart ? "text-xl sm:text-2xl" : "text-base sm:text-lg",
             )}
           >
-            {feature.title}
+            {title}
           </h3>
           <p className="mt-2 text-sm leading-relaxed text-zinc-600 dark:text-zinc-400">
-            {feature.description}
+            {body}
           </p>
 
           {isHeart && (
             <div className="mt-4 flex flex-wrap gap-2 text-xs text-zinc-600 dark:text-zinc-400">
               {["3-second floor view", "Live timer per resource", "One-tap actions"].map(
-                (t) => (
+                (chip) => (
                   <span
-                    key={t}
+                    key={chip}
                     className="rounded-full border border-[var(--color-border)] bg-[var(--color-surface)]/60 px-3 py-1 dark:border-white/10 dark:bg-white/5"
                   >
-                    {t}
+                    {chip}
                   </span>
                 ),
               )}

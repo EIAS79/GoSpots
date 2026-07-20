@@ -21,6 +21,8 @@ export function GoSpotsLogo({
   href,
   className,
   animated = true,
+  /** onDark = always light text (hero/transparent nav). auto = follows light/dark theme. */
+  tone = "auto",
 }: {
   size?: Size;
   showName?: boolean;
@@ -28,8 +30,21 @@ export function GoSpotsLogo({
   href?: string;
   className?: string;
   animated?: boolean;
+  tone?: "auto" | "onDark" | "onLight";
 }) {
   const s = sizes[size];
+  const nameTone =
+    tone === "onDark"
+      ? "text-white"
+      : tone === "onLight"
+        ? "text-zinc-900"
+        : "text-[var(--color-foreground)]";
+  const taglineTone =
+    tone === "onDark"
+      ? "text-zinc-300"
+      : tone === "onLight"
+        ? "text-zinc-600"
+        : "text-[color-mix(in_srgb,var(--color-foreground)_58%,transparent)]";
   const mark = (
     <motion.span
       className={cn(
@@ -61,7 +76,8 @@ export function GoSpotsLogo({
           {showName && (
             <span
               className={cn(
-                "font-semibold tracking-tight text-zinc-900 dark:text-white",
+                "font-semibold tracking-tight transition-colors",
+                nameTone,
                 s.text,
               )}
             >
@@ -69,7 +85,13 @@ export function GoSpotsLogo({
             </span>
           )}
           {showTagline && (
-            <span className={cn("text-zinc-600 dark:text-zinc-400", s.tagline)}>
+            <span
+              className={cn(
+                "transition-colors",
+                taglineTone,
+                s.tagline,
+              )}
+            >
               {BRAND_TAGLINE}
             </span>
           )}

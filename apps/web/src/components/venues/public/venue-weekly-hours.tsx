@@ -28,24 +28,21 @@ export function VenueWeeklyHours({
   const today = new Date().getDay();
 
   return (
-    <ul className="divide-y divide-white/[0.06] rounded-xl border border-white/10 bg-zinc-900/40">
+    <ul className="divide-y divide-[var(--color-border)] rounded-xl border border-[var(--color-border)] bg-[var(--color-background)]/50">
       {hours.map((row) => {
         const isToday = row.weekday === today;
         return (
-          <li
-            key={row.weekday}
-            className={cnRow(isToday)}
-          >
-            <span className="min-w-0 font-medium text-zinc-200">
+          <li key={row.weekday} className={cnRow(isToday)}>
+            <span className="min-w-0 font-medium text-[var(--color-foreground)]">
               <span className="sm:hidden">{WEEKDAYS_SHORT[row.weekday]}</span>
               <span className="hidden sm:inline">{WEEKDAYS[row.weekday]}</span>
               {isToday ? (
-                <span className="ml-2 text-[10px] font-semibold uppercase tracking-wide text-amber-400/90">
+                <span className="ml-2 text-[10px] font-semibold uppercase tracking-wide text-amber-700 dark:text-amber-400/90">
                   Today
                 </span>
               ) : null}
             </span>
-            <span className="shrink-0 tabular-nums text-xs text-zinc-400 sm:text-sm">
+            <span className="shrink-0 tabular-nums text-xs text-zinc-600 dark:text-zinc-400 sm:text-sm">
               {row.isClosed ? (
                 <span className="text-zinc-500">Closed</span>
               ) : (
@@ -62,7 +59,7 @@ export function VenueWeeklyHours({
 function cnRow(isToday: boolean) {
   return [
     "flex flex-col items-start gap-1 px-3 py-2.5 text-sm sm:flex-row sm:items-center sm:justify-between sm:gap-4 sm:px-4 sm:py-3",
-    isToday ? "bg-amber-500/[0.06]" : "",
+    isToday ? "bg-amber-500/[0.08]" : "",
   ]
     .filter(Boolean)
     .join(" ");

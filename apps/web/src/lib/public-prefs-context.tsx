@@ -85,6 +85,50 @@ export function PublicPrefsProvider({ children }: { children: ReactNode }) {
     if (!hydrated) return;
     let cancelled = false;
 
+    async function fetchRate(from: string, to: string): Promise<number | null> {
+      try {
+        const res = await fetch(
+          `${getApiBaseUrl()}/public/currency/rate?from=${encodeURIComponent(from)}&to=${encodeURIComponent(to)}`,
+        );
+        if (res.ok) {
+          const body = (await res.json()) as { rate?: number };
+          if (body.rate != null && body.rate > 0) return body.rate;
+        }
+      } catch {
+        /* try public FX APIs */
+      }
+      try {
+        const res = await fetch(
+          `https://open.er-api.com/v6/latest/${encodeURIComponent(from)}`,
+          { signal: AbortSignal.timeout(8000) },
+        );
+        if (res.ok) {
+          const body = (await res.json()) as {
+            result?: string;
+            rates?: Record<string, number>;
+          };
+          const r = body.rates?.[to];
+          if (body.result === "success" && r != null && r > 0) return r;
+        }
+      } catch {
+        /* ignore */
+      }
+      try {
+        const res = await fetch(
+          `https://api.frankfurter.app/latest?from=${encodeURIComponent(from)}&to=${encodeURIComponent(to)}`,
+          { signal: AbortSignal.timeout(8000) },
+        );
+        if (res.ok) {
+          const body = (await res.json()) as { rates?: Record<string, number> };
+          const r = body.rates?.[to];
+          if (r != null && r > 0) return r;
+        }
+      } catch {
+        /* ignore */
+      }
+      return null;
+    }
+
     async function loadRates() {
       const bases = ["EUR", "USD", "PLN", "AED", "SAR", "EGP", "GBP"];
       const next: RateCache = { [currency]: 1 };
@@ -94,16 +138,8 @@ export function PublicPrefsProvider({ children }: { children: ReactNode }) {
             next[from] = 1;
             return;
           }
-          try {
-            const res = await fetch(
-              `${getApiBaseUrl()}/public/currency/rate?from=${encodeURIComponent(from)}&to=${encodeURIComponent(currency)}`,
-            );
-            if (!res.ok) return;
-            const body = (await res.json()) as { rate?: number };
-            if (body.rate != null && body.rate > 0) next[from] = body.rate;
-          } catch {
-            /* ignore */
-          }
+          const rate = await fetchRate(from, currency);
+          if (rate != null) next[from] = rate;
         }),
       );
       if (!cancelled) setRatesToDisplay(next);
@@ -142,18 +178,22 @@ export function PublicPrefsProvider({ children }: { children: ReactNode }) {
 
   const formatMoney = useCallback(
     (amount: number, fromCurrency = "EUR") => {
-      const converted = convertAmount(amount, fromCurrency);
+      const from = fromCurrency.toUpperCase();
+      const hasRate = from === currency || (ratesToDisplay[from] != null && ratesToDisplay[from]! > 0);
+      // Until FX loads, keep the source currency so we don't label €8 as "8 zł".
+      const displayCurrency = hasRate ? currency : from;
+      const converted = hasRate ? convertAmount(amount, from) : roundMoney(amount);
       try {
         return new Intl.NumberFormat(locale, {
           style: "currency",
-          currency,
+          currency: displayCurrency,
           maximumFractionDigits: 2,
         }).format(converted);
       } catch {
-        return `${converted} ${currency}`;
+        return `${converted} ${displayCurrency}`;
       }
     },
-    [convertAmount, currency, locale],
+    [convertAmount, currency, locale, ratesToDisplay],
   );
 
   const value = useMemo(

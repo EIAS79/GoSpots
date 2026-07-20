@@ -208,7 +208,14 @@ export function MenuAvailabilityPill({
   className?: string;
   variant?: "dark" | "light";
 }) {
+  const { t } = usePublicPrefs();
   const light = variant === "light";
+  const headline =
+    availability.tone === "available"
+      ? t("menu.availableNow")
+      : availability.tone === "sold-out"
+        ? t("menu.soldOut")
+        : availability.headline;
   return (
     <span
       className={cn(
@@ -249,7 +256,7 @@ export function MenuAvailabilityPill({
           availability.tone === "closed" && "bg-zinc-500",
         )}
       />
-      {availability.headline}
+      {headline}
     </span>
   );
 }

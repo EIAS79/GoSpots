@@ -38,6 +38,7 @@ import { isFeatureUnlocked } from "@/lib/plan";
 import { showsDiningUi, showsGamingUi } from "@/lib/venue-packs";
 import { useAuth } from "@/lib/use-auth";
 import { useCurrentMembership } from "@/lib/use-current-membership";
+import { useDashboardGuide } from "@/lib/use-dashboard-guide";
 import { useVenueAccess } from "@/lib/use-venue-access";
 import { useVenueHref } from "@/lib/venue-context";
 import { useLiveData } from "@/lib/use-live-data";
@@ -47,19 +48,6 @@ import {
   markReservationTabNotificationsRead,
   type ReservationNotificationBadges,
 } from "@/lib/notifications-client";
-
-const GUIDE = {
-  title: "Reservations",
-  description:
-    "Digital dining floor map and gaming bookings — tap tables or stations to book, mark out of service, and collect payment.",
-  capabilities: [
-    "Dining bookings: live table map from your Dining layout setup — mixed 1–8 seat tables.",
-    "Tap a free table to book · ⋮ menu to mark out of service · agenda for paid / unpaid.",
-    "Game bookings: PCs, PlayStation, billiard, bowling — same floor map workflow.",
-    "Event requests: approve or decline customer event forms.",
-    "Collect payment from the agenda or Game billing for completed sessions.",
-  ],
-};
 
 type ReservationsView = "dining" | "events" | "schedule";
 type FloorBoardPanel = "agenda" | "floor" | "both";
@@ -120,6 +108,7 @@ export default function ReservationsPage() {
   const diningLayoutHref = useVenueHref("/dining");
   const { state } = useAuth();
   const access = useVenueAccess();
+  const guide = useDashboardGuide("sessions");
   const [catalog, setCatalog] = useState<ResourceCatalog | null>(null);
   const [schedule, setSchedule] = useState<DaySchedule | null>(null);
   const [day, setDay] = useState(dateOnly(new Date()));
@@ -356,9 +345,9 @@ export default function ReservationsPage() {
 
   return (
     <TenantPage
-      title={GUIDE.title}
-      description={GUIDE.description}
-      capabilities={GUIDE.capabilities}
+      title={guide.title}
+      description={guide.description}
+      capabilities={guide.capabilities}
       actions={
         canWrite && showFloorBoard ? (
           <button

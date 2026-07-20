@@ -1,4 +1,10 @@
 import type { SupportedLocale } from "./locale-currency";
+import {
+  arLocaleBlocks,
+  deLocaleBlocks,
+  esLocaleBlocks,
+  frLocaleBlocks,
+} from "./i18n-locale-blocks";
 
 type DictTree = {
   [key: string]: string | string[] | DictTree;
@@ -70,6 +76,186 @@ const en: DictTree = {
     whatYouCanDo: "What you can do here",
     aboutSection: "About this section",
     viewOnly: "View-only — ask your admin for edit access.",
+  },
+  subscription: {
+    title: "Subscription & features",
+    paymentSubmitted:
+      "Payment submitted. If modules are still locked, wait a few seconds for the webhook — then refresh.",
+    setupTrial:
+      "Pick features for {pack} and save — matching dashboard sections unlock. You can change them freely during the trial.",
+    setupPaid:
+      "Choose the features below for {pack}, save, then start billing when you’re ready. Nothing is charged until then.",
+    trialHeadline: "{days}-day free trial · {left} {dayWord} left",
+    day: "day",
+    days: "days",
+    trialBody:
+      "Add/remove features anytime — visibility updates when you save. Up to {seats} employee seats free with Team accounts. After {ends}, everything turns off until you pay ({price}/mo) — no charge without checkout. Your data stays.",
+    trialEndsFallback: "trial ends",
+    trialEndedTitle: "Trial ended — features are off until you pay",
+    trialEndedBody:
+      "Adjust your plan below if needed, then start billing for {price}/mo. Nothing is charged without your consent. All your data is still here and returns when features turn back on.",
+    activeTrial: "Active trial",
+    paidActive: "Paid · active",
+    featuresTotal: "Features total {price}/mo",
+    staffSeats: " · Staff seats {used}/{limit}",
+    employeeSeatsNone: " · Employee seats 0/0 (buy on Team accounts)",
+    loadError: "Could not load subscription.",
+    venueType: "Venue type",
+    venueTypeHintTrial:
+      "Free. Guides suggestions — and with features below, updates dashboard visibility when you save.",
+    venueTypeHintPaid:
+      "Free. Guides suggestions — type/feature edits on a paid plan take effect next month.",
+    venueTypeHintDefault: "Free. Guides suggestions.",
+    featuresNeeded: "Features you need",
+    featuresHintTrial:
+      "Add or remove anytime during trial. Save to refresh sidebar visibility — data is kept even when a feature is off.",
+    featuresHintPaid:
+      "Edits schedule for the next billing month. No refunds mid-cycle; data stays if you turn something off.",
+    featuresHintDefault:
+      "Choose what you’ll pay for. Nothing is charged until you start billing below.",
+    suggestedBanner:
+      "Suggested for your venue type — save to unlock matching dashboard sections.",
+    suggested: "Suggested",
+    perMo: "/mo",
+    perSeat: "/seat",
+    payToUnlockTitle: "Pay to unlock modules",
+    payToUnlockBody:
+      "Your feature picks are saved for checkout. Sidebar sections stay hidden until payment succeeds and the subscription is active again.",
+    pendingTitle: "Changes scheduled for next billing month",
+    pendingBody:
+      "You already paid this period — no mid-cycle refunds or cuts. New features / seats apply{when}{thenPrice}. Current access stays until then. Your data is never deleted.",
+    pendingOn: " on {date}",
+    pendingPeriodEnd: " at period end",
+    pendingThen: " · then {price}/mo",
+    checkoutReadyTitle: "Features ready for checkout",
+    checkoutReadyBody:
+      "Saved selection{pricePart}. Complete payment to unlock these modules in the dashboard.",
+    checkoutPricePart: " · {price}/mo",
+    employeeSeats: "Employee seats",
+    seatsHintTrial:
+      "Free during trial — max {max} logins. After trial you buy seats ({price}/seat).",
+    seatsHintPaid:
+      "Choose how many logins to buy, then create accounts on Employees. {price} × seats / month.",
+    trialSeats: "Trial · {used}/{max}",
+    seatErrorTrial:
+      "Set 1–{max} employee seats, or turn off Team accounts.",
+    seatErrorPaid:
+      "Set how many employee seats to buy (at least 1), or turn off Team accounts.",
+    saveError: "Could not save features.",
+    savedScheduled:
+      "Scheduled for next billing month. Current access unchanged until then.",
+    savedOk: "Saved. Sidebar visibility updated — your data was kept.",
+    scheduleNext: "Schedule for next month",
+    saveFeatures: "Save features",
+    selectOne: "Select at least one feature to continue.",
+    featureDetails: "Feature details",
+    billingTitle: "Billing",
+    billingBody:
+      "Payments run through Lemon Squeezy (Merchant of Record) — multi-currency checkout, VAT/tax handled for you. Your pack + add-ons total {price}/mo.",
+    billingManageHint:
+      "Manage payment method, invoices, or cancel in the Lemon Squeezy portal. Pack changes you save here apply at the next billing period.",
+    billingNotConfigured:
+      "Billing keys are not set on the API yet. Add LEMON_SQUEEZY_* env vars to enable checkout.",
+    manageBilling: "Manage billing",
+    addPayment: "Add payment method",
+    activate: "Activate subscription",
+    billingFailed: "Billing action failed.",
+    viewOnlyFinance:
+      "View-only — ask an admin for transaction write access to edit records.",
+  },
+  financeHub: {
+    overview: "Overview",
+    transactions: "Transactions",
+    invoices: "Invoices",
+    losses: "Losses",
+    reports: "Reports",
+  },
+  pack: {
+    gaming: {
+      name: "Gaming venue",
+      tagline: "Stations, live map bookings, and play billing.",
+    },
+    dining: {
+      name: "Restaurant",
+      tagline: "Tables, digital booking, menu, and kitchen tickets.",
+    },
+    bar: {
+      name: "Bar & lounge",
+      tagline: "Menu, light reservations, and counter sales.",
+    },
+    hotel_fb: {
+      name: "Hotel F&B",
+      tagline: "Restaurant ops plus staff seats for hotel teams.",
+    },
+    mixed: {
+      name: "Mixed venue",
+      tagline: "Gaming floor and dining under one roof.",
+    },
+  },
+  addon: {
+    ops_alerts: {
+      name: "Ops alerts, audit & reviews",
+      tagline: "Notifications, activity log, and guest review inbox.",
+      details:
+        "Unlocks Notifications, Audit log, and Reviews. See booking alerts, staff actions, and guest ratings in one ops suite — filter and manage reviews from the dashboard.",
+    },
+    gaming_suite: {
+      name: "Gaming floor suite",
+      tagline: "Layout, setup, play billing, and game reservations.",
+      details:
+        "For gaming venues: design the floor map, configure stations/tables, take gaming reservations, and run play billing / session charges from the dashboard.",
+    },
+    menu_orders: {
+      name: "Menu & kitchen orders",
+      tagline: "Catalog, sections, and kitchen tickets.",
+      details:
+        "Build food and drink menus, manage stock and sections, and process menu orders / kitchen tickets. Ideal for restaurants, bars, and cafés.",
+    },
+    dining_floor: {
+      name: "Dining floor & bookings",
+      tagline: "Table layout and restaurant reservations.",
+      details:
+        "Design dining rooms and table layouts, then take and manage restaurant reservations. Works alongside Menu & kitchen orders when you serve food.",
+    },
+    venue_presence: {
+      name: "Venue page & discovery",
+      tagline: "Public venue page plus directory placement.",
+      details:
+        "Publish your venue on GoSpots with a dedicated public page, and unlock advertising / promoted placement in the venues directory so more guests can find you.",
+    },
+    guest_chat: {
+      name: "Guest messaging",
+      tagline: "Live chat with guests on your venue page.",
+      details:
+        "Guests start a private Uber-style chat from your public page, wait until staff joins, then message in real time. Staff can pause, end, reopen, or delete; guests can ping for attention.",
+    },
+    team_accounts: {
+      name: "Team accounts",
+      tagline: "Employee seats — priced per seat / month.",
+      details:
+        "Buy how many employee seats you need (starts at 0). Then create one login per seat with roles and permissions. Each seat is one person.",
+    },
+  },
+  featureGate: {
+    locked: "{title} is locked",
+    body:
+      "This module is not included in your current pack or add-ons. Unlock {feature} from Subscription to use it.",
+    cta: "View packs & modules",
+    labels: {
+      notifications: "Notifications",
+      audit: "Audit log",
+      reviews: "Reviews",
+      resource: "Floor & setup",
+      reservation: "Reservations",
+      transaction: "Transactions",
+      reports: "Reports",
+      menu: "Menu",
+      marketing: "Marketing",
+      messaging: "Guest messaging",
+      roles: "Roles",
+      memberships: "Team",
+      notes: "Shift notes",
+    },
   },
   settings: {
     regional: "Regional preferences",
@@ -248,13 +434,14 @@ const en: DictTree = {
       ],
     },
     subscription: {
-      title: "Subscription & packs",
+      title: "Subscription & features",
       description:
-        "Your venue pack and add-ons control which modules are unlocked, staff seats, and trial access.",
+        "Pay only for features you keep. Nothing is charged without you starting checkout. Turning a feature off never deletes your data.",
       caps: [
-        "See your current pack, trial days left, and unlocked modules.",
-        "Compare venue packs and marketing add-ons.",
-        "Understand which tools unlock when you change packs or add modules.",
+        "Free trial — add/remove features anytime; sidebar updates on save.",
+        "Up to 3 employee logins during trial when Team accounts is on.",
+        "After trial: all features stay off until you pay — no auto-charge.",
+        "On a paid plan, feature changes apply next billing month (no mid-cycle refunds).",
       ],
     },
     playBilling: {
@@ -288,11 +475,13 @@ const en: DictTree = {
     },
     finance: {
       title: "Finance",
-      description: "Revenue, losses, and transaction history for your venue.",
+      description:
+        "Revenue overview, transaction ledger, losses, and reports — not where you run the kitchen or floor.",
       caps: [
-        "See today's and this week's revenue.",
-        "Browse menu and game billing transactions.",
-        "Spot losses and adjust as needed.",
+        "See combined revenue from menu, play, and reservations (read-only rollups).",
+        "Record quick counter sales and track losses.",
+        "Run 1–90 day reports with charts, print, and CSV export.",
+        "Menu orders and play billing stay under Operations; reservations under Reservations.",
       ],
     },
     staff: {
@@ -387,6 +576,186 @@ const pl: DictTree = {
     whatYouCanDo: "Co możesz tu zrobić",
     aboutSection: "O tej sekcji",
     viewOnly: "Tylko podgląd — poproś administratora o dostęp do edycji.",
+  },
+  subscription: {
+    title: "Subskrypcja i funkcje",
+    paymentSubmitted:
+      "Płatność wysłana. Jeśli moduły są nadal zablokowane, poczekaj chwilę na webhook — potem odśwież.",
+    setupTrial:
+      "Wybierz funkcje dla {pack} i zapisz — pasujące sekcje panelu się odblokują. W okresie próbnym możesz zmieniać je swobodnie.",
+    setupPaid:
+      "Wybierz funkcje poniżej dla {pack}, zapisz, a potem uruchom rozliczenia, gdy będziesz gotowy. Nic nie jest obciążane wcześniej.",
+    trialHeadline: "{days}-dniowy okres próbny · zostało {left} {dayWord}",
+    day: "dzień",
+    days: "dni",
+    trialBody:
+      "Dodawaj i usuwaj funkcje w dowolnej chwili — widoczność odświeża się po zapisaniu. Do {seats} miejsc pracowniczych gratis z Kontami zespołu. Po {ends} wszystko się wyłączy, dopóki nie zapłacisz ({price}/mies.) — bez obciążenia bez checkoutu. Dane zostają.",
+    trialEndsFallback: "końcu okresu próbnego",
+    trialEndedTitle: "Okres próbny zakończony — funkcje wyłączone do płatności",
+    trialEndedBody:
+      "W razie potrzeby dostosuj plan poniżej, potem uruchom rozliczenia za {price}/mies. Nic nie jest obciążane bez Twojej zgody. Dane nadal tu są i wrócą po włączeniu funkcji.",
+    activeTrial: "Aktywna próba",
+    paidActive: "Opłacone · aktywne",
+    featuresTotal: "Funkcje łącznie {price}/mies.",
+    staffSeats: " · Miejsca personelu {used}/{limit}",
+    employeeSeatsNone: " · Miejsca pracowników 0/0 (kup w Kontach zespołu)",
+    loadError: "Nie udało się wczytać subskrypcji.",
+    venueType: "Typ lokalu",
+    venueTypeHintTrial:
+      "Gratis. Podpowiada sugestie — wraz z funkcjami poniżej aktualizuje widoczność panelu po zapisaniu.",
+    venueTypeHintPaid:
+      "Gratis. Podpowiada sugestie — zmiany typu/funkcji na płatnym planie obowiązują od następnego miesiąca.",
+    venueTypeHintDefault: "Gratis. Podpowiada sugestie.",
+    featuresNeeded: "Potrzebne funkcje",
+    featuresHintTrial:
+      "Dodawaj lub usuwaj w okresie próbnym. Zapisz, aby odświeżyć widoczność menu — dane zostają nawet gdy funkcja jest wyłączona.",
+    featuresHintPaid:
+      "Zmiany obowiązują od następnego miesiąca rozliczeniowego. Bez zwrotów w środku cyklu; dane zostają po wyłączeniu.",
+    featuresHintDefault:
+      "Wybierz, za co zapłacisz. Nic nie jest obciążane, dopóki nie uruchomisz rozliczeń poniżej.",
+    suggestedBanner:
+      "Sugerowane dla Twojego typu lokalu — zapisz, aby odblokować pasujące sekcje panelu.",
+    suggested: "Sugerowane",
+    perMo: "/mies.",
+    perSeat: "/miejsce",
+    payToUnlockTitle: "Zapłać, aby odblokować moduły",
+    payToUnlockBody:
+      "Wybrane funkcje są zapisane do checkoutu. Sekcje w menu pozostają ukryte, dopóki płatność nie przejdzie i subskrypcja nie będzie aktywna.",
+    pendingTitle: "Zmiany zaplanowane na następny miesiąc rozliczeniowy",
+    pendingBody:
+      "Ten okres jest już opłacony — bez zwrotów i cięć w środku cyklu. Nowe funkcje / miejsca obowiązują{when}{thenPrice}. Obecny dostęp zostaje do tego czasu. Dane nigdy nie są usuwane.",
+    pendingOn: " w dniu {date}",
+    pendingPeriodEnd: " na koniec okresu",
+    pendingThen: " · potem {price}/mies.",
+    checkoutReadyTitle: "Funkcje gotowe do checkoutu",
+    checkoutReadyBody:
+      "Zapisany wybór{pricePart}. Dokończ płatność, aby odblokować te moduły w panelu.",
+    checkoutPricePart: " · {price}/mies.",
+    employeeSeats: "Miejsca pracowników",
+    seatsHintTrial:
+      "Gratis w okresie próbnym — max {max} loginów. Po próbie kupujesz miejsca ({price}/miejsce).",
+    seatsHintPaid:
+      "Wybierz ile loginów kupić, potem utwórz konta w Pracownikach. {price} × miejsca / miesiąc.",
+    trialSeats: "Próba · {used}/{max}",
+    seatErrorTrial:
+      "Ustaw 1–{max} miejsc pracowniczych albo wyłącz Konta zespołu.",
+    seatErrorPaid:
+      "Ustaw ile miejsc kupić (min. 1) albo wyłącz Konta zespołu.",
+    saveError: "Nie udało się zapisać funkcji.",
+    savedScheduled:
+      "Zaplanowano na następny miesiąc. Obecny dostęp bez zmian do tego czasu.",
+    savedOk: "Zapisano. Widoczność menu zaktualizowana — dane zachowane.",
+    scheduleNext: "Zaplanuj na następny miesiąc",
+    saveFeatures: "Zapisz funkcje",
+    selectOne: "Wybierz co najmniej jedną funkcję, aby kontynuować.",
+    featureDetails: "Szczegóły funkcji",
+    billingTitle: "Płatności",
+    billingBody:
+      "Płatności przez Lemon Squeezy (Merchant of Record) — checkout w wielu walutach, VAT/podatki załatwione. Pakiet + dodatki: {price}/mies.",
+    billingManageHint:
+      "Metoda płatności, faktury lub anulowanie w portalu Lemon Squeezy. Zmiany pakietu zapisane tutaj obowiązują od następnego okresu.",
+    billingNotConfigured:
+      "Klucze rozliczeń nie są jeszcze ustawione w API. Dodaj zmienne LEMON_SQUEEZY_*, aby włączyć checkout.",
+    manageBilling: "Zarządzaj płatnościami",
+    addPayment: "Dodaj metodę płatności",
+    activate: "Aktywuj subskrypcję",
+    billingFailed: "Akcja rozliczeniowa nie powiodła się.",
+    viewOnlyFinance:
+      "Tylko podgląd — poproś admina o prawo zapisu transakcji, aby edytować rekordy.",
+  },
+  financeHub: {
+    overview: "Przegląd",
+    transactions: "Transakcje",
+    invoices: "Faktury",
+    losses: "Straty",
+    reports: "Raporty",
+  },
+  pack: {
+    gaming: {
+      name: "Lokal gamingowy",
+      tagline: "Stanowiska, rezerwacje na mapie i rozliczenia gry.",
+    },
+    dining: {
+      name: "Restauracja",
+      tagline: "Stoliki, rezerwacje cyfrowe, menu i bilety kuchenne.",
+    },
+    bar: {
+      name: "Bar i lounge",
+      tagline: "Menu, lekkie rezerwacje i sprzedaż przy ladzie.",
+    },
+    hotel_fb: {
+      name: "Hotel F&B",
+      tagline: "Operacje restauracji plus miejsca dla zespołu hotelu.",
+    },
+    mixed: {
+      name: "Lokal mieszany",
+      tagline: "Strefa gier i gastronomia pod jednym dachem.",
+    },
+  },
+  addon: {
+    ops_alerts: {
+      name: "Alerty, audyt i opinie",
+      tagline: "Powiadomienia, dziennik aktywności i skrzynka opinii gości.",
+      details:
+        "Odblokowuje Powiadomienia, Dziennik audytu i Opinie. Alerty o rezerwacjach, działania personelu i oceny gości w jednym miejscu.",
+    },
+    gaming_suite: {
+      name: "Pakiet strefy gier",
+      tagline: "Układ, konfiguracja, rozliczenia gry i rezerwacje.",
+      details:
+        "Dla lokali gamingowych: mapa sali, stanowiska/stoły, rezerwacje gier oraz rozliczenia sesji w panelu.",
+    },
+    menu_orders: {
+      name: "Menu i zamówienia kuchni",
+      tagline: "Katalog, sekcje i bilety kuchenne.",
+      details:
+        "Buduj menu jedzenia i napojów, zarządzaj stanami i sekcjami oraz realizuj zamówienia / bilety kuchenne.",
+    },
+    dining_floor: {
+      name: "Sala i rezerwacje",
+      tagline: "Układ stolików i rezerwacje restauracyjne.",
+      details:
+        "Projektuj sale i układy stolików, potem przyjmuj i zarządzaj rezerwacjami. Działa razem z Menu i zamówieniami kuchni.",
+    },
+    venue_presence: {
+      name: "Strona lokalu i odkrywanie",
+      tagline: "Publiczna strona oraz obecność w katalogu.",
+      details:
+        "Opublikuj lokal na GoSpots z dedykowaną stroną i odblokuj promocję w katalogu lokali.",
+    },
+    guest_chat: {
+      name: "Wiadomości gości",
+      tagline: "Czat na żywo z gośćmi na stronie lokalu.",
+      details:
+        "Goście zaczynają prywatny czat ze strony publicznej, czekają aż personel dołączy, potem piszą na żywo.",
+    },
+    team_accounts: {
+      name: "Konta zespołu",
+      tagline: "Miejsca pracowników — cena za miejsce / miesiąc.",
+      details:
+        "Kup tyle miejsc, ile potrzebujesz (od 0). Potem utwórz jeden login na miejsce z rolami i uprawnieniami.",
+    },
+  },
+  featureGate: {
+    locked: "{title} jest zablokowane",
+    body:
+      "Ten moduł nie jest w Twoim pakiecie ani dodatkach. Odblokuj {feature} w Subskrypcji, aby z niego korzystać.",
+    cta: "Zobacz pakiety i moduły",
+    labels: {
+      notifications: "Powiadomienia",
+      audit: "Dziennik audytu",
+      reviews: "Opinie",
+      resource: "Sala i konfiguracja",
+      reservation: "Rezerwacje",
+      transaction: "Transakcje",
+      reports: "Raporty",
+      menu: "Menu",
+      marketing: "Marketing",
+      messaging: "Wiadomości gości",
+      roles: "Role",
+      memberships: "Zespół",
+      notes: "Notatki zmiany",
+    },
   },
   settings: {
     regional: "Preferencje regionalne",
@@ -564,13 +933,14 @@ const pl: DictTree = {
       ],
     },
     subscription: {
-      title: "Subskrypcja i pakiety",
+      title: "Subskrypcja i funkcje",
       description:
-        "Pakiet lokalu i dodatki kontrolują odblokowane moduły, miejsca dla personelu i dostęp próbny.",
+        "Płacisz tylko za funkcje, które zostawiasz. Nic nie jest obciążane bez startu checkoutu. Wyłączenie funkcji nigdy nie usuwa danych.",
       caps: [
-        "Zobacz aktualny pakiet, dni próbne i odblokowane moduły.",
-        "Porównaj pakiety lokalu i dodatki marketingowe.",
-        "Sprawdź, które narzędzia odblokują się po zmianie pakietu.",
+        "Okres próbny — dodawaj i usuwaj funkcje w dowolnej chwili; menu odświeża się po zapisaniu.",
+        "Do 3 loginów pracowników w okresie próbnym przy włączonych Kontach zespołu.",
+        "Po próbie: wszystkie funkcje wyłączone do płatności — bez automatycznego obciążenia.",
+        "Na płatnym planie zmiany funkcji obowiązują od następnego miesiąca (bez zwrotów w cyklu).",
       ],
     },
     playBilling: {
@@ -604,11 +974,13 @@ const pl: DictTree = {
     },
     finance: {
       title: "Finanse",
-      description: "Przychody, straty i historia transakcji lokalu.",
+      description:
+        "Przegląd przychodów, księga transakcji, straty i raporty — nie tu prowadzisz kuchnię ani salę.",
       caps: [
-        "Zobacz przychody z dziś i z tego tygodnia.",
-        "Przeglądaj transakcje menu i rozliczeń gier.",
-        "Wykrywaj straty i koryguj w razie potrzeby.",
+        "Zobacz łączne przychody z menu, gry i rezerwacji (zestawienia tylko do odczytu).",
+        "Rejestruj szybką sprzedaż przy ladzie i śledź straty.",
+        "Raporty 1–90 dni z wykresami, drukiem i eksportem CSV.",
+        "Zamówienia menu i rozliczenia gier zostają w Operacjach; rezerwacje w Rezerwacjach.",
       ],
     },
     staff: {
@@ -653,6 +1025,13 @@ const pl: DictTree = {
 /** German / French / Spanish / Arabic: override high-traffic UI; fall back to English */
 const de: DictTree = {
   ...en,
+  financeHub: {
+    overview: "Übersicht",
+    transactions: "Transaktionen",
+    invoices: "Rechnungen",
+    losses: "Verluste",
+    reports: "Berichte",
+  },
   nav: pl.nav && en.nav ? {
     group: {
       overview: "Übersicht",
@@ -707,6 +1086,10 @@ const de: DictTree = {
     aboutSection: "Über diesen Bereich",
     viewOnly: "Nur Ansicht — bitten Sie Ihren Admin um Bearbeitungszugriff.",
   },
+  subscription: deLocaleBlocks.subscription,
+  pack: deLocaleBlocks.pack,
+  addon: deLocaleBlocks.addon,
+  featureGate: deLocaleBlocks.featureGate,
   settings: {
     ...(en.settings as DictTree),
     regional: "Regionale Einstellungen",
@@ -814,27 +1197,34 @@ const de: DictTree = {
         "Schließdaten oder Sonderzeiten für private Events hinzufügen.",
       ],
     },
-    overview: (en.guide as DictTree).overview as DictTree,
-    gallery: (en.guide as DictTree).gallery as DictTree,
-    menu: (en.guide as DictTree).menu as DictTree,
-    notes: (en.guide as DictTree).notes as DictTree,
-    reviews: (en.guide as DictTree).reviews as DictTree,
-    notifications: (en.guide as DictTree).notifications as DictTree,
-    audit: (en.guide as DictTree).audit as DictTree,
-    subscription: (en.guide as DictTree).subscription as DictTree,
-    playBilling: (en.guide as DictTree).playBilling as DictTree,
-    sessions: (en.guide as DictTree).sessions as DictTree,
-    orders: (en.guide as DictTree).orders as DictTree,
-    finance: (en.guide as DictTree).finance as DictTree,
-    staff: (en.guide as DictTree).staff as DictTree,
-    resources: (en.guide as DictTree).resources as DictTree,
-    dining: (en.guide as DictTree).dining as DictTree,
-    messages: (en.guide as DictTree).messages as DictTree,
+    overview: deLocaleBlocks.guide.overview as DictTree,
+    gallery: deLocaleBlocks.guide.gallery as DictTree,
+    menu: deLocaleBlocks.guide.menu as DictTree,
+    notes: deLocaleBlocks.guide.notes as DictTree,
+    reviews: deLocaleBlocks.guide.reviews as DictTree,
+    notifications: deLocaleBlocks.guide.notifications as DictTree,
+    audit: deLocaleBlocks.guide.audit as DictTree,
+    subscription: deLocaleBlocks.guide.subscription as DictTree,
+    playBilling: deLocaleBlocks.guide.playBilling as DictTree,
+    sessions: deLocaleBlocks.guide.sessions as DictTree,
+    orders: deLocaleBlocks.guide.orders as DictTree,
+    finance: deLocaleBlocks.guide.finance as DictTree,
+    staff: deLocaleBlocks.guide.staff as DictTree,
+    resources: deLocaleBlocks.guide.resources as DictTree,
+    dining: deLocaleBlocks.guide.dining as DictTree,
+    messages: deLocaleBlocks.guide.messages as DictTree,
   },
 };
 
 const fr: DictTree = {
   ...en,
+  financeHub: {
+    overview: "Aperçu",
+    transactions: "Transactions",
+    invoices: "Factures",
+    losses: "Pertes",
+    reports: "Rapports",
+  },
   nav: {
     group: {
       overview: "Aperçu",
@@ -889,6 +1279,10 @@ const fr: DictTree = {
     aboutSection: "À propos de cette section",
     viewOnly: "Lecture seule — demandez l’accès en écriture à votre admin.",
   },
+  subscription: frLocaleBlocks.subscription,
+  pack: frLocaleBlocks.pack,
+  addon: frLocaleBlocks.addon,
+  featureGate: frLocaleBlocks.featureGate,
   settings: {
     ...(en.settings as DictTree),
     regional: "Préférences régionales",
@@ -996,27 +1390,34 @@ const fr: DictTree = {
         "Ajouter des dates de fermeture ou horaires spéciaux.",
       ],
     },
-    overview: (en.guide as DictTree).overview as DictTree,
-    gallery: (en.guide as DictTree).gallery as DictTree,
-    menu: (en.guide as DictTree).menu as DictTree,
-    notes: (en.guide as DictTree).notes as DictTree,
-    reviews: (en.guide as DictTree).reviews as DictTree,
-    notifications: (en.guide as DictTree).notifications as DictTree,
-    audit: (en.guide as DictTree).audit as DictTree,
-    subscription: (en.guide as DictTree).subscription as DictTree,
-    playBilling: (en.guide as DictTree).playBilling as DictTree,
-    sessions: (en.guide as DictTree).sessions as DictTree,
-    orders: (en.guide as DictTree).orders as DictTree,
-    finance: (en.guide as DictTree).finance as DictTree,
-    staff: (en.guide as DictTree).staff as DictTree,
-    resources: (en.guide as DictTree).resources as DictTree,
-    dining: (en.guide as DictTree).dining as DictTree,
-    messages: (en.guide as DictTree).messages as DictTree,
+    overview: frLocaleBlocks.guide.overview as DictTree,
+    gallery: frLocaleBlocks.guide.gallery as DictTree,
+    menu: frLocaleBlocks.guide.menu as DictTree,
+    notes: frLocaleBlocks.guide.notes as DictTree,
+    reviews: frLocaleBlocks.guide.reviews as DictTree,
+    notifications: frLocaleBlocks.guide.notifications as DictTree,
+    audit: frLocaleBlocks.guide.audit as DictTree,
+    subscription: frLocaleBlocks.guide.subscription as DictTree,
+    playBilling: frLocaleBlocks.guide.playBilling as DictTree,
+    sessions: frLocaleBlocks.guide.sessions as DictTree,
+    orders: frLocaleBlocks.guide.orders as DictTree,
+    finance: frLocaleBlocks.guide.finance as DictTree,
+    staff: frLocaleBlocks.guide.staff as DictTree,
+    resources: frLocaleBlocks.guide.resources as DictTree,
+    dining: frLocaleBlocks.guide.dining as DictTree,
+    messages: frLocaleBlocks.guide.messages as DictTree,
   },
 };
 
 const es: DictTree = {
   ...en,
+  financeHub: {
+    overview: "Resumen",
+    transactions: "Transacciones",
+    invoices: "Facturas",
+    losses: "Pérdidas",
+    reports: "Informes",
+  },
   nav: {
     group: {
       overview: "Resumen",
@@ -1071,6 +1472,10 @@ const es: DictTree = {
     aboutSection: "Sobre esta sección",
     viewOnly: "Solo lectura — pide a tu admin acceso de edición.",
   },
+  subscription: esLocaleBlocks.subscription,
+  pack: esLocaleBlocks.pack,
+  addon: esLocaleBlocks.addon,
+  featureGate: esLocaleBlocks.featureGate,
   settings: {
     ...(en.settings as DictTree),
     regional: "Preferencias regionales",
@@ -1178,27 +1583,34 @@ const es: DictTree = {
         "Añadir fechas de cierre u horarios especiales.",
       ],
     },
-    overview: (en.guide as DictTree).overview as DictTree,
-    gallery: (en.guide as DictTree).gallery as DictTree,
-    menu: (en.guide as DictTree).menu as DictTree,
-    notes: (en.guide as DictTree).notes as DictTree,
-    reviews: (en.guide as DictTree).reviews as DictTree,
-    notifications: (en.guide as DictTree).notifications as DictTree,
-    audit: (en.guide as DictTree).audit as DictTree,
-    subscription: (en.guide as DictTree).subscription as DictTree,
-    playBilling: (en.guide as DictTree).playBilling as DictTree,
-    sessions: (en.guide as DictTree).sessions as DictTree,
-    orders: (en.guide as DictTree).orders as DictTree,
-    finance: (en.guide as DictTree).finance as DictTree,
-    staff: (en.guide as DictTree).staff as DictTree,
-    resources: (en.guide as DictTree).resources as DictTree,
-    dining: (en.guide as DictTree).dining as DictTree,
-    messages: (en.guide as DictTree).messages as DictTree,
+    overview: esLocaleBlocks.guide.overview as DictTree,
+    gallery: esLocaleBlocks.guide.gallery as DictTree,
+    menu: esLocaleBlocks.guide.menu as DictTree,
+    notes: esLocaleBlocks.guide.notes as DictTree,
+    reviews: esLocaleBlocks.guide.reviews as DictTree,
+    notifications: esLocaleBlocks.guide.notifications as DictTree,
+    audit: esLocaleBlocks.guide.audit as DictTree,
+    subscription: esLocaleBlocks.guide.subscription as DictTree,
+    playBilling: esLocaleBlocks.guide.playBilling as DictTree,
+    sessions: esLocaleBlocks.guide.sessions as DictTree,
+    orders: esLocaleBlocks.guide.orders as DictTree,
+    finance: esLocaleBlocks.guide.finance as DictTree,
+    staff: esLocaleBlocks.guide.staff as DictTree,
+    resources: esLocaleBlocks.guide.resources as DictTree,
+    dining: esLocaleBlocks.guide.dining as DictTree,
+    messages: esLocaleBlocks.guide.messages as DictTree,
   },
 };
 
 const ar: DictTree = {
   ...en,
+  financeHub: {
+    overview: "نظرة عامة",
+    transactions: "المعاملات",
+    invoices: "الفواتير",
+    losses: "الخسائر",
+    reports: "التقارير",
+  },
   nav: {
     group: {
       overview: "نظرة عامة",
@@ -1253,6 +1665,10 @@ const ar: DictTree = {
     aboutSection: "حول هذا القسم",
     viewOnly: "للعرض فقط — اطلب من المسؤول صلاحية التعديل.",
   },
+  subscription: arLocaleBlocks.subscription,
+  pack: arLocaleBlocks.pack,
+  addon: arLocaleBlocks.addon,
+  featureGate: arLocaleBlocks.featureGate,
   settings: {
     ...(en.settings as DictTree),
     regional: "التفضيلات الإقليمية",
@@ -1359,22 +1775,22 @@ const ar: DictTree = {
         "إضافة تواريخ إغلاق أو ساعات خاصة.",
       ],
     },
-    overview: (en.guide as DictTree).overview as DictTree,
-    gallery: (en.guide as DictTree).gallery as DictTree,
-    menu: (en.guide as DictTree).menu as DictTree,
-    notes: (en.guide as DictTree).notes as DictTree,
-    reviews: (en.guide as DictTree).reviews as DictTree,
-    notifications: (en.guide as DictTree).notifications as DictTree,
-    audit: (en.guide as DictTree).audit as DictTree,
-    subscription: (en.guide as DictTree).subscription as DictTree,
-    playBilling: (en.guide as DictTree).playBilling as DictTree,
-    sessions: (en.guide as DictTree).sessions as DictTree,
-    orders: (en.guide as DictTree).orders as DictTree,
-    finance: (en.guide as DictTree).finance as DictTree,
-    staff: (en.guide as DictTree).staff as DictTree,
-    resources: (en.guide as DictTree).resources as DictTree,
-    dining: (en.guide as DictTree).dining as DictTree,
-    messages: (en.guide as DictTree).messages as DictTree,
+    overview: arLocaleBlocks.guide.overview as DictTree,
+    gallery: arLocaleBlocks.guide.gallery as DictTree,
+    menu: arLocaleBlocks.guide.menu as DictTree,
+    notes: arLocaleBlocks.guide.notes as DictTree,
+    reviews: arLocaleBlocks.guide.reviews as DictTree,
+    notifications: arLocaleBlocks.guide.notifications as DictTree,
+    audit: arLocaleBlocks.guide.audit as DictTree,
+    subscription: arLocaleBlocks.guide.subscription as DictTree,
+    playBilling: arLocaleBlocks.guide.playBilling as DictTree,
+    sessions: arLocaleBlocks.guide.sessions as DictTree,
+    orders: arLocaleBlocks.guide.orders as DictTree,
+    finance: arLocaleBlocks.guide.finance as DictTree,
+    staff: arLocaleBlocks.guide.staff as DictTree,
+    resources: arLocaleBlocks.guide.resources as DictTree,
+    dining: arLocaleBlocks.guide.dining as DictTree,
+    messages: arLocaleBlocks.guide.messages as DictTree,
   },
 };
 

@@ -50,7 +50,7 @@ export function PublicVenueClient({
 
   if (loading) {
     return (
-      <div className="flex min-h-screen items-center justify-center bg-zinc-950">
+      <div className="flex min-h-screen items-center justify-center bg-[var(--color-background)]">
         <Loader2 className="size-8 animate-spin text-amber-400" />
       </div>
     );
@@ -58,11 +58,13 @@ export function PublicVenueClient({
 
   if (error || !venue) {
     return (
-      <div className="flex min-h-screen flex-col items-center justify-center gap-4 bg-zinc-950 px-4 text-center">
-        <p className="text-zinc-400">{error ?? "Venue not found."}</p>
+      <div className="flex min-h-screen flex-col items-center justify-center gap-4 bg-[var(--color-background)] px-4 text-center text-[var(--color-foreground)]">
+        <p className="text-zinc-600 dark:text-zinc-400">
+          {error ?? "Venue not found."}
+        </p>
         <Link
           href="/venues"
-          className="text-sm text-amber-400 hover:text-amber-300"
+          className="text-sm text-amber-700 hover:text-amber-600 dark:text-amber-400 dark:hover:text-amber-300"
         >
           Browse venues
         </Link>
