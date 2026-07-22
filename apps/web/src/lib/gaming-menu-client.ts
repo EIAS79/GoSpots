@@ -3,12 +3,13 @@ import type { BookingUnitKind } from "./booking-unit-kind";
 import type { GamingSectionSummary } from "./gaming-layout-client";
 import type { BookingMode } from "./resources-client";
 import type { ResourceType } from "./resource-types";
+import type { MoneyWire } from "./money";
 
 export type GamingRate = {
   id: string;
   label: string;
   durationMinutes: number | null;
-  price: number;
+  price: MoneyWire;
   sortOrder: number;
 };
 

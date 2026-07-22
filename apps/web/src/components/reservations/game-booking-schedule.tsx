@@ -11,7 +11,7 @@ import {
   User2,
   UtensilsCrossed,
 } from "lucide-react";
-import { useEffect, useRef, useState, type ComponentType } from "react";
+import { useEffect, useMemo, useRef, useState, type ComponentType } from "react";
 import { useNowMs } from "@/lib/use-now-ms";
 import { BilliardTableIcon } from "@/components/icons/billiard-table-icon";
 import { BowlingLaneIcon } from "@/components/icons/bowling-lane-icon";
@@ -27,7 +27,6 @@ import {
 } from "@/lib/booking-unit-kind";
 import {
   FLOOR_STATUS_DOT,
-  FLOOR_STATUS_LABELS,
   type UnitFloorStatus,
 } from "@/lib/booking-floor-status";
 import {
@@ -45,10 +44,25 @@ import type {
   ScheduleUnit,
 } from "@/lib/reservations-client";
 import { GamingFloorLayoutExplorer } from "@/components/reservations/gaming-floor-layout-explorer";
-import { BowlingLaneFloorMap } from "@/components/reservations/bowling-lane-floor-map";
+import {
+  BowlingLaneFloorMap,
+  type BowlingLaneChromeLabels,
+} from "@/components/reservations/bowling-lane-floor-map";
 import { UnitGridPager } from "@/components/reservations/unit-grid-pager";
 import { getFloorMapVisualType } from "@/lib/gaming-floor-visual";
 import type { ResourceType } from "@/lib/resource-types";
+import { useVenueSettingsOptional } from "@/lib/venue-settings-context";
+import {
+  staffBoardThemeLabels,
+  staffBowlingChromeLabels,
+  staffFloorChromeLabels,
+  staffFloorStatusLabels,
+  staffFloorT,
+  staffScheduleActionLabels,
+  type StaffBoardThemeLabels,
+  type StaffFloorChromeLabels,
+  type StaffScheduleActionLabels,
+} from "@/lib/staff-floor-i18n";
 
 const TYPE_ICONS: Partial<
   Record<ResourceType, ComponentType<{ size?: number; className?: string }>>
@@ -75,29 +89,10 @@ const TYPE_ICONS: Partial<
 
 export type ReservationBoardVariant = "gaming" | "dining";
 
-const BOARD_THEME: Record<
-  ReservationBoardVariant,
-  {
-    pickerLabel: string;
-    selectedChip: string;
-    emptyTitle: string;
-    emptyHint: string;
-  }
-> = {
-  gaming: {
-    pickerLabel: "Game activity",
-    selectedChip:
-      "border-emerald-400/40 bg-emerald-500/15 text-emerald-100",
-    emptyTitle: "No games configured yet.",
-    emptyHint: "Add PC, PlayStation, billiard, or bowling under Gaming setup.",
-  },
-  dining: {
-    pickerLabel: "Restaurant",
-    selectedChip: "border-amber-400/40 bg-amber-500/15 text-amber-100",
-    emptyTitle: "No digital dining tables yet.",
-    emptyHint:
-      "Set up areas and table types under Venue → Dining layout, then manage bookings here.",
-  },
+/** Visual-only chip styles; copy comes from `staffBoardThemeLabels`. */
+const BOARD_THEME_CHIP: Record<ReservationBoardVariant, string> = {
+  gaming: "border-emerald-400/40 bg-emerald-500/15 text-emerald-100",
+  dining: "border-amber-400/40 bg-amber-500/15 text-amber-100",
 };
 
 function useCompactFloorView() {
@@ -165,6 +160,10 @@ type ScheduleCommon = {
   onCheckInBooking?: (booking: ScheduleBooking, unitId: string) => Promise<void>;
   onGuestLeftBooking?: (booking: ScheduleBooking, unitId: string) => Promise<void>;
   highlightedUnitId?: string | null;
+  floorChrome: StaffFloorChromeLabels;
+  bowlingChrome: BowlingLaneChromeLabels;
+  floorStatusLabels: Record<UnitFloorStatus, string>;
+  actionLabels: StaffScheduleActionLabels;
 };
 
 export function GameBookingSchedule({
@@ -197,7 +196,20 @@ export function GameBookingSchedule({
   const isToday = schedule.date === localDateInput();
   const nowMs = useNowMs(10_000);
   const compactFloor = useCompactFloorView();
-  const theme = BOARD_THEME[variant];
+  const selectedChip = BOARD_THEME_CHIP[variant];
+  const vs = useVenueSettingsOptional();
+  const t = useMemo(
+    () => vs?.t ?? staffFloorT(vs?.locale),
+    [vs?.t, vs?.locale],
+  );
+  const themeLabels: StaffBoardThemeLabels = useMemo(
+    () => staffBoardThemeLabels(t, variant),
+    [t, variant],
+  );
+  const floorChrome = useMemo(() => staffFloorChromeLabels(t), [t]);
+  const bowlingChrome = useMemo(() => staffBowlingChromeLabels(t), [t]);
+  const floorStatusLabels = useMemo(() => staffFloorStatusLabels(t), [t]);
+  const actionLabels = useMemo(() => staffScheduleActionLabels(t), [t]);
 
   const categories = (variant === "dining"
     ? sortDiningScheduleCategories
@@ -238,8 +250,8 @@ export function GameBookingSchedule({
   if (categories.length === 0) {
     return (
       <p className="rounded-xl border border-dashed border-white/15 px-6 py-12 text-center text-sm text-zinc-500">
-        {theme.emptyTitle}{" "}
-        <span className="text-zinc-400">{theme.emptyHint}</span>
+        {themeLabels.emptyTitle}{" "}
+        <span className="text-zinc-400">{themeLabels.emptyHint}</span>
       </p>
     );
   }
@@ -256,14 +268,18 @@ export function GameBookingSchedule({
     onCheckInBooking,
     onGuestLeftBooking,
     highlightedUnitId,
+    floorChrome,
+    bowlingChrome,
+    floorStatusLabels,
+    actionLabels,
   };
 
   return (
     <div className="min-w-0 w-full rounded-xl border border-white/10 bg-zinc-900/40">
-      {/* Game activity picker */}
+      {/* Game / dining activity picker */}
       <div className="border-b border-white/10 bg-zinc-950/50 px-3 py-3">
         <p className="mb-2 text-[9px] font-semibold uppercase tracking-widest text-zinc-600">
-          {theme.pickerLabel}
+          {themeLabels.pickerLabel}
         </p>
         <div className="flex gap-2 overflow-x-auto pb-0.5 [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
           {categories.map((cat) => {
@@ -280,7 +296,7 @@ export function GameBookingSchedule({
                 className={cn(
                   "inline-flex shrink-0 items-center gap-2 rounded-lg border px-3 py-2 text-left transition",
                   selected
-                    ? theme.selectedChip
+                    ? selectedChip
                     : "border-white/10 bg-zinc-900/60 text-zinc-400 hover:border-white/20 hover:text-zinc-200",
                 )}
               >
@@ -294,7 +310,7 @@ export function GameBookingSchedule({
                     {cat.name}
                   </span>
                   <span className="block text-[10px] opacity-75">
-                    {free}/{cat.units.length} free
+                    {actionLabels.freeOfTotal(free, cat.units.length)}
                   </span>
                 </span>
               </button>
@@ -392,6 +408,8 @@ function unitCardCommon(unit: ScheduleUnit, categoryId: string, p: GridProps) {
     isToday: p.isToday,
     nowMs: p.nowMs,
     highlighted: p.highlightedUnitId === unit.id,
+    statusLabels: p.floorStatusLabels,
+    actionLabels: p.actionLabels,
     onBook: () => p.onBookUnit(unit.id, categoryId),
     onFocus: p.onFocusUnit ? () => p.onFocusUnit!(unit.id, unit.name) : undefined,
     onEditBooking: p.onEditBooking
@@ -429,6 +447,8 @@ function SeatGrid(p: GridProps) {
       onBookUnit={(unitId) => p.onBookUnit(unitId, p.categoryId)}
       onEditBooking={(booking, unitId) => p.onEditBooking?.(booking, unitId)}
       onToggleNotWorking={p.onToggleNotWorking}
+      chromeLabels={p.floorChrome}
+      guestStatusLabels={p.floorStatusLabels}
     />
   );
 }
@@ -449,6 +469,8 @@ function TableGrid(p: GridProps) {
       onBookUnit={(unitId) => p.onBookUnit(unitId, p.categoryId)}
       onEditBooking={(booking, unitId) => p.onEditBooking?.(booking, unitId)}
       onToggleNotWorking={p.onToggleNotWorking}
+      chromeLabels={p.floorChrome}
+      guestStatusLabels={p.floorStatusLabels}
     />
   );
 }
@@ -464,6 +486,8 @@ function LaneGrid(p: GridProps) {
       onBookUnit={(unitId) => p.onBookUnit(unitId, p.categoryId)}
       onEditBooking={(booking, unitId) => p.onEditBooking?.(booking, unitId)}
       onToggleNotWorking={p.onToggleNotWorking}
+      chromeLabels={p.bowlingChrome}
+      guestStatusLabels={p.floorStatusLabels}
     />
   );
 }
@@ -504,6 +528,8 @@ type UnitCardProps = {
   isToday: boolean;
   nowMs: number;
   highlighted?: boolean;
+  statusLabels: Record<UnitFloorStatus, string>;
+  actionLabels: StaffScheduleActionLabels;
   onBook: () => void;
   onFocus?: () => void;
   onEditBooking?: (b: ScheduleBooking) => void;
@@ -531,6 +557,8 @@ function UnitCard({
   isToday,
   nowMs,
   highlighted,
+  statusLabels,
+  actionLabels,
   onBook,
   onFocus,
   onEditBooking,
@@ -574,6 +602,8 @@ function UnitCard({
         canWrite={canWrite}
         highlighted={highlighted}
         nowMs={nowMs}
+        statusLabels={statusLabels}
+        actionLabels={actionLabels}
         onBook={onBook}
         onFocus={onFocus}
         onEditBooking={onEditBooking}
@@ -630,7 +660,7 @@ function UnitCard({
                 className={cn("size-1.5 rounded-full", FLOOR_STATUS_DOT[status])}
                 aria-hidden
               />
-              {FLOOR_STATUS_LABELS[status]}
+              {statusLabels[status]}
             </p>
           </div>
 
@@ -641,6 +671,7 @@ function UnitCard({
               hasBookings={bookingCount > 0}
               checkInBooking={checkInBooking}
               guestLeftBooking={guestLeftBooking}
+              actionLabels={actionLabels}
               onToggleNotWorking={onToggleNotWorking}
               onFocus={onFocus}
               onCheckInBooking={onCheckInBooking}
@@ -656,11 +687,14 @@ function UnitCard({
             nowMs={nowMs}
             compact={compact}
             extraBookings={extraBookings}
+            actionLabels={actionLabels}
             onFocus={onFocus}
           />
         ) : compact ? null : (
           <p className="text-[11px] text-zinc-600">
-            {isOOS ? "Marked for maintenance" : "No bookings today"}
+            {isOOS
+              ? actionLabels.markedMaintenance
+              : actionLabels.noBookingsToday}
           </p>
         )}
 
@@ -670,6 +704,7 @@ function UnitCard({
             canWrite={canWrite}
             focus={focus}
             compact={compact}
+            actionLabels={actionLabels}
             onBook={onBook}
             onEditBooking={onEditBooking}
             onToggleNotWorking={onToggleNotWorking}
@@ -686,6 +721,7 @@ function FocusRow({
   nowMs,
   compact,
   extraBookings,
+  actionLabels,
   onFocus,
 }: {
   focus: ScheduleBooking;
@@ -693,6 +729,7 @@ function FocusRow({
   nowMs: number;
   compact: boolean;
   extraBookings: number;
+  actionLabels: StaffScheduleActionLabels;
   onFocus?: () => void;
 }) {
   const sessionPhase = resolveSessionBookingPhase(
@@ -739,7 +776,7 @@ function FocusRow({
           onClick={onFocus}
           className="text-[10px] text-sky-300/80 hover:text-sky-200 hover:underline"
         >
-          +{extraBookings} more today
+          {actionLabels.moreToday(extraBookings)}
         </button>
       ) : null}
     </div>
@@ -751,6 +788,7 @@ function PrimaryAction({
   canWrite,
   focus,
   compact,
+  actionLabels,
   onBook,
   onEditBooking,
   onToggleNotWorking,
@@ -759,6 +797,7 @@ function PrimaryAction({
   canWrite: boolean;
   focus: ScheduleBooking | null;
   compact: boolean;
+  actionLabels: StaffScheduleActionLabels;
   onBook: () => void;
   onEditBooking?: (b: ScheduleBooking) => void;
   onToggleNotWorking?: () => void;
@@ -780,7 +819,7 @@ function PrimaryAction({
           "border-emerald-400/30 bg-emerald-500/10 text-emerald-200 hover:bg-emerald-500/20",
         )}
       >
-        Restore to service
+        {actionLabels.restore}
       </button>
     ) : null;
   }
@@ -795,7 +834,7 @@ function PrimaryAction({
           "border-rose-400/30 bg-rose-500/10 text-rose-100 hover:bg-rose-500/20",
         )}
       >
-        Open booking
+        {actionLabels.openBooking}
       </button>
     );
   }
@@ -809,7 +848,7 @@ function PrimaryAction({
         "border-emerald-400/30 bg-emerald-500/10 text-emerald-200 hover:bg-emerald-500/15 hover:border-emerald-400/50",
       )}
     >
-      Book
+      {actionLabels.book}
     </button>
   );
 }
@@ -822,6 +861,8 @@ function UnitRow({
   canWrite,
   highlighted,
   nowMs,
+  statusLabels,
+  actionLabels,
   onBook,
   onFocus,
   onEditBooking,
@@ -836,6 +877,8 @@ function UnitRow({
   canWrite: boolean;
   highlighted?: boolean;
   nowMs: number;
+  statusLabels: Record<UnitFloorStatus, string>;
+  actionLabels: StaffScheduleActionLabels;
   onBook: () => void;
   onFocus?: () => void;
   onEditBooking?: (b: ScheduleBooking) => void;
@@ -871,7 +914,7 @@ function UnitRow({
           {unit.name}
         </p>
         <p className={cn("text-[11px]", STATUS_TEXT[status])}>
-          {FLOOR_STATUS_LABELS[status]}
+          {statusLabels[status]}
           {focus ? (
             <span className="ml-1.5 text-zinc-500">
               · {focus.guestName} {formatTime(focus.startsAt)}
@@ -879,7 +922,7 @@ function UnitRow({
           ) : null}
           {bookingCount > (focus ? 1 : 0) ? (
             <span className="ml-1.5 text-sky-300/80">
-              +{bookingCount - (focus ? 1 : 0)} more
+              {actionLabels.moreCount(bookingCount - (focus ? 1 : 0))}
             </span>
           ) : null}
         </p>
@@ -892,6 +935,7 @@ function UnitRow({
               canWrite={canWrite}
               focus={focus}
               compact
+              actionLabels={actionLabels}
               onBook={onBook}
               onEditBooking={onEditBooking}
               onToggleNotWorking={onToggleNotWorking}
@@ -903,6 +947,7 @@ function UnitRow({
             hasBookings={bookingCount > 0}
             checkInBooking={checkInBooking}
             guestLeftBooking={guestLeftBooking}
+            actionLabels={actionLabels}
             onToggleNotWorking={onToggleNotWorking}
             onFocus={onFocus}
             onCheckInBooking={onCheckInBooking}
@@ -921,6 +966,7 @@ function UnitMenu({
   hasBookings,
   checkInBooking,
   guestLeftBooking,
+  actionLabels,
   onToggleNotWorking,
   onFocus,
   onCheckInBooking,
@@ -932,6 +978,7 @@ function UnitMenu({
   hasBookings: boolean;
   checkInBooking?: ScheduleBooking | null;
   guestLeftBooking?: ScheduleBooking | null;
+  actionLabels: StaffScheduleActionLabels;
   onToggleNotWorking?: () => void;
   onFocus?: () => void;
   onCheckInBooking?: (b: ScheduleBooking) => Promise<void> | void;
@@ -964,7 +1011,7 @@ function UnitMenu({
     <div ref={ref} className={cn("relative", inline ? "" : "shrink-0")}>
       <button
         type="button"
-        aria-label={`More actions for ${unit.name}`}
+        aria-label={actionLabels.moreFor(unit.name)}
         onClick={() => setOpen((v) => !v)}
         className={cn(
           "grid size-6 place-items-center rounded-md text-zinc-500 transition hover:bg-white/5 hover:text-zinc-200",
@@ -986,7 +1033,7 @@ function UnitMenu({
               className="flex w-full items-center gap-2 rounded-md px-2.5 py-1.5 text-left text-sky-300 hover:bg-sky-500/10 hover:text-sky-200"
             >
               <LogIn size={12} aria-hidden />
-              Check in guest
+              {actionLabels.checkInGuest}
             </button>
           ) : null}
           {showGuestLeft && guestLeftBooking && onGuestLeftBooking ? (
@@ -999,7 +1046,7 @@ function UnitMenu({
               className="flex w-full items-center gap-2 rounded-md px-2.5 py-1.5 text-left text-emerald-300 hover:bg-emerald-500/10 hover:text-emerald-200"
             >
               <PlayCircle size={12} aria-hidden />
-              Guest left — free unit
+              {actionLabels.guestLeftFree}
             </button>
           ) : null}
           {showFocus ? (
@@ -1012,7 +1059,7 @@ function UnitMenu({
               className="flex w-full items-center gap-2 rounded-md px-2.5 py-1.5 text-left text-zinc-300 hover:bg-white/5 hover:text-white"
             >
               <CalendarClock size={12} aria-hidden />
-              View in day schedule
+              {actionLabels.viewDaySchedule}
             </button>
           ) : null}
           {showToggle ? (
@@ -1025,7 +1072,7 @@ function UnitMenu({
               className="flex w-full items-center gap-2 rounded-md px-2.5 py-1.5 text-left text-zinc-400 hover:bg-white/5 hover:text-white"
             >
               <CircleDot size={12} aria-hidden />
-              Mark out of service
+              {actionLabels.markOutOfService}
             </button>
           ) : null}
         </div>

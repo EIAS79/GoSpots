@@ -9,6 +9,7 @@ import {
   isItemOrderableNow,
   itemOutOfStock,
 } from "@/lib/menu-timing";
+import { useVenueSettingsOptional } from "@/lib/venue-settings-context";
 
 const UNCATEGORIZED_ID = "__other__";
 const ITEMS_PER_PAGE = 6;
@@ -20,7 +21,11 @@ type SectionBucket = {
   items: MenuItem[];
 };
 
-function buildSections(menu: FullMenu, search: string): SectionBucket[] {
+function buildSections(
+  menu: FullMenu,
+  search: string,
+  otherLabel: string,
+): SectionBucket[] {
   const q = search.trim().toLowerCase();
   const sectionById = new Map(menu.sections.map((s) => [s.id, s]));
   const buckets = new Map<string, SectionBucket>();
@@ -30,7 +35,7 @@ function buildSections(menu: FullMenu, search: string): SectionBucket[] {
   }
   buckets.set(UNCATEGORIZED_ID, {
     id: UNCATEGORIZED_ID,
-    name: "Other",
+    name: otherLabel,
     items: [],
   });
 
@@ -59,18 +64,19 @@ export function MenuItemPicker({
   disabled,
 }: {
   menu: FullMenu | null;
-  formatMoney: (n: number) => string;
+  formatMoney: (n: import("@/lib/money").MoneyWire) => string;
   onPick: (itemId: string, qty: number) => void;
   disabled?: boolean;
 }) {
+  const t = useVenueSettingsOptional()?.t ?? ((k: string) => k);
   const [search, setSearch] = useState("");
   const [activeSectionId, setActiveSectionId] = useState<string | null>(null);
   const [page, setPage] = useState(0);
   const [flashId, setFlashId] = useState<string | null>(null);
 
   const sections = useMemo(
-    () => (menu ? buildSections(menu, search) : []),
-    [menu, search],
+    () => (menu ? buildSections(menu, search, t("orders.pickerOther")) : []),
+    [menu, search, t],
   );
 
   const activeSection =
@@ -91,7 +97,7 @@ export function MenuItemPicker({
   }, [activeSectionId, search]);
 
   if (!menu) {
-    return <p className="text-xs text-zinc-500">Loading menu…</p>;
+    return <p className="text-xs text-zinc-500">{t("common.loading")}</p>;
   }
 
   const items = activeSection?.items ?? [];
@@ -120,13 +126,13 @@ export function MenuItemPicker({
           type="search"
           value={search}
           onChange={(e) => setSearch(e.target.value)}
-          placeholder="Search dishes…"
+          placeholder={t("orders.pickerSearch")}
           className="w-full rounded-xl border border-white/10 bg-zinc-950 py-2.5 pl-9 pr-9 text-sm text-white placeholder:text-zinc-600 focus:border-emerald-500/40 focus:outline-none focus:ring-2 focus:ring-emerald-500/20"
         />
         {search ? (
           <button
             type="button"
-            aria-label="Clear search"
+            aria-label={t("orders.pickerClearSearch")}
             onClick={() => setSearch("")}
             className="absolute right-2 top-1/2 grid h-7 w-7 -translate-y-1/2 place-items-center rounded-full text-zinc-500 hover:bg-white/5"
           >
@@ -137,7 +143,7 @@ export function MenuItemPicker({
 
       {sections.length === 0 ? (
         <p className="rounded-xl border border-dashed border-white/10 py-10 text-center text-xs text-zinc-500">
-          No items available right now.
+          {t("orders.pickerEmpty")}
         </p>
       ) : (
         <>
@@ -171,7 +177,7 @@ export function MenuItemPicker({
                   disabled={safePage <= 0}
                   onClick={() => setPage((p) => Math.max(0, p - 1))}
                   className="grid h-8 w-8 place-items-center rounded-lg border border-white/10 bg-zinc-950 text-zinc-300 disabled:opacity-40"
-                  aria-label="Previous page"
+                  aria-label={t("orders.prevPage")}
                 >
                   ‹
                 </button>
@@ -183,18 +189,20 @@ export function MenuItemPicker({
                   disabled={safePage >= pageCount - 1}
                   onClick={() => setPage((p) => Math.min(pageCount - 1, p + 1))}
                   className="grid h-8 w-8 place-items-center rounded-lg border border-white/10 bg-zinc-950 text-zinc-300 disabled:opacity-40"
-                  aria-label="Next page"
+                  aria-label={t("orders.nextPage")}
                 >
                   ›
                 </button>
               </div>
             ) : (
               <span className="text-[11px] text-zinc-500">
-                {items.length} item{items.length === 1 ? "" : "s"}
+                {items.length === 1
+                  ? t("orders.pickerItemCountOne", { count: items.length })
+                  : t("orders.pickerItemCountMany", { count: items.length })}
               </span>
             )}
             <p className="text-[10px] text-zinc-600">
-              Tap to add · change qty on ticket
+              {t("orders.pickerTapHint")}
             </p>
           </div>
 
@@ -245,7 +253,7 @@ export function MenuItemPicker({
                             oos ? "text-rose-400" : "text-zinc-500",
                           )}
                         >
-                          {oos ? "Out of stock" : `${item.stock} left`}
+                          {oos ? t("orders.pickerOutOfStock") : t("orders.pickerStockLeft", { n: item.stock })}
                         </span>
                       ) : null}
                     </span>

@@ -9,10 +9,12 @@ import { useAuth } from "@/lib/use-auth";
 import { useCurrentMembership } from "@/lib/use-current-membership";
 import { useDashboardGuide } from "@/lib/use-dashboard-guide";
 import { useVenueAccess } from "@/lib/use-venue-access";
+import { useVenueSettingsOptional } from "@/lib/venue-settings-context";
 
 export default function OrdersPage() {
   const guide = useDashboardGuide("orders");
   const { state } = useAuth();
+  const t = useVenueSettingsOptional()?.t ?? ((k: string) => k);
   const access = useVenueAccess();
   const membership = useCurrentMembership();
   const perms = membership?.permissions ?? "";
@@ -29,11 +31,13 @@ export default function OrdersPage() {
       capabilities={guide.capabilities}
     >
       {!canWrite ? (
-        <p className="mb-4 text-xs text-zinc-500">
-          View-only — ask an admin for transaction write access to edit orders.
-        </p>
+        <p className="mb-4 text-xs text-zinc-500">{t("orders.viewOnly")}</p>
       ) : null}
-      <FeatureGate feature="transaction" unlocked={unlocked} title="Menu orders">
+      <FeatureGate
+        feature="transaction"
+        unlocked={unlocked}
+        title={t("orders.gateTitle")}
+      >
         <MenuOrdersPanel canWrite={canWrite && unlocked} />
       </FeatureGate>
     </TenantPage>

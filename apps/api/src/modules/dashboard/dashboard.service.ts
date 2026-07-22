@@ -16,8 +16,10 @@ import {
 import {
   monthlyTotal,
   parseAddOns,
+  resolveAddOnsCsv,
   resolvePackId,
   serializeAddOns,
+  syncSubscriptionAddOnRows,
   VENUE_ADD_ON_LIST,
   VENUE_PACK_LIST,
   type AddOnId,
@@ -26,6 +28,7 @@ import { requireShopId } from '../../common/tenant';
 import { hasPermission, PERMISSIONS } from '../../common/permissions';
 import type { JwtAccessPayload } from '../auth/auth.service';
 import type { UpdateVenuePackDto } from '../auth/dto/auth.dto';
+import { toMoneyNumber, serializeMoney } from '../../common/money.util';
 import {
   buildFinanceAnalytics,
   computeRevenueSince,
@@ -44,7 +47,9 @@ export class DashboardService {
 
     const shop = await this.prisma.shop.findUnique({
       where: { id: shopId },
-      include: { subscription: true },
+      include: {
+        subscription: { include: { addOnRows: true } },
+      },
     });
 
     const [
@@ -161,7 +166,7 @@ export class DashboardService {
       if (key in viewsByDay) viewsByDay[key]++;
     }
 
-    const lossesWeekAmt = lossesWeek._sum.amount ?? 0;
+    const lossesWeekAmt = toMoneyNumber(lossesWeek._sum.amount);
 
     return {
       shop: {
@@ -200,10 +205,10 @@ export class DashboardService {
             addOns: '',
           },
       kpis: {
-        revenueToday,
-        revenueWeek,
-        lossesWeek: lossesWeekAmt,
-        profitWeek: revenueWeek - lossesWeekAmt,
+        revenueToday: serializeMoney(revenueToday),
+        revenueWeek: serializeMoney(revenueWeek),
+        lossesWeek: serializeMoney(lossesWeekAmt),
+        profitWeek: serializeMoney(revenueWeek - lossesWeekAmt),
         ordersToday,
         completedOrdersWeek: orderSalesWeek._count ?? 0,
         customersWeek: customersWeek._sum?.guestCount ?? 0,
@@ -259,7 +264,9 @@ export class DashboardService {
     await this.applyDuePendingPlan(shopId);
     const shop = await this.prisma.shop.findUnique({
       where: { id: shopId },
-      include: { subscription: true },
+      include: {
+        subscription: { include: { addOnRows: true } },
+      },
     });
     const staffUsed = await this.prisma.membership.count({
       where: {
@@ -295,7 +302,7 @@ export class DashboardService {
         ? {
             ...sub,
             packId: sub.packId,
-            addOns: sub.addOns,
+            addOns: access.addOns,
           }
         : null,
       effectiveTier,
@@ -353,6 +360,7 @@ export class DashboardService {
   async applyDuePendingPlan(shopId: string) {
     const sub = await this.prisma.subscription.findUnique({
       where: { shopId },
+      include: { addOnRows: true },
     });
     if (!sub) return;
     const pendingPackId = (sub as { pendingPackId?: string | null })
@@ -362,8 +370,9 @@ export class DashboardService {
     const periodEnd = sub.currentPeriodEnd;
     if (periodEnd && periodEnd.getTime() > Date.now()) return;
 
+    const liveAddOns = resolveAddOnsCsv({ addOnRows: sub.addOnRows });
     const pendingAddOns =
-      (sub as { pendingAddOns?: string | null }).pendingAddOns ?? sub.addOns;
+      (sub as { pendingAddOns?: string | null }).pendingAddOns ?? liveAddOns;
     const pendingSeats =
       (sub as { pendingStaffSeatQuantity?: number | null })
         .pendingStaffSeatQuantity ??
@@ -372,24 +381,24 @@ export class DashboardService {
     const packId = resolvePackId(pendingPackId);
     const tier = tierForPack(packId, pendingAddOns);
 
-    await this.prisma.$transaction([
-      this.prisma.subscription.update({
+    await this.prisma.$transaction(async (tx) => {
+      const updated = await tx.subscription.update({
         where: { shopId },
         data: {
           packId,
-          addOns: pendingAddOns,
           tier,
           staffSeatQuantity: pendingSeats,
           pendingPackId: null,
           pendingAddOns: null,
           pendingStaffSeatQuantity: null,
         } as never,
-      }),
-      this.prisma.shop.update({
+      });
+      await syncSubscriptionAddOnRows(tx, updated.id, pendingAddOns);
+      await tx.shop.update({
         where: { id: shopId },
         data: { venueType: packId },
-      }),
-    ]);
+      });
+    });
   }
 
   async updatePack(actor: JwtAccessPayload, dto: UpdateVenuePackDto) {
@@ -405,7 +414,9 @@ export class DashboardService {
     await this.applyDuePendingPlan(shopId);
     const shop = await this.prisma.shop.findUnique({
       where: { id: shopId },
-      include: { subscription: true },
+      include: {
+        subscription: { include: { addOnRows: true } },
+      },
     });
     if (!shop?.subscription) {
       throw new NotFoundException('Subscription not found.');
@@ -413,10 +424,11 @@ export class DashboardService {
 
     const sub = shop.subscription;
     const packId = resolvePackId(dto.packId ?? sub.packId);
+    const liveAddOns = resolveAddOnsCsv({ addOnRows: sub.addOnRows });
     const addOnsCsv =
       dto.addOns != null
         ? serializeAddOns(dto.addOns as AddOnId[])
-        : sub.addOns;
+        : liveAddOns;
     const hasTeam = parseAddOns(addOnsCsv).includes('team_accounts');
     const currentSeats =
       (sub as { staffSeatQuantity?: number }).staffSeatQuantity ?? 0;
@@ -450,7 +462,7 @@ export class DashboardService {
     if (isPaidActive) {
       const liveSame =
         packId === sub.packId &&
-        addOnsCsv === sub.addOns &&
+        addOnsCsv === liveAddOns &&
         staffSeatQuantity === currentSeats;
 
       if (liveSame) {
@@ -487,24 +499,24 @@ export class DashboardService {
       });
     } else {
       // Active trial: apply immediately so selected modules appear in the dashboard.
-      await this.prisma.$transaction([
-        this.prisma.subscription.update({
+      await this.prisma.$transaction(async (tx) => {
+        const updated = await tx.subscription.update({
           where: { shopId },
           data: {
             packId,
-            addOns: addOnsCsv,
             tier,
             staffSeatQuantity,
             pendingPackId: null,
             pendingAddOns: null,
             pendingStaffSeatQuantity: null,
           } as never,
-        }),
-        this.prisma.shop.update({
+        });
+        await syncSubscriptionAddOnRows(tx, updated.id, addOnsCsv);
+        await tx.shop.update({
           where: { id: shopId },
           data: { venueType: packId },
-        }),
-      ]);
+        });
+      });
     }
 
     return this.subscription(actor);

@@ -1,7 +1,6 @@
-import { ApiError, api } from "./api";
-import { getApiBaseUrl } from "./api-base-url";
-import { getVenuePathHeaders } from "./venue-api-headers";
+import { ApiError, api, credentialedFetch } from "./api";
 import type { MealPeriod } from "./menu-periods";
+import type { MoneyWire } from "./money";
 
 export type TagType = "CATEGORY" | "FILTER" | "OFFER";
 
@@ -31,7 +30,7 @@ export type MenuItem = {
   description: string | null;
   imageUrl: string | null;
   imageUrl2: string | null;
-  price: number;
+  price: MoneyWire;
   stock: number;
   stockDaily?: number;
   stockResetOn?: string | null;
@@ -150,21 +149,10 @@ export function deleteMenuItem(id: string) {
 async function uploadMenuFile<T>(path: string, file: File): Promise<T> {
   const form = new FormData();
   form.append("file", file);
-  const base = getApiBaseUrl();
-  let res: Response;
-  try {
-    res = await fetch(`${base}${path}`, {
-      method: "POST",
-      credentials: "include",
-      headers: getVenuePathHeaders(),
-      body: form,
-    });
-  } catch {
-    throw new ApiError(
-      `Cannot reach the API at ${base}. Is the backend running? Try: pnpm dev`,
-      0,
-    );
-  }
+  const res = await credentialedFetch(path, {
+    method: "POST",
+    body: form,
+  });
   if (!res.ok) {
     let body: unknown = null;
     try {

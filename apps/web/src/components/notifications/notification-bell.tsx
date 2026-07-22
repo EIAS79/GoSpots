@@ -4,6 +4,7 @@ import { Bell } from "lucide-react";
 import Link from "next/link";
 import { cn } from "@/lib/cn";
 import { useVenueHref } from "@/lib/venue-context";
+import { useVenueSettingsOptional } from "@/lib/venue-settings-context";
 
 export function NotificationBell({
   unreadCount,
@@ -13,6 +14,7 @@ export function NotificationBell({
   className?: string;
 }) {
   const href = useVenueHref("/notifications");
+  const t = useVenueSettingsOptional()?.t ?? ((key: string) => key);
 
   return (
     <Link
@@ -23,8 +25,8 @@ export function NotificationBell({
       )}
       aria-label={
         unreadCount > 0
-          ? `Notifications, ${unreadCount} unread`
-          : "Notifications"
+          ? t("notif.bellAriaUnread", { count: unreadCount })
+          : t("notif.bellAria")
       }
     >
       <Bell size={18} />

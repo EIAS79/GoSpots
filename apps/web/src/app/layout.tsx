@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
 import Script from "next/script";
 import { AppProviders } from "@/components/layout/app-providers";
+import { OfflineBanner } from "@/components/layout/offline-banner";
 import { getSiteUrlString } from "@/lib/site-url";
 import "./globals.css";
 
@@ -20,40 +21,42 @@ const siteUrl = getSiteUrlString();
 export const metadata: Metadata = {
   metadataBase: new URL(siteUrl),
   title: {
-    default: "GoSpots — live venue operations & discovery",
-    template: "%s · GoSpots",
+    default: "Locora — host every location",
+    template: "%s · Locora",
   },
   description:
-    "GoSpots is a private-beta platform for venue operators: one live screen for tables and consoles, session timers, reservations, billing, staff controls, and daily revenue clarity. Players can browse the growing public directory and reserve where venues enable it.",
-  applicationName: "GoSpots",
+    "Locora is the dashboard for gaming centers, restaurants, and venues: publish your site, take reservations, collect reviews, and run day-to-day operations from one place.",
+  applicationName: "Locora",
   keywords: [
-    "billiard hall software",
-    "gaming lounge POS",
-    "snooker club reservations",
-    "venue session timer",
+    "venue dashboard",
+    "gaming center software",
+    "restaurant reservations",
+    "venue website builder",
+    "host venue management",
+    "venue reviews and contact",
     "entertainment venue billing",
   ],
   openGraph: {
     type: "website",
     locale: "en_US",
     url: siteUrl,
-    siteName: "GoSpots",
-    title: "GoSpots — live venue operations & discovery",
+    siteName: "Locora",
+    title: "Locora — host every location",
     description:
-      "Run sessions, reservations, billing, and staff from one dashboard. Players discover billiard halls, lounges, and game cafés as venues publish on GoSpots.",
+      "Dashboard for gaming centers, restaurants, and venues — publish your site, take reservations, collect reviews.",
     images: [
       {
-        url: "/gospots.png",
-        alt: "GoSpots",
+        url: "/brand/locora-og.svg",
+        alt: "Locora",
       },
     ],
   },
   twitter: {
     card: "summary",
-    title: "GoSpots — live venue operations & discovery",
+    title: "Locora — host every location",
     description:
-      "One live operations screen for entertainment venues. Honest beta — onboarding operators first.",
-    images: ["/gospots.png"],
+      "Host every location: dashboard, public venue site, bookings, reviews, and contact.",
+    images: ["/brand/locora-og.svg"],
   },
   robots: { index: true, follow: true },
 };
@@ -70,10 +73,13 @@ export default function RootLayout({
       className={`${geistSans.variable} ${geistMono.variable} relative h-full antialiased`}
     >
       <body className="relative min-h-full bg-[var(--color-background)] font-sans text-[var(--color-foreground)] transition-colors duration-300">
-        <Script id="gospots-theme-init" strategy="beforeInteractive">
-          {`(function(){try{var t=localStorage.getItem('gospots-theme');var r=document.documentElement;if(t==='light'){r.classList.remove('dark');r.dataset.theme='light';}else{r.classList.add('dark');r.dataset.theme='dark';}}catch(e){document.documentElement.classList.add('dark');document.documentElement.dataset.theme='dark';}})();`}
+        <Script id="locora-theme-init" strategy="beforeInteractive">
+          {`(function(){try{var t=localStorage.getItem('locora-theme')||localStorage.getItem('gospots-theme');var r=document.documentElement;if(t==='light'){r.classList.remove('dark');r.dataset.theme='light';}else{r.classList.add('dark');r.dataset.theme='dark';}}catch(e){document.documentElement.classList.add('dark');document.documentElement.dataset.theme='dark';}})();`}
         </Script>
-        <AppProviders>{children}</AppProviders>
+        <AppProviders>
+          <OfflineBanner />
+          {children}
+        </AppProviders>
       </body>
     </html>
   );

@@ -1,7 +1,12 @@
+import {
+  toMoneyNumber,
+  type MoneyInput,
+} from '../../common/money.util';
+
 type OrderLineForAudit = {
   name: string;
   quantity: number;
-  unitPrice: number;
+  unitPrice: MoneyInput;
   lineStatus: string;
 };
 
@@ -12,7 +17,7 @@ export type ShopOrderForAudit = {
   status: string;
   paymentMethod: string;
   guestCount: number;
-  total: number;
+  total: MoneyInput;
   lines?: OrderLineForAudit[];
 };
 
@@ -51,19 +56,27 @@ function linesPhrase(lines: OrderLineForAudit[] | undefined) {
   return `${parts.slice(0, 4).join(', ')} (+${parts.length - 4} more)`;
 }
 
+function moneyLabel(value: MoneyInput) {
+  return toMoneyNumber(value).toFixed(2);
+}
+
 export function shopOrderAuditMeta(
   order: ShopOrderForAudit,
   extra?: Record<string, unknown>,
 ) {
   const activeLines = (order.lines ?? [])
     .filter((l) => l.lineStatus === 'ACTIVE')
-    .map((l) => ({
-      name: l.name,
-      quantity: l.quantity,
-      unitPrice: l.unitPrice,
-      subtotal: Math.round(l.quantity * l.unitPrice * 100) / 100,
-    }));
+    .map((l) => {
+      const unitPrice = toMoneyNumber(l.unitPrice);
+      return {
+        name: l.name,
+        quantity: l.quantity,
+        unitPrice,
+        subtotal: Math.round(l.quantity * unitPrice * 100) / 100,
+      };
+    });
 
+  const total = toMoneyNumber(order.total);
   return {
     orderId: order.id,
     ticket: orderTicketLabel(order),
@@ -73,7 +86,7 @@ export function shopOrderAuditMeta(
     statusLabel: orderStatusLabel(order.status),
     paymentMethod: order.paymentMethod,
     guestCount: order.guestCount,
-    total: Math.round(order.total * 100) / 100,
+    total: Math.round(total * 100) / 100,
     lineCount: order.lines?.length ?? 0,
     itemsSummary: linesPhrase(order.lines),
     activeLines,
@@ -86,18 +99,18 @@ export function auditSummaryCreate(order: ShopOrderForAudit) {
 }
 
 export function auditSummaryUpdate(order: ShopOrderForAudit, change: string) {
-  return `${change} — ${orderTicketLabel(order)} · ${orderStatusLabel(order.status)} · ${order.total.toFixed(2)} · ${linesPhrase(order.lines)}`;
+  return `${change} — ${orderTicketLabel(order)} · ${orderStatusLabel(order.status)} · ${moneyLabel(order.total)} · ${linesPhrase(order.lines)}`;
 }
 
 export function auditSummaryAddLine(
   order: ShopOrderForAudit,
   line: { name: string; quantity: number },
 ) {
-  return `Added ${line.quantity}× ${line.name} to ${orderTicketLabel(order)} (total ${order.total.toFixed(2)})`;
+  return `Added ${line.quantity}× ${line.name} to ${orderTicketLabel(order)} (total ${moneyLabel(order.total)})`;
 }
 
 export function auditSummaryDelete(order: ShopOrderForAudit) {
-  return `Permanently deleted ${orderTicketLabel(order)} · ${order.total.toFixed(2)} · ${linesPhrase(order.lines)}`;
+  return `Permanently deleted ${orderTicketLabel(order)} · ${moneyLabel(order.total)} · ${linesPhrase(order.lines)}`;
 }
 
 export function auditSummaryPatchLine(
@@ -105,12 +118,12 @@ export function auditSummaryPatchLine(
   line: { name: string; quantity: number },
   change: string,
 ) {
-  return `${change} — ${line.quantity}× ${line.name} on ${orderTicketLabel(order)} (total ${order.total.toFixed(2)})`;
+  return `${change} — ${line.quantity}× ${line.name} on ${orderTicketLabel(order)} (total ${moneyLabel(order.total)})`;
 }
 
 export function auditSummaryRemoveLine(
   order: ShopOrderForAudit,
   line: { name: string; quantity: number },
 ) {
-  return `Removed ${line.quantity}× ${line.name} from ${orderTicketLabel(order)} (total ${order.total.toFixed(2)})`;
+  return `Removed ${line.quantity}× ${line.name} from ${orderTicketLabel(order)} (total ${moneyLabel(order.total)})`;
 }

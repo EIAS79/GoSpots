@@ -17,6 +17,7 @@ import {
   type ShopSettings,
 } from "./shop-settings-client";
 import { isRtlLocale, translate, translateList, type MessageKey } from "./i18n";
+import { coerceMoney, type MoneyWire } from "./money";
 
 type VenueSettingsContextValue = {
   shop: ShopSettings | null;
@@ -27,7 +28,7 @@ type VenueSettingsContextValue = {
   eurToVenueRate: number;
   refresh: () => Promise<void>;
   updatePreferences: (prefs: Partial<ShopPreferences>) => Promise<void>;
-  formatMoney: (amount: number, currencyOverride?: string) => string;
+  formatMoney: (amount: MoneyWire, currencyOverride?: string) => string;
   /** Convert a catalog/plan amount stored in EUR into venue currency. */
   fromEur: (amountEur: number) => number;
   /** Format an EUR catalog price in the venue currency. */
@@ -66,6 +67,7 @@ export function VenueSettingsProvider({
         email: initial.email ?? null,
         coverImage: initial.coverImage ?? null,
         locale: initial.locale ?? "en",
+        timezone: initial.timezone ?? "UTC",
         currency: initial.currency ?? "EUR",
         isPublished: initial.isPublished ?? false,
         advertiseOnVenuesPage: initial.advertiseOnVenuesPage ?? true,
@@ -134,15 +136,16 @@ export function VenueSettingsProvider({
   );
 
   const formatMoney = useCallback(
-    (amount: number, currencyOverride?: string) => {
+    (amount: MoneyWire, currencyOverride?: string) => {
+      const n = coerceMoney(amount);
       try {
         return new Intl.NumberFormat(locale, {
           style: "currency",
           currency: currencyOverride ?? currency,
           maximumFractionDigits: 2,
-        }).format(amount);
+        }).format(n);
       } catch {
-        return `${amount} ${currencyOverride ?? currency}`;
+        return `${n} ${currencyOverride ?? currency}`;
       }
     },
     [locale, currency],

@@ -31,12 +31,19 @@ import {
 import { hasPermission, type ShopRole } from "@/lib/auth-client";
 import { staffLoginPreview, VENUE_STAFF_LOGIN_SUFFIX } from "@/lib/venue-account";
 import { useVenueHref } from "@/lib/venue-context";
+import { useVenueSettingsOptional } from "@/lib/venue-settings-context";
 import Link from "next/link";
 
 type PageTab = "accounts" | "access";
+type TeamT = (
+  key: string,
+  vars?: Record<string, string | number>,
+) => string;
 
 function EmployeeAccountsContent() {
   const guide = useDashboardGuide("staff");
+  const vs = useVenueSettingsOptional();
+  const t: TeamT = vs?.t ?? ((key) => key);
   const { state } = useAuth();
   const subscriptionHref = useVenueHref("/subscription");
   const membership = useCurrentMembership();
@@ -94,11 +101,15 @@ function EmployeeAccountsContent() {
     try {
       setData(await fetchStaff());
     } catch (e) {
-      setError(e instanceof Error ? e.message : "Failed to load employees.");
+      setError(
+        e instanceof Error
+          ? e.message
+          : vs?.t("team.loadFailed") ?? "Failed to load employees.",
+      );
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [vs]);
 
   useEffect(() => {
     void load();
@@ -126,7 +137,7 @@ function EmployeeAccountsContent() {
       setActivationReveal(created);
       await load();
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Could not create account.");
+      setError(err instanceof Error ? err.message : t("team.createFailed"));
     } finally {
       setSaving(false);
     }
@@ -170,7 +181,7 @@ function EmployeeAccountsContent() {
       closeEdit();
       await load();
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Could not update employee.");
+      setError(err instanceof Error ? err.message : t("team.updateFailed"));
     } finally {
       setSaving(false);
     }
@@ -199,7 +210,7 @@ function EmployeeAccountsContent() {
       });
       await load();
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Could not save access.");
+      setError(err instanceof Error ? err.message : t("team.saveAccessFailed"));
     } finally {
       setAccessSaving(false);
     }
@@ -212,9 +223,7 @@ function EmployeeAccountsContent() {
         description={guide.description}
         capabilities={guide.capabilities}
       >
-        <p className="text-sm text-zinc-400">
-          You do not have permission to view employee accounts.
-        </p>
+        <p className="text-sm text-zinc-400">{t("team.noPermission")}</p>
       </TenantPage>
     );
   }
@@ -246,7 +255,7 @@ function EmployeeAccountsContent() {
             className="inline-flex items-center gap-1.5 rounded-lg bg-emerald-600 px-3 py-1.5 text-sm text-white hover:bg-emerald-500"
           >
             <Plus size={14} />
-            Create account
+            {t("team.createAccount")}
           </button>
         ) : null
       }
@@ -262,7 +271,7 @@ function EmployeeAccountsContent() {
               : "text-zinc-500 hover:bg-white/5 hover:text-zinc-300",
           )}
         >
-          Accounts
+          {t("team.tabAccounts")}
         </button>
         {canEditStaff ? (
           <button
@@ -276,7 +285,7 @@ function EmployeeAccountsContent() {
             )}
           >
             <Shield size={12} />
-            Access & permissions
+            {t("team.tabAccess")}
           </button>
         ) : null}
       </div>
@@ -285,16 +294,13 @@ function EmployeeAccountsContent() {
         <div className="space-y-4">
           <div className="rounded-xl border border-violet-400/20 bg-violet-500/5 p-4">
             <h2 className="text-sm font-semibold text-violet-100">
-              Control what each employee can see
+              {t("team.accessTitle")}
             </h2>
-            <p className="mt-1 text-xs text-zinc-500">
-              Pick a team member, then toggle dashboard sections. Hidden tabs
-              disappear from their sidebar immediately after save.
-            </p>
+            <p className="mt-1 text-xs text-zinc-500">{t("team.accessHint")}</p>
           </div>
 
           <label className="block text-xs text-zinc-500">
-            Employee
+            {t("team.employee")}
             <select
               value={accessMemberId ?? ""}
               onChange={(e) => {
@@ -310,7 +316,7 @@ function EmployeeAccountsContent() {
               }}
               className="mt-1 w-full rounded-lg border border-white/10 bg-zinc-950 px-3 py-2.5 text-sm text-white sm:max-w-md"
             >
-              <option value="">Select an employee…</option>
+              <option value="">{t("team.selectEmployee")}</option>
               {(data?.staff ?? []).map((m) => (
                 <option key={m.membershipId} value={m.membershipId}>
                   {m.name ?? m.loginId} ({m.role})
@@ -323,7 +329,7 @@ function EmployeeAccountsContent() {
             <>
               <div className="flex flex-wrap items-end gap-4">
                 <label className="block text-xs text-zinc-500">
-                  Role
+                  {t("team.role")}
                   <select
                     value={accessRole}
                     onChange={(e) =>
@@ -331,14 +337,14 @@ function EmployeeAccountsContent() {
                     }
                     className="mt-1 w-full rounded-lg border border-white/10 bg-zinc-950 px-3 py-2 text-sm text-white sm:w-48"
                   >
-                    <option value="STAFF">Staff</option>
-                    <option value="MANAGER">Manager (admin)</option>
+                    <option value="STAFF">{t("team.roleStaff")}</option>
+                    <option value="MANAGER">{t("team.roleManager")}</option>
                   </select>
                 </label>
                 <p className="text-[11px] text-zinc-600">
                   {accessRole === "MANAGER"
-                    ? "Managers get full ops access automatically. Audit stays owner-only."
-                    : "Pick exactly which dashboard areas this person can use."}
+                    ? t("team.roleManagerHint")
+                    : t("team.roleStaffHint")}
                 </p>
               </div>
 
@@ -366,13 +372,13 @@ function EmployeeAccountsContent() {
                   onClick={() => void saveAccessTab()}
                   className="rounded-lg bg-violet-600 px-4 py-2 text-sm font-medium text-white hover:bg-violet-500 disabled:opacity-50"
                 >
-                  {accessSaving ? "Saving…" : "Save access for this employee"}
+                  {accessSaving ? t("common.saving") : t("team.saveAccess")}
                 </button>
               </div>
             </>
           ) : (
             <p className="rounded-xl border border-dashed border-white/15 px-6 py-10 text-center text-sm text-zinc-500">
-              Select an employee to configure their dashboard access.
+              {t("team.selectEmployeeEmpty")}
             </p>
           )}
         </div>
@@ -382,19 +388,27 @@ function EmployeeAccountsContent() {
         <div className="flex flex-wrap items-center justify-between gap-3">
           <div>
             <p className="text-xs uppercase tracking-wider text-zinc-500">
-              Employee seats
+              {t("team.seatsLabel")}
             </p>
             <p className="text-2xl font-semibold text-white">
               {seats.used} / {seats.limit}
             </p>
             <p className="mt-1 text-xs text-zinc-500">
               {seats.limit === 0
-                ? "No seats purchased yet"
-                : `${seats.used} account${seats.used === 1 ? "" : "s"} · ${seats.limit} purchased`}
+                ? t("team.seatsNone")
+                : seats.used === 1
+                  ? t("team.seatsSummaryOne", {
+                      used: seats.used,
+                      limit: seats.limit,
+                    })
+                  : t("team.seatsSummaryMany", {
+                      used: seats.used,
+                      limit: seats.limit,
+                    })}
             </p>
           </div>
           <div className="text-right text-sm text-zinc-400">
-            <p>Login format</p>
+            <p>{t("team.loginFormat")}</p>
             <p className="font-mono text-emerald-300">
               username@{shopSlug || "venue"}
               {VENUE_STAFF_LOGIN_SUFFIX}
@@ -409,10 +423,10 @@ function EmployeeAccountsContent() {
         {!canCreate && (
           <p className="mt-3 text-sm text-amber-200/90">
             {seats.limit === 0
-              ? "Buy employee seats on Subscription (Team accounts), then create one login per seat here."
+              ? t("team.buySeatsHint")
               : seats.used >= seats.limit
-                ? "All purchased seats are in use. Buy more seats on Subscription to add another employee."
-                : "Only the venue owner can create employee accounts."}
+                ? t("team.seatsFullHint")
+                : t("team.ownerOnlyCreate")}
           </p>
         )}
         {seats.limit === 0 ? (
@@ -420,7 +434,7 @@ function EmployeeAccountsContent() {
             href={subscriptionHref}
             className="mt-3 inline-flex text-sm text-emerald-300 underline-offset-2 hover:underline"
           >
-            Go to Subscription → add seats
+            {t("team.goSubscription")}
           </Link>
         ) : null}
       </div>
@@ -428,13 +442,20 @@ function EmployeeAccountsContent() {
       {activationReveal ? (
         <div className="mb-6 rounded-xl border border-cyan-400/30 bg-cyan-500/10 p-5">
           <p className="text-sm font-medium text-cyan-100">
-            Send this setup link only to{" "}
-            {activationReveal.name ?? activationReveal.username}
+            {t("team.setupLinkFor", {
+              name:
+                activationReveal.name ??
+                activationReveal.username ??
+                activationReveal.loginId ??
+                "",
+            })}
           </p>
           <p className="mt-2 text-xs text-zinc-400">
-            Copy and send it via WhatsApp, SMS, or any channel you trust. They
-            choose their own password (same as a new account). Link expires{" "}
-            {new Date(activationReveal.activationExpiresAt).toLocaleString()}.
+            {t("team.setupLinkHint", {
+              when: new Date(
+                activationReveal.activationExpiresAt,
+              ).toLocaleString(),
+            })}
           </p>
           <p className="mt-3 break-all font-mono text-xs text-cyan-200">
             {activationReveal.activationUrl}
@@ -447,14 +468,14 @@ function EmployeeAccountsContent() {
               }
               className="rounded-lg bg-cyan-600 px-3 py-1.5 text-xs text-white"
             >
-              Copy setup link
+              {t("team.copySetupLink")}
             </button>
             <button
               type="button"
               onClick={() => setActivationReveal(null)}
               className="rounded-lg border border-white/10 px-3 py-1.5 text-xs text-zinc-400"
             >
-              Dismiss
+              {t("team.dismiss")}
             </button>
           </div>
         </div>
@@ -471,7 +492,7 @@ function EmployeeAccountsContent() {
           <div className="fixed inset-0 z-[400] flex items-end justify-center sm:items-center sm:p-4">
             <button
               type="button"
-              aria-label="Close"
+              aria-label={t("team.close")}
               className="absolute inset-0 bg-black/70 backdrop-blur-sm"
               onClick={() => setShowForm(false)}
             />
@@ -484,10 +505,10 @@ function EmployeeAccountsContent() {
                   <UserPlus size={16} className="text-emerald-300" />
                   <div>
                     <h2 className="text-base font-semibold text-white">
-                      New employee login
+                      {t("team.newEmployeeTitle")}
                     </h2>
                     <p className="text-[11px] text-zinc-500">
-                      Identity, role, then dashboard access
+                      {t("team.newEmployeeSubtitle")}
                     </p>
                   </div>
                 </div>
@@ -503,11 +524,11 @@ function EmployeeAccountsContent() {
               <div className="space-y-5 overflow-y-auto px-5 py-4">
                 <section className="space-y-3">
                   <h3 className="text-[10px] font-medium uppercase tracking-wider text-zinc-500">
-                    1 · Identity
+                    {t("team.stepIdentity")}
                   </h3>
                   <div className="grid gap-3 sm:grid-cols-2">
                     <label className="block text-xs text-zinc-500">
-                      Username
+                      {t("team.username")}
                       <input
                         required
                         value={username}
@@ -518,7 +539,7 @@ function EmployeeAccountsContent() {
                       />
                     </label>
                     <label className="block text-xs text-zinc-500">
-                      Display name
+                      {t("team.displayName")}
                       <input
                         value={name}
                         onChange={(e) => setName(e.target.value)}
@@ -528,7 +549,7 @@ function EmployeeAccountsContent() {
                     </label>
                   </div>
                   <label className="block text-xs text-zinc-500 sm:max-w-xs">
-                    Role
+                    {t("team.role")}
                     <select
                       value={createRole}
                       onChange={(e) =>
@@ -536,34 +557,33 @@ function EmployeeAccountsContent() {
                       }
                       className="mt-1 w-full rounded-lg border border-white/10 bg-zinc-900 px-3 py-2 text-sm text-white outline-none focus:border-emerald-400/40"
                     >
-                      <option value="STAFF">Staff</option>
-                      <option value="MANAGER">Manager (admin)</option>
+                      <option value="STAFF">{t("team.roleStaff")}</option>
+                      <option value="MANAGER">{t("team.roleManager")}</option>
                     </select>
                   </label>
                 </section>
 
                 <section className="rounded-xl border border-cyan-400/20 bg-cyan-500/5 px-4 py-3">
                   <h3 className="text-[10px] font-medium uppercase tracking-wider text-zinc-500">
-                    2 · Login ID
+                    {t("team.stepLoginId")}
                   </h3>
                   <p className="mt-1.5 font-mono text-base text-cyan-200">
                     {loginPreview}
                   </p>
                   <p className="mt-1.5 text-xs text-zinc-500">
-                    Password is chosen by them via a one-time setup link you
-                    hand over after creation.
+                    {t("team.loginIdHint")}
                   </p>
                 </section>
 
                 <section className="space-y-3">
                   <div>
                     <h3 className="text-[10px] font-medium uppercase tracking-wider text-zinc-500">
-                      3 · Dashboard access
+                      {t("team.stepAccess")}
                     </h3>
                     <p className="mt-1 text-[11px] text-zinc-500">
                       {createRole === "MANAGER"
-                        ? "Managers unlock full ops access. Optionally grant settings or billing."
-                        : "Open sections and tap permissions to toggle."}
+                        ? t("team.createManagerAccessHint")
+                        : t("team.createStaffAccessHint")}
                     </p>
                   </div>
                   {createRole === "MANAGER" ? (
@@ -592,14 +612,14 @@ function EmployeeAccountsContent() {
                   onClick={() => setShowForm(false)}
                   className="rounded-lg border border-white/10 px-4 py-2 text-sm text-zinc-300"
                 >
-                  Cancel
+                  {t("common.cancel")}
                 </button>
                 <button
                   type="submit"
                   disabled={saving}
                   className="rounded-lg bg-emerald-600 px-4 py-2 text-sm font-medium text-white disabled:opacity-50"
                 >
-                  {saving ? "Creating…" : "Create employee account"}
+                  {saving ? t("team.creating") : t("team.createSubmit")}
                 </button>
               </div>
             </form>
@@ -610,11 +630,13 @@ function EmployeeAccountsContent() {
       <div className="overflow-hidden rounded-xl border border-white/10">
         {(data?.staff ?? []).some((m) => m.passwordResetRequestedAt && m.isActive) ? (
           <div className="border-b border-rose-400/20 bg-rose-500/10 px-4 py-3 text-sm text-rose-100">
-            <p className="font-medium">Password reset requested</p>
+            <p className="font-medium">{t("team.resetRequestedTitle")}</p>
             <p className="mt-1 text-xs text-rose-200/80">
-              An employee forgot their password. Click{" "}
-              <span className="font-medium text-rose-100">Send reset link</span>,
-              then share the link with them on WhatsApp or another channel.
+              {t("team.resetRequestedBefore")}{" "}
+              <span className="font-medium text-rose-100">
+                {t("team.sendResetLink")}
+              </span>
+              {t("team.resetRequestedAfter")}
             </p>
           </div>
         ) : null}
@@ -622,10 +644,10 @@ function EmployeeAccountsContent() {
         <table className="w-full min-w-[40rem] text-left text-sm">
           <thead className="bg-zinc-900/80 text-xs uppercase text-zinc-500">
             <tr>
-              <th className="px-4 py-3">Name</th>
-              <th className="px-4 py-3">Login ID</th>
-              <th className="px-4 py-3">Role</th>
-              <th className="px-4 py-3">Status</th>
+              <th className="px-4 py-3">{t("team.colName")}</th>
+              <th className="px-4 py-3">{t("team.colLoginId")}</th>
+              <th className="px-4 py-3">{t("team.colRole")}</th>
+              <th className="px-4 py-3">{t("team.colStatus")}</th>
               <th className="px-4 py-3" />
             </tr>
           </thead>
@@ -646,12 +668,14 @@ function EmployeeAccountsContent() {
                     type="button"
                     onClick={() => void copyLogin(m.loginId, m.membershipId)}
                     className="ml-2 inline-flex text-zinc-500 hover:text-white"
-                    title="Copy login"
+                    title={t("team.copyLogin")}
                   >
                     <Copy size={12} />
                   </button>
                   {copiedId === m.membershipId && (
-                    <span className="ml-1 text-[10px] text-emerald-400">Copied</span>
+                    <span className="ml-1 text-[10px] text-emerald-400">
+                      {t("team.copied")}
+                    </span>
                   )}
                 </td>
                 <td className="px-4 py-3 text-zinc-400">{m.role}</td>
@@ -668,17 +692,21 @@ function EmployeeAccountsContent() {
                       )}
                     >
                       {!m.isActive
-                        ? "Disabled"
+                        ? t("team.statusDisabled")
                         : m.activated
-                          ? "Active"
-                          : "Pending setup"}
+                          ? t("team.statusActive")
+                          : t("team.statusPending")}
                     </span>
                     {m.passwordResetRequestedAt && m.isActive ? (
                       <span
                         className="rounded-full bg-rose-500/15 px-2 py-0.5 text-xs text-rose-200"
-                        title={`Requested ${new Date(m.passwordResetRequestedAt).toLocaleString()}`}
+                        title={t("team.forgotPasswordTitle", {
+                          when: new Date(
+                            m.passwordResetRequestedAt,
+                          ).toLocaleString(),
+                        })}
                       >
-                        Forgot password
+                        {t("team.forgotPassword")}
                       </span>
                     ) : null}
                   </div>
@@ -692,13 +720,13 @@ function EmployeeAccountsContent() {
                           onClick={() => openAccessTab(m)}
                           className="text-xs text-violet-400 hover:text-violet-300"
                         >
-                          Access
+                          {t("team.access")}
                         </button>
                         <button
                           type="button"
                           onClick={() => openEdit(m)}
                           className="text-zinc-500 hover:text-emerald-300"
-                          aria-label="Edit employee"
+                          aria-label={t("team.editEmployeeAria")}
                         >
                           <Pencil size={14} />
                         </button>
@@ -727,10 +755,10 @@ function EmployeeAccountsContent() {
                         )}
                       >
                         {m.passwordResetRequestedAt
-                          ? "Send reset link"
+                          ? t("team.sendResetLink")
                           : m.pendingInvite
-                            ? "New link"
-                            : "Reset link"}
+                            ? t("team.newLink")
+                            : t("team.resetLink")}
                       </button>
                     ) : null}
                     {isOwner ? (
@@ -739,14 +767,14 @@ function EmployeeAccountsContent() {
                       onClick={() => {
                         if (
                           !confirm(
-                            `Remove ${m.loginId}? They lose access immediately.`,
+                            t("team.removeConfirm", { loginId: m.loginId }),
                           )
                         )
                           return;
                         void deleteStaff(m.membershipId).then(load);
                       }}
                       className="text-zinc-500 hover:text-rose-400"
-                      aria-label="Remove employee"
+                      aria-label={t("team.removeAria")}
                     >
                       <Trash2 size={14} />
                     </button>
@@ -758,7 +786,7 @@ function EmployeeAccountsContent() {
             {(data?.staff ?? []).length === 0 && (
               <tr>
                 <td colSpan={5} className="px-4 py-8 text-center text-zinc-500">
-                  No employee accounts yet.
+                  {t("team.emptyList")}
                 </td>
               </tr>
             )}
@@ -772,7 +800,7 @@ function EmployeeAccountsContent() {
           <div className="fixed inset-0 z-[400] flex items-end justify-center sm:items-center sm:p-4">
             <button
               type="button"
-              aria-label="Close"
+              aria-label={t("team.close")}
               className="absolute inset-0 bg-black/70 backdrop-blur-sm"
               onClick={closeEdit}
             />
@@ -783,7 +811,7 @@ function EmployeeAccountsContent() {
               <div className="flex items-center justify-between gap-3 border-b border-white/10 px-5 py-4">
                 <div>
                   <h2 className="text-base font-semibold text-white">
-                    Edit employee
+                    {t("team.editTitle")}
                   </h2>
                   <p className="mt-0.5 font-mono text-xs text-cyan-200">
                     {editing.loginId}
@@ -801,11 +829,11 @@ function EmployeeAccountsContent() {
               <div className="space-y-5 overflow-y-auto px-5 py-4">
                 <section className="space-y-3">
                   <h3 className="text-[10px] font-medium uppercase tracking-wider text-zinc-500">
-                    Profile
+                    {t("team.profile")}
                   </h3>
                   <div className="grid gap-3 sm:grid-cols-2">
                     <label className="block text-xs text-zinc-500">
-                      Display name
+                      {t("team.displayName")}
                       <input
                         value={editName}
                         onChange={(e) => setEditName(e.target.value)}
@@ -813,7 +841,7 @@ function EmployeeAccountsContent() {
                       />
                     </label>
                     <label className="block text-xs text-zinc-500">
-                      Role
+                      {t("team.role")}
                       <select
                         value={editRole}
                         onChange={(e) =>
@@ -821,8 +849,10 @@ function EmployeeAccountsContent() {
                         }
                         className="mt-1 w-full rounded-lg border border-white/10 bg-zinc-900 px-3 py-2 text-sm text-white outline-none focus:border-emerald-400/40"
                       >
-                        <option value="STAFF">Staff</option>
-                        <option value="MANAGER">Manager</option>
+                        <option value="STAFF">{t("team.roleStaff")}</option>
+                        <option value="MANAGER">
+                          {t("team.roleManagerShort")}
+                        </option>
                       </select>
                     </label>
                   </div>
@@ -833,19 +863,19 @@ function EmployeeAccountsContent() {
                       onChange={(e) => setEditActive(e.target.checked)}
                       className="rounded border-white/20"
                     />
-                    Account active — uncheck to suspend without deleting
+                    {t("team.accountActive")}
                   </label>
                 </section>
 
                 <section className="space-y-3">
                   <div>
                     <h3 className="text-[10px] font-medium uppercase tracking-wider text-zinc-500">
-                      Dashboard access
+                      {t("team.dashboardAccess")}
                     </h3>
                     <p className="mt-1 text-[11px] text-zinc-500">
                       {editRole === "MANAGER"
-                        ? "Full ops access is automatic. Optional grants below."
-                        : "Open sections and select permissions."}
+                        ? t("team.editManagerAccessHint")
+                        : t("team.editStaffAccessHint")}
                     </p>
                   </div>
                   {editRole === "MANAGER" ? (
@@ -874,14 +904,14 @@ function EmployeeAccountsContent() {
                   onClick={closeEdit}
                   className="rounded-lg border border-white/10 px-4 py-2 text-sm text-zinc-300"
                 >
-                  Cancel
+                  {t("common.cancel")}
                 </button>
                 <button
                   type="submit"
                   disabled={saving}
                   className="rounded-lg bg-emerald-600 px-4 py-2 text-sm text-white disabled:opacity-50"
                 >
-                  {saving ? "Saving…" : "Save changes"}
+                  {saving ? t("common.saving") : t("team.saveChanges")}
                 </button>
               </div>
             </form>
@@ -897,9 +927,15 @@ function EmployeeAccountsContent() {
 export default function StaffPage() {
   const access = useVenueAccess();
   const unlocked = isFeatureUnlocked(access.enabledModules, "roles");
+  const vs = useVenueSettingsOptional();
+  const t: TeamT = vs?.t ?? ((key) => key);
 
   return (
-    <FeatureGate feature="roles" unlocked={unlocked} title="Employee accounts">
+    <FeatureGate
+      feature="roles"
+      unlocked={unlocked}
+      title={t("team.gateTitle")}
+    >
       <EmployeeAccountsContent />
     </FeatureGate>
   );

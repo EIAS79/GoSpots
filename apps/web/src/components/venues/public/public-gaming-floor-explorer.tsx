@@ -15,11 +15,13 @@ import {
   applyWindowToUnits,
   buildBlockingMap,
 } from "@/lib/gaming-window-availability";
+import { usePublicPrefs } from "@/lib/public-prefs-context";
 import type {
   ScheduleBooking,
   ScheduleCategory,
   ScheduleUnit,
 } from "@/lib/reservations-client";
+import type { UnitFloorStatus } from "@/lib/booking-floor-status";
 
 const STATIONS_PER_PAGE = 10;
 
@@ -64,11 +66,54 @@ export function PublicGamingFloorExplorer({
   onBookUnit: (unit: ScheduleUnit) => void;
   onInspectBlocked?: (unitId: string, booking: ScheduleBooking) => void;
 }) {
+  const { t } = usePublicPrefs();
   const [activeFloor, setActiveFloor] = useState(1);
   const compactMap = useCompactMap();
 
   const unitKind = category.unitKind ?? getBookingUnitKind(category.type);
   const isLaneMap = unitKind === "LANE";
+
+  const guestStatusLabels = useMemo(
+    (): Record<UnitFloorStatus, string> => ({
+      AVAILABLE: t("venuePage.floor.statusAvailable"),
+      UNAVAILABLE: t("venuePage.floor.statusUnavailable"),
+      NOT_WORKING: t("venuePage.floor.statusNotWorking"),
+    }),
+    [t],
+  );
+
+  const chromeLabels = useMemo(
+    () => ({
+      floor: t("venuePage.floor.floor"),
+      floorN: (n: number) => t("venuePage.floor.floorN", { n }),
+      layoutZone: t("venuePage.floor.layoutZone"),
+      noStations: t("venuePage.floor.noStations"),
+      noStationsInLayout: t("venuePage.floor.noStationsInLayout"),
+      prev: t("venuePage.floor.prev"),
+      next: t("venuePage.floor.next"),
+      pageOf: (page: number, total: number) =>
+        t("venuePage.floor.pageOf", { page, total }),
+      stationsRange: (from: number, to: number, total: number) =>
+        t("venuePage.floor.stationsRange", { from, to, total }),
+    }),
+    [t],
+  );
+
+  const bowlingChromeLabels = useMemo(
+    () => ({
+      floor: t("venuePage.floor.floor"),
+      floorN: (n: number) => t("venuePage.floor.floorN", { n }),
+      layoutZone: t("venuePage.floor.layoutZone"),
+      noLanes: t("venuePage.floor.noLanes"),
+      alleyHint: t("venuePage.floor.bowlingAlleyHint"),
+      swipeLanes: t("venuePage.floor.swipeLanes"),
+      prev: t("venuePage.floor.prev"),
+      next: t("venuePage.floor.next"),
+      lanesRange: (from: number, to: number, total: number) =>
+        t("venuePage.floor.lanesRange", { from, to, total }),
+    }),
+    [t],
+  );
 
   const windowedUnits = useMemo(
     () =>
@@ -144,7 +189,7 @@ export function PublicGamingFloorExplorer({
                   : "border-white/10 text-zinc-500 hover:border-white/20 hover:text-zinc-300",
               )}
             >
-              Floor {floor}
+              {t("venuePage.floor.floorN", { n: floor })}
               <span className="ml-1 opacity-70">
                 · {free}/{count}
               </span>
@@ -168,7 +213,7 @@ export function PublicGamingFloorExplorer({
           windowError={windowError}
         />
         <p className="px-6 py-12 text-center text-sm text-zinc-500">
-          No stations configured for this activity yet.
+          {t("venuePage.floor.noStations")}
         </p>
       </div>
     );
@@ -190,7 +235,7 @@ export function PublicGamingFloorExplorer({
 
       {windowError ? (
         <p className="py-12 text-center text-sm text-zinc-500">
-          Fix the time range to see station availability.
+          {t("venuePage.floor.fixTimeRange")}
         </p>
       ) : isLaneMap ? (
         <BowlingLaneFloorMap
@@ -202,6 +247,8 @@ export function PublicGamingFloorExplorer({
           precomputedStatus
           blockingBookingsByUnitId={blockingMap}
           onInspectBlocked={onInspectBlocked}
+          chromeLabels={bowlingChromeLabels}
+          guestStatusLabels={guestStatusLabels}
           onBookUnit={(unitId) => {
             const unit = windowedUnits.find((u) => u.id === unitId);
             if (unit) onBookUnit(unit);
@@ -221,6 +268,8 @@ export function PublicGamingFloorExplorer({
           blockingBookingsByUnitId={blockingMap}
           mapVariant={compactMap ? "compact" : "full"}
           onInspectBlocked={onInspectBlocked}
+          chromeLabels={chromeLabels}
+          guestStatusLabels={guestStatusLabels}
           onBookUnit={(unitId) => {
             const unit = unitsOnFloor.find((u) => u.id === unitId);
             if (unit) onBookUnit(unit);

@@ -1,5 +1,6 @@
 import { api, ApiError } from "./api";
 import { getApiBaseUrl } from "./api-base-url";
+import type { MessageKey } from "./i18n";
 import type { SeatingZone } from "./seating-zone";
 
 export const EVENT_REQUEST_TYPES = [
@@ -59,6 +60,7 @@ export type EventRequest = {
   updatedAt: string;
 };
 
+/** @deprecated Prefer eventRequestTypeLabel(type, t) — English labels for legacy/public callers. */
 export const EVENT_REQUEST_TYPE_LABELS: Record<EventRequestType, string> = {
   TABLE: "Table reservation",
   GAMING: "Gaming / activity",
@@ -69,18 +71,72 @@ export const EVENT_REQUEST_TYPE_LABELS: Record<EventRequestType, string> = {
   OTHER: "Other event",
 };
 
+/** @deprecated Prefer eventRequestSourceLabel(source, t) — English labels for legacy/public callers. */
 export const EVENT_REQUEST_SOURCE_LABELS: Record<EventRequestSource, string> = {
   CLIENT_WEB: "Online form",
   PHONE: "Phone call",
   STAFF: "Logged by staff",
 };
 
+/** @deprecated Prefer eventRequestStatusLabel(status, t) — English labels for legacy/public callers. */
 export const EVENT_REQUEST_STATUS_LABELS: Record<EventRequestStatus, string> = {
   PENDING: "Pending review",
   APPROVED: "Approved",
   DECLINED: "Declined",
   CANCELED: "Canceled",
 };
+
+const EVENT_REQUEST_TYPE_KEYS: Record<EventRequestType, MessageKey> = {
+  TABLE: "eventRequests.type.TABLE",
+  GAMING: "eventRequests.type.GAMING",
+  BIRTHDAY: "eventRequests.type.BIRTHDAY",
+  MEETING: "eventRequests.type.MEETING",
+  PARTY: "eventRequests.type.PARTY",
+  CORPORATE: "eventRequests.type.CORPORATE",
+  OTHER: "eventRequests.type.OTHER",
+};
+
+const EVENT_REQUEST_SOURCE_KEYS: Record<EventRequestSource, MessageKey> = {
+  CLIENT_WEB: "eventRequests.source.CLIENT_WEB",
+  PHONE: "eventRequests.source.PHONE",
+  STAFF: "eventRequests.source.STAFF",
+};
+
+const EVENT_REQUEST_STATUS_KEYS: Record<EventRequestStatus, MessageKey> = {
+  PENDING: "eventRequests.status.PENDING",
+  APPROVED: "eventRequests.status.APPROVED",
+  DECLINED: "eventRequests.status.DECLINED",
+  CANCELED: "eventRequests.status.CANCELED",
+};
+
+type EventRequestTranslate = (
+  key: MessageKey,
+  vars?: Record<string, string | number>,
+) => string;
+
+export function eventRequestTypeLabel(
+  type: EventRequestType,
+  t?: EventRequestTranslate,
+): string {
+  if (t) return t(EVENT_REQUEST_TYPE_KEYS[type]);
+  return EVENT_REQUEST_TYPE_LABELS[type];
+}
+
+export function eventRequestSourceLabel(
+  source: EventRequestSource,
+  t?: EventRequestTranslate,
+): string {
+  if (t) return t(EVENT_REQUEST_SOURCE_KEYS[source]);
+  return EVENT_REQUEST_SOURCE_LABELS[source];
+}
+
+export function eventRequestStatusLabel(
+  status: EventRequestStatus,
+  t?: EventRequestTranslate,
+): string {
+  if (t) return t(EVENT_REQUEST_STATUS_KEYS[status]);
+  return EVENT_REQUEST_STATUS_LABELS[status];
+}
 
 export function fetchEventRequests(params?: { status?: EventRequestStatus }) {
   const q = new URLSearchParams();
@@ -145,12 +201,16 @@ export async function submitPublicEventRequest(
     zone?: SeatingZone;
     message?: string;
     resourceCategoryId?: string;
+    privacyConsentAccepted: boolean;
+    /** Optional; required only when API CAPTCHA_PROVIDER is enforced. */
+    captchaToken?: string;
   },
 ) {
   const res = await fetch(
     `${getApiBaseUrl()}/public/venues/${encodeURIComponent(slug)}/event-requests`,
     {
       method: "POST",
+      credentials: "omit",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(body),
     },
@@ -225,7 +285,7 @@ export async function fetchPublicEventRequestStatus(slug: string, token: string)
 export async function cancelPublicEventRequest(slug: string, token: string) {
   const res = await fetch(
     `${getApiBaseUrl()}/public/venues/${encodeURIComponent(slug)}/event-requests/status/${encodeURIComponent(token)}/cancel`,
-    { method: "POST", headers: { "Content-Type": "application/json" } },
+    { method: "POST", credentials: "omit", headers: { "Content-Type": "application/json" } },
   );
   let payload: unknown = null;
   try {

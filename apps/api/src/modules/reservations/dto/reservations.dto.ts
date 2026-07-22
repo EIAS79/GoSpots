@@ -8,8 +8,11 @@ import {
   IsNumber,
   IsOptional,
   IsString,
+  Matches,
+  Max,
   MaxLength,
   Min,
+  MinLength,
 } from 'class-validator';
 
 export class ReservationQueryDto {
@@ -30,12 +33,18 @@ export class ReservationQueryDto {
   resourceId?: string;
 }
 
+/** Public + staff day schedule — calendar date only (not full ISO datetime). */
 export class ScheduleQueryDto {
-  @IsDateString()
+  @IsString()
+  @Matches(/^\d{4}-\d{2}-\d{2}$/, {
+    message: 'date must be YYYY-MM-DD',
+  })
   date!: string;
 
   @IsOptional()
   @IsString()
+  @MinLength(1)
+  @MaxLength(64)
   categoryId?: string;
 }
 
@@ -60,6 +69,7 @@ export class CreateReservationDto {
   @IsOptional()
   @IsInt()
   @Min(1)
+  @Max(100)
   partySize?: number;
 
   @IsDateString()
@@ -104,6 +114,7 @@ export class UpdateReservationDto {
   @IsOptional()
   @IsInt()
   @Min(1)
+  @Max(100)
   partySize?: number;
 
   @IsOptional()

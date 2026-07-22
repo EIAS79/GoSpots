@@ -14,6 +14,7 @@ export function normalizeDiningTableSize(value: unknown): DiningTableSize {
   return 4;
 }
 
+/** @deprecated Use `seatingZoneLabel(t, zone)` from `./seating-zone` for a localized label. */
 export function diningZoneLabel(zone: SeatingZone | string | null | undefined) {
   return zone === "OUTDOOR" ? "Outdoors" : "Indoors";
 }
@@ -21,8 +22,14 @@ export function diningZoneLabel(zone: SeatingZone | string | null | undefined) {
 export function diningTableGroupLabel(
   name: string | null | undefined,
   capacity: number,
+  t?: (key: string, vars?: Record<string, string | number>) => string,
 ) {
   const trimmed = name?.trim();
   if (trimmed && trimmed !== `${capacity}-seat table`) return trimmed;
+  if (t) {
+    return capacity === 1
+      ? t("diningSetup.tableFallbackOne")
+      : t("diningSetup.tableFallbackMany", { capacity });
+  }
   return capacity === 1 ? "1-top table" : `${capacity}-top tables`;
 }

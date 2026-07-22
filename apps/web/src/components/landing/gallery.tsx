@@ -6,6 +6,7 @@ import { Reveal } from "@/components/effects/reveal";
 import { VenueCoverImage } from "@/components/ui/venue-cover-image";
 import { gallery } from "@/lib/gallery";
 import { cn } from "@/lib/cn";
+import { usePublicPrefs } from "@/lib/public-prefs-context";
 
 const spans = [
   "col-span-1 row-span-1 sm:col-span-2 sm:row-span-2",
@@ -20,20 +21,21 @@ const spans = [
 ];
 
 export function Gallery() {
+  const { t } = usePublicPrefs();
+
   return (
     <section id="gallery" className="relative py-24">
       <div className="mx-auto max-w-7xl px-4 sm:px-6 md:px-8">
         <Reveal className="mx-auto max-w-2xl text-center">
           <span className="text-xs font-medium uppercase tracking-widest text-amber-700 dark:text-amber-300">
-            Atmosphere · not a venue list
+            {t("gallery.eyebrow")}
           </span>
           <h2 className="mt-3 text-balance text-3xl font-bold md:text-5xl">
-            The kinds of nights{" "}
-            <span className="text-gradient">GoSpots is for.</span>
+            {t("gallery.title")}{" "}
+            <span className="text-gradient">{t("gallery.titleAccent")}</span>
           </h2>
           <p className="mt-4 text-base text-zinc-600 dark:text-zinc-400 md:text-lg">
-            Stock photography for mood only — it does not represent partner venues or
-            live availability.
+            {t("gallery.subtitle")}
           </p>
         </Reveal>
 
@@ -62,7 +64,7 @@ export function Gallery() {
               <figcaption className="absolute inset-x-0 bottom-0 flex items-end justify-between gap-2 p-2.5 sm:p-4">
                 <div className="min-w-0">
                   <span className="inline-flex items-center gap-1 rounded-full border border-white/15 bg-black/40 px-2 py-0.5 text-[10px] font-medium uppercase tracking-wider text-amber-200 backdrop-blur">
-                    {g.tag}
+                    {t(`gallery.tag.${i + 1}`)}
                   </span>
                   {g.city && (
                     <p className="mt-1.5 hidden items-center gap-1 text-xs text-zinc-300 sm:inline-flex">

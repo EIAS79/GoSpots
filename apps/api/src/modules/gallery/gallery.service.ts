@@ -131,7 +131,7 @@ export class GalleryService {
     if (!existing) throw new NotFoundException();
 
     const item = await this.prisma.galleryItem.update({
-      where: { id },
+      where: { id, shopId },
       data: {
         ...(dto.caption !== undefined && {
           caption: dto.caption?.trim() || null,
@@ -158,8 +158,8 @@ export class GalleryService {
     });
     if (!existing) throw new NotFoundException();
 
-    await this.media.deleteByMediaPath(existing.imageUrl);
-    await this.prisma.galleryItem.delete({ where: { id } });
+    await this.media.deleteByMediaPath(shopId, existing.imageUrl);
+    await this.prisma.galleryItem.delete({ where: { id, shopId } });
     await this.audit.record(actor, {
       section: 'gallery',
       action: 'gallery.item.delete',

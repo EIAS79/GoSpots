@@ -14,7 +14,7 @@ import { useVenueSettings } from "@/lib/venue-settings-context";
 
 export default function VenueOverviewPage() {
   const guide = useDashboardGuide("overview");
-  const { formatMoney, locale } = useVenueSettings();
+  const { formatMoney, locale, t } = useVenueSettings();
   const links = {
     reports: useVenueHref("/finance?tab=reports"),
     orders: useVenueHref("/orders"),
@@ -34,14 +34,19 @@ export default function VenueOverviewPage() {
     fetchDashboardOverview()
       .then(setData)
       .catch((e) =>
-        setError(e instanceof Error ? e.message : "Failed to load overview."),
+        setError(
+          e instanceof Error ? e.message : t("dashOverview.loadError"),
+        ),
       )
       .finally(() => setLoading(false));
-  }, []);
+  }, [t]);
 
   if (loading) {
     return (
-      <TenantPage title="Overview" className="flex items-center justify-center">
+      <TenantPage
+        title={t("dashOverview.title")}
+        className="flex items-center justify-center"
+      >
         <Loader2 className="h-6 w-6 animate-spin text-emerald-400" />
       </TenantPage>
     );
@@ -49,9 +54,9 @@ export default function VenueOverviewPage() {
 
   if (error || !data) {
     return (
-      <TenantPage title="Overview">
+      <TenantPage title={t("dashOverview.title")}>
         <p className="text-sm text-rose-300">
-          {error ?? "Could not load dashboard."}
+          {error ?? t("dashOverview.loadErrorGeneric")}
         </p>
       </TenantPage>
     );

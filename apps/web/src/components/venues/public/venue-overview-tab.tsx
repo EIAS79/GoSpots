@@ -12,6 +12,7 @@ import {
 import Image from "next/image";
 import { StarRatingDisplay } from "@/components/venues/public/venue-reviews-section";
 import { cn } from "@/lib/cn";
+import { usePublicPrefs } from "@/lib/public-prefs-context";
 import type {
   PublicScheduleException,
   PublicVenueDetail,
@@ -38,6 +39,7 @@ export function VenueOverviewTab({
   venue: PublicVenueDetail;
   slug: string;
 }) {
+  const { t } = usePublicPrefs();
   const exceptions = venue.scheduleExceptions ?? [];
   const gallery = venue.galleryItems.filter((i) => resolveMediaUrl(i.imageUrl));
   const location = formatVenueLocation(venue);
@@ -48,6 +50,7 @@ export function VenueOverviewTab({
     venue.showReviews !== false &&
     (venue.reviewCount ?? 0) > 0 &&
     venue.averageRating != null;
+  const reviewCount = venue.reviewCount ?? 0;
 
   return (
     <div className="space-y-10">
@@ -56,7 +59,7 @@ export function VenueOverviewTab({
         {showRating ? (
           <div className="flex flex-col justify-center rounded-2xl border border-amber-400/20 bg-gradient-to-br from-amber-500/10 via-[var(--color-surface)] to-[var(--color-background)] px-5 py-6">
             <p className="text-[10px] font-semibold uppercase tracking-widest text-amber-700/80 dark:text-amber-200/70">
-              Guest rating
+              {t("venuePage.overview.guestRating")}
             </p>
             {hasReviews ? (
               <>
@@ -67,8 +70,12 @@ export function VenueOverviewTab({
                   <StarRatingDisplay rating={venue.averageRating!} size={18} />
                 </div>
                 <p className="mt-2 text-xs text-zinc-600 dark:text-zinc-400">
-                  Average of {venue.reviewCount} review
-                  {venue.reviewCount === 1 ? "" : "s"}
+                  {t(
+                    reviewCount === 1
+                      ? "venuePage.overview.averageOfOne"
+                      : "venuePage.overview.averageOfMany",
+                    { count: reviewCount },
+                  )}
                 </p>
               </>
             ) : (
@@ -76,11 +83,11 @@ export function VenueOverviewTab({
                 <div className="mt-4 flex items-center gap-2 text-zinc-500">
                   <Star size={22} className="text-zinc-400 dark:text-zinc-600" />
                   <span className="text-lg font-medium text-zinc-600 dark:text-zinc-400">
-                    No reviews yet
+                    {t("venuePage.overview.noReviews")}
                   </span>
                 </div>
                 <p className="mt-2 text-xs text-zinc-500">
-                  Be among the first to rate this venue on the Reviews tab.
+                  {t("venuePage.overview.beFirstHint")}
                 </p>
               </>
             )}
@@ -93,14 +100,14 @@ export function VenueOverviewTab({
             !showRating && "md:col-span-2",
           )}
         >
-          <SectionHeading title="About" className="mb-3" />
+          <SectionHeading title={t("venuePage.overview.about")} className="mb-3" />
           {venue.description ? (
             <p className="text-base leading-relaxed text-zinc-700 dark:text-zinc-300">
               {venue.description}
             </p>
           ) : (
             <p className="text-sm text-zinc-500">
-              This venue hasn’t added a description yet.
+              {t("venuePage.overview.noDescription")}
             </p>
           )}
         </div>
@@ -109,7 +116,7 @@ export function VenueOverviewTab({
       {/* 2. Gallery collage */}
       {gallery.length > 0 ? (
         <section>
-          <SectionHeading title="Gallery" />
+          <SectionHeading title={t("venuePage.overview.gallery")} />
           <GalleryCollage items={gallery} />
         </section>
       ) : null}
@@ -122,7 +129,10 @@ export function VenueOverviewTab({
         )}
       >
         <div className="rounded-2xl border border-[var(--color-border)] bg-[var(--color-surface)] p-5">
-          <SectionHeading title="Opening hours" className="mb-3" />
+          <SectionHeading
+            title={t("venuePage.overview.openingHours")}
+            className="mb-3"
+          />
           <VenueWeeklyHours hours={venue.openingHours} />
         </div>
 
@@ -132,7 +142,7 @@ export function VenueOverviewTab({
       {/* 4. Schedule exceptions last — only when relevant */}
       {exceptions.length > 0 ? (
         <section>
-          <SectionHeading title="Schedule updates" />
+          <SectionHeading title={t("venuePage.overview.scheduleUpdates")} />
           <ul className="grid gap-2 sm:grid-cols-2">
             {exceptions.map((ex) => (
               <ScheduleExceptionRow key={ex.id} exception={ex} />
@@ -151,6 +161,7 @@ function FindUsPanel({
   venue: PublicVenueDetail;
   location: string | null;
 }) {
+  const { t } = usePublicPrefs();
   const street = venue.address?.trim() || null;
   const locality = [venue.city?.trim(), venue.country?.trim()]
     .filter(Boolean)
@@ -172,9 +183,9 @@ function FindUsPanel({
       />
 
       <div className="relative">
-        <SectionHeading title="Find us" className="mb-1" />
+        <SectionHeading title={t("venuePage.overview.findUs")} className="mb-1" />
         <p className="mb-5 text-sm text-zinc-500">
-          Directions, call, or email — pick what works.
+          {t("venuePage.overview.findUsHint")}
         </p>
 
         {location || street ? (
@@ -190,7 +201,7 @@ function FindUsPanel({
               </span>
               <div className="min-w-0 flex-1">
                 <p className="text-[11px] font-semibold uppercase tracking-wider text-zinc-500">
-                  Address
+                  {t("venuePage.overview.address")}
                 </p>
                 {street ? (
                   <p className="mt-1 text-sm font-medium leading-snug text-[var(--color-foreground)]">
@@ -214,7 +225,7 @@ function FindUsPanel({
                   </p>
                 ) : null}
                 <span className="mt-2.5 inline-flex items-center gap-1 text-xs font-medium text-amber-700 transition group-hover:text-amber-600 dark:text-amber-300/90 dark:group-hover:text-amber-200">
-                  Open in Maps
+                  {t("venuePage.overview.openInMaps")}
                   <ArrowUpRight
                     size={13}
                     className="transition duration-300 group-hover:translate-x-0.5 group-hover:-translate-y-0.5"
@@ -229,7 +240,7 @@ function FindUsPanel({
               </span>
               <div className="min-w-0 flex-1">
                 <p className="text-[11px] font-semibold uppercase tracking-wider text-zinc-500">
-                  Address
+                  {t("venuePage.overview.address")}
                 </p>
                 <p className="mt-1 text-sm font-medium text-[var(--color-foreground)]">
                   {location}
@@ -245,7 +256,7 @@ function FindUsPanel({
               <ContactAction
                 href={`tel:${venue.phone}`}
                 icon={Phone}
-                label="Call"
+                label={t("venuePage.overview.call")}
                 value={venue.phone}
               />
             ) : null}
@@ -253,7 +264,7 @@ function FindUsPanel({
               <ContactAction
                 href={`mailto:${venue.email}`}
                 icon={Mail}
-                label="Email"
+                label={t("venuePage.overview.email")}
                 value={venue.email}
               />
             ) : null}
@@ -323,6 +334,7 @@ function GalleryCollage({
 }: {
   items: PublicVenueDetail["galleryItems"];
 }) {
+  const { t } = usePublicPrefs();
   const urls = items
     .map((item) => ({
       ...item,
@@ -335,6 +347,7 @@ function GalleryCollage({
   const featured = urls[0];
   const rest = urls.slice(1, 5);
   const more = urls.length - 5;
+  const photoAlt = t("venuePage.overview.venuePhoto");
 
   return (
     <div className="grid grid-cols-2 gap-2 md:grid-cols-4 md:grid-rows-2 md:gap-3">
@@ -348,7 +361,7 @@ function GalleryCollage({
       >
         <Image
           src={featured.url}
-          alt={featured.caption ?? "Venue photo"}
+          alt={featured.caption ?? photoAlt}
           fill
           className="object-cover transition duration-500 group-hover:scale-[1.03]"
           unoptimized
@@ -373,7 +386,7 @@ function GalleryCollage({
         >
           <Image
             src={item.url}
-            alt={item.caption ?? "Venue photo"}
+            alt={item.caption ?? photoAlt}
             fill
             className="object-cover transition duration-500 group-hover:scale-105"
             unoptimized
@@ -381,7 +394,7 @@ function GalleryCollage({
           />
           {i === rest.length - 1 && more > 0 ? (
             <div className="absolute inset-0 flex items-center justify-center bg-black/55 text-sm font-semibold text-white">
-              +{more} more
+              {t("venuePage.overview.morePhotos", { count: more })}
             </div>
           ) : null}
         </figure>
@@ -395,6 +408,7 @@ function ScheduleExceptionRow({
 }: {
   exception: PublicScheduleException;
 }) {
+  const { t } = usePublicPrefs();
   const Icon = exception.isClosed ? CalendarOff : CalendarRange;
   return (
     <li className="flex items-start gap-3 rounded-xl border border-[var(--color-border)] bg-[var(--color-surface)] px-4 py-3">
@@ -416,10 +430,13 @@ function ScheduleExceptionRow({
         </p>
         <p className="mt-0.5 text-xs text-zinc-500">
           {exception.isClosed
-            ? "Closed"
+            ? t("venuePage.overview.closed")
             : exception.opensAt && exception.closesAt
-              ? `Special hours: ${exception.opensAt} – ${exception.closesAt}`
-              : "Special hours"}
+              ? t("venuePage.overview.specialHoursRange", {
+                  opens: exception.opensAt,
+                  closes: exception.closesAt,
+                })
+              : t("venuePage.overview.specialHours")}
         </p>
       </div>
     </li>

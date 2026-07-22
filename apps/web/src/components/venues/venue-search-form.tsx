@@ -2,6 +2,7 @@
 
 import { Search } from "lucide-react";
 import { cn } from "@/lib/cn";
+import { usePublicPrefs } from "@/lib/public-prefs-context";
 import { VENUE_CATEGORY_PRESETS } from "@/lib/venue-categories";
 
 export type VenueSearchFormValues = {
@@ -33,6 +34,7 @@ export function VenueSearchForm({
   showCategories = true,
   className,
 }: VenueSearchFormProps) {
+  const { t } = usePublicPrefs();
   function toggleCategory(slug: string) {
     const next = new Set(values.categories);
     if (next.has(slug)) next.delete(slug);
@@ -68,26 +70,26 @@ export function VenueSearchForm({
           <input
             value={values.q}
             onChange={(e) => onChange({ q: e.target.value })}
-            placeholder="Search name or description…"
+            placeholder={t("venueSearch.placeholder")}
             className={cn(fieldClass, "py-3 pl-10 pr-4")}
           />
         </label>
         <label className="min-w-0">
-          <span className="sr-only">City</span>
+          <span className="sr-only">{t("venueSearch.cityLabel")}</span>
           <input
             value={values.city}
             onChange={(e) => onChange({ city: e.target.value })}
-            placeholder="City"
+            placeholder={t("venueSearch.cityLabel")}
             list="venue-search-cities"
             className={fieldClass}
           />
         </label>
         <label className="min-w-0">
-          <span className="sr-only">Country</span>
+          <span className="sr-only">{t("venueSearch.countryLabel")}</span>
           <input
             value={values.country}
             onChange={(e) => onChange({ country: e.target.value })}
-            placeholder="Country"
+            placeholder={t("venueSearch.countryLabel")}
             list="venue-search-countries"
             className={fieldClass}
           />
@@ -97,7 +99,7 @@ export function VenueSearchForm({
           className="inline-flex items-center justify-center gap-2 rounded-xl bg-amber-400 px-4 py-3 text-sm font-semibold text-zinc-950 transition hover:bg-amber-300"
         >
           <Search size={16} className="md:hidden" />
-          <span className="md:inline">Search</span>
+          <span className="md:inline">{t("venueSearch.submit")}</span>
         </button>
       </div>
 

@@ -24,14 +24,50 @@ import {
 } from "@/lib/bowling-modes";
 import { bookingCollectsPartySize } from "@/lib/booking-unit-kind";
 import { hasWindowOverlapWithBookings } from "@/lib/gaming-window-availability";
+import {
+  useConnectivityOptional,
+  type ConnectivityMode,
+} from "@/lib/connectivity-context";
+import { PrivacyConsentCheckbox } from "@/components/venues/public/privacy-consent-checkbox";
+import { PublicCaptchaWidget } from "@/components/venues/public/public-captcha-widget";
 import { submitPublicGamingReservation } from "@/lib/public-gaming-client";
 import { submitPublicDiningReservation } from "@/lib/public-dining-client";
+import {
+  isPublicCaptchaEnabled,
+  withCaptchaToken,
+} from "@/lib/public-captcha";
+import { safeStatusPathHref } from "@/lib/safe-app-href";
 import { usePublicPrefs } from "@/lib/public-prefs-context";
 import {
   combineLocalDateTime,
   todayDateInput,
 } from "@/lib/seating-event-datetime";
 import type { ScheduleCategory, ScheduleUnit } from "@/lib/reservations-client";
+
+/** Modes A/B/C — fail-closed on public booking writes (bible #32). Mode F keeps submit. */
+function isConnectivityOutage(mode: ConnectivityMode): boolean {
+  return (
+    mode === "offline" ||
+    mode === "api_unreachable" ||
+    mode === "api_unavailable"
+  );
+}
+
+function outageCopyKey(
+  mode: Extract<
+    ConnectivityMode,
+    "offline" | "api_unreachable" | "api_unavailable"
+  >,
+): string {
+  switch (mode) {
+    case "offline":
+      return "venuePage.booking.outageOffline";
+    case "api_unreachable":
+      return "venuePage.booking.outageUnreachable";
+    case "api_unavailable":
+      return "venuePage.booking.outageUnavailable";
+  }
+}
 
 function defaultStartTime() {
   const d = new Date();
@@ -64,7 +100,7 @@ export function PublicGamingBookingDialog({
   initialPartySize?: number;
   offeringRates?: {
     label: string;
-    price: number;
+    price: import("@/lib/money").MoneyWire;
     durationMinutes: number | null;
   }[];
   currency?: string;
@@ -72,11 +108,29 @@ export function PublicGamingBookingDialog({
   onClose: () => void;
   onBooked?: () => void;
 }) {
-  const { formatMoney } = usePublicPrefs();
+  const { formatMoney, t, locale } = usePublicPrefs();
+  const connectivity = useConnectivityOptional();
+  const connectivityMode = connectivity?.mode ?? "ok";
+  const outage = isConnectivityOutage(connectivityMode);
+  const outageMessage = outage
+    ? t(
+        outageCopyKey(
+          connectivityMode as Extract<
+            ConnectivityMode,
+            "offline" | "api_unreachable" | "api_unavailable"
+          >,
+        ),
+      )
+    : null;
   const isDining = bookingKind === "dining";
   const slotMinutes = category.slotMinutes || (isDining ? 90 : 60);
   const noShowMinutes = parseNoShowMinutes(category.offeringConfig);
   const isBowling = !isDining && category.type === "BOWLING";
+  const unitKind = t(
+    isDining
+      ? "venuePage.booking.unitKindTable"
+      : "venuePage.booking.unitKindStation",
+  );
 
   const legacyRates = useMemo(
     () =>
@@ -134,6 +188,9 @@ export function PublicGamingBookingDialog({
   const [notes, setNotes] = useState("");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [captchaToken, setCaptchaToken] = useState<string | null>(null);
+  const [captchaReset, setCaptchaReset] = useState(0);
+  const [privacyConsent, setPrivacyConsent] = useState(false);
   const [success, setSuccess] = useState<{
     message: string;
     statusPath?: string;
@@ -247,17 +304,18 @@ export function PublicGamingBookingDialog({
   async function submit(e: React.FormEvent) {
     e.preventDefault();
     setError(null);
+    if (outage) return;
 
     if (!guestName.trim()) {
-      setError("Your name is required.");
+      setError(t("venuePage.booking.nameRequired"));
       return;
     }
     if (!guestEmail.trim()) {
-      setError("Your email is required — we'll send your booking confirmation.");
+      setError(t("venuePage.booking.emailRequired"));
       return;
     }
     if (!startsAt) {
-      setError("Pick a valid time slot.");
+      setError(t("venuePage.booking.invalidTime"));
       return;
     }
 
@@ -272,8 +330,15 @@ export function PublicGamingBookingDialog({
       overlapEndTime,
     );
     if (overlap) {
+      const timeOpts: Intl.DateTimeFormatOptions = {
+        hour: "numeric",
+        minute: "2-digit",
+      };
       setError(
-        `This station is already reserved ${new Date(overlap.startsAt).toLocaleTimeString(undefined, { hour: "numeric", minute: "2-digit" })}–${new Date(overlap.endsAt).toLocaleTimeString(undefined, { hour: "numeric", minute: "2-digit" })}. Pick a time before or after that slot.`,
+        t("venuePage.booking.overlap", {
+          start: new Date(overlap.startsAt).toLocaleTimeString(locale, timeOpts),
+          end: new Date(overlap.endsAt).toLocaleTimeString(locale, timeOpts),
+        }),
       );
       return;
     }
@@ -282,7 +347,10 @@ export function PublicGamingBookingDialog({
     const players = parseInt(partySize, 10) || 1;
     if (isDining && unit.capacity != null && players > unit.capacity) {
       setError(
-        `${unit.name} seats up to ${unit.capacity} — choose a smaller party or another table.`,
+        t("venuePage.booking.capacityExceeded", {
+          name: unit.name,
+          capacity: unit.capacity,
+        }),
       );
       return;
     }
@@ -302,33 +370,57 @@ export function PublicGamingBookingDialog({
     const resolvedEndsAt =
       endsAt ?? holdEndFromLocal(date, startTime, noShowMinutes);
     if (!resolvedEndsAt) {
-      setError("Pick a valid time slot.");
+      setError(t("venuePage.booking.invalidTime"));
+      return;
+    }
+
+    if (!privacyConsent) {
+      setError(t("venuePage.privacyConsent.required"));
+      return;
+    }
+
+    if (isPublicCaptchaEnabled() && !captchaToken?.trim()) {
+      setError(t("venuePage.captcha.required"));
       return;
     }
 
     setBusy(true);
     try {
-      const payload = {
-        resourceId: unit.id,
-        guestName: guestName.trim(),
-        guestEmail: guestEmail.trim(),
-        guestPhone: guestPhone.trim() || undefined,
-        partySize: showPartySize ? players : 1,
-        startsAt,
-        endsAt: resolvedEndsAt,
-        notes: bookingNotes,
-      };
+      const payload = withCaptchaToken(
+        {
+          resourceId: unit.id,
+          guestName: guestName.trim(),
+          guestEmail: guestEmail.trim(),
+          guestPhone: guestPhone.trim() || undefined,
+          partySize: showPartySize ? players : 1,
+          startsAt,
+          endsAt: resolvedEndsAt,
+          notes: bookingNotes,
+          privacyConsentAccepted: true,
+        },
+        captchaToken,
+      );
       const res = isDining
         ? await submitPublicDiningReservation(slug, payload)
         : await submitPublicGamingReservation(slug, payload);
       setSuccess({ message: res.message, statusPath: res.statusPath });
       onBooked?.();
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Could not complete booking.");
+      setError(
+        err instanceof Error
+          ? err.message
+          : t("venuePage.booking.submitFailed"),
+      );
+      setCaptchaToken(null);
+      setCaptchaReset((n) => n + 1);
     } finally {
       setBusy(false);
     }
   }
+
+  const successTrackHref = success
+    ? safeStatusPathHref(success.statusPath)
+    : null;
 
   return (
     <ModalPortal>
@@ -350,14 +442,19 @@ export function PublicGamingBookingDialog({
                 {category.name}
               </p>
               <h2 id="gaming-book-title" className="text-lg font-semibold text-white">
-                {isDining ? `Reserve ${unit.name}` : `Book ${unit.name}`}
+                {t(
+                  isDining
+                    ? "venuePage.booking.reserveTitle"
+                    : "venuePage.booking.bookTitle",
+                  { name: unit.name },
+                )}
               </h2>
             </div>
             <button
               type="button"
               onClick={onClose}
               className="rounded-lg p-2 text-zinc-400 hover:bg-white/5 hover:text-white"
-              aria-label="Close"
+              aria-label={t("venuePage.booking.close")}
             >
               <X size={18} />
             </button>
@@ -369,12 +466,12 @@ export function PublicGamingBookingDialog({
               <p className="mt-3 text-sm font-medium text-emerald-100">
                 {success.message}
               </p>
-              {success.statusPath ? (
+              {successTrackHref ? (
                 <Link
-                  href={success.statusPath}
+                  href={successTrackHref}
                   className="mt-4 inline-block rounded-lg bg-emerald-600 px-4 py-2.5 text-sm font-medium text-white hover:bg-emerald-500"
                 >
-                  Track your booking
+                  {t("venuePage.booking.trackBooking")}
                 </Link>
               ) : null}
               <button
@@ -382,16 +479,26 @@ export function PublicGamingBookingDialog({
                 onClick={onClose}
                 className="mt-4 block w-full text-xs text-zinc-500 underline"
               >
-                Close
+                {t("venuePage.booking.close")}
               </button>
             </div>
           ) : (
             <form onSubmit={(e) => void submit(e)} className="space-y-4 p-5">
+              {outageMessage ? (
+                <p
+                  role="status"
+                  aria-live="polite"
+                  className="rounded-lg border border-amber-400/25 bg-amber-950/50 px-3 py-2 text-xs leading-snug text-amber-100/95"
+                >
+                  {outageMessage}
+                </p>
+              ) : null}
+
               <div className="rounded-xl border border-emerald-500/20 bg-emerald-500/[0.06] px-4 py-3 text-sm text-zinc-300">
                 <div className="flex flex-col gap-0.5 leading-snug">
                   <span className="font-medium text-emerald-200">{unit.name}</span>
                   <span className="text-xs text-zinc-400">
-                    {new Date(`${date}T12:00:00`).toLocaleDateString(undefined, {
+                    {new Date(`${date}T12:00:00`).toLocaleDateString(locale, {
                       weekday: "short",
                       month: "short",
                       day: "numeric",
@@ -402,7 +509,9 @@ export function PublicGamingBookingDialog({
                 </div>
                 {estimatedPrice != null ? (
                   <span className="mt-1 block text-xs text-emerald-300/80">
-                    Est. {formatEstPrice(estimatedPrice)}
+                    {t("venuePage.booking.estPrice", {
+                      price: formatEstPrice(estimatedPrice),
+                    })}
                   </span>
                 ) : null}
               </div>
@@ -418,7 +527,7 @@ export function PublicGamingBookingDialog({
                   modes={bowlingModes}
                   value={selectedBowlingModeId}
                   onChange={onBowlingModeChange}
-                  label="How would you like to book?"
+                  label={t("venuePage.booking.howToBook")}
                   labelClassName="block text-xs text-zinc-400"
                   className="mt-1 w-full rounded-lg border border-white/10 bg-zinc-900 px-3 py-2.5 text-base text-white sm:text-sm"
                 />
@@ -426,7 +535,7 @@ export function PublicGamingBookingDialog({
 
               {isBowling && chargeMode === "GAME" ? (
                 <label className="block text-xs text-zinc-400">
-                  Number of games
+                  {t("venuePage.booking.numberOfGames")}
                   <input
                     type="number"
                     min={1}
@@ -439,7 +548,7 @@ export function PublicGamingBookingDialog({
               ) : null}
 
               <label className="block text-xs text-zinc-400">
-                Your name
+                {t("venuePage.booking.yourName")}
                 <input
                   required
                   autoFocus
@@ -451,7 +560,7 @@ export function PublicGamingBookingDialog({
 
               <div className="grid gap-3 sm:grid-cols-2">
                 <label className="block text-xs text-zinc-400">
-                  Email
+                  {t("venuePage.booking.email")}
                   <input
                     type="email"
                     required
@@ -461,7 +570,7 @@ export function PublicGamingBookingDialog({
                   />
                 </label>
                 <label className="block text-xs text-zinc-400">
-                  Phone (optional)
+                  {t("venuePage.booking.phoneOptional")}
                   <input
                     type="tel"
                     value={guestPhone}
@@ -475,18 +584,25 @@ export function PublicGamingBookingDialog({
                 <label className="block text-xs text-zinc-400">
                   {isDining ? (
                     <>
-                      Party size
+                      {t("venuePage.booking.partySize")}
                       {unit.capacity != null ? (
                         <span className="text-zinc-600">
                           {" "}
-                          (this table: up to {unit.capacity})
+                          {t("venuePage.booking.tableCapacity", {
+                            capacity: unit.capacity,
+                          })}
                         </span>
                       ) : null}
                     </>
                   ) : (
-                    <>
-                      Players ({selectedBowlingMode?.minPlayers ?? bowlingConfig.minPlayers}–{selectedBowlingMode?.maxPlayers ?? bowlingConfig.maxPlayers})
-                    </>
+                    t("venuePage.booking.playersRange", {
+                      min:
+                        selectedBowlingMode?.minPlayers ??
+                        bowlingConfig.minPlayers,
+                      max:
+                        selectedBowlingMode?.maxPlayers ??
+                        bowlingConfig.maxPlayers,
+                    })
                   )}
                   <input
                     type="number"
@@ -503,26 +619,30 @@ export function PublicGamingBookingDialog({
                   />
                   {isDining ? (
                     <span className="mt-1 block text-[10px] text-zinc-600">
-                      Used for seating — no charge is calculated online for
-                      dining reservations.
+                      {t("venuePage.booking.diningPartyHint")}
                     </span>
                   ) : (
                     <span className="mt-1 block text-[10px] text-zinc-600">
-                      Per-person pricing — charge is per player for each{" "}
-                      {selectedBowlingMode?.slotMinutes ?? effectiveSlotMinutes}{" "}
-                      min block in your time slot.
+                      {t("venuePage.booking.perPersonPricing", {
+                        minutes:
+                          selectedBowlingMode?.slotMinutes ??
+                          effectiveSlotMinutes,
+                      })}
                     </span>
                   )}
                 </label>
               ) : isBowling && chargeMode === "TIME" ? (
                 <p className="rounded-lg border border-white/10 bg-zinc-900/50 px-3 py-2 text-[11px] text-zinc-500">
-                  Lane rental — you book the lane for the duration; guest count
-                  does not change the price.
+                  {t("venuePage.booking.laneRental")}
                 </p>
               ) : null}
 
               <label className="block text-xs text-zinc-400">
-                {isDining ? "Arrival time" : "Start time"}
+                {t(
+                  isDining
+                    ? "venuePage.booking.arrivalTime"
+                    : "venuePage.booking.startTime",
+                )}
                 <input
                   type="time"
                   value={startTime}
@@ -531,33 +651,46 @@ export function PublicGamingBookingDialog({
                 />
               </label>
               <p className="text-[10px] text-zinc-600">
-                No fixed end time — your {isDining ? "table" : "station"} is held
-                for {noShowMinutes} minutes after start. Please arrive on time.
+                {t("venuePage.booking.holdHint", {
+                  unitKind,
+                  minutes: noShowMinutes,
+                })}
               </p>
 
               <label className="block text-xs text-zinc-400">
-                Notes (optional)
+                {t("venuePage.booking.notesOptional")}
                 <textarea
                   value={notes}
                   onChange={(e) => setNotes(e.target.value)}
                   rows={2}
-                  placeholder="Game titles, skill level, special requests…"
+                  placeholder={t("venuePage.booking.notesPlaceholder")}
                   className="mt-1 w-full rounded-lg border border-white/10 bg-zinc-900 px-3 py-2.5 text-base text-white sm:text-sm"
                 />
               </label>
 
+              <PublicCaptchaWidget
+                onTokenChange={setCaptchaToken}
+                resetKey={captchaReset}
+              />
+
+              <PrivacyConsentCheckbox
+                checked={privacyConsent}
+                onChange={setPrivacyConsent}
+                label={t("venuePage.privacyConsent.label")}
+                disabled={busy}
+              />
+
               <button
                 type="submit"
-                disabled={busy}
+                disabled={outage || busy}
                 className="inline-flex w-full items-center justify-center gap-2 rounded-xl bg-amber-600 py-3 text-sm font-semibold text-white hover:bg-amber-500 disabled:opacity-50"
               >
                 {busy ? <Loader2 size={16} className="animate-spin" /> : null}
-                Confirm booking
+                {t("venuePage.booking.confirmBooking")}
               </button>
 
               <p className="text-center text-[11px] text-zinc-600">
-                A confirmation email is sent when you book. Your station is
-                reserved immediately for the time you selected.
+                {t("venuePage.booking.confirmEmailHint", { unitKind })}
               </p>
             </form>
           )}

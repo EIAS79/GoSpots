@@ -4,11 +4,15 @@ import {
   ForbiddenException,
   Injectable,
   Logger,
+  NotFoundException,
   UnauthorizedException,
 } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { JwtService } from '@nestjs/jwt';
+import { randomUUID } from 'crypto';
 import { PrismaService } from '../../prisma/prisma.service';
+import type { JwtAccessPayload } from './auth.types';
+export type { JwtAccessPayload } from './auth.types';
 import {
   hashPassword,
   validatePasswordStrength,
@@ -28,21 +32,62 @@ import {
 } from '../../common/venue-account';
 import { addTrialEndDate, tierForPack } from '../../common/subscription-tier';
 import {
+  assertMultiVenueEntitlement,
+  assertOwnerMayAddVenue,
+  assertStaffSeatCapacity,
+  getVenueEntitlements,
+} from '../../common/venue-entitlements';
+import {
+  resolveAddOnsCsv,
   resolvePackId,
   serializeAddOns,
+  syncSubscriptionAddOnRows,
   type AddOnId,
 } from '../../common/venue-packs';
 import {
-  buildDashboardPath,
+  permissionsToEffectiveCsv,
+  syncMembershipPermissionRows,
+} from '../../common/permissions';
+import {
+  classifyVenuePath,
+  dashboardKeyPersistFields,
   generateDashboardKey,
-  parseDashboardPath,
 } from '../../common/dashboard-path';
+import {
+  buildNewDeviceSignInMail,
+  isNewDeviceUserAgent,
+  normalizeSessionUserAgent,
+} from '../../common/new-device-alert.util';
+import {
+  MFA_CHALLENGE_PURPOSE,
+  MFA_CHALLENGE_TTL_SEC,
+  isMfaChallengePayload,
+} from '../../common/mfa-challenge.util';
+import {
+  generateRecoveryCodes,
+  hashRecoveryCode,
+  matchRecoveryCodeHash,
+} from '../../common/mfa-recovery.util';
+import {
+  buildOtpAuthUri,
+  decryptTotpSecret,
+  encryptTotpSecret,
+  generateTotpSecret,
+  verifyTotpCode,
+  type MfaEncryptionKeySource,
+} from '../../common/mfa-totp.util';
+import { assertUserPassword } from '../../common/security/verify-password.util';
 import { AuditService } from '../audit/audit.service';
 import { NotificationsService } from '../notifications/notifications.service';
 import { MailService } from '../mail/mail.service';
 import {
   ForgotPasswordDto,
   LoginDto,
+  MfaRecoveryRegenerateDto,
+  MfaTotpBeginDto,
+  MfaTotpConfirmDto,
+  MfaTotpDisableDto,
+  MfaVerifyDto,
   RegisterDto,
   ResetPasswordDto,
   StaffForgotPasswordDto,
@@ -52,18 +97,27 @@ import { CreateVenueDto } from './dto/create-venue.dto';
 const MAX_FAILED = 5;
 const LOCK_MINUTES = 15;
 
-export interface JwtAccessPayload {
-  sub: string; // user id
-  sysRole: string;
-  email: string;
-  acct?: string; // VENUE_OWNER | VENUE_STAFF
-  sid?: string; // auth session id (staff: single active session)
-  // Active membership context (optional — picked first owned shop on login).
-  shopId?: string;
-  shopRole?: string;
-  perms?: string; // CSV
-  tier?: string;
-}
+export type AuthTokenBundle = {
+  user: {
+    id: string;
+    email: string;
+    name: string | null;
+    systemRole: string;
+  };
+  venuePath: string | null;
+  accessToken: string;
+  accessExpiresIn: number;
+  refreshToken: string;
+  refreshExpiresIn: number;
+};
+
+/** Password OK but TOTP still required — no cookies issued yet. */
+export type MfaLoginChallenge = {
+  mfaRequired: true;
+  mfaToken: string;
+};
+
+export type LoginResult = AuthTokenBundle | MfaLoginChallenge;
 
 @Injectable()
 export class AuthService {
@@ -117,7 +171,7 @@ export class AuthService {
       const s = await tx.shop.create({
         data: {
           slug,
-          dashboardKey: generateDashboardKey(),
+          ...dashboardKeyPersistFields(generateDashboardKey()),
           name: dto.shopName,
           ownerId: u.id,
           venueType: dto.venueType ?? packId,
@@ -130,7 +184,6 @@ export class AuthService {
               status: 'TRIAL',
               trialEndsAt: addTrialEndDate(),
               packId,
-              addOns: addOnsCsv,
             },
           },
           /** Persist the same defaults the hours page shows, so public pages
@@ -144,17 +197,21 @@ export class AuthService {
             })),
           },
         },
+        include: { subscription: true },
       });
-      await tx.membership.create({
+      if (s.subscription) {
+        await syncSubscriptionAddOnRows(tx, s.subscription.id, addOnsCsv);
+      }
+      const membership = await tx.membership.create({
         data: {
           userId: u.id,
           shopId: s.id,
           role: 'OWNER',
-          permissions: '*',
           acceptedAt: new Date(),
           isActive: true,
         },
       });
+      await syncMembershipPermissionRows(tx, membership.id, '*');
       return { user: u, shop: s };
     });
 
@@ -200,7 +257,7 @@ export class AuthService {
       const s = await tx.shop.create({
         data: {
           slug,
-          dashboardKey: generateDashboardKey(),
+          ...dashboardKeyPersistFields(generateDashboardKey()),
           name: dto.shopName,
           ownerId: userId,
           venueType: dto.venueType ?? packId,
@@ -210,7 +267,6 @@ export class AuthService {
               status: 'TRIAL',
               trialEndsAt: addTrialEndDate(),
               packId,
-              addOns: addOnsCsv,
             },
           },
           openingHours: {
@@ -225,20 +281,23 @@ export class AuthService {
         select: {
           id: true,
           slug: true,
-          dashboardKey: true,
           name: true,
+          subscription: { select: { id: true } },
         },
       });
-      await tx.membership.create({
+      if (s.subscription) {
+        await syncSubscriptionAddOnRows(tx, s.subscription.id, addOnsCsv);
+      }
+      const membership = await tx.membership.create({
         data: {
           userId,
           shopId: s.id,
           role: 'OWNER',
-          permissions: '*',
           acceptedAt: new Date(),
           isActive: true,
         },
       });
+      await syncMembershipPermissionRows(tx, membership.id, '*');
       return s;
     });
 
@@ -257,8 +316,8 @@ export class AuthService {
     });
 
     return {
-      shop,
-      dashboardPath: buildDashboardPath(shop.slug, shop.dashboardKey),
+      shop: { id: shop.id, slug: shop.slug, name: shop.name },
+      venuePath: shop.slug,
     };
   }
 
@@ -345,7 +404,14 @@ export class AuthService {
 
     const shops = await this.prisma.shop.findMany({
       where: { id: { in: uniqueIds }, ownerId: source.id },
-      select: { id: true, slug: true, dashboardKey: true, name: true },
+      select: {
+        id: true,
+        slug: true,
+        name: true,
+        subscription: {
+          include: { addOnRows: true },
+        },
+      },
     });
     if (shops.length !== uniqueIds.length) {
       throw new BadRequestException(
@@ -353,10 +419,26 @@ export class AuthService {
       );
     }
 
-    const linked: { id: string; name: string; dashboardPath: string }[] = [];
+    const currentMemberships = await this.prisma.membership.count({
+      where: { userId: currentUserId, isActive: true },
+    });
+    const ownedSubs = await this.prisma.shop.findMany({
+      where: { ownerId: currentUserId },
+      select: { subscription: { include: { addOnRows: true } } },
+    });
+    assertMultiVenueEntitlement(
+      [
+        ...ownedSubs.map((s) => s.subscription),
+        ...shops.map((s) => s.subscription),
+      ],
+      currentMemberships,
+      shops.length,
+    );
+
+    const linked: { id: string; name: string; venuePath: string }[] = [];
 
     for (const shop of shops) {
-      await this.prisma.membership.upsert({
+      const membership = await this.prisma.membership.upsert({
         where: {
           userId_shopId: { userId: currentUserId, shopId: shop.id },
         },
@@ -364,17 +446,16 @@ export class AuthService {
           userId: currentUserId,
           shopId: shop.id,
           role: 'OWNER',
-          permissions: '*',
           acceptedAt: new Date(),
           isActive: true,
         },
         update: {
           role: 'OWNER',
-          permissions: '*',
           isActive: true,
           acceptedAt: new Date(),
         },
       });
+      await syncMembershipPermissionRows(this.prisma, membership.id, '*');
 
       await this.audit.recordForShop(shop.id, {
         section: 'venue',
@@ -391,13 +472,13 @@ export class AuthService {
       linked.push({
         id: shop.id,
         name: shop.name,
-        dashboardPath: buildDashboardPath(shop.slug, shop.dashboardKey),
+        venuePath: shop.slug,
       });
     }
 
     return {
       linked,
-      dashboardPath: linked[0]?.dashboardPath ?? null,
+      venuePath: linked[0]?.venuePath ?? null,
     };
   }
 
@@ -427,7 +508,7 @@ export class AuthService {
   }
 
   // ─── Login ───────────────────────────────────────────────────────
-  async login(dto: LoginDto, ip?: string, ua?: string) {
+  async login(dto: LoginDto, ip?: string, ua?: string): Promise<LoginResult> {
     const loginId = normalizeLoginIdentifier(dto.login);
     const user = await this.prisma.user.findUnique({
       where: { email: loginId },
@@ -467,7 +548,7 @@ export class AuthService {
       !isVenueStaffLoginEmail(loginId)
     ) {
       throw new BadRequestException(
-        'Staff sign-in needs your login ID (name@venue.gospots).',
+        'Staff sign-in needs your login ID (name@venue.locora).',
       );
     }
 
@@ -509,9 +590,62 @@ export class AuthService {
       );
     }
 
+    // Owner TOTP: password OK but do not issue cookies until MFA verify.
+    if (
+      user.accountType === UserAccountType.VENUE_OWNER &&
+      user.totpEnabled
+    ) {
+      const mfaToken = await this.jwt.signAsync(
+        {
+          sub: user.id,
+          purpose: MFA_CHALLENGE_PURPOSE,
+          acct: user.accountType,
+        },
+        {
+          secret: this.config.getOrThrow('JWT_ACCESS_SECRET'),
+          expiresIn: MFA_CHALLENGE_TTL_SEC,
+        },
+      );
+      return { mfaRequired: true, mfaToken };
+    }
+
     await this.prisma.user.update({
       where: { id: user.id },
       data: { failedLogins: 0, lockedUntil: null },
+    });
+
+    return this.completeLoginAfterPassword(user.id, ip, ua);
+  }
+
+  /** Finish login after password (and MFA when enabled). */
+  private async completeLoginAfterPassword(
+    userId: string,
+    ip?: string,
+    ua?: string,
+  ): Promise<AuthTokenBundle> {
+    const user = await this.prisma.user.findUnique({
+      where: { id: userId },
+      select: {
+        id: true,
+        email: true,
+        name: true,
+        accountType: true,
+      },
+    });
+    if (!user) throw new UnauthorizedException();
+
+    const activeMembership = await this.prisma.membership.findFirst({
+      where: { userId: user.id, isActive: true },
+    });
+
+    // Snapshot active UAs before issueTokens (staff may revoke peers inside).
+    const priorSessions = await this.prisma.authSession.findMany({
+      where: {
+        userId: user.id,
+        revokedAt: null,
+        expiresAt: { gt: new Date() },
+      },
+      select: { userAgent: true },
     });
 
     const tokens = await this.issueTokens(user.id, ip, ua);
@@ -524,7 +658,336 @@ export class AuthService {
       shopRole: activeMembership?.role,
       ip,
     });
+    await this.maybeNotifyNewDeviceSignIn({
+      userId: user.id,
+      email: user.email,
+      userAgent: ua,
+      shopId: activeMembership?.shopId,
+      knownUserAgents: priorSessions.map((s) => s.userAgent),
+    });
     return tokens;
+  }
+
+  // ─── Owner TOTP MFA ──────────────────────────────────────────────
+
+  private mfaKeySource(): MfaEncryptionKeySource {
+    return {
+      mfaTotpEncryptionKey: this.config.get<string>('MFA_TOTP_ENCRYPTION_KEY'),
+      jwtAccessSecret: this.config.get<string>('JWT_ACCESS_SECRET'),
+    };
+  }
+
+  private assertVenueOwner(accountType: UserAccountType) {
+    if (accountType !== UserAccountType.VENUE_OWNER) {
+      throw new ForbiddenException('Two-factor authentication is owner-only.');
+    }
+  }
+
+  async getMfaStatus(userId: string) {
+    const user = await this.prisma.user.findUnique({
+      where: { id: userId },
+      select: { accountType: true, totpEnabled: true },
+    });
+    if (!user) throw new UnauthorizedException();
+    this.assertVenueOwner(user.accountType);
+    const recoveryCodesRemaining = user.totpEnabled
+      ? await this.prisma.mfaRecoveryCode.count({
+          where: { userId, usedAt: null },
+        })
+      : 0;
+    return {
+      totpEnabled: user.totpEnabled,
+      recoveryCodesRemaining,
+    };
+  }
+
+  async beginMfaTotp(userId: string, dto: MfaTotpBeginDto) {
+    const user = await this.prisma.user.findUnique({
+      where: { id: userId },
+      select: {
+        id: true,
+        email: true,
+        accountType: true,
+        totpEnabled: true,
+        passwordHash: true,
+      },
+    });
+    if (!user) throw new UnauthorizedException();
+    this.assertVenueOwner(user.accountType);
+    if (user.totpEnabled) {
+      throw new BadRequestException('MFA is already enabled.');
+    }
+    await assertUserPassword(this.prisma, userId, dto.password);
+
+    const secret = generateTotpSecret();
+    const totpSecretEnc = encryptTotpSecret(secret, this.mfaKeySource());
+    await this.prisma.user.update({
+      where: { id: userId },
+      data: { totpSecretEnc, totpVerifiedAt: null },
+    });
+
+    return {
+      secret,
+      otpauthUri: buildOtpAuthUri({
+        secret,
+        accountName: user.email,
+        issuer: 'Locora',
+      }),
+    };
+  }
+
+  async confirmMfaTotp(userId: string, dto: MfaTotpConfirmDto) {
+    const user = await this.prisma.user.findUnique({
+      where: { id: userId },
+      select: {
+        id: true,
+        accountType: true,
+        totpEnabled: true,
+        totpSecretEnc: true,
+      },
+    });
+    if (!user) throw new UnauthorizedException();
+    this.assertVenueOwner(user.accountType);
+    if (user.totpEnabled) {
+      throw new BadRequestException('MFA is already enabled.');
+    }
+    if (!user.totpSecretEnc) {
+      throw new BadRequestException('Start MFA enrollment first.');
+    }
+
+    let plaintext: string;
+    try {
+      plaintext = decryptTotpSecret(user.totpSecretEnc, this.mfaKeySource());
+    } catch {
+      throw new BadRequestException('MFA enrollment secret is invalid. Start again.');
+    }
+    if (!verifyTotpCode(plaintext, dto.code)) {
+      throw new UnauthorizedException('Invalid authenticator code.');
+    }
+
+    const recoveryCodes = generateRecoveryCodes();
+    const now = new Date();
+    await this.prisma.$transaction(async (tx) => {
+      await tx.mfaRecoveryCode.deleteMany({ where: { userId } });
+      await tx.mfaRecoveryCode.createMany({
+        data: recoveryCodes.map((code) => ({
+          userId,
+          codeHash: hashRecoveryCode(code),
+        })),
+      });
+      await tx.user.update({
+        where: { id: userId },
+        data: {
+          totpEnabled: true,
+          totpVerifiedAt: now,
+        },
+      });
+    });
+
+    this.logger.log(`MFA enrolled for owner user=${userId}`);
+    return { recoveryCodes };
+  }
+
+  async disableMfaTotp(userId: string, dto: MfaTotpDisableDto) {
+    const user = await this.prisma.user.findUnique({
+      where: { id: userId },
+      select: {
+        id: true,
+        accountType: true,
+        totpEnabled: true,
+        totpSecretEnc: true,
+      },
+    });
+    if (!user) throw new UnauthorizedException();
+    this.assertVenueOwner(user.accountType);
+    if (!user.totpEnabled) {
+      throw new BadRequestException('MFA is not enabled.');
+    }
+    await assertUserPassword(this.prisma, userId, dto.password);
+    await this.assertTotpOrRecovery(userId, user.totpSecretEnc, dto);
+
+    await this.prisma.$transaction(async (tx) => {
+      await tx.mfaRecoveryCode.deleteMany({ where: { userId } });
+      await tx.user.update({
+        where: { id: userId },
+        data: {
+          totpEnabled: false,
+          totpSecretEnc: null,
+          totpVerifiedAt: null,
+        },
+      });
+    });
+
+    this.logger.log(`MFA disabled for owner user=${userId}`);
+    return { ok: true as const };
+  }
+
+  async regenerateMfaRecoveryCodes(
+    userId: string,
+    dto: MfaRecoveryRegenerateDto,
+  ) {
+    const user = await this.prisma.user.findUnique({
+      where: { id: userId },
+      select: {
+        id: true,
+        accountType: true,
+        totpEnabled: true,
+        totpSecretEnc: true,
+      },
+    });
+    if (!user) throw new UnauthorizedException();
+    this.assertVenueOwner(user.accountType);
+    if (!user.totpEnabled || !user.totpSecretEnc) {
+      throw new BadRequestException('MFA is not enabled.');
+    }
+    await assertUserPassword(this.prisma, userId, dto.password);
+    await this.assertTotpOrRecovery(userId, user.totpSecretEnc, dto);
+
+    const recoveryCodes = generateRecoveryCodes();
+    await this.prisma.$transaction(async (tx) => {
+      await tx.mfaRecoveryCode.deleteMany({ where: { userId } });
+      await tx.mfaRecoveryCode.createMany({
+        data: recoveryCodes.map((code) => ({
+          userId,
+          codeHash: hashRecoveryCode(code),
+        })),
+      });
+    });
+
+    this.logger.log(`MFA recovery codes regenerated for owner user=${userId}`);
+    return { recoveryCodes };
+  }
+
+  async verifyMfaLogin(
+    dto: MfaVerifyDto,
+    ip?: string,
+    ua?: string,
+  ): Promise<AuthTokenBundle> {
+    let payload: unknown;
+    try {
+      payload = await this.jwt.verifyAsync(dto.mfaToken, {
+        secret: this.config.getOrThrow('JWT_ACCESS_SECRET'),
+      });
+    } catch {
+      throw new UnauthorizedException('Invalid or expired MFA challenge.');
+    }
+    if (!isMfaChallengePayload(payload)) {
+      throw new UnauthorizedException('Invalid or expired MFA challenge.');
+    }
+
+    const user = await this.prisma.user.findUnique({
+      where: { id: payload.sub },
+      select: {
+        id: true,
+        accountType: true,
+        totpEnabled: true,
+        totpSecretEnc: true,
+        lockedUntil: true,
+        failedLogins: true,
+      },
+    });
+    if (
+      !user ||
+      user.accountType !== UserAccountType.VENUE_OWNER ||
+      !user.totpEnabled ||
+      !user.totpSecretEnc
+    ) {
+      throw new UnauthorizedException('Invalid or expired MFA challenge.');
+    }
+
+    if (user.lockedUntil && user.lockedUntil > new Date()) {
+      throw new UnauthorizedException(
+        'Account locked. Try again later or reset your password.',
+      );
+    }
+
+    const factorOk = await this.tryTotpOrRecovery(
+      user.id,
+      user.totpSecretEnc,
+      dto,
+    );
+    if (!factorOk) {
+      await this.bumpFailedLogins(user.id, user.failedLogins);
+      throw new UnauthorizedException('Invalid MFA code.');
+    }
+
+    await this.prisma.user.update({
+      where: { id: user.id },
+      data: { failedLogins: 0, lockedUntil: null },
+    });
+
+    return this.completeLoginAfterPassword(user.id, ip, ua);
+  }
+
+  private async assertTotpOrRecovery(
+    userId: string,
+    totpSecretEnc: string | null,
+    dto: { code?: string; recoveryCode?: string },
+  ) {
+    const ok = await this.tryTotpOrRecovery(userId, totpSecretEnc, dto);
+    if (!ok) {
+      throw new UnauthorizedException('Invalid authenticator or recovery code.');
+    }
+  }
+
+  /** Verify TOTP or consume one recovery code. Returns false if neither matches. */
+  private async tryTotpOrRecovery(
+    userId: string,
+    totpSecretEnc: string | null,
+    dto: { code?: string; recoveryCode?: string },
+  ): Promise<boolean> {
+    const hasCode = Boolean(dto.code?.trim());
+    const hasRecovery = Boolean(dto.recoveryCode?.trim());
+    if (!hasCode && !hasRecovery) {
+      throw new BadRequestException(
+        'Provide an authenticator code or a recovery code.',
+      );
+    }
+
+    if (hasCode && totpSecretEnc) {
+      try {
+        const secret = decryptTotpSecret(totpSecretEnc, this.mfaKeySource());
+        if (verifyTotpCode(secret, dto.code!)) {
+          return true;
+        }
+      } catch {
+        /* fall through */
+      }
+    }
+
+    if (hasRecovery) {
+      const rows = await this.prisma.mfaRecoveryCode.findMany({
+        where: { userId },
+        select: { id: true, codeHash: true, usedAt: true },
+      });
+      const matchId = matchRecoveryCodeHash(dto.recoveryCode!, rows);
+      if (matchId) {
+        const marked = await this.prisma.mfaRecoveryCode.updateMany({
+          where: { id: matchId, usedAt: null },
+          data: { usedAt: new Date() },
+        });
+        if (marked.count === 1) {
+          this.logger.log(
+            `MFA recovery code used for owner user=${userId}`,
+          );
+          return true;
+        }
+      }
+    }
+
+    return false;
+  }
+
+  private async bumpFailedLogins(userId: string, current: number) {
+    const failed = current + 1;
+    const lock =
+      failed >= MAX_FAILED
+        ? new Date(Date.now() + LOCK_MINUTES * 60 * 1000)
+        : null;
+    await this.prisma.user.update({
+      where: { id: userId },
+      data: { failedLogins: failed, lockedUntil: lock },
+    });
   }
 
   /**
@@ -566,9 +1029,9 @@ export class AuthService {
 
     await this.mail.send({
       to: email,
-      subject: 'Reset your GoSpots owner password',
+      subject: 'Reset your Locora owner password',
       text: `Reset your password (valid ~1 hour):\n\n${resetUrl}\n\nIf you did not request this, ignore this email.`,
-      html: `<p>Reset your GoSpots owner password (link valid about 1 hour):</p><p><a href="${resetUrl}">${resetUrl}</a></p><p>If you did not request this, you can ignore this email.</p>`,
+      html: `<p>Reset your Locora owner password (link valid about 1 hour):</p><p><a href="${resetUrl}">${resetUrl}</a></p><p>If you did not request this, you can ignore this email.</p>`,
       required: true,
     });
 
@@ -580,34 +1043,45 @@ export class AuthService {
     if (pwError) throw new BadRequestException(pwError);
 
     const tokenHash = hashToken(dto.token.trim());
-    const user = await this.prisma.user.findFirst({
-      where: {
-        passwordResetTokenHash: tokenHash,
-        passwordResetExpiresAt: { gt: new Date() },
-        accountType: 'VENUE_OWNER',
-      },
-    });
-    if (!user) {
-      throw new BadRequestException(
-        'This reset link is invalid or expired. Request a new one from the owner sign-in panel.',
-      );
-    }
-
+    const invalidMsg =
+      'This reset link is invalid or expired. Request a new one from the owner sign-in panel.';
     const passwordHash = await hashPassword(dto.password);
-    await this.prisma.user.update({
-      where: { id: user.id },
-      data: {
-        passwordHash,
-        passwordResetTokenHash: null,
-        passwordResetExpiresAt: null,
-        failedLogins: 0,
-        lockedUntil: null,
-      },
-    });
 
-    await this.prisma.authSession.updateMany({
-      where: { userId: user.id, revokedAt: null },
-      data: { revokedAt: new Date() },
+    await this.prisma.$transaction(async (tx) => {
+      const user = await tx.user.findFirst({
+        where: {
+          passwordResetTokenHash: tokenHash,
+          passwordResetExpiresAt: { gt: new Date() },
+          accountType: 'VENUE_OWNER',
+        },
+      });
+      if (!user) {
+        throw new BadRequestException(invalidMsg);
+      }
+
+      // Atomic consume: concurrent reuse loses the race (count !== 1).
+      const consumed = await tx.user.updateMany({
+        where: {
+          id: user.id,
+          passwordResetTokenHash: tokenHash,
+          passwordResetExpiresAt: { gt: new Date() },
+        },
+        data: {
+          passwordHash,
+          passwordResetTokenHash: null,
+          passwordResetExpiresAt: null,
+          failedLogins: 0,
+          lockedUntil: null,
+        },
+      });
+      if (consumed.count !== 1) {
+        throw new BadRequestException(invalidMsg);
+      }
+
+      await tx.authSession.updateMany({
+        where: { userId: user.id, revokedAt: null },
+        data: { revokedAt: new Date() },
+      });
     });
 
     return { ok: true as const };
@@ -704,28 +1178,54 @@ export class AuthService {
     const pwError = validatePasswordStrength(password);
     if (pwError) throw new BadRequestException(pwError);
 
-    const tokenHash = hashToken(token);
-    const membership = await this.prisma.membership.findFirst({
-      where: {
-        inviteTokenHash: tokenHash,
-        inviteExpiresAt: { gt: new Date() },
-        user: {
+    const tokenHash = hashToken(token.trim());
+    const invalidMsg =
+      'Invalid or expired setup link. Ask your manager for a new one.';
+    const passwordHash = await hashPassword(password);
+
+    const membership = await this.prisma.$transaction(async (tx) => {
+      const found = await tx.membership.findFirst({
+        where: {
+          inviteTokenHash: tokenHash,
+          inviteExpiresAt: { gt: new Date() },
+          isActive: true,
+          user: {
+            accountType: UserAccountType.VENUE_STAFF,
+            passwordSetAt: null,
+          },
+        },
+        include: { user: true },
+      });
+      if (!found) {
+        throw new BadRequestException(invalidMsg);
+      }
+
+      // Pending invites already consume an active seat — assert as "keep this
+      // seat" (used - 1), not adding another.
+      const shop = await tx.shop.findUnique({
+        where: { id: found.shopId },
+        include: {
+          subscription: { include: { addOnRows: true } },
+        },
+      });
+      const entitlements = getVenueEntitlements(shop?.subscription ?? null);
+      const usedSeats = await tx.membership.count({
+        where: {
+          shopId: found.shopId,
+          role: { in: [ShopRole.STAFF, ShopRole.MANAGER] },
+          isActive: true,
+          user: { accountType: UserAccountType.VENUE_STAFF },
+        },
+      });
+      assertStaffSeatCapacity(entitlements, Math.max(0, usedSeats - 1));
+
+      // Atomic consume: passwordSetAt null + invite hash must both still match.
+      const activated = await tx.user.updateMany({
+        where: {
+          id: found.userId,
           accountType: UserAccountType.VENUE_STAFF,
           passwordSetAt: null,
         },
-      },
-      include: { user: true },
-    });
-    if (!membership) {
-      throw new BadRequestException(
-        'Invalid or expired setup link. Ask your manager for a new one.',
-      );
-    }
-
-    const passwordHash = await hashPassword(password);
-    await this.prisma.$transaction(async (tx) => {
-      await tx.user.update({
-        where: { id: membership.userId },
         data: {
           passwordHash,
           passwordSetAt: new Date(),
@@ -733,8 +1233,17 @@ export class AuthService {
           lockedUntil: null,
         },
       });
-      await tx.membership.update({
-        where: { id: membership.id },
+      if (activated.count !== 1) {
+        throw new BadRequestException(invalidMsg);
+      }
+
+      const consumed = await tx.membership.updateMany({
+        where: {
+          id: found.id,
+          inviteTokenHash: tokenHash,
+          inviteExpiresAt: { gt: new Date() },
+          isActive: true,
+        },
         data: {
           inviteTokenHash: null,
           inviteExpiresAt: null,
@@ -742,10 +1251,18 @@ export class AuthService {
           acceptedAt: new Date(),
         },
       });
+      if (consumed.count !== 1) {
+        throw new BadRequestException(invalidMsg);
+      }
+
+      // Rows already written at invite create; no CSV dual-write on activate.
+
       await tx.authSession.updateMany({
-        where: { userId: membership.userId, revokedAt: null },
+        where: { userId: found.userId, revokedAt: null },
         data: { revokedAt: new Date() },
       });
+
+      return found;
     });
 
     const actor: JwtAccessPayload = {
@@ -775,19 +1292,46 @@ export class AuthService {
   // ─── Refresh token rotation ─────────────────────────────────────
   async refresh(refreshToken: string, ip?: string, ua?: string) {
     const tokenHash = hashToken(refreshToken);
-    const session = await this.prisma.authSession.findFirst({
-      where: { refreshTokenHash: tokenHash, revokedAt: null },
-      include: { user: true },
+    const session = await this.prisma.authSession.findUnique({
+      where: { refreshTokenHash: tokenHash },
     });
-    if (!session || session.expiresAt < new Date()) {
+    if (!session) {
       throw new UnauthorizedException('Refresh token invalid.');
     }
-    // Rotate: revoke current, issue new
-    await this.prisma.authSession.update({
-      where: { id: session.id },
+
+    // Reuse of a rotated token → steal signal: revoke the whole family.
+    if (session.revokedAt) {
+      await this.revokeSessionFamily(session.familyId);
+      throw new UnauthorizedException('Refresh token invalid.');
+    }
+
+    if (session.expiresAt < new Date()) {
+      await this.prisma.authSession.updateMany({
+        where: { id: session.id, revokedAt: null },
+        data: { revokedAt: new Date() },
+      });
+      throw new UnauthorizedException('Refresh token invalid.');
+    }
+
+    // Rotate: claim-revoke current (lost race = treat as reuse), then issue same family.
+    const claimed = await this.prisma.authSession.updateMany({
+      where: { id: session.id, revokedAt: null },
       data: { revokedAt: new Date() },
     });
-    return this.issueTokens(session.userId, ip, ua);
+    if (claimed.count !== 1) {
+      await this.revokeSessionFamily(session.familyId);
+      throw new UnauthorizedException('Refresh token invalid.');
+    }
+
+    return this.issueTokens(session.userId, ip, ua, session.familyId);
+  }
+
+  /** Revoke every active session in a refresh-token family (reuse / theft response). */
+  private async revokeSessionFamily(familyId: string) {
+    await this.prisma.authSession.updateMany({
+      where: { familyId, revokedAt: null },
+      data: { revokedAt: new Date() },
+    });
   }
 
   // ─── Logout — revoke current session ────────────────────────────
@@ -798,6 +1342,103 @@ export class AuthService {
       where: { refreshTokenHash: tokenHash, revokedAt: null },
       data: { revokedAt: new Date() },
     });
+  }
+
+  /**
+   * Active refresh sessions for the signed-in user (no raw tokens / hashes).
+   * AuthSession has no updatedAt — createdAt is issue/rotate time for the row.
+   */
+  async listAuthSessions(userId: string) {
+    const now = new Date();
+    const sessions = await this.prisma.authSession.findMany({
+      where: {
+        userId,
+        revokedAt: null,
+        expiresAt: { gt: now },
+      },
+      select: {
+        id: true,
+        createdAt: true,
+        userAgent: true,
+        expiresAt: true,
+      },
+      orderBy: { createdAt: 'desc' },
+    });
+    return { sessions };
+  }
+
+  /** Revoke one session (and its refresh family). Must belong to userId. */
+  async revokeAuthSession(userId: string, sessionId: string) {
+    const session = await this.prisma.authSession.findFirst({
+      where: { id: sessionId, userId },
+      select: { id: true, familyId: true, revokedAt: true },
+    });
+    if (!session) {
+      throw new NotFoundException('Session not found.');
+    }
+    await this.revokeSessionFamily(session.familyId);
+    return { revoked: true as const };
+  }
+
+  /**
+   * Revoke every active session except the caller's current family.
+   * Current family is resolved from refresh cookie, else JWT `sid` (staff).
+   */
+  async revokeOtherAuthSessions(
+    userId: string,
+    opts: { refreshToken?: string; sessionId?: string } = {},
+  ) {
+    const keepFamilyId = await this.resolveCurrentSessionFamilyId(userId, opts);
+    if (!keepFamilyId) {
+      throw new BadRequestException(
+        'Current session required to revoke others.',
+      );
+    }
+
+    const result = await this.prisma.authSession.updateMany({
+      where: {
+        userId,
+        revokedAt: null,
+        familyId: { not: keepFamilyId },
+      },
+      data: { revokedAt: new Date() },
+    });
+
+    return { revokedCount: result.count };
+  }
+
+  private async resolveCurrentSessionFamilyId(
+    userId: string,
+    opts: { refreshToken?: string; sessionId?: string },
+  ): Promise<string | null> {
+    if (opts.refreshToken) {
+      const tokenHash = hashToken(opts.refreshToken);
+      const byRefresh = await this.prisma.authSession.findUnique({
+        where: { refreshTokenHash: tokenHash },
+        select: { userId: true, familyId: true, revokedAt: true },
+      });
+      if (
+        byRefresh &&
+        byRefresh.userId === userId &&
+        byRefresh.revokedAt === null
+      ) {
+        return byRefresh.familyId;
+      }
+    }
+
+    if (opts.sessionId) {
+      const byId = await this.prisma.authSession.findFirst({
+        where: {
+          id: opts.sessionId,
+          userId,
+          revokedAt: null,
+        },
+        select: { familyId: true },
+      });
+      if (byId) return byId.familyId;
+    }
+
+    return null;
   }
 
   // ─── Profile + memberships for /me ──────────────────────────────
@@ -816,13 +1457,12 @@ export class AuthService {
           select: {
             id: true,
             role: true,
-            permissions: true,
+            permissionRows: { select: { permission: true } },
             isActive: true,
             shop: {
               select: {
                 id: true,
                 slug: true,
-                dashboardKey: true,
                 name: true,
                 locale: true,
                 currency: true,
@@ -832,7 +1472,7 @@ export class AuthService {
                     status: true,
                     trialEndsAt: true,
                     packId: true,
-                    addOns: true,
+                    addOnRows: { select: { addOnId: true } },
                   },
                 },
               },
@@ -842,7 +1482,47 @@ export class AuthService {
       },
     });
     if (!user) throw new UnauthorizedException();
-    return user;
+
+    // Rows-primary: response keeps legacy string fields (computed from join rows).
+    // Never emit Shop.dashboardKey — clients bind with public slug (rotate has its own API).
+    return {
+      id: user.id,
+      email: user.email,
+      name: user.name,
+      accountType: user.accountType,
+      staffHandle: user.staffHandle,
+      systemRole: user.systemRole,
+      emailVerified: user.emailVerified,
+      memberships: user.memberships.map((m) => {
+        const sub = m.shop.subscription;
+        return {
+          id: m.id,
+          role: m.role,
+          permissions: permissionsToEffectiveCsv({
+            permissionRows: m.permissionRows,
+          }),
+          isActive: m.isActive,
+          shop: {
+            id: m.shop.id,
+            slug: m.shop.slug,
+            name: m.shop.name,
+            locale: m.shop.locale,
+            currency: m.shop.currency,
+            subscription: sub
+              ? {
+                  tier: sub.tier,
+                  status: sub.status,
+                  trialEndsAt: sub.trialEndsAt,
+                  packId: sub.packId,
+                  addOns: resolveAddOnsCsv({
+                    addOnRows: sub.addOnRows,
+                  }),
+                }
+              : null,
+          },
+        };
+      }),
+    };
   }
 
   /** Ensures the signed-in user may access this private dashboard URL. */
@@ -851,17 +1531,17 @@ export class AuthService {
     sysRole: string,
     venuePath: string,
   ) {
-    const parsed = parseDashboardPath(venuePath);
-    if (!parsed) {
+    const ref = classifyVenuePath(venuePath);
+    if (!ref) {
       throw new BadRequestException('Invalid venue dashboard path.');
     }
 
+    // Phase 3: always slug-only (legacy slug--key strips to slug; key not verified).
     const shop = await this.prisma.shop.findFirst({
-      where: { slug: parsed.slug, dashboardKey: parsed.dashboardKey },
+      where: { slug: ref.slug },
       select: {
         id: true,
         slug: true,
-        dashboardKey: true,
         name: true,
         locale: true,
         currency: true,
@@ -879,6 +1559,7 @@ export class AuthService {
 
     const membership = await this.prisma.membership.findFirst({
       where: { userId, shopId: shop.id, isActive: true },
+      include: { permissionRows: { select: { permission: true } } },
     });
     if (!membership) {
       throw new UnauthorizedException('You do not have access to this venue.');
@@ -925,6 +1606,11 @@ export class AuthService {
     }
 
     const accessTtl = +this.config.get('JWT_ACCESS_TTL', '900');
+    const effectivePerms = membership
+      ? permissionsToEffectiveCsv({
+          permissionRows: membership.permissionRows,
+        })
+      : '*';
     const payload: JwtAccessPayload = {
       sub: actor.sub,
       sysRole: actor.sysRole,
@@ -933,7 +1619,7 @@ export class AuthService {
       sid: actor.sid,
       shopId: shop.id,
       shopRole: membership?.role ?? 'OWNER',
-      perms: membership?.permissions ?? '*',
+      perms: effectivePerms,
       tier: shopFull?.subscription?.tier,
     };
 
@@ -945,27 +1631,73 @@ export class AuthService {
     return { shop: shopProfile, accessToken, accessExpiresIn: accessTtl };
   }
 
-  resolveDashboardPathForUser(user: {
+  /** Primary venue slug for redirects (never the secret `slug--key`). */
+  resolveVenuePathForUser(user: {
     memberships: {
       isActive: boolean;
       role: string;
-      shop: { slug: string; dashboardKey: string };
+      shop: { slug: string };
     }[];
   }): string | null {
     const active = user.memberships.filter((m) => m.isActive);
     const primary = active.find((m) => m.role === 'OWNER') ?? active[0];
     if (!primary) return null;
-    return buildDashboardPath(primary.shop.slug, primary.shop.dashboardKey);
+    return primary.shop.slug;
+  }
+
+  /**
+   * Email owner/staff on new UA (or first active session). Fail-open:
+   * MailService enqueues outbox first; delivery errors must not fail login.
+   */
+  private async maybeNotifyNewDeviceSignIn(input: {
+    userId: string;
+    email: string;
+    userAgent?: string;
+    shopId?: string;
+    knownUserAgents: Array<string | null>;
+  }): Promise<void> {
+    if (!isNewDeviceUserAgent(input.userAgent, input.knownUserAgents)) {
+      return;
+    }
+    const signedInAt = new Date();
+    const body = buildNewDeviceSignInMail({
+      userAgent: normalizeSessionUserAgent(input.userAgent),
+      signedInAt,
+    });
+    try {
+      await this.mail.send({
+        to: input.email,
+        subject: body.subject,
+        text: body.text,
+        html: body.html,
+        shopId: input.shopId,
+        required: false,
+      });
+    } catch (err) {
+      this.logger.warn(
+        `New-device sign-in email failed for user=${input.userId}: ${
+          err instanceof Error ? err.message : String(err)
+        }`,
+      );
+    }
   }
 
   // ─── Internal: build access + refresh tokens ────────────────────
-  private async issueTokens(userId: string, ip?: string, ua?: string) {
+  private async issueTokens(
+    userId: string,
+    ip?: string,
+    ua?: string,
+    familyId?: string,
+  ) {
     const user = await this.prisma.user.findUnique({
       where: { id: userId },
       include: {
         memberships: {
           where: { isActive: true },
-          include: { shop: { include: { subscription: true } } },
+          include: {
+            permissionRows: { select: { permission: true } },
+            shop: { include: { subscription: true } },
+          },
         },
       },
     });
@@ -986,10 +1718,12 @@ export class AuthService {
 
     const refreshRaw = generateRefreshTokenRaw();
     const refreshHash = hashToken(refreshRaw);
+    const sessionFamilyId = familyId ?? randomUUID();
 
     const session = await this.prisma.authSession.create({
       data: {
         userId: user.id,
+        familyId: sessionFamilyId,
         refreshTokenHash: refreshHash,
         userAgent: ua?.slice(0, 200),
         ipAddress: ip?.slice(0, 64),
@@ -1008,7 +1742,11 @@ export class AuthService {
           : undefined,
       shopId: primary?.shopId,
       shopRole: primary?.role,
-      perms: primary?.permissions,
+      perms: primary
+        ? permissionsToEffectiveCsv({
+            permissionRows: primary.permissionRows,
+          })
+        : undefined,
       tier: primary?.shop.subscription?.tier,
     };
 
@@ -1017,14 +1755,11 @@ export class AuthService {
       expiresIn: accessTtl,
     });
 
-    const dashboardPath = this.resolveDashboardPathForUser({
+    const venuePath = this.resolveVenuePathForUser({
       memberships: activeMemberships.map((m) => ({
         isActive: m.isActive,
         role: m.role,
-        shop: {
-          slug: m.shop.slug,
-          dashboardKey: m.shop.dashboardKey,
-        },
+        shop: { slug: m.shop.slug },
       })),
     });
 
@@ -1035,7 +1770,7 @@ export class AuthService {
         name: user.name,
         systemRole: user.systemRole,
       },
-      dashboardPath,
+      venuePath,
       accessToken,
       accessExpiresIn: accessTtl,
       refreshToken: refreshRaw,

@@ -1,4 +1,5 @@
 import { cn } from "@/lib/cn";
+import { useVenueSettingsOptional } from "@/lib/venue-settings-context";
 
 const STATUS_STYLES = {
   PENDING: "bg-amber-500/15 text-amber-200 ring-amber-500/25",
@@ -6,10 +7,10 @@ const STATUS_STYLES = {
   CANCELED: "bg-zinc-500/20 text-zinc-400 ring-white/10",
 } as const;
 
-const STATUS_LABELS = {
-  PENDING: "Preparing",
-  COMPLETED: "Handed off",
-  CANCELED: "Canceled",
+const STATUS_KEYS = {
+  PENDING: "orders.tabPreparing",
+  COMPLETED: "orders.tabHandedOff",
+  CANCELED: "orders.tabCanceled",
 } as const;
 
 export function OrderStatusBadge({
@@ -19,6 +20,7 @@ export function OrderStatusBadge({
   status: keyof typeof STATUS_STYLES;
   className?: string;
 }) {
+  const t = useVenueSettingsOptional()?.t ?? ((k: string) => k);
   return (
     <span
       className={cn(
@@ -27,7 +29,7 @@ export function OrderStatusBadge({
         className,
       )}
     >
-      {STATUS_LABELS[status]}
+      {t(STATUS_KEYS[status])}
     </span>
   );
 }

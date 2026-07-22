@@ -14,6 +14,7 @@ import {
   LogOut,
   Menu,
   MessageSquare,
+  Receipt,
   Settings,
   ShieldCheck,
   ShoppingCart,
@@ -37,7 +38,7 @@ import {
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { useEffect, useState, type ReactNode } from "react";
-import { GoSpotsLogo } from "@/components/brand/gospots-logo";
+import { DashboardSidebarBrand } from "@/components/brand/dashboard-sidebar-brand";
 import { VenueSwitcher } from "@/components/layout/venue-switcher";
 import { NotificationHeaderActions } from "@/components/notifications/notification-header-actions";
 import { NotificationToasts } from "@/components/notifications/notification-toasts";
@@ -50,6 +51,7 @@ import { useAuth } from "@/lib/use-auth";
 import type { MessageKey } from "@/lib/i18n";
 import { translate } from "@/lib/i18n";
 import { useVenueSettingsOptional } from "@/lib/venue-settings-context";
+import { OnboardingResumeBanner } from "@/components/onboarding/onboarding-resume-banner";
 
 type NavItem = {
   segment: string;
@@ -179,6 +181,13 @@ const NAV_GROUPS: NavGroup[] = [
         segment: "/orders",
         labelKey: "nav.orders",
         icon: ShoppingCart,
+        perms: ["transaction.read"],
+        feature: "transaction",
+      },
+      {
+        segment: "/guest-checks",
+        labelKey: "nav.guestChecks",
+        icon: Receipt,
         perms: ["transaction.read"],
         feature: "transaction",
       },
@@ -349,6 +358,7 @@ export function TenantShell({ children }: { children: ReactNode }) {
           trialEndsAt: sub.trialEndsAt,
           packId: sub.packId,
           addOns: sub.addOns,
+          addOnRows: sub.addOnRows,
         }
       : null,
   );
@@ -417,7 +427,7 @@ export function TenantShell({ children }: { children: ReactNode }) {
           {showAdminLinks && (
             <div className="mb-4">
               <p className="mb-1 px-3 text-[10px] uppercase tracking-widest text-zinc-600">
-                Platform
+                {t("nav.platformGroup")}
               </p>
               <ul className="flex flex-col gap-0.5">
                 <li>
@@ -431,7 +441,7 @@ export function TenantShell({ children }: { children: ReactNode }) {
                     )}
                   >
                     <ShieldCheck size={15} />
-                    Platform admin
+                    {t("nav.platformAdmin")}
                   </Link>
                 </li>
               </ul>
@@ -455,7 +465,7 @@ export function TenantShell({ children }: { children: ReactNode }) {
               onClick={() => {
                 void signOut().then(() => router.replace("/login"));
               }}
-              aria-label="Sign out"
+              aria-label={t("nav.signOut")}
               className="grid h-11 w-11 place-items-center rounded-md text-zinc-400 transition hover:bg-rose-500/10 hover:text-rose-300"
             >
               <LogOut size={16} />
@@ -467,24 +477,24 @@ export function TenantShell({ children }: { children: ReactNode }) {
   }
 
   return (
-    <div className="flex h-dvh max-h-dvh min-h-0 w-full max-w-[100vw] overflow-hidden bg-zinc-950 text-zinc-100">
-      <aside className="hidden h-full min-h-0 w-64 shrink-0 flex-col border-r border-white/5 bg-zinc-950 lg:flex">
-        <div className="shrink-0 space-y-2.5 border-b border-white/5 px-4 py-3">
-          <GoSpotsLogo href="/" size="sm" showTagline={false} tone="onDark" />
+    <div className="flex h-dvh max-h-dvh min-h-0 w-full max-w-[100vw] overflow-hidden bg-[var(--color-background)] text-[var(--color-foreground)]">
+      <aside className="hidden h-full min-h-0 w-64 shrink-0 flex-col border-r border-[var(--color-border)] bg-[var(--color-background)] lg:flex">
+        <div className="shrink-0 space-y-3 border-b border-[var(--color-border)] px-3.5 py-3.5">
+          <DashboardSidebarBrand />
           <VenueSwitcher />
         </div>
         <NavContent />
       </aside>
 
-      <main className="relative flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden bg-zinc-950">
-        <header className="flex shrink-0 items-center justify-between gap-3 border-b border-white/5 px-4 py-2 pt-[max(0.5rem,env(safe-area-inset-top))] sm:px-5 md:px-6 lg:justify-end lg:px-8">
+      <main className="relative flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden bg-[var(--color-background)]">
+        <header className="flex shrink-0 items-center justify-between gap-3 border-b border-[var(--color-border)] px-4 py-2 pt-[max(0.5rem,env(safe-area-inset-top))] sm:px-5 md:px-6 lg:justify-end lg:px-8">
           <div className="flex min-w-0 flex-1 items-center gap-2 lg:hidden">
             <button
               type="button"
-              aria-label="Open navigation"
+              aria-label={t("nav.openNavigation")}
               aria-expanded={mobileNavOpen}
               onClick={() => setMobileNavOpen(true)}
-              className="grid h-11 w-11 shrink-0 place-items-center rounded-lg border border-white/10 bg-zinc-900/70 text-zinc-200"
+              className="grid h-11 w-11 shrink-0 place-items-center rounded-lg border border-[var(--color-border)] bg-[var(--color-surface)] text-[var(--color-foreground)]"
             >
               <Menu size={18} />
             </button>
@@ -499,23 +509,23 @@ export function TenantShell({ children }: { children: ReactNode }) {
             className="absolute inset-0 z-40 lg:hidden"
             role="dialog"
             aria-modal="true"
-            aria-label="Navigation"
+            aria-label={t("nav.navigation")}
           >
             <button
               type="button"
-              aria-label="Close navigation"
+              aria-label={t("nav.closeNavigation")}
               onClick={() => setMobileNavOpen(false)}
               className="absolute inset-0 bg-black/60 backdrop-blur-[1px]"
             />
-            <div className="absolute inset-y-0 left-0 flex w-[min(21rem,88vw)] flex-col border-r border-white/10 bg-zinc-950 pb-[env(safe-area-inset-bottom)] pt-[env(safe-area-inset-top)] shadow-2xl">
-              <div className="shrink-0 space-y-2.5 border-b border-white/5 px-4 py-3">
-                <div className="flex items-center justify-between gap-2">
-                  <GoSpotsLogo href="/" size="sm" showTagline={false} />
+            <div className="absolute inset-y-0 left-0 flex w-[min(21rem,88vw)] flex-col border-r border-[var(--color-border)] bg-[var(--color-background)] pb-[env(safe-area-inset-bottom)] pt-[env(safe-area-inset-top)] shadow-2xl">
+              <div className="shrink-0 space-y-3 border-b border-[var(--color-border)] px-3.5 py-3.5">
+                <div className="flex items-start justify-between gap-2">
+                  <DashboardSidebarBrand className="min-w-0 flex-1" />
                   <button
                     type="button"
-                    aria-label="Close navigation"
+                    aria-label={t("nav.closeNavigation")}
                     onClick={() => setMobileNavOpen(false)}
-                    className="grid h-11 w-11 place-items-center rounded-lg border border-white/10 text-zinc-400"
+                    className="mt-0.5 grid h-11 w-11 shrink-0 place-items-center rounded-lg border border-[var(--color-border)] text-[color-mix(in_srgb,var(--color-foreground)_55%,transparent)]"
                   >
                     <X size={18} />
                   </button>
@@ -527,6 +537,7 @@ export function TenantShell({ children }: { children: ReactNode }) {
           </div>
         ) : null}
         <NotificationToasts onUnreadChange={setUnreadNotifications} />
+        <OnboardingResumeBanner />
         <div className="flex min-h-0 flex-1 flex-col overflow-hidden">
           {children}
         </div>

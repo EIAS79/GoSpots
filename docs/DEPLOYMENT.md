@@ -1,4 +1,4 @@
-# GoSpots — production preview (Vercel + hosted API + Postgres)
+# Locora — production preview (Vercel + hosted API + Postgres)
 
 This monorepo has **three parts** in production:
 
@@ -50,7 +50,7 @@ After Render deploy, each start runs **`prisma migrate deploy` only** (no `db pu
    - **Build:** `npm install -g pnpm@10.12.1 && pnpm install --frozen-lockfile && pnpm --filter @gospots/api exec prisma generate && pnpm --filter @gospots/api run build`  
      (Do **not** use `corepack enable` on Render — it fails with `EROFS` on `/usr/bin/pnpm`.)
    - **Start:** `cd apps/api && npx prisma migrate deploy && node dist/main.js`
-   - **Health check path:** `/api/v1/health`
+   - **Health check path:** `/api/v1/ready` (DB readiness). `/live` and `/health` are liveness-only.
 
 3. Environment variables (Render → Environment):
 
@@ -61,12 +61,13 @@ After Render deploy, each start runs **`prisma migrate deploy` only** (no `db pu
 | `JWT_ACCESS_SECRET` | long random string |
 | `WEB_ORIGIN` | `https://your-app.vercel.app` |
 | `WEB_APP_URL` | same as `WEB_ORIGIN` (password reset, checkout redirects, guest links) |
-| `CORS_ORIGIN` | same as `WEB_ORIGIN` (comma-separate multiple preview URLs) |
+| `CORS_ORIGINS` | same as `WEB_ORIGIN` (preferred allowlist; comma-separate previews) |
+| `CORS_ORIGIN` | legacy alias; merged with `CORS_ORIGINS` / `WEB_*` |
 | `COOKIE_SECURE` | `true` |
 | `COOKIE_SAME_SITE` | `none` (only if **not** using Vercel proxy; use `lax` with proxy) |
 | `RESEND_API_KEY` | Resend API key (required for email) |
 | `MAIL_FROM` | Verified sender, e.g. `bookings@yourdomain.com` |
-| `MAIL_FROM_NAME` | `GoSpots` |
+| `MAIL_FROM_NAME` | `Locora` |
 | `LEMON_SQUEEZY_API_KEY` | Lemon Squeezy API key (required for paid checkout) |
 | `LEMON_SQUEEZY_STORE_ID` | Store ID |
 | `LEMON_SQUEEZY_VARIANT_ID` | Subscription variant ID |
@@ -95,7 +96,7 @@ After Render deploy, each start runs **`prisma migrate deploy` only** (no `db pu
 
 Each Vercel preview gets a new hostname. Either:
 
-- Add each preview URL to Render `CORS_ORIGIN` / `WEB_ORIGIN` (comma-separated), **or**
+- Add each preview URL to Render `CORS_ORIGINS` / `CORS_ORIGIN` / `WEB_ORIGIN` (comma-separated), **or**
 - Rely on the **proxy** (`/api/v1` + `API_PROXY_TARGET`) so the browser only talks to Vercel (recommended).
 
 ---

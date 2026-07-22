@@ -16,38 +16,38 @@ const en: Dict = {
   "nav.language": "Language",
   "nav.currency": "Currency",
 
-  "hero.manage.badge": "Venue operations · private beta",
-  "hero.manage.titleA": "Run the floor",
-  "hero.manage.titleB": "from one live screen.",
+  "hero.manage.badge": "Gaming floor ops · private beta",
+  "hero.manage.titleA": "Run tonight's",
+  "hero.manage.titleB": "gaming floor.",
   "hero.manage.subtitle":
-    "Sessions, reservations, billing, and staff control — built for billiard halls, gaming lounges, and busy entertainment floors. We're onboarding operators first while the public directory grows.",
-  "hero.manage.ctaPrimary": "List your venue — free trial",
-  "hero.manage.ctaSecondary": "Sign in",
-  "hero.manage.pillar1": "Live table & console status",
-  "hero.manage.pillar2": "Timers, tabs, and handovers without guesswork",
-  "hero.manage.pillar3": "Honest beta — onboarding venues first",
+    "Built for billiard halls, PC/console lounges, bowling, and gaming venues — live floor, bookings, and play billing in one dashboard. Mixed venues welcome.",
+  "hero.manage.ctaPrimary": "Start free gaming trial",
+  "hero.manage.ctaSecondary": "Browse venues",
+  "hero.manage.pillar1": "Live floor map + bookings",
+  "hero.manage.pillar2": "Play billing and walk-ins",
+  "hero.manage.pillar3": "Guest status links that just work",
 
-  "hero.play.badge": "Discover & reserve",
-  "hero.play.titleA": "Find your next",
-  "hero.play.titleB": "favorite spot.",
+  "hero.play.badge": "Discover locations",
+  "hero.play.titleA": "Find venues,",
+  "hero.play.titleB": "hosts, and nights out.",
   "hero.play.subtitle":
-    "Billiard halls, gaming lounges, restaurants, cafés, bars, and karaoke rooms — search by city and category, then reserve when the venue enables it.",
+    "Browse gaming centers, restaurants, and venues — reserve, read reviews, and contact hosts when they publish on Locora.",
   "hero.play.ctaPrimary": "Browse venues",
   "hero.play.ctaSecondary": "I run a venue",
-  "hero.play.pillar1": "From billiards to brunch — one directory",
+  "hero.play.pillar1": "Gaming, dining, and nightlife — one directory",
   "hero.play.pillar2": "Filter by city, category, and vibe",
   "hero.play.pillar3": "Reserve when the venue enables it",
 
   "venues.worldwide": "Worldwide venues",
   "venues.published": "{total} published venues · {countries} countries",
   "venues.publishedOne": "{total} published venue · {countries} countries",
-  "venues.tagline": "Find your next spot",
+  "venues.tagline": "Find a spot tonight.",
   "venues.subtitle":
-    "Gaming lounges, billiard halls, bars, and nightlife — search by name, city, country, or category.",
+    "Gaming centers, restaurants, bars, and venues — search by name, city, country, or category.",
   "venues.searching": "Searching…",
   "venues.found": "{total} venues found",
   "venues.foundOne": "{total} venue found",
-  "venues.showingAll": "Showing all published venues on GoSpots",
+  "venues.showingAll": "Showing all published venues on Locora",
   "venues.filters": "Filters: {summary}",
   "venues.pricesIn": "Prices in {currency}",
   "venues.browse": "Browse venues",
@@ -55,8 +55,31 @@ const en: Dict = {
   "venues.games": "{count} games",
   "venues.gameOne": "{count} game",
   "venues.emptyTitle": "No spots match yet",
-  "venues.emptyBody": "Try another city or category — or list your venue on GoSpots.",
+  "venues.emptyBody": "Try another city or category — or list your venue on Locora.",
+  "venues.emptyBodyPilot":
+    "We're filling {city} first — join the local directory, or try another search.",
   "venues.getListed": "Get listed",
+  "venues.pilotHint": "Locora launches city by city. Pilot:",
+  "venues.pilotLink": "{city} directory",
+
+  "pilotCity.eyebrow": "City-first launch",
+  "pilotCity.title": "Join the {city} gaming directory",
+  "pilotCity.body":
+    "We're onboarding venues in {city} before guest ads. Free listing during launch — local players come after the map looks alive.",
+  "pilotCity.cta": "See {city} launch page",
+
+  "cityLanding.badge": "Pilot city · {city}, {country}",
+  "cityLanding.title": "Gaming venues in {city}",
+  "cityLanding.subtitle":
+    "Locora is building the local directory for billiard halls, PC cafés, console lounges, and bowling in {city} — supply first, then guest traffic.",
+  "cityLanding.supplyNote":
+    "Guest promo waits until enough quality listings are live. Owners: claim your spot now.",
+  "cityLanding.ctaOwner": "List my venue in {city}",
+  "cityLanding.ctaBrowse": "Browse {city} on Locora",
+  "cityLanding.pillar1": "Cover photo, hours, and a clear description — no ghost listings.",
+  "cityLanding.pillar2": "Publish + list on the venues page when your trial includes marketing.",
+  "cityLanding.pillar3": "Local guest traffic and promo only after the city page looks alive.",
+  "cityLanding.footerHint": "Owner tools and signup live on",
 
   "how.eyebrow": "How it works",
   "how.title": "From signup to a live floor",
@@ -77,7 +100,7 @@ const en: Dict = {
 
   "homeVenues.play.eyebrow": "Live directory",
   "homeVenues.play.title": "Spots already on",
-  "homeVenues.play.titleAccent": "GoSpots",
+  "homeVenues.play.titleAccent": "Locora",
   "homeVenues.play.subtitle":
     "Real listings straight from the venues themselves — each with its own photos, prices, currency, and reservation rules. Use the search above or open the full directory.",
   "homeVenues.manage.eyebrow": "Your public listing",
@@ -138,6 +161,30 @@ const en: Dict = {
   "menu.noMatch": "No items match your search.",
   "menu.availableNow": "Available now",
   "menu.soldOut": "Sold out",
+  "menu.opensAt": "Opens at {time}",
+  "menu.availableTomorrowFrom": "Available tomorrow from {time}",
+  "menu.availableTomorrow": "Available tomorrow",
+  "menu.availableWeekdayFrom": "Available {day} from {time}",
+  "menu.availableWeekday": "Available {day}",
+  "menu.notAvailableToday": "Not available today",
+  "menu.notAvailableNow": "Not available right now",
+  "menu.availableAllDay": "Available all day, every day",
+  "menu.everyDay": "Every day",
+  "menu.monFri": "Mon–Fri",
+  "menu.day0": "Sun",
+  "menu.day1": "Mon",
+  "menu.day2": "Tue",
+  "menu.day3": "Wed",
+  "menu.day4": "Thu",
+  "menu.day5": "Fri",
+  "menu.day6": "Sat",
+  "menu.weekday0": "Sunday",
+  "menu.weekday1": "Monday",
+  "menu.weekday2": "Tuesday",
+  "menu.weekday3": "Wednesday",
+  "menu.weekday4": "Thursday",
+  "menu.weekday5": "Friday",
+  "menu.weekday6": "Saturday",
   "menu.notAvailable": "Menu not available.",
   "menu.itemOne": "{count} item",
   "menu.items": "{count} items",
@@ -275,11 +322,11 @@ const en: Dict = {
 
   "pricing.eyebrow": "Pricing",
   "pricing.title": "Your venue type is free.",
-  "pricing.titleAccent": "Pay only for what you run.",
+  "pricing.titleAccent": "Pay for the ops you run.",
   "pricing.subtitle":
-    "No tiers, no bundles you don't need. Pick your venue type, switch on the features you actually use, and watch your monthly price build itself — after a {days}-day free trial.",
+    "Gaming-first self-serve. Pick gaming or mixed, switch on a few outcome bundles, and see your monthly price after a {days}-day free trial.",
   "pricing.step1": "Choose your venue type — always {price}",
-  "pricing.step2": "Switch on the features you need",
+  "pricing.step2": "Switch on the bundles you need",
   "pricing.suggested": "Suggested",
   "pricing.perMonth": "/month",
   "pricing.perMonthShort": "/mo",
@@ -291,10 +338,14 @@ const en: Dict = {
   "pricing.summary": "{pack} ({price}) · {features} {featureLabel}{seatsPart}",
   "pricing.feature": "feature",
   "pricing.features": "features",
+  "pricing.bundle": "bundle",
+  "pricing.bundles": "bundles",
   "pricing.seat": "seat",
   "pricing.seatsWord": "seats",
   "pricing.teamPart": " · {count} team {seatLabel}",
   "pricing.startTrial": "Start {days} days free",
+  "pricing.contactSalesLead": "Restaurant or hotel F&B?",
+  "pricing.contactSales": "Talk to us",
   "pricing.footnote":
     "Prices in {currency}. Change features anytime — during the trial changes unlock immediately.",
   "pricing.noCard": "No card required · nothing is charged without your consent",
@@ -325,6 +376,129 @@ const en: Dict = {
   "pack.hotel_fb.tagline": "Restaurant ops plus staff seats for hotel teams.",
   "pack.mixed.name": "Mixed venue",
   "pack.mixed.tagline": "Gaming floor and dining under one roof.",
+
+  "bundle.ops_trust.name": "Ops & trust",
+  "bundle.ops_trust.tagline":
+    "Notifications, activity log, and guest review inbox.",
+  "bundle.gaming_floor.name": "Gaming floor",
+  "bundle.gaming_floor.tagline":
+    "Layout, bookings, live sessions, and play billing.",
+  "bundle.food_dining.name": "Food & dining",
+  "bundle.food_dining.tagline":
+    "Menu, kitchen tickets, and restaurant table bookings.",
+
+  "who.eyebrow": "Who it's for",
+  "who.title": "Built for",
+  "who.titleAccent": "gaming venue operators.",
+  "who.subtitle":
+    "Win tonight's floor first — who's booked, what's free, what you charged. Mixed entertainment venues are welcome; full-service restaurants and hotel F&B start with a conversation.",
+  "who.cta": "Start gaming trial free",
+  "who.noteLead":
+    "90-day trial · no card required. Need restaurant or hotel F&B tooling?",
+  "who.talkToUs": "talk to us",
+  "who.contact.title": "Restaurant / hotel",
+  "who.contact.body":
+    "Not self-serve yet. We onboard dining and hotel F&B manually so gaming stays the wedge.",
+  "who.ex.gaming.1": "Billiard & snooker halls",
+  "who.ex.gaming.2": "Gaming lounges",
+  "who.ex.gaming.3": "Esports cafés",
+  "who.ex.gaming.4": "Arcades & bowling",
+  "who.ex.gaming.5": "VR experiences",
+  "who.ex.dining.1": "Restaurants",
+  "who.ex.dining.2": "Cafés",
+  "who.ex.dining.3": "Brasseries",
+  "who.ex.dining.4": "Casual dining",
+  "who.ex.bar.1": "Bars & lounges",
+  "who.ex.bar.2": "Pubs & sports bars",
+  "who.ex.bar.3": "Karaoke rooms",
+  "who.ex.bar.4": "Night clubs",
+  "who.ex.hotel_fb.1": "Hotel restaurants",
+  "who.ex.hotel_fb.2": "Hotel bars & lounges",
+  "who.ex.hotel_fb.3": "In-house F&B teams",
+  "who.ex.mixed.1": "Family entertainment",
+  "who.ex.mixed.2": "Cinema + food halls",
+  "who.ex.mixed.3": "Gaming + dining under one roof",
+
+  "features.chip1": "3-second floor view",
+  "features.chip2": "Live timer per resource",
+  "features.chip3": "One-tap actions",
+  "features.heart": "The heart",
+
+  "guest.eyebrow": "For guests",
+  "guest.title": "Find it, book it,",
+  "guest.titleAccent": "enjoy it.",
+  "guest.subtitle":
+    "Three steps between you and your next night out — no phone calls, no guessing if a table, lane, or booth is free.",
+  "guest.cta": "Find spots near me",
+  "guest.step1.title": "Discover spots",
+  "guest.step1.body":
+    "Browse billiard halls, gaming lounges, restaurants, cafés, bars, and karaoke rooms in your city.",
+  "guest.step2.title": "Reserve your spot",
+  "guest.step2.body":
+    "Pick a time slot, lock it in, get a confirmation. Show up and enjoy — table, station, or booth.",
+  "guest.step3.title": "Confirm and go",
+  "guest.step3.body":
+    "Lock your reservation, get a confirmation, and show up ready — table, station, or booth waiting.",
+  "guest.promise1.title": "Always free for guests",
+  "guest.promise1.body":
+    "Venues pay for their tools — you never pay Locora to browse, discover, or reserve.",
+  "guest.promise2.title": "Real venues, real info",
+  "guest.promise2.body":
+    "Every listing is managed by the venue itself: its own photos, hours, prices, and rules.",
+  "guest.promise3.title": "A directory that grows",
+  "guest.promise3.body":
+    "We're onboarding operators city by city. New spots appear as soon as they publish.",
+
+  "pain.eyebrow": "Product scenarios",
+  "pain.title": "The messy nights",
+  "pain.titleAccent": "Locora is built for.",
+  "pain.subtitle":
+    "Illustrative problems operators describe — not quotes from customers.",
+  "pain.1.title": "Forgotten timers",
+  "pain.1.body":
+    "Busy nights turn into guesswork. Minutes slip, tabs grow, and nobody agrees what was actually on the clock.",
+  "pain.2.title": "Reservation conflicts",
+  "pain.2.body":
+    "Walk-ins collide with holds, VIPs overlap, and the floor map in the manager’s head stops matching reality.",
+  "pain.3.title": "Wrong or disputed bills",
+  "pain.3.body":
+    "Hourly rates, extras, and discounts get mixed when everything lives on paper or scattered chats.",
+  "pain.4.title": "Staff discounts without control",
+  "pain.4.body":
+    "You need trust on the floor — but also limits, roles, and a trail when something looks off.",
+  "pain.5.title": "No live floor visibility",
+  "pain.5.body":
+    "Owners step away for an hour and lose sight of what’s playing, what’s reserved, and what’s actually earning.",
+  "pain.6.title": "Weak end-of-night reporting",
+  "pain.6.body":
+    "Closing the drawer shouldn’t take spreadsheets. You want per-table, per-cashier clarity without the drama.",
+
+  "gallery.eyebrow": "Atmosphere · not a venue list",
+  "gallery.title": "The kinds of nights",
+  "gallery.titleAccent": "Locora is for.",
+  "gallery.subtitle":
+    "Stock photography for mood only — it does not represent partner venues or live availability.",
+  "gallery.tag.1": "Billiard",
+  "gallery.tag.2": "Gaming",
+  "gallery.tag.3": "PC lounge",
+  "gallery.tag.4": "Board games",
+  "gallery.tag.5": "PlayStation",
+  "gallery.tag.6": "Darts",
+  "gallery.tag.7": "Lounge",
+  "gallery.tag.8": "Arcade",
+  "gallery.tag.9": "Bowling",
+
+  "finder.openDirectory": "Open full directory",
+  "finder.published": "Published on Locora",
+  "finder.preview": "Directory preview",
+  "finder.seeAll": "See all",
+  "finder.empty":
+    "No published venues yet. Operators can list for free — search will light up as they go live.",
+
+  "footer.poweredBy": "Powered by",
+  "footer.rights": "All rights reserved.",
+  "footer.builtWith": "Built with Next.js · NestJS · PostgreSQL ·",
+  "footer.busyNights": "made for busy nights",
 
   "stats.days.label": "days free on every new venue",
   "stats.days.hint": "No card required to start",
@@ -370,7 +544,7 @@ const en: Dict = {
   "faq.titleAccent": "ask first.",
   "faq.owner.1.q": "Do I need to install anything in my venue?",
   "faq.owner.1.a":
-    "No. GoSpots runs in the browser on the device you already have — laptop, tablet, or counter PC. Updates push automatically.",
+    "No. Locora runs in the browser on the device you already have — laptop, tablet, or counter PC. Updates push automatically.",
   "faq.owner.2.q": "Can I try it before I pay?",
   "faq.owner.2.a":
     "Yes. New venues get a 90-day free trial — no card required. Pick any features you want and change them freely during the trial. Nothing is ever charged without your consent.",
@@ -389,10 +563,10 @@ const en: Dict = {
   "faq.owner.7.q": "What about my staff making mistakes?",
   "faq.owner.7.a":
     "Every important action — discount, cancel, refund, price change — goes into an immutable audit log tied to the user.",
-  "faq.player.1.q": "Is GoSpots free for guests?",
+  "faq.player.1.q": "Is Locora free for guests?",
   "faq.player.1.a":
     "Completely. Browsing venues, checking details, and reserving a spot never costs you anything — venues pay for their tools, not you.",
-  "faq.player.2.q": "What kinds of places are on GoSpots?",
+  "faq.player.2.q": "What kinds of places are on Locora?",
   "faq.player.2.a":
     "Way more than gaming. Billiard halls, gaming lounges, and esports cafés — plus restaurants, cafés, bars, pubs, karaoke rooms, bowling alleys, night clubs, and family entertainment venues.",
   "faq.player.3.q": "How do I find a spot near me?",
@@ -406,7 +580,7 @@ const en: Dict = {
     "No account needed to browse and discover venues. You only sign in when a venue's booking flow requires it.",
   "faq.player.6.q": "Why don't I see many venues yet?",
   "faq.player.6.a":
-    "GoSpots is in private beta and onboarding operators first. The public directory grows with every venue that turns on publishing.",
+    "Locora is in private beta and onboarding operators first. The public directory grows with every venue that turns on publishing.",
 
   "cta.manage.titleA": "Never lose money to",
   "cta.manage.titleB": "forgotten timers.",
@@ -426,12 +600,13 @@ const en: Dict = {
   "cta.play.secondary": "I run a venue — list it free",
 
   "footer.blurb":
-    "billiard halls, gaming lounges, and entertainment venues near you. Owners run nights from one realtime dashboard.",
+    "gaming centers, restaurants, and venues — host dashboard, public site, bookings, and reviews.",
   "footer.product": "Product",
   "footer.explore": "Explore",
+  "footer.forVenues": "For venues",
   "footer.forGuests": "For guests",
   "footer.company": "Company",
-  "footer.findSpot": "Find a spot",
+  "footer.findSpot": "Find a location",
   "footer.directory": "Directory",
   "footer.faq": "FAQ",
   "footer.operations": "Operations",
@@ -444,7 +619,7 @@ const en: Dict = {
   "footer.privacy": "Privacy",
   "footer.terms": "Terms",
 
-  "marquee.owner.title": "What GoSpots is designed to handle",
+  "marquee.owner.title": "What Locora is designed to handle",
   "marquee.owner.1": "Live floor status",
   "marquee.owner.2": "Session timers that stay attached to the table",
   "marquee.owner.3": "Walk-ins + reservations in one view",
@@ -453,7 +628,7 @@ const en: Dict = {
   "marquee.owner.6": "Immutable audit trail",
   "marquee.owner.7": "Per-table and per-shift revenue",
   "marquee.owner.8": "Built for billiard · snooker · lounges · game cafés",
-  "marquee.player.title": "What you can find on GoSpots",
+  "marquee.player.title": "What you can find on Locora",
   "marquee.player.1": "Billiard halls and snooker clubs",
   "marquee.player.2": "Gaming lounges and esports cafés",
   "marquee.player.3": "Restaurants, cafés and bars",
@@ -495,6 +670,594 @@ const en: Dict = {
   "cat.titleAccent": "find it here.",
   "cat.subtitle": "From billiards to brunch — pick a category and explore venues near you.",
   "cat.cta": "See all venues",
+
+  // Auth pages (login / register / forgot / reset / staff activate)
+  "auth.login.title": "Sign in",
+  "auth.login.staffForgotTitle": "Forgot staff password",
+  "auth.login.subtitleOwner":
+    "Venue owner — use the email you registered with.",
+  "auth.login.subtitleStaff":
+    "Staff — use the login ID your manager gave you.",
+  "auth.login.subtitleStaffForgot":
+    "Enter your venue (or owner) name and staff login ID. Your owner will get a notification and send you a new setup link.",
+  "auth.login.backToStaff": "Back to staff sign in",
+  "auth.login.newHere": "New here?",
+  "auth.login.createAccount": "Create your venue account",
+  "auth.login.staffNeedLogin":
+    "Need a login? Ask your venue owner or manager — staff accounts are created by them.",
+  "auth.login.accountType": "Account type",
+  "auth.login.owner": "Owner",
+  "auth.login.staff": "Staff",
+  "auth.login.ownerTip":
+    "Owners manage the venue, subscription, and team. You can reset your password if you forget it.",
+  "auth.login.email": "Email",
+  "auth.login.password": "Password",
+  "auth.login.emailPlaceholder": "you@venue.com",
+  "auth.login.forgotOwnerPassword": "Forgot your password?",
+  "auth.login.signingIn": "Signing in…",
+  "auth.login.signInOwner": "Sign in as owner",
+  "auth.login.signInStaff": "Sign in as staff",
+  "auth.login.failed": "Login failed.",
+  "auth.login.staffForgotDoneLead": "Your owner opens",
+  "auth.login.employeeAccounts": "Employee accounts",
+  "auth.login.staffForgotDoneTrail":
+    ", generates a new link, and sends it to you (WhatsApp, SMS, etc.). Open that link to choose a new password — same as a new account.",
+  "auth.login.staffForgotTip":
+    "We notify your venue owner. They create a fresh setup link and send it to you — we never email staff passwords.",
+  "auth.login.venueOrOwnerName": "Venue or owner name",
+  "auth.login.venuePlaceholder": "e.g. Zuzu Arcade",
+  "auth.login.staffLoginId": "Staff login ID",
+  "auth.login.staffIdPlaceholder": "anna@your-venue.locora",
+  "auth.login.sending": "Sending…",
+  "auth.login.notifyOwner": "Notify owner",
+  "auth.login.requestFailed": "Request failed.",
+  "auth.login.mfaTitle": "Authenticator code",
+  "auth.login.mfaSubtitle":
+    "Enter the 6-digit code from your authenticator app, or use a recovery code.",
+  "auth.login.mfaCode": "Authenticator code",
+  "auth.login.mfaRecovery": "Recovery code",
+  "auth.login.mfaOrRecovery": "Or use a one-time recovery code",
+  "auth.login.mfaVerify": "Verify and sign in",
+  "auth.login.mfaBack": "Back to password",
+  "auth.login.mfaFailed": "Invalid or expired MFA code.",
+  "auth.login.staffTip":
+    "Use your staff login ID and the password you set from the setup link. Forgot it? Ask your owner for a new link below.",
+  "auth.login.forgotStaffPassword": "Forgot password?",
+
+  "auth.register.title": "Create your venue",
+  "auth.register.subtitle":
+    "{days}-day free trial · choose your venue type, then pick features after signup.",
+  "auth.register.alreadyHave": "Already have an account?",
+  "auth.register.signIn": "Sign in",
+  "auth.register.stepAccount": "Account",
+  "auth.register.stepVenue": "Venue",
+  "auth.register.stepType": "Type",
+  "auth.register.yourName": "Your name",
+  "auth.register.email": "Email",
+  "auth.register.password": "Password",
+  "auth.register.confirmPassword": "Confirm password",
+  "auth.register.strength": "Strength: {label}",
+  "auth.register.strength0": "Weak",
+  "auth.register.strength1": "Okay",
+  "auth.register.strength2": "Good",
+  "auth.register.strength3": "Strong",
+  "auth.register.strength4": "Excellent",
+  "auth.register.venueName": "Venue name",
+  "auth.register.venuePlaceholder": "Neon Billiards",
+  "auth.register.slug": "Public URL slug",
+  "auth.register.slugPreview": "Locora.com/venue/{slug}",
+  "auth.register.cityOptional": "City (optional)",
+  "auth.register.countryOptional": "Country (optional)",
+  "auth.register.phoneOptional": "Phone (optional)",
+  "auth.register.packHint":
+    "Gaming or mixed venue? No pricing here — pick paid bundles after your account is created.",
+  "auth.register.contactSalesLead": "Restaurant or hotel F&B?",
+  "auth.register.contactSales": "Contact us",
+  "auth.register.trialNote":
+    "Free for {days} days. You can change venue type or features anytime.",
+  "auth.register.agreeBefore": "I agree to the",
+  "auth.register.terms": "Terms of Service",
+  "auth.register.agreeAnd": "and",
+  "auth.register.privacy": "Privacy Policy",
+  "auth.register.back": "Back",
+  "auth.register.continue": "Continue",
+  "auth.register.createVenue": "Create venue",
+  "auth.register.emailRequired": "Email is required.",
+  "auth.register.passwordMismatch": "Passwords do not match.",
+  "auth.register.passwordWeak":
+    "Pick a stronger password (10+ chars, mix of cases & numbers).",
+  "auth.register.venueNameRequired": "Venue name is required.",
+  "auth.register.slugRequired": "Venue URL slug is required.",
+  "auth.register.agreeRequired":
+    "Please agree to the Terms of Service and Privacy Policy.",
+  "auth.register.failed": "Registration failed.",
+
+  "auth.forgot.title": "Forgot password",
+  "auth.forgot.subtitle":
+    "Owner accounts only. Staff cannot reset passwords here.",
+  "auth.forgot.backToOwner": "Back to owner sign in",
+  "auth.forgot.returnToSignIn": "Return to sign in",
+  "auth.forgot.ownerEmail": "Owner email",
+  "auth.forgot.emailPlaceholder": "you@venue.com",
+  "auth.forgot.sending": "Sending…",
+  "auth.forgot.sendLink": "Send reset link",
+  "auth.forgot.requestFailed": "Request failed.",
+
+  "auth.reset.invalidTitle": "Invalid reset link",
+  "auth.reset.invalidSubtitle":
+    "This page needs a token from your reset email.",
+  "auth.reset.requestNew": "Request a new owner reset link",
+  "auth.reset.title": "Set a new password",
+  "auth.reset.subtitle":
+    "Owner account only. Choose a new password for your venue login.",
+  "auth.reset.backToSignIn": "Back to sign in",
+  "auth.reset.newPassword": "New password",
+  "auth.reset.confirmPassword": "Confirm password",
+  "auth.reset.saving": "Saving…",
+  "auth.reset.update": "Update password",
+  "auth.reset.missingToken":
+    "Missing reset token. Request a new link from owner sign in.",
+  "auth.reset.passwordMismatch": "Passwords do not match.",
+  "auth.reset.failed": "Reset failed.",
+
+  "auth.activate.invalidTitle": "Invalid setup link",
+  "auth.activate.invalidSubtitle":
+    "This page needs a token from your manager.",
+  "auth.activate.invalidBody":
+    "Open the personal setup link you received — do not share it with coworkers.",
+  "auth.activate.goToSignIn": "Go to sign in",
+  "auth.activate.title": "Set up your employee login",
+  "auth.activate.subtitle":
+    "Choose a password only you know — for a new account or after a password reset. Your manager never sees it.",
+  "auth.activate.newPassword": "New password (min 10 characters)",
+  "auth.activate.confirmPassword": "Confirm password",
+  "auth.activate.activating": "Activating…",
+  "auth.activate.submit": "Activate & sign in",
+  "auth.activate.oneAccount":
+    "One account = one person. Signing in elsewhere will end your other session.",
+  "auth.activate.missingToken":
+    "Missing setup link. Ask your manager for a new invite.",
+  "auth.activate.passwordMismatch": "Passwords do not match.",
+  "auth.activate.failed": "Activation failed.",
+
+  "guestStatus.backToVenue": "Back to venue",
+  "guestStatus.returnToVenue": "Return to {name}",
+  "guestStatus.canceling": "Canceling…",
+  "guestStatus.phase.upcoming": "Upcoming",
+  "guestStatus.phase.waiting": "Waiting guest",
+  "guestStatus.phase.in_use": "In use",
+  "guestStatus.phase.completed": "Completed",
+  "guestStatus.phase.no_show": "No-show",
+  "guestStatus.phase.canceled": "Canceled",
+
+  "guestStatus.gaming.loading": "Loading your booking…",
+  "guestStatus.gaming.loadError": "Could not load booking.",
+  "guestStatus.gaming.fallbackUnit": "Gaming station",
+  "guestStatus.gaming.playersOne": "{count} player",
+  "guestStatus.gaming.playersMany": "{count} players",
+  "guestStatus.gaming.cancelConfirm":
+    "Cancel this booking? You can book again anytime before the session starts.",
+  "guestStatus.gaming.cancelError": "Could not cancel booking.",
+  "guestStatus.gaming.cancel": "Cancel booking",
+  "guestStatus.gaming.cancelHint":
+    "You can cancel before you are checked in at the venue.",
+  "guestStatus.gaming.hintCanceled":
+    "This booking was canceled or marked as no-show.",
+  "guestStatus.gaming.hintWaiting":
+    "Your start time has passed — check in with staff when you arrive.",
+  "guestStatus.gaming.hintDefault":
+    "No fixed end time — stay as long as you like once checked in. This page updates automatically.",
+
+  "guestStatus.dining.loading": "Loading your reservation…",
+  "guestStatus.dining.loadError": "Could not load reservation.",
+  "guestStatus.dining.fallbackUnit": "Table",
+  "guestStatus.dining.partyOf": "party of {count}",
+  "guestStatus.dining.cancelConfirm":
+    "Cancel this table reservation? The table will be freed for other guests.",
+  "guestStatus.dining.cancelError": "Could not cancel reservation.",
+  "guestStatus.dining.cancel": "Cancel reservation",
+  "guestStatus.dining.cancelHint":
+    "You can cancel before you are seated at the table.",
+  "guestStatus.dining.hintCanceled":
+    "This reservation was canceled and the table has been released.",
+  "guestStatus.dining.hintWaiting":
+    "Your arrival time has passed — please check in with staff when you arrive.",
+  "guestStatus.dining.hintDefault":
+    "No fixed end time — stay as long as you like once seated. This page updates automatically.",
+
+  "guestStatus.event.loading": "Loading your request…",
+  "guestStatus.event.loadError": "Could not load request.",
+  "guestStatus.event.notFound": "Request not found.",
+  "guestStatus.event.eyebrow": "Event request",
+  "guestStatus.event.guest": "Guest",
+  "guestStatus.event.guestsMany": "{count} guests",
+  "guestStatus.event.preferredTime": "Preferred time",
+  "guestStatus.event.diningArea": "Dining area",
+  "guestStatus.event.activity": "Activity",
+  "guestStatus.event.yourNote": "Your note",
+  "guestStatus.event.venueMessage": "Message from the venue",
+  "guestStatus.event.hintPending":
+    "The venue is reviewing your request against their live floor setup. Bookmark this page — no account needed.",
+  "guestStatus.event.hintApprovedDining":
+    "Approved — staff will hold tables on the dining floor map for your party. Contact the venue if details change.",
+  "guestStatus.event.cancelConfirm":
+    "Cancel this event request? The venue will be notified immediately.",
+  "guestStatus.event.cancelError": "Could not cancel request.",
+  "guestStatus.event.cancel": "Cancel request",
+  "guestStatus.event.cancelHint":
+    "You can cancel while pending, or after approval before the event start time.",
+  "guestStatus.event.questionsBefore": "Questions? Contact {name} directly using the details on their",
+  "guestStatus.event.venuePage": "venue page",
+  "guestStatus.event.questionsAfter": ".",
+  "guestStatus.event.status.PENDING": "Pending review",
+  "guestStatus.event.status.APPROVED": "Approved",
+  "guestStatus.event.status.DECLINED": "Declined",
+  "guestStatus.event.status.CANCELED": "Canceled",
+  "guestStatus.event.type.TABLE": "Table reservation",
+  "guestStatus.event.type.GAMING": "Gaming / activity",
+  "guestStatus.event.type.BIRTHDAY": "Birthday",
+  "guestStatus.event.type.MEETING": "Meeting",
+  "guestStatus.event.type.PARTY": "Party",
+  "guestStatus.event.type.CORPORATE": "Corporate / business",
+  "guestStatus.event.type.OTHER": "Other event",
+
+  "venuePage.notAvailable":
+    "This venue is not available or is not published.",
+  "venuePage.notFound": "Venue not found.",
+  "venuePage.browseVenues": "Browse venues",
+
+  "venuePage.overview.guestRating": "Guest rating",
+  "venuePage.overview.averageOfOne": "Average of {count} review",
+  "venuePage.overview.averageOfMany": "Average of {count} reviews",
+  "venuePage.overview.noReviews": "No reviews yet",
+  "venuePage.overview.beFirstHint":
+    "Be among the first to rate this venue on the Reviews tab.",
+  "venuePage.overview.about": "About",
+  "venuePage.overview.noDescription":
+    "This venue hasn’t added a description yet.",
+  "venuePage.overview.gallery": "Gallery",
+  "venuePage.overview.openingHours": "Opening hours",
+  "venuePage.overview.scheduleUpdates": "Schedule updates",
+  "venuePage.overview.findUs": "Find us",
+  "venuePage.overview.findUsHint":
+    "Directions, call, or email — pick what works.",
+  "venuePage.overview.address": "Address",
+  "venuePage.overview.openInMaps": "Open in Maps",
+  "venuePage.overview.call": "Call",
+  "venuePage.overview.email": "Email",
+  "venuePage.overview.venuePhoto": "Venue photo",
+  "venuePage.overview.morePhotos": "+{count} more",
+  "venuePage.overview.closed": "Closed",
+  "venuePage.overview.specialHours": "Special hours",
+  "venuePage.overview.specialHoursRange":
+    "Special hours: {opens} – {closes}",
+  "venuePage.overview.hoursUnpublished":
+    "Opening hours haven’t been published yet.",
+  "venuePage.overview.today": "Today",
+  "venuePage.weekday.0": "Sunday",
+  "venuePage.weekday.1": "Monday",
+  "venuePage.weekday.2": "Tuesday",
+  "venuePage.weekday.3": "Wednesday",
+  "venuePage.weekday.4": "Thursday",
+  "venuePage.weekday.5": "Friday",
+  "venuePage.weekday.6": "Saturday",
+  "venuePage.weekdayShort.0": "Sun",
+  "venuePage.weekdayShort.1": "Mon",
+  "venuePage.weekdayShort.2": "Tue",
+  "venuePage.weekdayShort.3": "Wed",
+  "venuePage.weekdayShort.4": "Thu",
+  "venuePage.weekdayShort.5": "Fri",
+  "venuePage.weekdayShort.6": "Sat",
+
+  "venuePage.book.diningEvents": "Dining & events",
+  "venuePage.book.instantBefore": "Instant tables are on the",
+  "venuePage.book.bookATable": "Book a table",
+  "venuePage.book.instantMid": "tab. This page is for private event requests",
+  "venuePage.book.instantGamingBefore": "; for gaming stations use",
+  "venuePage.book.gamingFloor": "Gaming floor",
+  "venuePage.book.instantEnd": ".",
+  "venuePage.book.legacyBefore":
+    "Request a table or private event. For gaming — PCs, consoles, billiards — use the",
+  "venuePage.book.legacyAfter": "tab when available.",
+  "venuePage.book.call": "Call",
+  "venuePage.book.callPhone": "Call {phone}",
+  "venuePage.book.emailVenue": "Email venue",
+  "venuePage.book.tableReservation": "Table reservation",
+  "venuePage.book.privateEvents": "Private events",
+  "venuePage.book.eventDescDigital":
+    "Birthdays, meetings, and parties — choose the dining area (or activity) from this venue’s live setup. Staff review against the same floor data as the dashboard.",
+  "venuePage.book.contact": "Contact",
+
+  "venuePage.contact.title": "Contact the venue",
+  "venuePage.contact.subtitle":
+    "Questions, group inquiries, or anything that is not a booking request.",
+  "venuePage.contact.nameRequired": "Your name is required.",
+  "venuePage.contact.messageRequired": "Please write a message.",
+  "venuePage.contact.replyRequired":
+    "Provide an email or phone so the venue can reply.",
+  "venuePage.contact.sendFailed": "Could not send message.",
+  "venuePage.contact.sendAnother": "Send another message",
+  "venuePage.contact.yourName": "Your name",
+  "venuePage.contact.subject": "Subject",
+  "venuePage.contact.optional": "Optional",
+  "venuePage.contact.phone": "Phone",
+  "venuePage.contact.email": "Email",
+  "venuePage.contact.message": "Message",
+  "venuePage.contact.send": "Send message",
+
+  "venuePage.reviews.guestReviews": "Guest reviews",
+  "venuePage.reviews.whatVisitorsSay": "What visitors say",
+  "venuePage.reviews.countOne": "{count} review",
+  "venuePage.reviews.countMany": "{count} reviews",
+  "venuePage.reviews.disabledVenue":
+    "Reviews are turned off for this venue.",
+  "venuePage.reviews.privateHint":
+    "Reviews are private — you can still leave feedback below.",
+  "venuePage.reviews.beFirst": "Be the first to leave a review.",
+  "venuePage.reviews.sort": "Sort",
+  "venuePage.reviews.sortDate": "Date",
+  "venuePage.reviews.sortRating": "Rating",
+  "venuePage.reviews.orderDescTitle": "Highest / newest first",
+  "venuePage.reviews.orderAscTitle": "Lowest / oldest first",
+  "venuePage.reviews.orderDesc": "High → low",
+  "venuePage.reviews.orderAsc": "Low → high",
+  "venuePage.reviews.loadError": "Could not load reviews.",
+  "venuePage.reviews.nonePublished": "No published reviews yet.",
+  "venuePage.reviews.turnedOff": "Reviews are turned off",
+  "venuePage.reviews.privateVenue": "Reviews are private for this venue",
+  "venuePage.reviews.shareExperience": "Share your experience",
+  "venuePage.reviews.unavailable": "Reviews unavailable",
+  "venuePage.reviews.noneYet": "No reviews yet",
+  "venuePage.reviews.summaryAvgOne": "{avg} · {count} review",
+  "venuePage.reviews.summaryAvgMany": "{avg} · {count} reviews",
+  "venuePage.reviews.feedbackHidden":
+    "You can still leave feedback — it won’t appear publicly",
+  "venuePage.reviews.shareAfterVisit":
+    "Share your experience after your visit",
+  "venuePage.reviews.closedForGuests": "Reviews are closed for guests",
+  "venuePage.reviews.cancel": "Cancel",
+  "venuePage.reviews.write": "Write a review",
+  "venuePage.reviews.yourName": "Your name",
+  "venuePage.reviews.emailOptional": "Email (optional)",
+  "venuePage.reviews.yourRating": "Your rating",
+  "venuePage.reviews.commentOptional": "Comment (optional)",
+  "venuePage.reviews.commentPlaceholder":
+    "Food, service, atmosphere, gaming setup…",
+  "venuePage.reviews.post": "Post review",
+  "venuePage.reviews.nameRequired": "Your name is required.",
+  "venuePage.reviews.submitFailed": "Could not submit review.",
+  "venuePage.reviews.notAccepting":
+    "This venue is not accepting reviews.",
+  "venuePage.reviews.beFirstList": "Be the first to review this venue.",
+  "venuePage.reviews.rateStars": "Rate {n} stars",
+
+  "venuePage.booking.reserveTitle": "Reserve {name}",
+  "venuePage.booking.bookTitle": "Book {name}",
+  "venuePage.booking.close": "Close",
+  "venuePage.booking.trackBooking": "Track your booking",
+  "venuePage.booking.estPrice": "Est. {price}",
+  "venuePage.booking.howToBook": "How would you like to book?",
+  "venuePage.booking.numberOfGames": "Number of games",
+  "venuePage.booking.yourName": "Your name",
+  "venuePage.booking.email": "Email",
+  "venuePage.booking.phoneOptional": "Phone (optional)",
+  "venuePage.booking.partySize": "Party size",
+  "venuePage.booking.tableCapacity": "(this table: up to {capacity})",
+  "venuePage.booking.playersRange": "Players ({min}–{max})",
+  "venuePage.booking.diningPartyHint":
+    "Used for seating — no charge is calculated online for dining reservations.",
+  "venuePage.booking.perPersonPricing":
+    "Per-person pricing — charge is per player for each {minutes} min block in your time slot.",
+  "venuePage.booking.laneRental":
+    "Lane rental — you book the lane for the duration; guest count does not change the price.",
+  "venuePage.booking.arrivalTime": "Arrival time",
+  "venuePage.booking.startTime": "Start time",
+  "venuePage.booking.holdHint":
+    "No fixed end time — your {unitKind} is held for {minutes} minutes after start. Please arrive on time.",
+  "venuePage.booking.unitKindTable": "table",
+  "venuePage.booking.unitKindStation": "station",
+  "venuePage.booking.notesOptional": "Notes (optional)",
+  "venuePage.booking.notesPlaceholder":
+    "Game titles, skill level, special requests…",
+  "venuePage.booking.confirmBooking": "Confirm booking",
+  "venuePage.booking.confirmEmailHint":
+    "A confirmation email is sent when you book. Your {unitKind} is reserved immediately for the time you selected.",
+  "venuePage.booking.nameRequired": "Your name is required.",
+  "venuePage.booking.emailRequired":
+    "Your email is required — we'll send your booking confirmation.",
+  "venuePage.booking.invalidTime": "Pick a valid time slot.",
+  "venuePage.booking.overlap":
+    "This station is already reserved {start}–{end}. Pick a time before or after that slot.",
+  "venuePage.booking.capacityExceeded":
+    "{name} seats up to {capacity} — choose a smaller party or another table.",
+  "venuePage.booking.submitFailed": "Could not complete booking.",
+  // Match OfflineBanner Mode A/B/C (bible #32 public booking outage UX)
+  "venuePage.booking.outageOffline":
+    "No internet — changes won’t save until you’re back online.",
+  "venuePage.booking.outageUnreachable":
+    "Can’t reach Locora servers — try again shortly.",
+  "venuePage.booking.outageUnavailable":
+    "Locora is temporarily unavailable — your data is safe; retry in a minute.",
+
+  "venuePage.captcha.label": "Security check",
+  "venuePage.captcha.required": "Complete the security check before submitting.",
+  "venuePage.privacyConsent.label":
+    "I agree that this venue may use my details to manage this request. See Privacy Policy.",
+  "venuePage.privacyConsent.required": "Please accept the privacy notice to continue.",
+  "venuePage.dsar.title": "Privacy request",
+  "venuePage.dsar.hint":
+    "Request a copy of your data or ask the venue to erase your guest details.",
+  "venuePage.dsar.access": "Request a copy of my data",
+  "venuePage.dsar.erasure": "Request erasure of my data",
+  "venuePage.dsar.submit": "Send request",
+  "venuePage.dsar.success": "Request sent. The venue will follow up by email.",
+  "venuePage.dsar.failed": "Could not send privacy request.",
+
+  "publicBooking.modeTableTitle": "Request a table",
+  "publicBooking.modeTableDesc":
+    "Pick a date, time, and party size. The venue confirms availability before your visit.",
+  "publicBooking.modeGamingTitle": "Book an activity",
+  "publicBooking.modeGamingDesc":
+    "Reserve bowling, billiards, gaming stations, and more. Staff will confirm your slot.",
+  "publicBooking.modeEventTitle": "Request a private event",
+  "publicBooking.modeEventDesc":
+    "Birthdays, meetings, parties — tell us what you need. The venue reviews every request against their live floor.",
+  "publicBooking.replyRequired":
+    "Please provide an email or phone number so the venue can reply.",
+  "publicBooking.pickDateStart": "Pick a date and start time.",
+  "publicBooking.endAfterStart": "End time must be after start time.",
+  "publicBooking.selectActivity": "Select an activity to book.",
+  "publicBooking.selectAreaOrActivity":
+    "Select a dining area or activity for your event.",
+  "publicBooking.selectDiningArea": "Select a dining area.",
+  "publicBooking.sendFailed": "Could not send request.",
+  "publicBooking.trackRequest": "Track your request",
+  "publicBooking.statusLinkHint":
+    "Save the status link — you can cancel from there while the request is still pending or before the approved event starts.",
+  "publicBooking.submitAnother": "Submit another request",
+  "publicBooking.players": "Players",
+  "publicBooking.guests": "Guests",
+  "publicBooking.partySize": "Party size",
+  "publicBooking.eventType": "Event type",
+  "publicBooking.activity": "Activity",
+  "publicBooking.diningArea": "Dining area",
+  "publicBooking.preferredAreaActivity": "Preferred dining area / activity",
+  "publicBooking.unitsSuffix": " · {n} units",
+  "publicBooking.reachHint": "Provide at least one way to reach you.",
+  "publicBooking.preferredArea": "Preferred area",
+  "publicBooking.preferredDate": "Preferred date",
+  "publicBooking.startTime": "Start time",
+  "publicBooking.endTime": "End time",
+  "publicBooking.notesTable": "Notes for the venue",
+  "publicBooking.notesGaming": "Anything we should know?",
+  "publicBooking.notesEvent": "Tell us about your event",
+  "publicBooking.notesTablePlaceholder":
+    "High chair, window seat, birthday setup…",
+  "publicBooking.notesGamingPlaceholder":
+    "Lane preference, game titles, skill level…",
+  "publicBooking.notesEventPlaceholder":
+    "Birthday for 12, need projector, dietary needs…",
+  "publicBooking.sendRequest": "Send request",
+  "publicBooking.zoneIndoor": "Indoors",
+  "publicBooking.zoneOutdoor": "Outdoors",
+
+  "venuePage.guestChat.continue": "Continue chat",
+  "venuePage.guestChat.open": "Chat with staff",
+  "venuePage.guestChat.loading": "Loading…",
+  "venuePage.guestChat.privateSubtitle": "Private chat with venue staff",
+  "venuePage.guestChat.close": "Close chat",
+  "venuePage.guestChat.intro":
+    "Start a private chat. Only you and venue staff can see it — it stays available after refresh until you or staff end or delete it.",
+  "venuePage.guestChat.yourName": "Your name",
+  "venuePage.guestChat.emailOptional": "Email (optional)",
+  "venuePage.guestChat.phoneOptional": "Phone (optional)",
+  "venuePage.guestChat.firstMessageOptional": "First message (optional)",
+  "venuePage.guestChat.firstMessagePlaceholder": "How can we help?",
+  "venuePage.guestChat.start": "Start chat",
+  "venuePage.guestChat.statusWaiting": "Waiting for staff…",
+  "venuePage.guestChat.statusOpen": "Connected with staff",
+  "venuePage.guestChat.statusPaused": "Chat paused",
+  "venuePage.guestChat.statusEnded": "Chat ended",
+  "venuePage.guestChat.queueHint":
+    "You’re in the queue. A staff member will join shortly.",
+  "venuePage.guestChat.pausedHint":
+    "Staff paused this chat. You can still message or notify them.",
+  "venuePage.guestChat.you": "You",
+  "venuePage.guestChat.staff": "Staff",
+  "venuePage.guestChat.noMessages":
+    "No messages yet — say hello when you’re ready.",
+  "venuePage.guestChat.notifyStaff": "Notify staff",
+  "venuePage.guestChat.end": "End chat",
+  "venuePage.guestChat.delete": "Delete",
+  "venuePage.guestChat.deleteConfirm":
+    "Delete this chat? You won’t be able to reopen it.",
+  "venuePage.guestChat.endedNotice": "You ended this chat.",
+  "venuePage.guestChat.placeholderWaiting": "Message while you wait…",
+  "venuePage.guestChat.placeholderTyping": "Type a message…",
+  "venuePage.guestChat.send": "Send",
+  "venuePage.guestChat.endedHint":
+    "This chat has ended. Delete it to start a new one, or ask staff to reopen.",
+  "venuePage.guestChat.errorStart": "Could not start chat.",
+  "venuePage.guestChat.errorSend": "Could not send.",
+  "venuePage.guestChat.errorPing": "Could not notify staff.",
+  "venuePage.guestChat.errorEnd": "Could not end chat.",
+  "venuePage.guestChat.errorDelete": "Could not delete chat.",
+  // Match OfflineBanner Mode A/B/C (bible #32 guest-chat outage UX)
+  "venuePage.guestChat.outageOffline":
+    "No internet — changes won’t save until you’re back online.",
+  "venuePage.guestChat.outageUnreachable":
+    "Can’t reach Locora servers — try again shortly.",
+  "venuePage.guestChat.outageUnavailable":
+    "Locora is temporarily unavailable — your data is safe; retry in a minute.",
+
+  "venuePage.floor.floor": "Floor",
+  "venuePage.floor.floorN": "Floor {n}",
+  "venuePage.floor.date": "Date",
+  "venuePage.floor.today": "Today · {label}",
+  "venuePage.floor.prevDay": "Previous day",
+  "venuePage.floor.nextDay": "Next day",
+  "venuePage.floor.checkAvailability": "Check availability",
+  "venuePage.floor.from": "From",
+  "venuePage.floor.to": "To",
+  "venuePage.floor.until": "Until",
+  "venuePage.floor.mapLabelTables": "Live table map",
+  "venuePage.floor.mapLabelLanes": "Live lane map",
+  "venuePage.floor.mapLabelStations": "Live station map",
+  "venuePage.floor.noStations":
+    "No stations configured for this activity yet.",
+  "venuePage.floor.fixTimeRange":
+    "Fix the time range to see station availability.",
+  "venuePage.floor.loadFloorFailed": "Could not load floor map.",
+  "venuePage.floor.loadTableFailed": "Could not load table map.",
+  "venuePage.floor.layoutZone": "Layout / zone",
+  "venuePage.floor.noStationsInLayout": "No stations in this layout.",
+  "venuePage.floor.prev": "Prev",
+  "venuePage.floor.next": "Next",
+  "venuePage.floor.pageOf": "Page {page} of {total}",
+  "venuePage.floor.stationsRange":
+    "· stations {from}–{to} of {total}",
+  "venuePage.floor.reservedTitle": "Reserved for this time",
+  "venuePage.floor.close": "Close",
+  "venuePage.floor.blockHint":
+    "Choose a time before or after this reservation, or pick another station. You can book the same seat at a non-overlapping time.",
+  "venuePage.floor.statusAvailable":
+    "Available for your time — tap to book",
+  "venuePage.floor.statusUnavailable":
+    "Reserved during your time — tap for details",
+  "venuePage.floor.statusNotWorking": "Out of service",
+  "venuePage.floor.noLanes": "No lanes configured yet.",
+  "venuePage.floor.bowlingAlleyHint": "Bowling alley · approach → pins",
+  "venuePage.floor.swipeLanes": "Swipe to see lanes",
+  "venuePage.floor.lanesRange": "Lanes {from}–{to} of {total}",
+  "venuePage.floor.updatesLive": "Updates live as bookings start and end",
+  "venuePage.floor.liveMapByZone": "Live map by zone and floor",
+  "venuePage.floor.screenTables": "Tables",
+  "venuePage.floor.screenCabinets": "Cabinets",
+  "venuePage.floor.screenStations": "Stations",
+  "venuePage.floor.screenScreen": "Screen",
+  "venuePage.floor.tapHintDining":
+    "Tap a table that fits your party size to book",
+  "venuePage.floor.tapHintTable":
+    "Tap a table to book or view the active session",
+  "venuePage.floor.tapHintCabinet":
+    "Tap a cabinet to book or view the active session",
+  "venuePage.floor.tapHintSeat":
+    "Tap a seat to book or view the active session",
+
+  "venueSearch.placeholder": "Search name or description…",
+  "venueSearch.cityLabel": "City",
+  "venueSearch.countryLabel": "Country",
+  "venueSearch.submit": "Search",
+
+  "venuesDiscovery.gridView": "Grid view",
+  "venuesDiscovery.listView": "List view",
+  "venuesDiscovery.statusOpen": "Open",
+  "venuesDiscovery.statusOpensLater": "Opens later",
+  "venuesDiscovery.statusClosed": "Closed",
+  "venuesDiscovery.noDescription": "No description yet.",
+
+  "theme.switchToLight": "Switch to light mode",
+  "theme.switchToDark": "Switch to dark mode",
 };
 
 const pl: Dict = {
@@ -512,38 +1275,38 @@ const pl: Dict = {
   "nav.language": "Język",
   "nav.currency": "Waluta",
 
-  "hero.manage.badge": "Operacje lokalu · prywatna beta",
-  "hero.manage.titleA": "Prowadź salę",
-  "hero.manage.titleB": "z jednego ekranu na żywo.",
+  "hero.manage.badge": "Operacje sali gier · prywatna beta",
+  "hero.manage.titleA": "Prowadź dzisiejszą",
+  "hero.manage.titleB": "salę gier.",
   "hero.manage.subtitle":
-    "Sesje, rezerwacje, rozliczenia i kontrola personelu — dla bilardów, stref gier i ruchliwych lokali. Najpierw wdrażamy operatorów, podczas gdy katalog publiczny rośnie.",
-  "hero.manage.ctaPrimary": "Dodaj lokal — darmowy okres próbny",
-  "hero.manage.ctaSecondary": "Zaloguj się",
-  "hero.manage.pillar1": "Status stołów i konsol na żywo",
-  "hero.manage.pillar2": "Timery, rachunki i zmiany bez zgadywania",
-  "hero.manage.pillar3": "Szczera beta — najpierw lokale",
+    "Dla sal bilardowych, lounge PC/konsol, bowlingów i lokali gamingowych — mapa na żywo, rezerwacje i rozliczenia gry w jednym panelu. Lokale mieszane mile widziane.",
+  "hero.manage.ctaPrimary": "Zacznij darmowy trial gamingowy",
+  "hero.manage.ctaSecondary": "Przeglądaj lokale",
+  "hero.manage.pillar1": "Mapa sali i rezerwacje na żywo",
+  "hero.manage.pillar2": "Rozliczenia gry i walk-iny",
+  "hero.manage.pillar3": "Linki statusu dla gości, które działają",
 
-  "hero.play.badge": "Odkrywaj i rezerwuj",
-  "hero.play.titleA": "Znajdź swoje",
-  "hero.play.titleB": "ulubione miejsce.",
+  "hero.play.badge": "Odkrywaj lokalizacje",
+  "hero.play.titleA": "Znajdź lokale,",
+  "hero.play.titleB": "hostów i wieczór poza domem.",
   "hero.play.subtitle":
-    "Bilardy, strefy gier, restauracje, kawiarnie, bary i karaoke — szukaj po mieście i kategorii, rezerwuj gdy lokal to umożliwia.",
+    "Przeglądaj centra gier, restauracje i lokale — rezerwuj, czytaj opinie i kontaktuj się z hostami, gdy publikują na Locora.",
   "hero.play.ctaPrimary": "Przeglądaj lokale",
   "hero.play.ctaSecondary": "Prowadzę lokal",
-  "hero.play.pillar1": "Od bilardu po brunch — jeden katalog",
+  "hero.play.pillar1": "Gry, gastronomia i nightlife — jeden katalog",
   "hero.play.pillar2": "Filtruj po mieście, kategorii i klimacie",
   "hero.play.pillar3": "Rezerwuj, gdy lokal to włączy",
 
   "venues.worldwide": "Lokale na całym świecie",
   "venues.published": "{total} opublikowanych lokali · {countries} krajów",
   "venues.publishedOne": "{total} opublikowany lokal · {countries} krajów",
-  "venues.tagline": "Znajdź swoje miejsce",
+  "venues.tagline": "Znajdź miejsce na dziś.",
   "venues.subtitle":
-    "Strefy gier, bilardy, bary i nightlife — szukaj po nazwie, mieście, kraju lub kategorii.",
+    "Centra gier, restauracje, bary i lokale — szukaj po nazwie, mieście, kraju lub kategorii.",
   "venues.searching": "Szukam…",
   "venues.found": "Znaleziono {total} lokali",
   "venues.foundOne": "Znaleziono {total} lokal",
-  "venues.showingAll": "Wszystkie opublikowane lokale na GoSpots",
+  "venues.showingAll": "Wszystkie opublikowane lokale na Locora",
   "venues.filters": "Filtry: {summary}",
   "venues.pricesIn": "Ceny w {currency}",
   "venues.browse": "Przeglądaj lokale",
@@ -552,8 +1315,31 @@ const pl: Dict = {
   "venues.gameOne": "{count} gra",
   "venues.emptyTitle": "Brak pasujących miejsc",
   "venues.emptyBody":
-    "Spróbuj innego miasta lub kategorii — albo dodaj swój lokal na GoSpots.",
+    "Spróbuj innego miasta lub kategorii — albo dodaj swój lokal na Locora.",
+  "venues.emptyBodyPilot":
+    "Najpierw wypełniamy {city} — dołącz do lokalnego katalogu albo zmień wyszukiwanie.",
   "venues.getListed": "Dodaj lokal",
+  "venues.pilotHint": "Locora startuje miasto po mieście. Pilot:",
+  "venues.pilotLink": "Katalog {city}",
+
+  "pilotCity.eyebrow": "Start od miasta",
+  "pilotCity.title": "Dołącz do katalogu gier w {city}",
+  "pilotCity.body":
+    "Najpierw onboardujemy lokale w {city}, potem reklamy dla gości. Darmowa lista w trakcie launchu — lokalni gracze przychodzą, gdy mapa wygląda na żywą.",
+  "pilotCity.cta": "Zobacz stronę launchu {city}",
+
+  "cityLanding.badge": "Miasto pilotażowe · {city}, {country}",
+  "cityLanding.title": "Lokale gamingowe w {city}",
+  "cityLanding.subtitle":
+    "Locora buduje lokalny katalog bilardów, kafejek PC, lounge'y konsolowych i bowlingów w {city} — najpierw podaż, potem ruch gości.",
+  "cityLanding.supplyNote":
+    "Promocja dla gości czeka, aż będzie wystarczająco dobrych listingów. Właściciele: zajmijcie miejsce teraz.",
+  "cityLanding.ctaOwner": "Dodaj mój lokal w {city}",
+  "cityLanding.ctaBrowse": "Przeglądaj {city} na Locora",
+  "cityLanding.pillar1": "Zdjęcie okładki, godziny i jasny opis — bez pustych listingów.",
+  "cityLanding.pillar2": "Opublikuj i dodaj do strony lokali, gdy trial obejmuje marketing.",
+  "cityLanding.pillar3": "Lokalny ruch gości i promo dopiero gdy strona miasta wygląda na żywą.",
+  "cityLanding.footerHint": "Narzędzia właściciela i rejestracja są na",
 
   "how.eyebrow": "Jak to działa",
   "how.title": "Od rejestracji do żywej sali",
@@ -574,7 +1360,7 @@ const pl: Dict = {
 
   "homeVenues.play.eyebrow": "Katalog na żywo",
   "homeVenues.play.title": "Miejsca już na",
-  "homeVenues.play.titleAccent": "GoSpots",
+  "homeVenues.play.titleAccent": "Locora",
   "homeVenues.play.subtitle":
     "Prawdziwe oferty prosto od lokali — każde ze swoimi zdjęciami, cenami, walutą i zasadami rezerwacji. Użyj wyszukiwarki powyżej lub otwórz pełny katalog.",
   "homeVenues.manage.eyebrow": "Twoja publiczna wizytówka",
@@ -635,6 +1421,30 @@ const pl: Dict = {
   "menu.noMatch": "Brak pozycji pasujących do wyszukiwania.",
   "menu.availableNow": "Dostępne teraz",
   "menu.soldOut": "Wyprzedane",
+  "menu.opensAt": "Otwiera się o {time}",
+  "menu.availableTomorrowFrom": "Dostępne jutro od {time}",
+  "menu.availableTomorrow": "Dostępne jutro",
+  "menu.availableWeekdayFrom": "Dostępne w {day} od {time}",
+  "menu.availableWeekday": "Dostępne w {day}",
+  "menu.notAvailableToday": "Niedostępne dziś",
+  "menu.notAvailableNow": "Niedostępne w tej chwili",
+  "menu.availableAllDay": "Dostępne cały dzień, codziennie",
+  "menu.everyDay": "Codziennie",
+  "menu.monFri": "Pn–Pt",
+  "menu.day0": "Nd",
+  "menu.day1": "Pn",
+  "menu.day2": "Wt",
+  "menu.day3": "Śr",
+  "menu.day4": "Cz",
+  "menu.day5": "Pt",
+  "menu.day6": "So",
+  "menu.weekday0": "niedzielę",
+  "menu.weekday1": "poniedziałek",
+  "menu.weekday2": "wtorek",
+  "menu.weekday3": "środę",
+  "menu.weekday4": "czwartek",
+  "menu.weekday5": "piątek",
+  "menu.weekday6": "sobotę",
   "menu.notAvailable": "Menu niedostępne.",
   "menu.itemOne": "{count} pozycja",
   "menu.items": "{count} pozycji",
@@ -772,11 +1582,11 @@ const pl: Dict = {
 
   "pricing.eyebrow": "Cennik",
   "pricing.title": "Typ lokalu jest darmowy.",
-  "pricing.titleAccent": "Płacisz tylko za to, czego używasz.",
+  "pricing.titleAccent": "Płacisz za operacje, które prowadzisz.",
   "pricing.subtitle":
-    "Bez pakietów, których nie potrzebujesz. Wybierz typ lokalu, włącz funkcje i zobacz miesięczną cenę — po {days}-dniowym okresie próbnym.",
+    "Self-serve pod gaming. Wybierz gaming lub mixed, włącz kilka pakietów wynikowych i zobacz miesięczną cenę po {days}-dniowym okresie próbnym.",
   "pricing.step1": "Wybierz typ lokalu — zawsze {price}",
-  "pricing.step2": "Włącz potrzebne funkcje",
+  "pricing.step2": "Włącz potrzebne pakiety",
   "pricing.suggested": "Sugerowane",
   "pricing.perMonth": "/miesiąc",
   "pricing.perMonthShort": "/mies.",
@@ -788,10 +1598,14 @@ const pl: Dict = {
   "pricing.summary": "{pack} ({price}) · {features} {featureLabel}{seatsPart}",
   "pricing.feature": "funkcja",
   "pricing.features": "funkcje",
+  "pricing.bundle": "pakiet",
+  "pricing.bundles": "pakiety",
   "pricing.seat": "miejsce",
   "pricing.seatsWord": "miejsca",
   "pricing.teamPart": " · {count} {seatLabel} zespołu",
   "pricing.startTrial": "Zacznij {days} dni za darmo",
+  "pricing.contactSalesLead": "Restauracja lub hotel F&B?",
+  "pricing.contactSales": "Napisz do nas",
   "pricing.footnote":
     "Ceny w {currency}. Zmieniaj funkcje w każdej chwili — w okresie próbnym odblokowanie jest natychmiastowe.",
   "pricing.noCard": "Bez karty · nic nie jest obciążane bez Twojej zgody",
@@ -822,6 +1636,128 @@ const pl: Dict = {
   "pack.hotel_fb.tagline": "Operacje restauracji plus miejsca dla zespołu hotelu.",
   "pack.mixed.name": "Lokal mieszany",
   "pack.mixed.tagline": "Strefa gier i gastronomia pod jednym dachem.",
+
+  "bundle.ops_trust.name": "Ops i zaufanie",
+  "bundle.ops_trust.tagline":
+    "Powiadomienia, dziennik aktywności i skrzynka opinii gości.",
+  "bundle.gaming_floor.name": "Sala gier",
+  "bundle.gaming_floor.tagline":
+    "Układ, rezerwacje, sesje na żywo i rozliczenia gry.",
+  "bundle.food_dining.name": "Jedzenie i dining",
+  "bundle.food_dining.tagline":
+    "Menu, bilety kuchenne i rezerwacje stolików.",
+
+  "who.eyebrow": "Dla kogo",
+  "who.title": "Dla",
+  "who.titleAccent": "operatorów lokali gamingowych.",
+  "who.subtitle":
+    "Najpierw wygraj dzisiejszą salę — kto zarezerwował, co wolne, ile naliczyłeś. Lokale mixed mile widziane; pełne restauracje i hotel F&B zaczynamy rozmową.",
+  "who.cta": "Zacznij darmowy trial gamingowy",
+  "who.noteLead":
+    "90 dni trialu · bez karty. Potrzebujesz narzędzi restauracji lub hotel F&B?",
+  "who.talkToUs": "napisz do nas",
+  "who.contact.title": "Restauracja / hotel",
+  "who.contact.body":
+    "Jeszcze nie self-serve. Dining i hotel F&B wdrażamy ręcznie, żeby gaming został klinem.",
+  "who.ex.gaming.1": "Sale bilardowe i snooker",
+  "who.ex.gaming.2": "Gaming lounge",
+  "who.ex.gaming.3": "Kawiarnie esportowe",
+  "who.ex.gaming.4": "Automaty i bowling",
+  "who.ex.gaming.5": "Doświadczenia VR",
+  "who.ex.dining.1": "Restauracje",
+  "who.ex.dining.2": "Kawiarnie",
+  "who.ex.dining.3": "Brasserie",
+  "who.ex.dining.4": "Casual dining",
+  "who.ex.bar.1": "Bary i lounge",
+  "who.ex.bar.2": "Puby i sports bary",
+  "who.ex.bar.3": "Pokoje karaoke",
+  "who.ex.bar.4": "Kluby nocne",
+  "who.ex.hotel_fb.1": "Restauracje hotelowe",
+  "who.ex.hotel_fb.2": "Bary i lounge hotelowe",
+  "who.ex.hotel_fb.3": "Zespoły F&B hotelu",
+  "who.ex.mixed.1": "Rozrywka rodzinna",
+  "who.ex.mixed.2": "Kino + food halle",
+  "who.ex.mixed.3": "Gaming i gastronomia pod jednym dachem",
+
+  "features.chip1": "Widok sali w 3 sekundy",
+  "features.chip2": "Timer na żywo przy zasobie",
+  "features.chip3": "Akcje jednym tapnięciem",
+  "features.heart": "Serce systemu",
+
+  "guest.eyebrow": "Dla gości",
+  "guest.title": "Znajdź, zarezerwuj,",
+  "guest.titleAccent": "ciesz się.",
+  "guest.subtitle":
+    "Trzy kroki do Twojej następnej nocy — bez telefonów i zgadywania, czy stolik, tor czy box jest wolny.",
+  "guest.cta": "Znajdź miejsca w pobliżu",
+  "guest.step1.title": "Odkrywaj miejsca",
+  "guest.step1.body":
+    "Przeglądaj sale bilardowe, gaming lounge, restauracje, kawiarnie, bary i karaoke w swoim mieście.",
+  "guest.step2.title": "Zarezerwuj miejsce",
+  "guest.step2.body":
+    "Wybierz termin, potwierdź i przyjdź — stolik, stanowisko lub box czekają.",
+  "guest.step3.title": "Potwierdź i idź",
+  "guest.step3.body":
+    "Zablokuj rezerwację, otrzymaj potwierdzenie i pojaw się gotowy — miejsce czeka.",
+  "guest.promise1.title": "Zawsze darmowe dla gości",
+  "guest.promise1.body":
+    "Lokale płacą za narzędzia — Ty nigdy nie płacisz Locora za przeglądanie, odkrywanie czy rezerwację.",
+  "guest.promise2.title": "Prawdziwe lokale, prawdziwe info",
+  "guest.promise2.body":
+    "Każda wizytówka jest prowadzona przez lokal: własne zdjęcia, godziny, ceny i zasady.",
+  "guest.promise3.title": "Katalog, który rośnie",
+  "guest.promise3.body":
+    "Wprowadzamy operatorów miasto po mieście. Nowe miejsca pojawiają się, gdy je opublikują.",
+
+  "pain.eyebrow": "Scenariusze produktu",
+  "pain.title": "Chaotyczne noce,",
+  "pain.titleAccent": "dla których powstał Locora.",
+  "pain.subtitle":
+    "Ilustracyjne problemy opisywane przez operatorów — nie cytaty klientów.",
+  "pain.1.title": "Zapomniane timery",
+  "pain.1.body":
+    "Busy nights zamieniają się w zgadywanie. Minuty uciekają, rachunki rosną, a nikt nie wie, co było na zegarze.",
+  "pain.2.title": "Konflikty rezerwacji",
+  "pain.2.body":
+    "Walk-iny kolidują z holdami, VIP-y się nakładają, a mapa w głowie managera przestaje pasować do sali.",
+  "pain.3.title": "Błędne lub sporne rachunki",
+  "pain.3.body":
+    "Stawki godzinowe, dodatki i zniżki mieszają się, gdy wszystko żyje na papierze lub w czatach.",
+  "pain.4.title": "Zniżki personelu bez kontroli",
+  "pain.4.body":
+    "Potrzebujesz zaufania na sali — ale też limitów, ról i śladu, gdy coś wygląda źle.",
+  "pain.5.title": "Brak widoku sali na żywo",
+  "pain.5.body":
+    "Właściciel odchodzi na godzinę i traci wgląd w to, co gra, co jest zarezerwowane i co realnie zarabia.",
+  "pain.6.title": "Słabe raporty na koniec nocy",
+  "pain.6.body":
+    "Zamykanie kasy nie powinno wymagać arkuszy. Chcesz jasności per stolik i kasjer — bez dramatu.",
+
+  "gallery.eyebrow": "Atmosfera · nie lista lokali",
+  "gallery.title": "Takie noce,",
+  "gallery.titleAccent": "dla których jest Locora.",
+  "gallery.subtitle":
+    "Zdjęcia stockowe tylko dla klimatu — nie przedstawiają partnerów ani dostępności na żywo.",
+  "gallery.tag.1": "Bilard",
+  "gallery.tag.2": "Gaming",
+  "gallery.tag.3": "PC lounge",
+  "gallery.tag.4": "Gry planszowe",
+  "gallery.tag.5": "PlayStation",
+  "gallery.tag.6": "Dart",
+  "gallery.tag.7": "Lounge",
+  "gallery.tag.8": "Arcade",
+  "gallery.tag.9": "Bowling",
+
+  "finder.openDirectory": "Otwórz pełny katalog",
+  "finder.published": "Opublikowane na Locora",
+  "finder.preview": "Podgląd katalogu",
+  "finder.seeAll": "Zobacz wszystkie",
+  "finder.empty": "Brak opublikowanych lokali — bądź wśród pierwszych.",
+
+  "footer.poweredBy": "Powered by",
+  "footer.rights": "Wszelkie prawa zastrzeżone.",
+  "footer.builtWith": "Zbudowane na Next.js · NestJS · PostgreSQL ·",
+  "footer.busyNights": "dla busy nights",
 
   "stats.days.label": "dni gratis na każdy nowy lokal",
   "stats.days.hint": "Bez karty na start",
@@ -867,7 +1803,7 @@ const pl: Dict = {
   "faq.titleAccent": "zapytać najpierw.",
   "faq.owner.1.q": "Czy muszę coś instalować w lokalu?",
   "faq.owner.1.a":
-    "Nie. GoSpots działa w przeglądarce na urządzeniu, które już masz — laptop, tablet lub komputer przy ladzie. Aktualizacje przychodzą automatycznie.",
+    "Nie. Locora działa w przeglądarce na urządzeniu, które już masz — laptop, tablet lub komputer przy ladzie. Aktualizacje przychodzą automatycznie.",
   "faq.owner.2.q": "Czy mogę wypróbować przed płatnością?",
   "faq.owner.2.a":
     "Tak. Nowe lokale dostają 90-dniowy okres próbny — bez karty. Wybierz dowolne funkcje i zmieniaj je swobodnie w trakcie. Nic nie jest obciążane bez Twojej zgody.",
@@ -886,10 +1822,10 @@ const pl: Dict = {
   "faq.owner.7.q": "A co z błędami personelu?",
   "faq.owner.7.a":
     "Każda ważna akcja — zniżka, anulowanie, zwrot, zmiana ceny — trafia do niezmiennego dziennika audytu powiązanego z użytkownikiem.",
-  "faq.player.1.q": "Czy GoSpots jest darmowy dla gości?",
+  "faq.player.1.q": "Czy Locora jest darmowy dla gości?",
   "faq.player.1.a":
     "Całkowicie. Przeglądanie lokali, szczegóły i rezerwacja nic Cię nie kosztują — lokale płacą za swoje narzędzia, nie Ty.",
-  "faq.player.2.q": "Jakie miejsca są na GoSpots?",
+  "faq.player.2.q": "Jakie miejsca są na Locora?",
   "faq.player.2.a":
     "Dużo więcej niż gaming. Bilardy, strefy gier i kawiarnie esportowe — plus restauracje, kawiarnie, bary, puby, karaoke, kręgielnie, kluby i lokale rodzinnej rozrywki.",
   "faq.player.3.q": "Jak znaleźć miejsce w pobliżu?",
@@ -903,7 +1839,7 @@ const pl: Dict = {
     "Nie — przeglądanie i odkrywanie lokali bez konta. Logujesz się tylko, gdy proces rezerwacji lokalu tego wymaga.",
   "faq.player.6.q": "Dlaczego widzę jeszcze mało lokali?",
   "faq.player.6.a":
-    "GoSpots jest w prywatnej becie i najpierw wdraża operatorów. Katalog publiczny rośnie z każdym lokalem, który włączy publikację.",
+    "Locora jest w prywatnej becie i najpierw wdraża operatorów. Katalog publiczny rośnie z każdym lokalem, który włączy publikację.",
 
   "cta.manage.titleA": "Nigdy nie trać pieniędzy na",
   "cta.manage.titleB": "zapomniane timery.",
@@ -926,6 +1862,7 @@ const pl: Dict = {
     "bilardy, strefy gier i lokale rozrywkowe w Twojej okolicy. Właściciele prowadzą wieczory z jednego panelu w czasie rzeczywistym.",
   "footer.product": "Produkt",
   "footer.explore": "Odkrywaj",
+  "footer.forVenues": "Dla lokali",
   "footer.forGuests": "Dla gości",
   "footer.company": "Firma",
   "footer.findSpot": "Znajdź miejsce",
@@ -941,7 +1878,7 @@ const pl: Dict = {
   "footer.privacy": "Prywatność",
   "footer.terms": "Regulamin",
 
-  "marquee.owner.title": "Do czego GoSpots jest stworzony",
+  "marquee.owner.title": "Do czego Locora jest stworzony",
   "marquee.owner.1": "Status sali na żywo",
   "marquee.owner.2": "Timery sesji przypięte do stołu",
   "marquee.owner.3": "Walk-iny i rezerwacje w jednym widoku",
@@ -950,7 +1887,7 @@ const pl: Dict = {
   "marquee.owner.6": "Niezmienny dziennik audytu",
   "marquee.owner.7": "Przychody per stół i per zmiana",
   "marquee.owner.8": "Pod bilard · snooker · lounge · game café",
-  "marquee.player.title": "Co znajdziesz na GoSpots",
+  "marquee.player.title": "Co znajdziesz na Locora",
   "marquee.player.1": "Sale bilardowe i snooker",
   "marquee.player.2": "Lounge gamingowe i esports café",
   "marquee.player.3": "Restauracje, kawiarnie i bary",
@@ -992,6 +1929,595 @@ const pl: Dict = {
   "cat.titleAccent": "znajdziesz tu.",
   "cat.subtitle": "Od bilardu po brunch — wybierz kategorię i odkrywaj lokale w pobliżu.",
   "cat.cta": "Zobacz wszystkie lokale",
+
+  "auth.login.title": "Zaloguj się",
+  "auth.login.staffForgotTitle": "Nie pamiętam hasła pracownika",
+  "auth.login.subtitleOwner":
+    "Właściciel lokalu — użyj e-maila użytego przy rejestracji.",
+  "auth.login.subtitleStaff":
+    "Personel — użyj ID logowania nadanego przez menedżera.",
+  "auth.login.subtitleStaffForgot":
+    "Podaj nazwę lokalu (lub właściciela) oraz ID logowania. Właściciel dostanie powiadomienie i wyśle Ci nowy link aktywacyjny.",
+  "auth.login.backToStaff": "Wróć do logowania personelu",
+  "auth.login.newHere": "Nowy tutaj?",
+  "auth.login.createAccount": "Utwórz konto lokalu",
+  "auth.login.staffNeedLogin":
+    "Potrzebujesz loginu? Zapytaj właściciela lub menedżera — konta personelu tworzą oni.",
+  "auth.login.accountType": "Typ konta",
+  "auth.login.owner": "Właściciel",
+  "auth.login.staff": "Personel",
+  "auth.login.ownerTip":
+    "Właściciele zarządzają lokalem, subskrypcją i zespołem. Możesz zresetować hasło, jeśli je zapomnisz.",
+  "auth.login.email": "E-mail",
+  "auth.login.password": "Hasło",
+  "auth.login.emailPlaceholder": "ty@lokal.com",
+  "auth.login.forgotOwnerPassword": "Nie pamiętasz hasła?",
+  "auth.login.signingIn": "Logowanie…",
+  "auth.login.signInOwner": "Zaloguj jako właściciel",
+  "auth.login.signInStaff": "Zaloguj jako personel",
+  "auth.login.failed": "Logowanie nie powiodło się.",
+  "auth.login.staffForgotDoneLead": "Właściciel otwiera",
+  "auth.login.employeeAccounts": "Konta pracowników",
+  "auth.login.staffForgotDoneTrail":
+    ", generuje nowy link i wysyła go do Ciebie (WhatsApp, SMS itd.). Otwórz ten link, aby wybrać nowe hasło — tak samo jak przy nowym koncie.",
+  "auth.login.staffForgotTip":
+    "Powiadamiamy właściciela lokalu. Tworzy świeży link aktywacyjny i wysyła go do Ciebie — nigdy nie wysyłamy haseł personelu e-mailem.",
+  "auth.login.venueOrOwnerName": "Nazwa lokalu lub właściciela",
+  "auth.login.venuePlaceholder": "np. Zuzu Arcade",
+  "auth.login.staffLoginId": "ID logowania personelu",
+  "auth.login.staffIdPlaceholder": "anna@twoj-lokal.locora",
+  "auth.login.sending": "Wysyłanie…",
+  "auth.login.notifyOwner": "Powiadom właściciela",
+  "auth.login.requestFailed": "Żądanie nie powiodło się.",
+  "auth.login.mfaTitle": "Kod authenticatora",
+  "auth.login.mfaSubtitle":
+    "Wpisz 6-cyfrowy kod z aplikacji authenticator albo użyj kodu odzyskiwania.",
+  "auth.login.mfaCode": "Kod authenticatora",
+  "auth.login.mfaRecovery": "Kod odzyskiwania",
+  "auth.login.mfaOrRecovery": "Albo użyj jednorazowego kodu odzyskiwania",
+  "auth.login.mfaVerify": "Zweryfikuj i zaloguj",
+  "auth.login.mfaBack": "Wróć do hasła",
+  "auth.login.mfaFailed": "Nieprawidłowy lub wygasły kod MFA.",
+  "auth.login.staffTip":
+    "Użyj ID logowania i hasła ustawionego z linku aktywacyjnego. Nie pamiętasz? Poproś właściciela o nowy link poniżej.",
+  "auth.login.forgotStaffPassword": "Nie pamiętam hasła?",
+
+  "auth.register.title": "Utwórz swój lokal",
+  "auth.register.subtitle":
+    "{days}-dniowy darmowy okres próbny · wybierz typ lokalu, a funkcje dobierzesz po rejestracji.",
+  "auth.register.alreadyHave": "Masz już konto?",
+  "auth.register.signIn": "Zaloguj się",
+  "auth.register.stepAccount": "Konto",
+  "auth.register.stepVenue": "Lokal",
+  "auth.register.stepType": "Typ",
+  "auth.register.yourName": "Twoje imię",
+  "auth.register.email": "E-mail",
+  "auth.register.password": "Hasło",
+  "auth.register.confirmPassword": "Potwierdź hasło",
+  "auth.register.strength": "Siła: {label}",
+  "auth.register.strength0": "Słabe",
+  "auth.register.strength1": "W porządku",
+  "auth.register.strength2": "Dobre",
+  "auth.register.strength3": "Silne",
+  "auth.register.strength4": "Doskonałe",
+  "auth.register.venueName": "Nazwa lokalu",
+  "auth.register.venuePlaceholder": "Neon Billiards",
+  "auth.register.slug": "Publiczny slug URL",
+  "auth.register.slugPreview": "Locora.com/venue/{slug}",
+  "auth.register.cityOptional": "Miasto (opcjonalnie)",
+  "auth.register.countryOptional": "Kraj (opcjonalnie)",
+  "auth.register.phoneOptional": "Telefon (opcjonalnie)",
+  "auth.register.packHint":
+    "Lokal gamingowy czy mixed? Bez cen — płatne pakiety wybierzesz po utworzeniu konta.",
+  "auth.register.contactSalesLead": "Restauracja lub hotel F&B?",
+  "auth.register.contactSales": "Napisz do nas",
+  "auth.register.trialNote":
+    "Bezpłatnie przez {days} dni. Typ lokalu i funkcje możesz zmienić w dowolnym momencie.",
+  "auth.register.agreeBefore": "Akceptuję",
+  "auth.register.terms": "Regulamin",
+  "auth.register.agreeAnd": "oraz",
+  "auth.register.privacy": "Politykę prywatności",
+  "auth.register.back": "Wstecz",
+  "auth.register.continue": "Dalej",
+  "auth.register.createVenue": "Utwórz lokal",
+  "auth.register.emailRequired": "E-mail jest wymagany.",
+  "auth.register.passwordMismatch": "Hasła nie są takie same.",
+  "auth.register.passwordWeak":
+    "Wybierz silniejsze hasło (min. 10 znaków, wielkie i małe litery oraz cyfry).",
+  "auth.register.venueNameRequired": "Nazwa lokalu jest wymagana.",
+  "auth.register.slugRequired": "Slug URL lokalu jest wymagany.",
+  "auth.register.agreeRequired":
+    "Zaakceptuj Regulamin i Politykę prywatności.",
+  "auth.register.failed": "Rejestracja nie powiodła się.",
+
+  "auth.forgot.title": "Nie pamiętam hasła",
+  "auth.forgot.subtitle":
+    "Tylko konta właścicieli. Personel nie resetuje hasła tutaj.",
+  "auth.forgot.backToOwner": "Wróć do logowania właściciela",
+  "auth.forgot.returnToSignIn": "Wróć do logowania",
+  "auth.forgot.ownerEmail": "E-mail właściciela",
+  "auth.forgot.emailPlaceholder": "ty@lokal.com",
+  "auth.forgot.sending": "Wysyłanie…",
+  "auth.forgot.sendLink": "Wyślij link resetujący",
+  "auth.forgot.requestFailed": "Żądanie nie powiodło się.",
+
+  "auth.reset.invalidTitle": "Nieprawidłowy link resetujący",
+  "auth.reset.invalidSubtitle":
+    "Ta strona wymaga tokenu z e-maila resetującego.",
+  "auth.reset.requestNew": "Poproś o nowy link resetujący właściciela",
+  "auth.reset.title": "Ustaw nowe hasło",
+  "auth.reset.subtitle":
+    "Tylko konto właściciela. Wybierz nowe hasło do logowania lokalu.",
+  "auth.reset.backToSignIn": "Wróć do logowania",
+  "auth.reset.newPassword": "Nowe hasło",
+  "auth.reset.confirmPassword": "Potwierdź hasło",
+  "auth.reset.saving": "Zapisywanie…",
+  "auth.reset.update": "Zaktualizuj hasło",
+  "auth.reset.missingToken":
+    "Brak tokenu resetującego. Poproś o nowy link przy logowaniu właściciela.",
+  "auth.reset.passwordMismatch": "Hasła nie są takie same.",
+  "auth.reset.failed": "Reset nie powiódł się.",
+
+  "auth.activate.invalidTitle": "Nieprawidłowy link aktywacyjny",
+  "auth.activate.invalidSubtitle":
+    "Ta strona wymaga tokenu od menedżera.",
+  "auth.activate.invalidBody":
+    "Otwórz osobisty link aktywacyjny, który otrzymałeś — nie udostępniaj go współpracownikom.",
+  "auth.activate.goToSignIn": "Przejdź do logowania",
+  "auth.activate.title": "Skonfiguruj login pracownika",
+  "auth.activate.subtitle":
+    "Wybierz hasło znane tylko Tobie — przy nowym koncie lub po resecie. Menedżer go nigdy nie widzi.",
+  "auth.activate.newPassword": "Nowe hasło (min. 10 znaków)",
+  "auth.activate.confirmPassword": "Potwierdź hasło",
+  "auth.activate.activating": "Aktywacja…",
+  "auth.activate.submit": "Aktywuj i zaloguj",
+  "auth.activate.oneAccount":
+    "Jedno konto = jedna osoba. Logowanie gdzie indziej zakończy inną sesję.",
+  "auth.activate.missingToken":
+    "Brak linku aktywacyjnego. Poproś menedżera o nowe zaproszenie.",
+  "auth.activate.passwordMismatch": "Hasła nie są takie same.",
+  "auth.activate.failed": "Aktywacja nie powiodła się.",
+
+  "guestStatus.backToVenue": "Wróć do lokalu",
+  "guestStatus.returnToVenue": "Wróć do {name}",
+  "guestStatus.canceling": "Anulowanie…",
+  "guestStatus.phase.upcoming": "Nadchodząca",
+  "guestStatus.phase.waiting": "Gość oczekuje",
+  "guestStatus.phase.in_use": "W użyciu",
+  "guestStatus.phase.completed": "Zakończona",
+  "guestStatus.phase.no_show": "Nieobecność",
+  "guestStatus.phase.canceled": "Anulowana",
+
+  "guestStatus.gaming.loading": "Ładowanie rezerwacji…",
+  "guestStatus.gaming.loadError": "Nie udało się wczytać rezerwacji.",
+  "guestStatus.gaming.fallbackUnit": "Stanowisko do gier",
+  "guestStatus.gaming.playersOne": "{count} gracz",
+  "guestStatus.gaming.playersMany": "{count} graczy",
+  "guestStatus.gaming.cancelConfirm":
+    "Anulować tę rezerwację? Możesz zarezerwować ponownie w dowolnym momencie przed rozpoczęciem sesji.",
+  "guestStatus.gaming.cancelError": "Nie udało się anulować rezerwacji.",
+  "guestStatus.gaming.cancel": "Anuluj rezerwację",
+  "guestStatus.gaming.cancelHint":
+    "Możesz anulować przed zameldowaniem w lokalu.",
+  "guestStatus.gaming.hintCanceled":
+    "Ta rezerwacja została anulowana lub oznaczona jako nieobecność.",
+  "guestStatus.gaming.hintWaiting":
+    "Czas rozpoczęcia minął — zamelduj się u personelu po przyjściu.",
+  "guestStatus.gaming.hintDefault":
+    "Bez stałego czasu zakończenia — zostań tak długo, jak chcesz po zameldowaniu. Ta strona aktualizuje się automatycznie.",
+
+  "guestStatus.dining.loading": "Ładowanie rezerwacji stolika…",
+  "guestStatus.dining.loadError": "Nie udało się wczytać rezerwacji.",
+  "guestStatus.dining.fallbackUnit": "Stolik",
+  "guestStatus.dining.partyOf": "grupa {count} osób",
+  "guestStatus.dining.cancelConfirm":
+    "Anulować rezerwację stolika? Stolik zostanie zwolniony dla innych gości.",
+  "guestStatus.dining.cancelError": "Nie udało się anulować rezerwacji.",
+  "guestStatus.dining.cancel": "Anuluj rezerwację",
+  "guestStatus.dining.cancelHint":
+    "Możesz anulować przed zajęciem stolika.",
+  "guestStatus.dining.hintCanceled":
+    "Ta rezerwacja została anulowana, a stolik zwolniony.",
+  "guestStatus.dining.hintWaiting":
+    "Czas przybycia minął — zamelduj się u personelu po przyjściu.",
+  "guestStatus.dining.hintDefault":
+    "Bez stałego czasu zakończenia — zostań tak długo, jak chcesz po zajęciu miejsca. Ta strona aktualizuje się automatycznie.",
+
+  "guestStatus.event.loading": "Ładowanie zgłoszenia…",
+  "guestStatus.event.loadError": "Nie udało się wczytać zgłoszenia.",
+  "guestStatus.event.notFound": "Nie znaleziono zgłoszenia.",
+  "guestStatus.event.eyebrow": "Zgłoszenie wydarzenia",
+  "guestStatus.event.guest": "Gość",
+  "guestStatus.event.guestsMany": "{count} gości",
+  "guestStatus.event.preferredTime": "Preferowany czas",
+  "guestStatus.event.diningArea": "Strefa gastronomiczna",
+  "guestStatus.event.activity": "Aktywność",
+  "guestStatus.event.yourNote": "Twoja notatka",
+  "guestStatus.event.venueMessage": "Wiadomość od lokalu",
+  "guestStatus.event.hintPending":
+    "Lokal sprawdza zgłoszenie względem aktualnego układu sali. Zapisz tę stronę w zakładkach — konto nie jest potrzebne.",
+  "guestStatus.event.hintApprovedDining":
+    "Zaakceptowano — personel zarezerwuje stoliki na mapie sali dla Twojej grupy. Skontaktuj się z lokalem, jeśli szczegóły się zmienią.",
+  "guestStatus.event.cancelConfirm":
+    "Anulować to zgłoszenie? Lokal zostanie powiadomiony od razu.",
+  "guestStatus.event.cancelError": "Nie udało się anulować zgłoszenia.",
+  "guestStatus.event.cancel": "Anuluj zgłoszenie",
+  "guestStatus.event.cancelHint":
+    "Możesz anulować w trakcie oczekiwania lub po akceptacji przed rozpoczęciem wydarzenia.",
+  "guestStatus.event.questionsBefore":
+    "Pytania? Skontaktuj się bezpośrednio z {name}, korzystając z danych na ich",
+  "guestStatus.event.venuePage": "stronie lokalu",
+  "guestStatus.event.questionsAfter": ".",
+  "guestStatus.event.status.PENDING": "Oczekuje na przegląd",
+  "guestStatus.event.status.APPROVED": "Zaakceptowane",
+  "guestStatus.event.status.DECLINED": "Odrzucone",
+  "guestStatus.event.status.CANCELED": "Anulowane",
+  "guestStatus.event.type.TABLE": "Rezerwacja stolika",
+  "guestStatus.event.type.GAMING": "Gry / aktywność",
+  "guestStatus.event.type.BIRTHDAY": "Urodziny",
+  "guestStatus.event.type.MEETING": "Spotkanie",
+  "guestStatus.event.type.PARTY": "Impreza",
+  "guestStatus.event.type.CORPORATE": "Firmowe / biznesowe",
+  "guestStatus.event.type.OTHER": "Inne wydarzenie",
+
+  "venuePage.notAvailable":
+    "Ten lokal jest niedostępny lub nie został opublikowany.",
+  "venuePage.notFound": "Nie znaleziono lokalu.",
+  "venuePage.browseVenues": "Przeglądaj lokale",
+
+  "venuePage.overview.guestRating": "Ocena gości",
+  "venuePage.overview.averageOfOne": "Średnia z {count} opinii",
+  "venuePage.overview.averageOfMany": "Średnia z {count} opinii",
+  "venuePage.overview.noReviews": "Brak opinii",
+  "venuePage.overview.beFirstHint":
+    "Bądź wśród pierwszych, którzy ocenią ten lokal w zakładce Opinie.",
+  "venuePage.overview.about": "O lokalu",
+  "venuePage.overview.noDescription":
+    "Ten lokal nie dodał jeszcze opisu.",
+  "venuePage.overview.gallery": "Galeria",
+  "venuePage.overview.openingHours": "Godziny otwarcia",
+  "venuePage.overview.scheduleUpdates": "Zmiany w harmonogramie",
+  "venuePage.overview.findUs": "Jak dojechać",
+  "venuePage.overview.findUsHint":
+    "Nawigacja, telefon lub e-mail — wybierz wygodną opcję.",
+  "venuePage.overview.address": "Adres",
+  "venuePage.overview.openInMaps": "Otwórz w Mapach",
+  "venuePage.overview.call": "Zadzwoń",
+  "venuePage.overview.email": "E-mail",
+  "venuePage.overview.venuePhoto": "Zdjęcie lokalu",
+  "venuePage.overview.morePhotos": "+{count} więcej",
+  "venuePage.overview.closed": "Zamknięte",
+  "venuePage.overview.specialHours": "Godziny specjalne",
+  "venuePage.overview.specialHoursRange":
+    "Godziny specjalne: {opens} – {closes}",
+  "venuePage.overview.hoursUnpublished":
+    "Godziny otwarcia nie zostały jeszcze opublikowane.",
+  "venuePage.overview.today": "Dziś",
+  "venuePage.weekday.0": "Niedziela",
+  "venuePage.weekday.1": "Poniedziałek",
+  "venuePage.weekday.2": "Wtorek",
+  "venuePage.weekday.3": "Środa",
+  "venuePage.weekday.4": "Czwartek",
+  "venuePage.weekday.5": "Piątek",
+  "venuePage.weekday.6": "Sobota",
+  "venuePage.weekdayShort.0": "Nd",
+  "venuePage.weekdayShort.1": "Pn",
+  "venuePage.weekdayShort.2": "Wt",
+  "venuePage.weekdayShort.3": "Śr",
+  "venuePage.weekdayShort.4": "Cz",
+  "venuePage.weekdayShort.5": "Pt",
+  "venuePage.weekdayShort.6": "Sb",
+
+  "venuePage.book.diningEvents": "Gastronomia i wydarzenia",
+  "venuePage.book.instantBefore": "Natychmiastowe stoliki są w zakładce",
+  "venuePage.book.bookATable": "Zarezerwuj stolik",
+  "venuePage.book.instantMid":
+    "— ta strona jest do zgłoszeń prywatnych wydarzeń",
+  "venuePage.book.instantGamingBefore": "; stanowiska do gier znajdziesz w",
+  "venuePage.book.gamingFloor": "Strefa gier",
+  "venuePage.book.instantEnd": ".",
+  "venuePage.book.legacyBefore":
+    "Zgłoś stolik lub prywatne wydarzenie. Do gier — PC, konsole, bilard — użyj zakładki",
+  "venuePage.book.legacyAfter": "gdy jest dostępna.",
+  "venuePage.book.call": "Zadzwoń",
+  "venuePage.book.callPhone": "Zadzwoń {phone}",
+  "venuePage.book.emailVenue": "Napisz do lokalu",
+  "venuePage.book.tableReservation": "Rezerwacja stolika",
+  "venuePage.book.privateEvents": "Prywatne wydarzenia",
+  "venuePage.book.eventDescDigital":
+    "Urodziny, spotkania i imprezy — wybierz strefę gastronomiczną (lub aktywność) z aktualnego układu lokalu. Personel weryfikuje względem tych samych danych co w panelu.",
+  "venuePage.book.contact": "Kontakt",
+
+  "venuePage.contact.title": "Kontakt z lokalem",
+  "venuePage.contact.subtitle":
+    "Pytania, zapytania grupowe lub cokolwiek, co nie jest rezerwacją.",
+  "venuePage.contact.nameRequired": "Imię i nazwisko jest wymagane.",
+  "venuePage.contact.messageRequired": "Napisz wiadomość.",
+  "venuePage.contact.replyRequired":
+    "Podaj e-mail lub telefon, aby lokal mógł odpowiedzieć.",
+  "venuePage.contact.sendFailed": "Nie udało się wysłać wiadomości.",
+  "venuePage.contact.sendAnother": "Wyślij kolejną wiadomość",
+  "venuePage.contact.yourName": "Imię i nazwisko",
+  "venuePage.contact.subject": "Temat",
+  "venuePage.contact.optional": "Opcjonalnie",
+  "venuePage.contact.phone": "Telefon",
+  "venuePage.contact.email": "E-mail",
+  "venuePage.contact.message": "Wiadomość",
+  "venuePage.contact.send": "Wyślij wiadomość",
+
+  "venuePage.reviews.guestReviews": "Opinie gości",
+  "venuePage.reviews.whatVisitorsSay": "Co mówią goście",
+  "venuePage.reviews.countOne": "{count} opinia",
+  "venuePage.reviews.countMany": "{count} opinii",
+  "venuePage.reviews.disabledVenue":
+    "Opinie są wyłączone dla tego lokalu.",
+  "venuePage.reviews.privateHint":
+    "Opinie są prywatne — nadal możesz zostawić opinię poniżej.",
+  "venuePage.reviews.beFirst": "Bądź pierwszą osobą, która zostawi opinię.",
+  "venuePage.reviews.sort": "Sortuj",
+  "venuePage.reviews.sortDate": "Data",
+  "venuePage.reviews.sortRating": "Ocena",
+  "venuePage.reviews.orderDescTitle": "Najwyższe / najnowsze najpierw",
+  "venuePage.reviews.orderAscTitle": "Najniższe / najstarsze najpierw",
+  "venuePage.reviews.orderDesc": "Wysokie → niskie",
+  "venuePage.reviews.orderAsc": "Niskie → wysokie",
+  "venuePage.reviews.loadError": "Nie udało się wczytać opinii.",
+  "venuePage.reviews.nonePublished": "Brak opublikowanych opinii.",
+  "venuePage.reviews.turnedOff": "Opinie są wyłączone",
+  "venuePage.reviews.privateVenue": "Opinie są prywatne dla tego lokalu",
+  "venuePage.reviews.shareExperience": "Podziel się wrażeniami",
+  "venuePage.reviews.unavailable": "Opinie niedostępne",
+  "venuePage.reviews.noneYet": "Brak opinii",
+  "venuePage.reviews.summaryAvgOne": "{avg} · {count} opinia",
+  "venuePage.reviews.summaryAvgMany": "{avg} · {count} opinii",
+  "venuePage.reviews.feedbackHidden":
+    "Nadal możesz zostawić opinię — nie pojawi się publicznie",
+  "venuePage.reviews.shareAfterVisit":
+    "Podziel się wrażeniami po wizycie",
+  "venuePage.reviews.closedForGuests": "Opinie są zamknięte dla gości",
+  "venuePage.reviews.cancel": "Anuluj",
+  "venuePage.reviews.write": "Napisz opinię",
+  "venuePage.reviews.yourName": "Imię i nazwisko",
+  "venuePage.reviews.emailOptional": "E-mail (opcjonalnie)",
+  "venuePage.reviews.yourRating": "Twoja ocena",
+  "venuePage.reviews.commentOptional": "Komentarz (opcjonalnie)",
+  "venuePage.reviews.commentPlaceholder":
+    "Jedzenie, obsługa, atmosfera, strefa gier…",
+  "venuePage.reviews.post": "Opublikuj opinię",
+  "venuePage.reviews.nameRequired": "Imię i nazwisko jest wymagane.",
+  "venuePage.reviews.submitFailed": "Nie udało się wysłać opinii.",
+  "venuePage.reviews.notAccepting":
+    "Ten lokal nie przyjmuje opinii.",
+  "venuePage.reviews.beFirstList": "Bądź pierwszą osobą, która oceni ten lokal.",
+  "venuePage.reviews.rateStars": "Oceń na {n} gwiazdek",
+
+  "venuePage.booking.reserveTitle": "Zarezerwuj {name}",
+  "venuePage.booking.bookTitle": "Zarezerwuj {name}",
+  "venuePage.booking.close": "Zamknij",
+  "venuePage.booking.trackBooking": "Śledź rezerwację",
+  "venuePage.booking.estPrice": "Szac. {price}",
+  "venuePage.booking.howToBook": "Jak chcesz zarezerwować?",
+  "venuePage.booking.numberOfGames": "Liczba gier",
+  "venuePage.booking.yourName": "Imię i nazwisko",
+  "venuePage.booking.email": "E-mail",
+  "venuePage.booking.phoneOptional": "Telefon (opcjonalnie)",
+  "venuePage.booking.partySize": "Liczba osób",
+  "venuePage.booking.tableCapacity": "(ten stolik: do {capacity})",
+  "venuePage.booking.playersRange": "Gracze ({min}–{max})",
+  "venuePage.booking.diningPartyHint":
+    "Służy do przydziału miejsc — online nie liczymy opłaty za rezerwację stolika.",
+  "venuePage.booking.perPersonPricing":
+    "Cena za osobę — opłata za każdego gracza za każdy blok {minutes} min w wybranym terminie.",
+  "venuePage.booking.laneRental":
+    "Wynajem toru — rezerwujesz tor na czas; liczba gości nie zmienia ceny.",
+  "venuePage.booking.arrivalTime": "Godzina przybycia",
+  "venuePage.booking.startTime": "Godzina rozpoczęcia",
+  "venuePage.booking.holdHint":
+    "Bez stałej godziny końca — Twój {unitKind} jest trzymany przez {minutes} min od startu. Prosimy o punktualność.",
+  "venuePage.booking.unitKindTable": "stolik",
+  "venuePage.booking.unitKindStation": "stanowisko",
+  "venuePage.booking.notesOptional": "Notatki (opcjonalnie)",
+  "venuePage.booking.notesPlaceholder":
+    "Tytuły gier, poziom, szczególne prośby…",
+  "venuePage.booking.confirmBooking": "Potwierdź rezerwację",
+  "venuePage.booking.confirmEmailHint":
+    "Po rezerwacji wysyłamy e-mail z potwierdzeniem. Twój {unitKind} jest od razu zarezerwowany na wybrany czas.",
+  "venuePage.booking.nameRequired": "Imię i nazwisko jest wymagane.",
+  "venuePage.booking.emailRequired":
+    "E-mail jest wymagany — wyślemy potwierdzenie rezerwacji.",
+  "venuePage.booking.invalidTime": "Wybierz prawidłowy termin.",
+  "venuePage.booking.overlap":
+    "To stanowisko jest już zarezerwowane {start}–{end}. Wybierz godzinę przed lub po tym terminie.",
+  "venuePage.booking.capacityExceeded":
+    "{name} mieści do {capacity} osób — wybierz mniejszą grupę lub inny stolik.",
+  "venuePage.booking.submitFailed": "Nie udało się dokończyć rezerwacji.",
+  "venuePage.booking.outageOffline":
+    "Brak internetu — zmiany nie zapiszą się, dopóki nie wrócisz online.",
+  "venuePage.booking.outageUnreachable":
+    "Nie można połączyć się z serwerami Locora — spróbuj wkrótce.",
+  "venuePage.booking.outageUnavailable":
+    "Locora jest chwilowo niedostępna — Twoje dane są bezpieczne; spróbuj za minutę.",
+
+  "venuePage.captcha.label": "Weryfikacja bezpieczeństwa",
+  "venuePage.captcha.required":
+    "Ukończ weryfikację bezpieczeństwa przed wysłaniem.",
+  "venuePage.privacyConsent.label":
+    "Zgadzam się, aby lokal używał moich danych do obsługi tego zgłoszenia. Zobacz Politykę prywatności.",
+  "venuePage.privacyConsent.required":
+    "Zaakceptuj informację o prywatności, aby kontynuować.",
+  "venuePage.dsar.title": "Wniosek prywatności",
+  "venuePage.dsar.hint":
+    "Poproś o kopię swoich danych lub o usunięcie danych gościa w tym lokalu.",
+  "venuePage.dsar.access": "Poproś o kopię moich danych",
+  "venuePage.dsar.erasure": "Poproś o usunięcie moich danych",
+  "venuePage.dsar.submit": "Wyślij wniosek",
+  "venuePage.dsar.success": "Wniosek wysłany. Lokal odpowie e-mailem.",
+  "venuePage.dsar.failed": "Nie udało się wysłać wniosku prywatności.",
+
+  "publicBooking.modeTableTitle": "Poproś o stolik",
+  "publicBooking.modeTableDesc":
+    "Wybierz datę, godzinę i liczbę osób. Lokal potwierdzi dostępność przed wizytą.",
+  "publicBooking.modeGamingTitle": "Zarezerwuj aktywność",
+  "publicBooking.modeGamingDesc":
+    "Zarezerwuj kręgle, bilard, stanowiska do gier i więcej. Personel potwierdzi termin.",
+  "publicBooking.modeEventTitle": "Poproś o prywatne wydarzenie",
+  "publicBooking.modeEventDesc":
+    "Urodziny, spotkania, imprezy — napisz, czego potrzebujesz. Lokal sprawdzi prośbę względem aktualnej sali.",
+  "publicBooking.replyRequired":
+    "Podaj e-mail lub telefon, aby lokal mógł odpowiedzieć.",
+  "publicBooking.pickDateStart": "Wybierz datę i godzinę rozpoczęcia.",
+  "publicBooking.endAfterStart": "Godzina zakończenia musi być po rozpoczęciu.",
+  "publicBooking.selectActivity": "Wybierz aktywność do rezerwacji.",
+  "publicBooking.selectAreaOrActivity":
+    "Wybierz obszar restauracji lub aktywność na wydarzenie.",
+  "publicBooking.selectDiningArea": "Wybierz obszar restauracji.",
+  "publicBooking.sendFailed": "Nie udało się wysłać prośby.",
+  "publicBooking.trackRequest": "Śledź prośbę",
+  "publicBooking.statusLinkHint":
+    "Zapisz link statusu — możesz anulować, gdy prośba jest oczekująca lub przed rozpoczęciem zatwierdzonego wydarzenia.",
+  "publicBooking.submitAnother": "Wyślij kolejną prośbę",
+  "publicBooking.players": "Gracze",
+  "publicBooking.guests": "Goście",
+  "publicBooking.partySize": "Liczba osób",
+  "publicBooking.eventType": "Typ wydarzenia",
+  "publicBooking.activity": "Aktywność",
+  "publicBooking.diningArea": "Obszar restauracji",
+  "publicBooking.preferredAreaActivity": "Preferowany obszar / aktywność",
+  "publicBooking.unitsSuffix": " · {n} jednostek",
+  "publicBooking.reachHint": "Podaj przynajmniej jeden sposób kontaktu.",
+  "publicBooking.preferredArea": "Preferowany obszar",
+  "publicBooking.preferredDate": "Preferowana data",
+  "publicBooking.startTime": "Godzina rozpoczęcia",
+  "publicBooking.endTime": "Godzina zakończenia",
+  "publicBooking.notesTable": "Notatki dla lokalu",
+  "publicBooking.notesGaming": "Coś, co powinniśmy wiedzieć?",
+  "publicBooking.notesEvent": "Opisz swoje wydarzenie",
+  "publicBooking.notesTablePlaceholder":
+    "Krzesełko, miejsce przy oknie, dekoracje urodzinowe…",
+  "publicBooking.notesGamingPlaceholder":
+    "Preferowany tor, tytuły gier, poziom umiejętności…",
+  "publicBooking.notesEventPlaceholder":
+    "Urodziny dla 12 osób, potrzebny projektor, dieta…",
+  "publicBooking.sendRequest": "Wyślij prośbę",
+  "publicBooking.zoneIndoor": "Wewnątrz",
+  "publicBooking.zoneOutdoor": "Na zewnątrz",
+
+  "venuePage.guestChat.continue": "Kontynuuj czat",
+  "venuePage.guestChat.open": "Czat z obsługą",
+  "venuePage.guestChat.loading": "Ładowanie…",
+  "venuePage.guestChat.privateSubtitle": "Prywatny czat z obsługą lokalu",
+  "venuePage.guestChat.close": "Zamknij czat",
+  "venuePage.guestChat.intro":
+    "Rozpocznij prywatny czat. Widzicie go tylko Ty i obsługa — zostaje po odświeżeniu, dopóki Ty lub personel go nie zakończycie albo nie usuniecie.",
+  "venuePage.guestChat.yourName": "Twoje imię",
+  "venuePage.guestChat.emailOptional": "E-mail (opcjonalnie)",
+  "venuePage.guestChat.phoneOptional": "Telefon (opcjonalnie)",
+  "venuePage.guestChat.firstMessageOptional": "Pierwsza wiadomość (opcjonalnie)",
+  "venuePage.guestChat.firstMessagePlaceholder": "W czym możemy pomóc?",
+  "venuePage.guestChat.start": "Rozpocznij czat",
+  "venuePage.guestChat.statusWaiting": "Oczekiwanie na obsługę…",
+  "venuePage.guestChat.statusOpen": "Połączono z obsługą",
+  "venuePage.guestChat.statusPaused": "Czat wstrzymany",
+  "venuePage.guestChat.statusEnded": "Czat zakończony",
+  "venuePage.guestChat.queueHint":
+    "Jesteś w kolejce. Członek obsługi dołączy wkrótce.",
+  "venuePage.guestChat.pausedHint":
+    "Obsługa wstrzymała ten czat. Nadal możesz pisać lub ich powiadomić.",
+  "venuePage.guestChat.you": "Ty",
+  "venuePage.guestChat.staff": "Obsługa",
+  "venuePage.guestChat.noMessages":
+    "Brak wiadomości — napisz coś, gdy będziesz gotowy.",
+  "venuePage.guestChat.notifyStaff": "Powiadom obsługę",
+  "venuePage.guestChat.end": "Zakończ czat",
+  "venuePage.guestChat.delete": "Usuń",
+  "venuePage.guestChat.deleteConfirm":
+    "Usunąć ten czat? Nie będzie można go ponownie otworzyć.",
+  "venuePage.guestChat.endedNotice": "Zakończyłeś ten czat.",
+  "venuePage.guestChat.placeholderWaiting": "Napisz, czekając…",
+  "venuePage.guestChat.placeholderTyping": "Napisz wiadomość…",
+  "venuePage.guestChat.send": "Wyślij",
+  "venuePage.guestChat.endedHint":
+    "Ten czat się zakończył. Usuń go, aby zacząć nowy, albo poproś obsługę o ponowne otwarcie.",
+  "venuePage.guestChat.errorStart": "Nie udało się rozpocząć czatu.",
+  "venuePage.guestChat.errorSend": "Nie udało się wysłać.",
+  "venuePage.guestChat.errorPing": "Nie udało się powiadomić obsługi.",
+  "venuePage.guestChat.errorEnd": "Nie udało się zakończyć czatu.",
+  "venuePage.guestChat.errorDelete": "Nie udało się usunąć czatu.",
+  "venuePage.guestChat.outageOffline":
+    "Brak internetu — zmiany nie zapiszą się, dopóki nie wrócisz online.",
+  "venuePage.guestChat.outageUnreachable":
+    "Nie można połączyć się z serwerami Locora — spróbuj wkrótce.",
+  "venuePage.guestChat.outageUnavailable":
+    "Locora jest chwilowo niedostępna — Twoje dane są bezpieczne; spróbuj za minutę.",
+
+  "venuePage.floor.floor": "Piętro",
+  "venuePage.floor.floorN": "Piętro {n}",
+  "venuePage.floor.date": "Data",
+  "venuePage.floor.today": "Dziś · {label}",
+  "venuePage.floor.prevDay": "Poprzedni dzień",
+  "venuePage.floor.nextDay": "Następny dzień",
+  "venuePage.floor.checkAvailability": "Sprawdź dostępność",
+  "venuePage.floor.from": "Od",
+  "venuePage.floor.to": "Do",
+  "venuePage.floor.until": "Do",
+  "venuePage.floor.mapLabelTables": "Mapa stolików na żywo",
+  "venuePage.floor.mapLabelLanes": "Mapa torów na żywo",
+  "venuePage.floor.mapLabelStations": "Mapa stanowisk na żywo",
+  "venuePage.floor.noStations":
+    "Brak skonfigurowanych stanowisk dla tej aktywności.",
+  "venuePage.floor.fixTimeRange":
+    "Popraw zakres godzin, aby zobaczyć dostępność stanowisk.",
+  "venuePage.floor.loadFloorFailed": "Nie udało się wczytać mapy sali.",
+  "venuePage.floor.loadTableFailed": "Nie udało się wczytać mapy stolików.",
+  "venuePage.floor.layoutZone": "Układ / strefa",
+  "venuePage.floor.noStationsInLayout": "Brak stanowisk w tym układzie.",
+  "venuePage.floor.prev": "Wstecz",
+  "venuePage.floor.next": "Dalej",
+  "venuePage.floor.pageOf": "Strona {page} z {total}",
+  "venuePage.floor.stationsRange":
+    "· stanowiska {from}–{to} z {total}",
+  "venuePage.floor.reservedTitle": "Zarezerwowane w tym czasie",
+  "venuePage.floor.close": "Zamknij",
+  "venuePage.floor.blockHint":
+    "Wybierz godzinę przed lub po tej rezerwacji albo inne stanowisko. To samo miejsce możesz zarezerwować w niekolidującym czasie.",
+  "venuePage.floor.statusAvailable":
+    "Wolne w wybranym czasie — dotknij, aby zarezerwować",
+  "venuePage.floor.statusUnavailable":
+    "Zajęte w wybranym czasie — dotknij po szczegóły",
+  "venuePage.floor.statusNotWorking": "Niedostępne",
+  "venuePage.floor.noLanes": "Brak skonfigurowanych torów.",
+  "venuePage.floor.bowlingAlleyHint": "Kręgielnia · podejście → kręgle",
+  "venuePage.floor.swipeLanes": "Przesuń, aby zobaczyć tory",
+  "venuePage.floor.lanesRange": "Tory {from}–{to} z {total}",
+  "venuePage.floor.updatesLive": "Aktualizacje na żywo podczas trwania rezerwacji",
+  "venuePage.floor.liveMapByZone": "Mapa na żywo według strefy i piętra",
+  "venuePage.floor.screenTables": "Stoliki",
+  "venuePage.floor.screenCabinets": "Automaty",
+  "venuePage.floor.screenStations": "Stanowiska",
+  "venuePage.floor.screenScreen": "Ekran",
+  "venuePage.floor.tapHintDining":
+    "Dotknij stolika odpowiedniego dla liczby gości, aby zarezerwować",
+  "venuePage.floor.tapHintTable":
+    "Dotknij stolika, aby zarezerwować lub zobaczyć aktywną sesję",
+  "venuePage.floor.tapHintCabinet":
+    "Dotknij automatu, aby zarezerwować lub zobaczyć aktywną sesję",
+  "venuePage.floor.tapHintSeat":
+    "Dotknij miejsca, aby zarezerwować lub zobaczyć aktywną sesję",
+
+  "venueSearch.placeholder": "Szukaj nazwy lub opisu…",
+  "venueSearch.cityLabel": "Miasto",
+  "venueSearch.countryLabel": "Kraj",
+  "venueSearch.submit": "Szukaj",
+
+  "venuesDiscovery.gridView": "Widok kafelków",
+  "venuesDiscovery.listView": "Widok listy",
+  "venuesDiscovery.statusOpen": "Otwarte",
+  "venuesDiscovery.statusOpensLater": "Otwiera się później",
+  "venuesDiscovery.statusClosed": "Zamknięte",
+  "venuesDiscovery.noDescription": "Brak opisu.",
+
+  "theme.switchToLight": "Przełącz na tryb jasny",
+  "theme.switchToDark": "Przełącz na tryb ciemny",
 };
 
 const de: Dict = {
@@ -1009,38 +2535,38 @@ const de: Dict = {
   "nav.language": "Sprache",
   "nav.currency": "Währung",
 
-  "hero.manage.badge": "Venue-Betrieb · private Beta",
-  "hero.manage.titleA": "Den Floor steuern",
-  "hero.manage.titleB": "von einem Live-Screen.",
+  "hero.manage.badge": "Host-Dashboard · private Beta",
+  "hero.manage.titleA": "Hoste jeden",
+  "hero.manage.titleB": "Standort.",
   "hero.manage.subtitle":
-    "Sessions, Reservierungen, Abrechnung und Team — für Billard, Gaming-Lounges und volle Floors. Wir onboarden zuerst Betreiber, während das Verzeichnis wächst.",
+    "Dashboard für Gaming-Center, Restaurants und Venues — Seite veröffentlichen, Reservierungen annehmen, Reviews sammeln und den Betrieb an einem Ort steuern.",
   "hero.manage.ctaPrimary": "Venue eintragen — Testphase",
-  "hero.manage.ctaSecondary": "Anmelden",
-  "hero.manage.pillar1": "Live-Status von Tischen & Konsolen",
-  "hero.manage.pillar2": "Timer, Tabs und Übergaben ohne Rätselraten",
-  "hero.manage.pillar3": "Ehrliche Beta — Venues zuerst",
+  "hero.manage.ctaSecondary": "Venues durchsuchen",
+  "hero.manage.pillar1": "Volle Kontrolle über Venue-Daten",
+  "hero.manage.pillar2": "Veröffentlichen, werben, gefunden werden",
+  "hero.manage.pillar3": "Öffentliche Seite: buchen, bewerten, kontaktieren",
 
-  "hero.play.badge": "Entdecken & reservieren",
-  "hero.play.titleA": "Finde deinen",
-  "hero.play.titleB": "nächsten Favoriten.",
+  "hero.play.badge": "Standorte entdecken",
+  "hero.play.titleA": "Finde Venues,",
+  "hero.play.titleB": "Hosts und Abende raus.",
   "hero.play.subtitle":
-    "Billard, Gaming-Lounges, Restaurants, Cafés, Bars und Karaoke — nach Stadt und Kategorie suchen, dann reservieren wenn die Venue es erlaubt.",
+    "Gaming-Center, Restaurants und Venues durchstöbern — reservieren, Reviews lesen und Hosts kontaktieren, wenn sie auf Locora publizieren.",
   "hero.play.ctaPrimary": "Venues durchsuchen",
   "hero.play.ctaSecondary": "Ich betreibe eine Venue",
-  "hero.play.pillar1": "Von Billard bis Brunch — ein Verzeichnis",
+  "hero.play.pillar1": "Gaming, Dining und Nightlife — ein Verzeichnis",
   "hero.play.pillar2": "Nach Stadt, Kategorie und Vibe filtern",
   "hero.play.pillar3": "Reservieren, wenn die Venue es aktiviert",
 
   "venues.worldwide": "Venues weltweit",
   "venues.published": "{total} veröffentlichte Venues · {countries} Länder",
   "venues.publishedOne": "{total} veröffentlichte Venue · {countries} Länder",
-  "venues.tagline": "Finde deinen Spot",
+  "venues.tagline": "Finde heute einen Spot.",
   "venues.subtitle":
-    "Gaming-Lounges, Billard, Bars und Nightlife — Suche nach Name, Stadt, Land oder Kategorie.",
+    "Gaming-Center, Restaurants, Bars und Venues — Suche nach Name, Stadt, Land oder Kategorie.",
   "venues.searching": "Suche…",
   "venues.found": "{total} Venues gefunden",
   "venues.foundOne": "{total} Venue gefunden",
-  "venues.showingAll": "Alle veröffentlichten Venues auf GoSpots",
+  "venues.showingAll": "Alle veröffentlichten Venues auf Locora",
   "venues.filters": "Filter: {summary}",
   "venues.pricesIn": "Preise in {currency}",
   "venues.browse": "Venues durchsuchen",
@@ -1049,7 +2575,7 @@ const de: Dict = {
   "venues.gameOne": "{count} Spiel",
   "venues.emptyTitle": "Noch keine Treffer",
   "venues.emptyBody":
-    "Andere Stadt oder Kategorie versuchen — oder dein Venue auf GoSpots eintragen.",
+    "Andere Stadt oder Kategorie versuchen — oder dein Venue auf Locora eintragen.",
   "venues.getListed": "Eintragen lassen",
 
   "how.eyebrow": "So funktioniert’s",
@@ -1071,7 +2597,7 @@ const de: Dict = {
 
   "homeVenues.play.eyebrow": "Live-Verzeichnis",
   "homeVenues.play.title": "Spots schon auf",
-  "homeVenues.play.titleAccent": "GoSpots",
+  "homeVenues.play.titleAccent": "Locora",
   "homeVenues.play.subtitle":
     "Echte Einträge direkt von den Venues — jeweils mit eigenen Fotos, Preisen, Währung und Reservierungsregeln. Nutze die Suche oben oder öffne das volle Verzeichnis.",
   "homeVenues.manage.eyebrow": "Dein öffentlicher Eintrag",
@@ -1321,6 +2847,115 @@ const de: Dict = {
   "pack.mixed.name": "Gemischtes Venue",
   "pack.mixed.tagline": "Gaming-Floor und Gastronomie unter einem Dach.",
 
+  "who.eyebrow": "Für wen",
+  "who.title": "Für Hosts —",
+  "who.titleAccent": "Gaming-Center, Restaurants und Venues.",
+  "who.subtitle":
+    "Locora gibt Betreibern ein Dashboard für Venue-Daten, Publishing und Werbung sowie eine öffentliche Seite mit Reservierungen, Reviews und Kontakt. Wähle deinen Typ kostenlos, schalte nur die Features ein, die du brauchst.",
+  "who.cta": "Venue kostenlos listen",
+  "who.noteLead":
+    "90 Tage Trial · keine Karte nötig. Etwas anderes? Starte mit Mixed und baue dein Feature-Set — oder",
+  "who.talkToUs": "schreib uns",
+  "who.ex.gaming.1": "Billard- & Snookerhallen",
+  "who.ex.gaming.2": "Gaming-Lounges",
+  "who.ex.gaming.3": "Esports-Cafés",
+  "who.ex.gaming.4": "Spielhallen & Bowling",
+  "who.ex.gaming.5": "VR-Erlebnisse",
+  "who.ex.dining.1": "Restaurants",
+  "who.ex.dining.2": "Cafés",
+  "who.ex.dining.3": "Brasserien",
+  "who.ex.dining.4": "Casual Dining",
+  "who.ex.bar.1": "Bars & Lounges",
+  "who.ex.bar.2": "Pubs & Sportbars",
+  "who.ex.bar.3": "Karaoke-Räume",
+  "who.ex.bar.4": "Nachtclubs",
+  "who.ex.hotel_fb.1": "Hotelrestaurants",
+  "who.ex.hotel_fb.2": "Hotelbars & Lounges",
+  "who.ex.hotel_fb.3": "Interne F&B-Teams",
+  "who.ex.mixed.1": "Familienunterhaltung",
+  "who.ex.mixed.2": "Kino + Food Halls",
+  "who.ex.mixed.3": "Gaming + Dining unter einem Dach",
+
+  "features.chip1": "Floor-Ansicht in 3 Sekunden",
+  "features.chip2": "Live-Timer pro Ressource",
+  "features.chip3": "Aktionen mit einem Tippen",
+  "features.heart": "Das Herzstück",
+
+  "guest.eyebrow": "Für Gäste",
+  "guest.title": "Finden, buchen,",
+  "guest.titleAccent": "genießen.",
+  "guest.subtitle":
+    "Drei Schritte zu deinem nächsten Abend — ohne Anrufe, ohne Rätselraten, ob Tisch, Bahn oder Box frei ist.",
+  "guest.cta": "Spots in meiner Nähe finden",
+  "guest.step1.title": "Spots entdecken",
+  "guest.step1.body":
+    "Durchstöbere Billardhallen, Gaming-Lounges, Restaurants, Cafés, Bars und Karaoke in deiner Stadt.",
+  "guest.step2.title": "Platz reservieren",
+  "guest.step2.body":
+    "Zeitfenster wählen, bestätigen, kommen — Tisch, Station oder Box wartet.",
+  "guest.step3.title": "Bestätigen und los",
+  "guest.step3.body":
+    "Reservierung sichern, Bestätigung erhalten und bereit erscheinen — dein Platz wartet.",
+  "guest.promise1.title": "Immer kostenlos für Gäste",
+  "guest.promise1.body":
+    "Venues zahlen für ihre Tools — du zahlst Locora nie fürs Stöbern, Entdecken oder Reservieren.",
+  "guest.promise2.title": "Echte Venues, echte Infos",
+  "guest.promise2.body":
+    "Jeder Eintrag wird vom Venue selbst gepflegt: eigene Fotos, Öffnungszeiten, Preise und Regeln.",
+  "guest.promise3.title": "Ein wachsendes Verzeichnis",
+  "guest.promise3.body":
+    "Wir onboarden Betreiber Stadt für Stadt. Neue Spots erscheinen, sobald sie veröffentlichen.",
+
+  "pain.eyebrow": "Produktszenarien",
+  "pain.title": "Die chaotischen Nächte,",
+  "pain.titleAccent": "für die Locora gebaut ist.",
+  "pain.subtitle":
+    "Illustrative Probleme von Betreibern — keine Kundenstimmen.",
+  "pain.1.title": "Vergessene Timer",
+  "pain.1.body":
+    "Volle Nächte werden zum Rätselraten. Minuten verrinnen, Tabs wachsen, niemand weiß, was auf der Uhr stand.",
+  "pain.2.title": "Reservierungskonflikte",
+  "pain.2.body":
+    "Walk-ins kollidieren mit Holds, VIPs überlappen, und die Floor-Map im Kopf des Managers passt nicht mehr.",
+  "pain.3.title": "Falsche oder strittige Rechnungen",
+  "pain.3.body":
+    "Stundensätze, Extras und Rabatte vermischen sich, wenn alles auf Papier oder in Chats lebt.",
+  "pain.4.title": "Mitarbeiterrabatte ohne Kontrolle",
+  "pain.4.body":
+    "Du brauchst Vertrauen auf dem Floor — aber auch Limits, Rollen und eine Spur, wenn etwas merkwürdig wirkt.",
+  "pain.5.title": "Keine Live-Floor-Sicht",
+  "pain.5.body":
+    "Eigentümer gehen eine Stunde weg und verlieren den Überblick, was spielt, reserviert ist und wirklich verdient.",
+  "pain.6.title": "Schwache Abendabrechnungen",
+  "pain.6.body":
+    "Kasse schließen sollte keine Tabellen brauchen. Du willst Klarheit pro Tisch und Kassierer — ohne Drama.",
+
+  "gallery.eyebrow": "Atmosphäre · keine Venue-Liste",
+  "gallery.title": "Solche Nächte,",
+  "gallery.titleAccent": "für die Locora da ist.",
+  "gallery.subtitle":
+    "Stockfotos nur für die Stimmung — sie stellen keine Partner-Venues oder Live-Verfügbarkeit dar.",
+  "gallery.tag.1": "Billard",
+  "gallery.tag.2": "Gaming",
+  "gallery.tag.3": "PC-Lounge",
+  "gallery.tag.4": "Brettspiele",
+  "gallery.tag.5": "PlayStation",
+  "gallery.tag.6": "Darts",
+  "gallery.tag.7": "Lounge",
+  "gallery.tag.8": "Arcade",
+  "gallery.tag.9": "Bowling",
+
+  "finder.openDirectory": "Volles Verzeichnis öffnen",
+  "finder.published": "Auf Locora veröffentlicht",
+  "finder.preview": "Verzeichnis-Vorschau",
+  "finder.seeAll": "Alle ansehen",
+  "finder.empty": "Noch keine veröffentlichten Venues — sei unter den Ersten.",
+
+  "footer.poweredBy": "Powered by",
+  "footer.rights": "Alle Rechte vorbehalten.",
+  "footer.builtWith": "Gebaut mit Next.js · NestJS · PostgreSQL ·",
+  "footer.busyNights": "gemacht für busy nights",
+
   "stats.days.label": "Tage gratis für jedes neue Venue",
   "stats.days.hint": "Keine Karte zum Start nötig",
   "stats.free.label": "für deinen Venue-Typ — für immer",
@@ -1365,7 +3000,7 @@ const de: Dict = {
   "faq.titleAccent": "fragen könntest.",
   "faq.owner.1.q": "Muss ich etwas in meiner Venue installieren?",
   "faq.owner.1.a":
-    "Nein. GoSpots läuft im Browser auf dem Gerät, das du schon hast — Laptop, Tablet oder Tresen-PC. Updates kommen automatisch.",
+    "Nein. Locora läuft im Browser auf dem Gerät, das du schon hast — Laptop, Tablet oder Tresen-PC. Updates kommen automatisch.",
   "faq.owner.2.q": "Kann ich es vor dem Bezahlen testen?",
   "faq.owner.2.a":
     "Ja. Neue Venues bekommen 90 Tage kostenlos — ohne Karte. Wähle beliebige Features und ändere sie frei in der Testphase. Nichts wird ohne Zustimmung belastet.",
@@ -1384,10 +3019,10 @@ const de: Dict = {
   "faq.owner.7.q": "Was ist mit Fehlern meines Teams?",
   "faq.owner.7.a":
     "Jede wichtige Aktion — Rabatt, Storno, Erstattung, Preisänderung — landet in einem unveränderlichen Audit-Log am Nutzer.",
-  "faq.player.1.q": "Ist GoSpots für Gäste kostenlos?",
+  "faq.player.1.q": "Ist Locora für Gäste kostenlos?",
   "faq.player.1.a":
     "Vollständig. Venues browsen, Details prüfen und reservieren kostet dich nichts — Venues zahlen für ihre Tools, nicht du.",
-  "faq.player.2.q": "Welche Orte gibt es auf GoSpots?",
+  "faq.player.2.q": "Welche Orte gibt es auf Locora?",
   "faq.player.2.a":
     "Viel mehr als Gaming. Billard, Gaming-Lounges und Esports-Cafés — plus Restaurants, Cafés, Bars, Pubs, Karaoke, Bowling, Clubs und Familien-Entertainment.",
   "faq.player.3.q": "Wie finde ich einen Spot in der Nähe?",
@@ -1401,7 +3036,7 @@ const de: Dict = {
     "Kein Konto nötig zum Entdecken. Du meldest dich nur an, wenn der Buchungsflow der Venue es verlangt.",
   "faq.player.6.q": "Warum sehe ich noch wenige Venues?",
   "faq.player.6.a":
-    "GoSpots ist in privater Beta und onboardet zuerst Betreiber. Das öffentliche Verzeichnis wächst mit jeder Venue, die Publishing einschaltet.",
+    "Locora ist in privater Beta und onboardet zuerst Betreiber. Das öffentliche Verzeichnis wächst mit jeder Venue, die Publishing einschaltet.",
 
   "cta.manage.titleA": "Verliere nie Geld durch",
   "cta.manage.titleB": "vergessene Timer.",
@@ -1424,6 +3059,7 @@ const de: Dict = {
     "Billard, Gaming-Lounges und Entertainment-Venues in deiner Nähe. Betreiber führen Nächte von einem Echtzeit-Dashboard.",
   "footer.product": "Produkt",
   "footer.explore": "Entdecken",
+  "footer.forVenues": "Für Venues",
   "footer.forGuests": "Für Gäste",
   "footer.company": "Unternehmen",
   "footer.findSpot": "Spot finden",
@@ -1439,7 +3075,7 @@ const de: Dict = {
   "footer.privacy": "Datenschutz",
   "footer.terms": "AGB",
 
-  "marquee.owner.title": "Wofür GoSpots gebaut ist",
+  "marquee.owner.title": "Wofür Locora gebaut ist",
   "marquee.owner.1": "Live-Floor-Status",
   "marquee.owner.2": "Session-Timer am Tisch",
   "marquee.owner.3": "Walk-ins + Reservierungen in einer Ansicht",
@@ -1448,7 +3084,7 @@ const de: Dict = {
   "marquee.owner.6": "Unveränderliches Audit-Log",
   "marquee.owner.7": "Umsatz pro Tisch und Schicht",
   "marquee.owner.8": "Für Billard · Snooker · Lounges · Game Cafés",
-  "marquee.player.title": "Was Sie auf GoSpots finden",
+  "marquee.player.title": "Was Sie auf Locora finden",
   "marquee.player.1": "Billardhallen und Snookerclubs",
   "marquee.player.2": "Gaming-Lounges und Esports-Cafés",
   "marquee.player.3": "Restaurants, Cafés und Bars",
@@ -1507,38 +3143,38 @@ const fr: Dict = {
   "nav.language": "Langue",
   "nav.currency": "Devise",
 
-  "hero.manage.badge": "Gestion de lieu · bêta privée",
-  "hero.manage.titleA": "Pilotez la salle",
-  "hero.manage.titleB": "depuis un écran en direct.",
+  "hero.manage.badge": "Tableau de bord hôte · bêta privée",
+  "hero.manage.titleA": "Hébergez chaque",
+  "hero.manage.titleB": "emplacement.",
   "hero.manage.subtitle":
-    "Sessions, réservations, facturation et équipe — pour billards, salles de jeux et floors animés. Nous onboardons d’abord les opérateurs pendant que l’annuaire public grandit.",
+    "Tableau de bord pour centres de jeux, restaurants et lieux — publiez votre site, prenez des réservations, collectez des avis et pilotez l’activité au même endroit.",
   "hero.manage.ctaPrimary": "Ajouter un lieu — essai gratuit",
-  "hero.manage.ctaSecondary": "Connexion",
-  "hero.manage.pillar1": "Statut live des tables et consoles",
-  "hero.manage.pillar2": "Timers, notes et passations sans approximatif",
-  "hero.manage.pillar3": "Bêta honnête — lieux d’abord",
+  "hero.manage.ctaSecondary": "Parcourir les lieux",
+  "hero.manage.pillar1": "Contrôle total des données du lieu",
+  "hero.manage.pillar2": "Publiez, annoncez et soyez trouvé",
+  "hero.manage.pillar3": "Site public : réserver, avis, contact",
 
-  "hero.play.badge": "Découvrir et réserver",
-  "hero.play.titleA": "Trouvez votre",
-  "hero.play.titleB": "prochain spot.",
+  "hero.play.badge": "Découvrir des lieux",
+  "hero.play.titleA": "Trouvez lieux,",
+  "hero.play.titleB": "hôtes et soirées.",
   "hero.play.subtitle":
-    "Billards, salles de jeux, restaurants, cafés, bars et karaoke — cherchez par ville et catégorie, puis réservez si le lieu l’active.",
+    "Parcourez centres de jeux, restaurants et lieux — réservez, lisez les avis et contactez les hôtes quand ils publient sur Locora.",
   "hero.play.ctaPrimary": "Parcourir les lieux",
   "hero.play.ctaSecondary": "Je gère un lieu",
-  "hero.play.pillar1": "Du billard au brunch — un annuaire",
+  "hero.play.pillar1": "Jeux, resto et nightlife — un annuaire",
   "hero.play.pillar2": "Filtrer par ville, catégorie et ambiance",
   "hero.play.pillar3": "Réserver quand le lieu l’autorise",
 
   "venues.worldwide": "Lieux dans le monde",
   "venues.published": "{total} lieux publiés · {countries} pays",
   "venues.publishedOne": "{total} lieu publié · {countries} pays",
-  "venues.tagline": "Trouvez votre spot",
+  "venues.tagline": "Trouvez un spot ce soir.",
   "venues.subtitle":
-    "Salles de jeux, billards, bars et nightlife — recherchez par nom, ville, pays ou catégorie.",
+    "Centres de jeux, restaurants, bars et lieux — recherchez par nom, ville, pays ou catégorie.",
   "venues.searching": "Recherche…",
   "venues.found": "{total} lieux trouvés",
   "venues.foundOne": "{total} lieu trouvé",
-  "venues.showingAll": "Tous les lieux publiés sur GoSpots",
+  "venues.showingAll": "Tous les lieux publiés sur Locora",
   "venues.filters": "Filtres : {summary}",
   "venues.pricesIn": "Prix en {currency}",
   "venues.browse": "Parcourir les lieux",
@@ -1547,7 +3183,7 @@ const fr: Dict = {
   "venues.gameOne": "{count} jeu",
   "venues.emptyTitle": "Aucun lieu ne correspond",
   "venues.emptyBody":
-    "Essayez une autre ville ou catégorie — ou inscrivez votre lieu sur GoSpots.",
+    "Essayez une autre ville ou catégorie — ou inscrivez votre lieu sur Locora.",
   "venues.getListed": "Être listé",
 
   "how.eyebrow": "Comment ça marche",
@@ -1569,7 +3205,7 @@ const fr: Dict = {
 
   "homeVenues.play.eyebrow": "Annuaire live",
   "homeVenues.play.title": "Des spots déjà sur",
-  "homeVenues.play.titleAccent": "GoSpots",
+  "homeVenues.play.titleAccent": "Locora",
   "homeVenues.play.subtitle":
     "Annonces réelles venues des lieux — chacun avec ses photos, prix, devise et règles de réservation. Utilisez la recherche ci-dessus ou ouvrez l’annuaire complet.",
   "homeVenues.manage.eyebrow": "Votre fiche publique",
@@ -1819,6 +3455,115 @@ const fr: Dict = {
   "pack.mixed.name": "Lieu mixte",
   "pack.mixed.tagline": "Espace jeux et restauration sous le même toit.",
 
+  "who.eyebrow": "Pour qui",
+  "who.title": "Pour les hôtes —",
+  "who.titleAccent": "centres de jeux, restaurants et lieux.",
+  "who.subtitle":
+    "Locora offre aux opérateurs un tableau de bord pour contrôler les données, publier et annoncer, et un site public avec réservations, avis et contact. Choisissez votre type gratuitement, puis activez seulement les fonctions dont vous avez besoin.",
+  "who.cta": "Lister mon lieu gratuitement",
+  "who.noteLead":
+    "90 jours d’essai · sans carte. Autre chose ? Commencez par Mixed et composez vos fonctions — ou",
+  "who.talkToUs": "parlez-nous",
+  "who.ex.gaming.1": "Salles de billard & snooker",
+  "who.ex.gaming.2": "Gaming lounges",
+  "who.ex.gaming.3": "Cafés esports",
+  "who.ex.gaming.4": "Salles d’arcade & bowling",
+  "who.ex.gaming.5": "Expériences VR",
+  "who.ex.dining.1": "Restaurants",
+  "who.ex.dining.2": "Cafés",
+  "who.ex.dining.3": "Brasseries",
+  "who.ex.dining.4": "Casual dining",
+  "who.ex.bar.1": "Bars & lounges",
+  "who.ex.bar.2": "Pubs & sports bars",
+  "who.ex.bar.3": "Salles karaoké",
+  "who.ex.bar.4": "Boîtes de nuit",
+  "who.ex.hotel_fb.1": "Restaurants d’hôtel",
+  "who.ex.hotel_fb.2": "Bars & lounges d’hôtel",
+  "who.ex.hotel_fb.3": "Équipes F&B internes",
+  "who.ex.mixed.1": "Divertissement familial",
+  "who.ex.mixed.2": "Cinéma + food halls",
+  "who.ex.mixed.3": "Jeux + restauration sous le même toit",
+
+  "features.chip1": "Vue salle en 3 secondes",
+  "features.chip2": "Timer live par ressource",
+  "features.chip3": "Actions en un tap",
+  "features.heart": "Le cœur",
+
+  "guest.eyebrow": "Pour les invités",
+  "guest.title": "Trouvez, réservez,",
+  "guest.titleAccent": "profitez.",
+  "guest.subtitle":
+    "Trois étapes jusqu’à votre prochaine soirée — sans appels, sans deviner si une table, une piste ou un box est libre.",
+  "guest.cta": "Trouver des spots près de moi",
+  "guest.step1.title": "Découvrir des spots",
+  "guest.step1.body":
+    "Parcourez salles de billard, gaming lounges, restaurants, cafés, bars et karaoké dans votre ville.",
+  "guest.step2.title": "Réserver votre place",
+  "guest.step2.body":
+    "Choisissez un créneau, confirmez, venez — table, station ou box vous attend.",
+  "guest.step3.title": "Confirmer et y aller",
+  "guest.step3.body":
+    "Verrouillez la réservation, recevez une confirmation et arrivez prêt — votre place attend.",
+  "guest.promise1.title": "Toujours gratuit pour les invités",
+  "guest.promise1.body":
+    "Les lieux paient leurs outils — vous ne payez jamais Locora pour parcourir, découvrir ou réserver.",
+  "guest.promise2.title": "Vrais lieux, vraies infos",
+  "guest.promise2.body":
+    "Chaque fiche est gérée par le lieu : ses photos, horaires, tarifs et règles.",
+  "guest.promise3.title": "Un annuaire qui grandit",
+  "guest.promise3.body":
+    "Nous onboardons les opérateurs ville par ville. De nouveaux spots apparaissent dès qu’ils publient.",
+
+  "pain.eyebrow": "Scénarios produit",
+  "pain.title": "Les soirées chaotiques",
+  "pain.titleAccent": "pour lesquelles Locora est fait.",
+  "pain.subtitle":
+    "Problèmes illustratifs décrits par les opérateurs — pas des citations clients.",
+  "pain.1.title": "Timers oubliés",
+  "pain.1.body":
+    "Les soirées chargées deviennent du flou. Les minutes filent, les notes montent, personne ne s’accorde sur l’horloge.",
+  "pain.2.title": "Conflits de réservation",
+  "pain.2.body":
+    "Les walk-ins heurtent les holds, les VIP se chevauchent, et la carte mentale du manager ne colle plus.",
+  "pain.3.title": "Additions fausses ou contestées",
+  "pain.3.body":
+    "Tarifs horaires, extras et remises se mélangent quand tout vit sur papier ou dans des chats.",
+  "pain.4.title": "Remises staff sans contrôle",
+  "pain.4.body":
+    "Il faut de la confiance en salle — mais aussi des limites, des rôles et une trace si quelque chose cloche.",
+  "pain.5.title": "Pas de vue live de la salle",
+  "pain.5.body":
+    "Le propriétaire s’absente une heure et perd de vue ce qui joue, ce qui est réservé et ce qui rapporte vraiment.",
+  "pain.6.title": "Rapports de fin de soirée faibles",
+  "pain.6.body":
+    "Fermer la caisse ne devrait pas demander des tableurs. Vous voulez la clarté par table et caissier — sans drame.",
+
+  "gallery.eyebrow": "Atmosphère · pas une liste de lieux",
+  "gallery.title": "Les soirées",
+  "gallery.titleAccent": "pour lesquelles Locora existe.",
+  "gallery.subtitle":
+    "Photos stock pour l’ambiance seulement — elles ne représentent pas des partenaires ni la dispo live.",
+  "gallery.tag.1": "Billard",
+  "gallery.tag.2": "Gaming",
+  "gallery.tag.3": "PC lounge",
+  "gallery.tag.4": "Jeux de société",
+  "gallery.tag.5": "PlayStation",
+  "gallery.tag.6": "Fléchettes",
+  "gallery.tag.7": "Lounge",
+  "gallery.tag.8": "Arcade",
+  "gallery.tag.9": "Bowling",
+
+  "finder.openDirectory": "Ouvrir l’annuaire complet",
+  "finder.published": "Publié sur Locora",
+  "finder.preview": "Aperçu de l’annuaire",
+  "finder.seeAll": "Voir tout",
+  "finder.empty": "Aucun lieu publié — soyez parmi les premiers.",
+
+  "footer.poweredBy": "Powered by",
+  "footer.rights": "Tous droits réservés.",
+  "footer.builtWith": "Construit avec Next.js · NestJS · PostgreSQL ·",
+  "footer.busyNights": "fait pour les soirs chargés",
+
   "stats.days.label": "jours gratuits pour chaque nouveau lieu",
   "stats.days.hint": "Sans carte pour commencer",
   "stats.free.label": "pour votre type de lieu — pour toujours",
@@ -1863,7 +3608,7 @@ const fr: Dict = {
   "faq.titleAccent": "demander d’abord.",
   "faq.owner.1.q": "Dois-je installer quelque chose dans mon lieu ?",
   "faq.owner.1.a":
-    "Non. GoSpots tourne dans le navigateur sur l’appareil que vous avez déjà — laptop, tablette ou PC de comptoir. Les mises à jour arrivent automatiquement.",
+    "Non. Locora tourne dans le navigateur sur l’appareil que vous avez déjà — laptop, tablette ou PC de comptoir. Les mises à jour arrivent automatiquement.",
   "faq.owner.2.q": "Puis-je essayer avant de payer ?",
   "faq.owner.2.a":
     "Oui. Les nouveaux lieux ont 90 jours d’essai gratuit — sans carte. Choisissez les fonctions et changez-les librement pendant l’essai. Rien n’est facturé sans votre accord.",
@@ -1882,10 +3627,10 @@ const fr: Dict = {
   "faq.owner.7.q": "Et si mon équipe fait des erreurs ?",
   "faq.owner.7.a":
     "Chaque action importante — remise, annulation, remboursement, changement de prix — va dans un journal d’audit immuable lié à l’utilisateur.",
-  "faq.player.1.q": "GoSpots est-il gratuit pour les clients ?",
+  "faq.player.1.q": "Locora est-il gratuit pour les clients ?",
   "faq.player.1.a":
     "Totalement. Parcourir les lieux, voir les détails et réserver ne vous coûte rien — les lieux paient leurs outils, pas vous.",
-  "faq.player.2.q": "Quels types de lieux sont sur GoSpots ?",
+  "faq.player.2.q": "Quels types de lieux sont sur Locora ?",
   "faq.player.2.a":
     "Bien plus que le gaming. Billards, salles de jeux et cafés esport — plus restaurants, cafés, bars, pubs, karaoke, bowling, clubs et lieux familiaux.",
   "faq.player.3.q": "Comment trouver un spot près de moi ?",
@@ -1899,7 +3644,7 @@ const fr: Dict = {
     "Pas de compte pour découvrir les lieux. Vous vous connectez seulement si le flux de réservation du lieu l’exige.",
   "faq.player.6.q": "Pourquoi je vois encore peu de lieux ?",
   "faq.player.6.a":
-    "GoSpots est en bêta privée et onboard d’abord les opérateurs. L’annuaire public grandit avec chaque lieu qui active la publication.",
+    "Locora est en bêta privée et onboard d’abord les opérateurs. L’annuaire public grandit avec chaque lieu qui active la publication.",
 
   "cta.manage.titleA": "Ne perdez plus d’argent à cause de",
   "cta.manage.titleB": "timers oubliés.",
@@ -1922,6 +3667,7 @@ const fr: Dict = {
     "billards, salles de jeux et lieux de divertissement près de chez vous. Les gérants pilotent les soirées depuis un tableau de bord en temps réel.",
   "footer.product": "Produit",
   "footer.explore": "Explorer",
+  "footer.forVenues": "Pour les lieux",
   "footer.forGuests": "Pour les clients",
   "footer.company": "Entreprise",
   "footer.findSpot": "Trouver un spot",
@@ -1937,7 +3683,7 @@ const fr: Dict = {
   "footer.privacy": "Confidentialité",
   "footer.terms": "Conditions",
 
-  "marquee.owner.title": "Ce que GoSpots est conçu pour gérer",
+  "marquee.owner.title": "Ce que Locora est conçu pour gérer",
   "marquee.owner.1": "Statut live du floor",
   "marquee.owner.2": "Timers de session liés à la table",
   "marquee.owner.3": "Walk-ins + réservations en une vue",
@@ -1946,7 +3692,7 @@ const fr: Dict = {
   "marquee.owner.6": "Journal d’audit immuable",
   "marquee.owner.7": "Revenus par table et par shift",
   "marquee.owner.8": "Pour billard · snooker · lounges · game cafés",
-  "marquee.player.title": "Ce que vous trouvez sur GoSpots",
+  "marquee.player.title": "Ce que vous trouvez sur Locora",
   "marquee.player.1": "Salles de billard et clubs de snooker",
   "marquee.player.2": "Lounges gaming et cafés esport",
   "marquee.player.3": "Restaurants, cafés et bars",
@@ -2005,38 +3751,38 @@ const es: Dict = {
   "nav.language": "Idioma",
   "nav.currency": "Moneda",
 
-  "hero.manage.badge": "Operaciones del local · beta privada",
-  "hero.manage.titleA": "Dirige el salón",
-  "hero.manage.titleB": "desde una pantalla en vivo.",
+  "hero.manage.badge": "Panel de anfitrión · beta privada",
+  "hero.manage.titleA": "Gestiona cada",
+  "hero.manage.titleB": "ubicación.",
   "hero.manage.subtitle":
-    "Sesiones, reservas, facturación y personal — para billares, lounges de juegos y salones ajetreados. Primero onboardeamos operadores mientras crece el directorio.",
+    "Panel para centros de juegos, restaurantes y locales — publica tu sitio, recibe reservas, recoge reseñas y opera el día a día en un solo lugar.",
   "hero.manage.ctaPrimary": "Publicar local — prueba gratis",
-  "hero.manage.ctaSecondary": "Iniciar sesión",
-  "hero.manage.pillar1": "Estado en vivo de mesas y consolas",
-  "hero.manage.pillar2": "Temporizadores, cuentas y relevos sin adivinar",
-  "hero.manage.pillar3": "Beta honesta — locales primero",
+  "hero.manage.ctaSecondary": "Ver locales",
+  "hero.manage.pillar1": "Control total de los datos del local",
+  "hero.manage.pillar2": "Publica, anuncia y que te encuentren",
+  "hero.manage.pillar3": "Sitio público: reservar, reseñas, contacto",
 
-  "hero.play.badge": "Descubre y reserva",
-  "hero.play.titleA": "Encuentra tu",
-  "hero.play.titleB": "próximo favorito.",
+  "hero.play.badge": "Descubre ubicaciones",
+  "hero.play.titleA": "Encuentra locales,",
+  "hero.play.titleB": "anfitriones y planes.",
   "hero.play.subtitle":
-    "Billares, lounges, restaurantes, cafés, bares y karaoke — busca por ciudad y categoría, luego reserva si el local lo permite.",
+    "Explora centros de juegos, restaurantes y locales — reserva, lee reseñas y contacta anfitriones cuando publican en Locora.",
   "hero.play.ctaPrimary": "Ver locales",
   "hero.play.ctaSecondary": "Tengo un local",
-  "hero.play.pillar1": "Del billar al brunch — un directorio",
+  "hero.play.pillar1": "Juegos, comida y nightlife — un directorio",
   "hero.play.pillar2": "Filtra por ciudad, categoría y ambiente",
   "hero.play.pillar3": "Reserva cuando el local lo active",
 
   "venues.worldwide": "Locales en el mundo",
   "venues.published": "{total} locales publicados · {countries} países",
   "venues.publishedOne": "{total} local publicado · {countries} países",
-  "venues.tagline": "Encuentra tu sitio",
+  "venues.tagline": "Encuentra un sitio esta noche.",
   "venues.subtitle":
-    "Lounges de juegos, billares, bares y nightlife — busca por nombre, ciudad, país o categoría.",
+    "Centros de juegos, restaurantes, bares y locales — busca por nombre, ciudad, país o categoría.",
   "venues.searching": "Buscando…",
   "venues.found": "{total} locales encontrados",
   "venues.foundOne": "{total} local encontrado",
-  "venues.showingAll": "Todos los locales publicados en GoSpots",
+  "venues.showingAll": "Todos los locales publicados en Locora",
   "venues.filters": "Filtros: {summary}",
   "venues.pricesIn": "Precios en {currency}",
   "venues.browse": "Ver locales",
@@ -2045,7 +3791,7 @@ const es: Dict = {
   "venues.gameOne": "{count} juego",
   "venues.emptyTitle": "Ningún sitio coincide aún",
   "venues.emptyBody":
-    "Prueba otra ciudad o categoría — o lista tu local en GoSpots.",
+    "Prueba otra ciudad o categoría — o lista tu local en Locora.",
   "venues.getListed": "Aparecer en el directorio",
 
   "how.eyebrow": "Cómo funciona",
@@ -2067,7 +3813,7 @@ const es: Dict = {
 
   "homeVenues.play.eyebrow": "Directorio en vivo",
   "homeVenues.play.title": "Sitios ya en",
-  "homeVenues.play.titleAccent": "GoSpots",
+  "homeVenues.play.titleAccent": "Locora",
   "homeVenues.play.subtitle":
     "Listados reales de los propios locales — cada uno con sus fotos, precios, moneda y reglas de reserva. Usa la búsqueda de arriba o abre el directorio completo.",
   "homeVenues.manage.eyebrow": "Tu ficha pública",
@@ -2318,6 +4064,115 @@ const es: Dict = {
   "pack.mixed.name": "Local mixto",
   "pack.mixed.tagline": "Zona de juegos y gastronomía bajo un mismo techo.",
 
+  "who.eyebrow": "Para quién",
+  "who.title": "Para anfitriones —",
+  "who.titleAccent": "centros de juegos, restaurantes y locales.",
+  "who.subtitle":
+    "Locora da a los operadores un panel para controlar datos del local, publicar y anunciar, y un sitio público con reservas, reseñas y contacto. Elige tu tipo gratis y activa solo las funciones que necesitas.",
+  "who.cta": "Publica tu local gratis",
+  "who.noteLead":
+    "90 días de prueba · sin tarjeta. ¿Otra cosa? Empieza con Mixed y arma tu set de funciones — o",
+  "who.talkToUs": "háblanos",
+  "who.ex.gaming.1": "Salas de billar y snooker",
+  "who.ex.gaming.2": "Gaming lounges",
+  "who.ex.gaming.3": "Cafés de esports",
+  "who.ex.gaming.4": "Arcades y bowling",
+  "who.ex.gaming.5": "Experiencias VR",
+  "who.ex.dining.1": "Restaurantes",
+  "who.ex.dining.2": "Cafés",
+  "who.ex.dining.3": "Brasseries",
+  "who.ex.dining.4": "Casual dining",
+  "who.ex.bar.1": "Bares y lounges",
+  "who.ex.bar.2": "Pubs y sports bars",
+  "who.ex.bar.3": "Salas de karaoke",
+  "who.ex.bar.4": "Discotecas",
+  "who.ex.hotel_fb.1": "Restaurantes de hotel",
+  "who.ex.hotel_fb.2": "Bares y lounges de hotel",
+  "who.ex.hotel_fb.3": "Equipos F&B internos",
+  "who.ex.mixed.1": "Entretenimiento familiar",
+  "who.ex.mixed.2": "Cine + food halls",
+  "who.ex.mixed.3": "Gaming + dining bajo un mismo techo",
+
+  "features.chip1": "Vista de sala en 3 segundos",
+  "features.chip2": "Temporizador en vivo por recurso",
+  "features.chip3": "Acciones con un toque",
+  "features.heart": "El corazón",
+
+  "guest.eyebrow": "Para invitados",
+  "guest.title": "Encuéntralo, resérvalo,",
+  "guest.titleAccent": "disfrútalo.",
+  "guest.subtitle":
+    "Tres pasos hasta tu próxima noche — sin llamadas ni adivinar si hay mesa, pista o booth libre.",
+  "guest.cta": "Encontrar sitios cerca",
+  "guest.step1.title": "Descubre sitios",
+  "guest.step1.body":
+    "Explora salas de billar, gaming lounges, restaurantes, cafés, bares y karaoke en tu ciudad.",
+  "guest.step2.title": "Reserva tu sitio",
+  "guest.step2.body":
+    "Elige horario, confirma y ven — mesa, estación o booth te esperan.",
+  "guest.step3.title": "Confirma y ve",
+  "guest.step3.body":
+    "Bloquea la reserva, recibe confirmación y llega listo — tu sitio espera.",
+  "guest.promise1.title": "Siempre gratis para invitados",
+  "guest.promise1.body":
+    "Los locales pagan sus herramientas — tú nunca pagas a Locora por explorar, descubrir o reservar.",
+  "guest.promise2.title": "Locales reales, info real",
+  "guest.promise2.body":
+    "Cada ficha la gestiona el local: sus fotos, horarios, precios y reglas.",
+  "guest.promise3.title": "Un directorio que crece",
+  "guest.promise3.body":
+    "Onbordeamos operadores ciudad a ciudad. Nuevos sitios aparecen al publicar.",
+
+  "pain.eyebrow": "Escenarios de producto",
+  "pain.title": "Las noches caóticas",
+  "pain.titleAccent": "para las que Locora está hecho.",
+  "pain.subtitle":
+    "Problemas ilustrativos que describen operadores — no citas de clientes.",
+  "pain.1.title": "Temporizadores olvidados",
+  "pain.1.body":
+    "Las noches ajetreadas se vuelven adivinanzas. Los minutos se escapan, las cuentas crecen y nadie acuerda el reloj.",
+  "pain.2.title": "Conflictos de reserva",
+  "pain.2.body":
+    "Los walk-ins chocan con holds, los VIP se solapan y el mapa mental del manager deja de coincidir.",
+  "pain.3.title": "Cuentas erróneas o disputadas",
+  "pain.3.body":
+    "Tarifas por hora, extras y descuentos se mezclan cuando todo vive en papel o chats.",
+  "pain.4.title": "Descuentos de staff sin control",
+  "pain.4.body":
+    "Necesitas confianza en sala — pero también límites, roles y un rastro si algo falla.",
+  "pain.5.title": "Sin visibilidad live del floor",
+  "pain.5.body":
+    "El dueño se ausenta una hora y pierde de vista qué juega, qué está reservado y qué realmente factura.",
+  "pain.6.title": "Informes débiles de cierre",
+  "pain.6.body":
+    "Cerrar caja no debería pedir hojas de cálculo. Quieres claridad por mesa y cajero — sin drama.",
+
+  "gallery.eyebrow": "Ambiente · no una lista de locales",
+  "gallery.title": "Las noches",
+  "gallery.titleAccent": "para las que es Locora.",
+  "gallery.subtitle":
+    "Fotos de stock solo para el mood — no representan partners ni disponibilidad en vivo.",
+  "gallery.tag.1": "Billar",
+  "gallery.tag.2": "Gaming",
+  "gallery.tag.3": "PC lounge",
+  "gallery.tag.4": "Juegos de mesa",
+  "gallery.tag.5": "PlayStation",
+  "gallery.tag.6": "Dardos",
+  "gallery.tag.7": "Lounge",
+  "gallery.tag.8": "Arcade",
+  "gallery.tag.9": "Bowling",
+
+  "finder.openDirectory": "Abrir directorio completo",
+  "finder.published": "Publicado en Locora",
+  "finder.preview": "Vista previa del directorio",
+  "finder.seeAll": "Ver todos",
+  "finder.empty": "Aún no hay locales publicados — sé de los primeros.",
+
+  "footer.poweredBy": "Powered by",
+  "footer.rights": "Todos los derechos reservados.",
+  "footer.builtWith": "Hecho con Next.js · NestJS · PostgreSQL ·",
+  "footer.busyNights": "hecho para noches ajetreadas",
+
   "stats.days.label": "días gratis en cada local nuevo",
   "stats.days.hint": "Sin tarjeta para empezar",
   "stats.free.label": "por tu tipo de local — para siempre",
@@ -2362,7 +4217,7 @@ const es: Dict = {
   "faq.titleAccent": "preguntar primero.",
   "faq.owner.1.q": "¿Necesito instalar algo en mi local?",
   "faq.owner.1.a":
-    "No. GoSpots funciona en el navegador del dispositivo que ya tienes — portátil, tablet o PC de barra. Las actualizaciones llegan solas.",
+    "No. Locora funciona en el navegador del dispositivo que ya tienes — portátil, tablet o PC de barra. Las actualizaciones llegan solas.",
   "faq.owner.2.q": "¿Puedo probarlo antes de pagar?",
   "faq.owner.2.a":
     "Sí. Los locales nuevos tienen 90 días de prueba gratis — sin tarjeta. Elige las funciones que quieras y cámbialas libremente durante la prueba. Nada se cobra sin tu consentimiento.",
@@ -2381,10 +4236,10 @@ const es: Dict = {
   "faq.owner.7.q": "¿Y si mi personal comete errores?",
   "faq.owner.7.a":
     "Cada acción importante — descuento, cancelación, reembolso, cambio de precio — entra en un registro de auditoría inmutable ligado al usuario.",
-  "faq.player.1.q": "¿GoSpots es gratis para los huéspedes?",
+  "faq.player.1.q": "¿Locora es gratis para los huéspedes?",
   "faq.player.1.a":
     "Por completo. Ver locales, detalles y reservar no te cuesta nada — los locales pagan sus herramientas, no tú.",
-  "faq.player.2.q": "¿Qué tipos de sitios hay en GoSpots?",
+  "faq.player.2.q": "¿Qué tipos de sitios hay en Locora?",
   "faq.player.2.a":
     "Mucho más que gaming. Billares, lounges y cafés esport — más restaurantes, cafés, bares, pubs, karaoke, bolera, clubs y ocio familiar.",
   "faq.player.3.q": "¿Cómo encuentro un sitio cerca de mí?",
@@ -2398,7 +4253,7 @@ const es: Dict = {
     "No hace falta cuenta para descubrir locales. Solo inicias sesión si el flujo de reserva del local lo exige.",
   "faq.player.6.q": "¿Por qué aún veo pocos locales?",
   "faq.player.6.a":
-    "GoSpots está en beta privada y primero incorpora operadores. El directorio público crece con cada local que activa la publicación.",
+    "Locora está en beta privada y primero incorpora operadores. El directorio público crece con cada local que activa la publicación.",
 
   "cta.manage.titleA": "No pierdas dinero por",
   "cta.manage.titleB": "temporizadores olvidados.",
@@ -2421,6 +4276,7 @@ const es: Dict = {
     "billares, lounges de juegos y locales de entretenimiento cerca de ti. Los dueños dirigen las noches desde un panel en tiempo real.",
   "footer.product": "Producto",
   "footer.explore": "Explorar",
+  "footer.forVenues": "Para locales",
   "footer.forGuests": "Para huéspedes",
   "footer.company": "Empresa",
   "footer.findSpot": "Encontrar un sitio",
@@ -2436,7 +4292,7 @@ const es: Dict = {
   "footer.privacy": "Privacidad",
   "footer.terms": "Términos",
 
-  "marquee.owner.title": "Para lo que está hecho GoSpots",
+  "marquee.owner.title": "Para lo que está hecho Locora",
   "marquee.owner.1": "Estado en vivo del salón",
   "marquee.owner.2": "Temporizadores de sesión en la mesa",
   "marquee.owner.3": "Walk-ins + reservas en una vista",
@@ -2445,7 +4301,7 @@ const es: Dict = {
   "marquee.owner.6": "Registro de auditoría inmutable",
   "marquee.owner.7": "Ingresos por mesa y por turno",
   "marquee.owner.8": "Para billar · snooker · lounges · game cafés",
-  "marquee.player.title": "Lo que encuentras en GoSpots",
+  "marquee.player.title": "Lo que encuentras en Locora",
   "marquee.player.1": "Billares y clubes de snooker",
   "marquee.player.2": "Lounges gaming y cafés esports",
   "marquee.player.3": "Restaurantes, cafés y bares",
@@ -2504,38 +4360,38 @@ const ar: Dict = {
   "nav.language": "اللغة",
   "nav.currency": "العملة",
 
-  "hero.manage.badge": "تشغيل المكان · نسخة تجريبية خاصة",
-  "hero.manage.titleA": "أدر الصالة",
-  "hero.manage.titleB": "من شاشة مباشرة واحدة.",
+  "hero.manage.badge": "لوحة المضيف · نسخة تجريبية خاصة",
+  "hero.manage.titleA": "أدِر كل",
+  "hero.manage.titleB": "موقع.",
   "hero.manage.subtitle":
-    "الجلسات والحجوزات والفوترة والموظفين — لقاعات البلياردو وصالات الألعاب والأماكن المزدحمة. نبدأ بضم المشغّلين بينما ينمو الدليل العام.",
+    "لوحة تحكم لمراكز الألعاب والمطاعم والأماكن — انشر موقعك، واستقبل الحجوزات، واجمع التقييمات، وشغّل العمليات اليومية من مكان واحد.",
   "hero.manage.ctaPrimary": "أضف مكانك — تجربة مجانية",
-  "hero.manage.ctaSecondary": "تسجيل الدخول",
-  "hero.manage.pillar1": "حالة الطاولات والأجهزة مباشرة",
-  "hero.manage.pillar2": "مؤقتات وفواتير وتسليم ورديات بلا تخمين",
-  "hero.manage.pillar3": "تجربة صادقة — الأماكن أولًا",
+  "hero.manage.ctaSecondary": "تصفح الأماكن",
+  "hero.manage.pillar1": "تحكم كامل ببيانات المكان",
+  "hero.manage.pillar2": "انشر وأعلن وكن ظاهرًا",
+  "hero.manage.pillar3": "موقع عام: حجز وتقييم واتصال",
 
-  "hero.play.badge": "اكتشف واحجز",
-  "hero.play.titleA": "اعثر على",
-  "hero.play.titleB": "مكانك المفضل.",
+  "hero.play.badge": "اكتشف المواقع",
+  "hero.play.titleA": "اعثر على أماكن،",
+  "hero.play.titleB": "مضيفين وخرجات.",
   "hero.play.subtitle":
-    "بلياردو وصالات ألعاب ومطاعم ومقاهٍ وبارات وكاريوكي — ابحث حسب المدينة والفئة ثم احجز عندما يفعّل المكان ذلك.",
+    "تصفح مراكز الألعاب والمطاعم والأماكن — احجز واقرأ التقييمات وتواصل مع المضيفين عندما ينشرون على Locora.",
   "hero.play.ctaPrimary": "تصفح الأماكن",
   "hero.play.ctaSecondary": "أدير مكانًا",
-  "hero.play.pillar1": "من البلياردو إلى الإفطار — دليل واحد",
+  "hero.play.pillar1": "ألعاب ومطاعم وحياة ليلية — دليل واحد",
   "hero.play.pillar2": "صفِّ حسب المدينة والفئة والأجواء",
   "hero.play.pillar3": "احجز عندما يفعّل المكان الحجز",
 
   "venues.worldwide": "أماكن حول العالم",
   "venues.published": "{total} أماكن منشورة · {countries} دول",
   "venues.publishedOne": "{total} مكان منشور · {countries} دول",
-  "venues.tagline": "اعثر على مكانك",
+  "venues.tagline": "اعثر على مكان الليلة.",
   "venues.subtitle":
-    "صالات ألعاب وبلياردو وبارات وحياة ليلية — ابحث بالاسم أو المدينة أو الدولة أو الفئة.",
+    "مراكز ألعاب ومطاعم وبارات وأماكن — ابحث بالاسم أو المدينة أو الدولة أو الفئة.",
   "venues.searching": "جارٍ البحث…",
   "venues.found": "تم العثور على {total} أماكن",
   "venues.foundOne": "تم العثور على {total} مكان",
-  "venues.showingAll": "كل الأماكن المنشورة على GoSpots",
+  "venues.showingAll": "كل الأماكن المنشورة على Locora",
   "venues.filters": "عوامل التصفية: {summary}",
   "venues.pricesIn": "الأسعار بـ {currency}",
   "venues.browse": "تصفح الأماكن",
@@ -2544,7 +4400,7 @@ const ar: Dict = {
   "venues.gameOne": "{count} لعبة",
   "venues.emptyTitle": "لا أماكن مطابقة بعد",
   "venues.emptyBody":
-    "جرّب مدينة أو فئة أخرى — أو أدرج مكانك على GoSpots.",
+    "جرّب مدينة أو فئة أخرى — أو أدرج مكانك على Locora.",
   "venues.getListed": "احصل على إدراج",
 
   "how.eyebrow": "كيف يعمل",
@@ -2566,7 +4422,7 @@ const ar: Dict = {
 
   "homeVenues.play.eyebrow": "دليل مباشر",
   "homeVenues.play.title": "أماكن موجودة على",
-  "homeVenues.play.titleAccent": "GoSpots",
+  "homeVenues.play.titleAccent": "Locora",
   "homeVenues.play.subtitle":
     "إعلانات حقيقية من الأماكن نفسها — كل منها بصوره وأسعاره وعملته وقواعد الحجز. استخدم البحث أعلاه أو افتح الدليل الكامل.",
   "homeVenues.manage.eyebrow": "قائمتك العامة",
@@ -2815,6 +4671,115 @@ const ar: Dict = {
   "pack.mixed.name": "مكان مختلط",
   "pack.mixed.tagline": "منطقة ألعاب ومطعم تحت سقف واحد.",
 
+  "who.eyebrow": "لمن",
+  "who.title": "للمضيفين —",
+  "who.titleAccent": "مراكز ألعاب ومطاعم وأماكن.",
+  "who.subtitle":
+    "Locora يمنح المشغّلين لوحة للتحكم ببيانات المكان والنشر والإعلان، وموقعًا عامًا للحجوزات والتقييمات والتواصل. اختر نوعك مجانًا ثم فعّل الميزات التي تحتاجها فقط.",
+  "who.cta": "أضف مكانك مجانًا",
+  "who.noteLead":
+    "تجربة 90 يومًا · بدون بطاقة. شيء آخر؟ ابدأ بـ Mixed وابنِ مجموعة ميزاتك — أو",
+  "who.talkToUs": "تواصل معنا",
+  "who.ex.gaming.1": "قاعات بلياردو وسنوكر",
+  "who.ex.gaming.2": "صالات ألعاب",
+  "who.ex.gaming.3": "مقاهي إسبورتس",
+  "who.ex.gaming.4": "أركيد وبولينغ",
+  "who.ex.gaming.5": "تجارب واقع افتراضي",
+  "who.ex.dining.1": "مطاعم",
+  "who.ex.dining.2": "مقاهٍ",
+  "who.ex.dining.3": "براسيري",
+  "who.ex.dining.4": "طعام غير رسمي",
+  "who.ex.bar.1": "بارات ولاونجات",
+  "who.ex.bar.2": "حانات وسبورتس بار",
+  "who.ex.bar.3": "غرف كاريوكي",
+  "who.ex.bar.4": "نوادي ليلية",
+  "who.ex.hotel_fb.1": "مطاعم الفندق",
+  "who.ex.hotel_fb.2": "بارات ولاونجات الفندق",
+  "who.ex.hotel_fb.3": "فرق F&B الداخلية",
+  "who.ex.mixed.1": "ترفيه عائلي",
+  "who.ex.mixed.2": "سينما + قاعات طعام",
+  "who.ex.mixed.3": "ألعاب ومطعم تحت سقف واحد",
+
+  "features.chip1": "عرض القاعة خلال 3 ثوانٍ",
+  "features.chip2": "مؤقت مباشر لكل مورد",
+  "features.chip3": "إجراءات بنقرة واحدة",
+  "features.heart": "القلب",
+
+  "guest.eyebrow": "للضيوف",
+  "guest.title": "اعثر، احجز،",
+  "guest.titleAccent": "استمتع.",
+  "guest.subtitle":
+    "ثلاث خطوات إلى ليلتك التالية — بلا مكالمات وبلا تخمين إن كانت طاولة أو مسار أو بوث متاحًا.",
+  "guest.cta": "اعثر على أماكن قريبة",
+  "guest.step1.title": "اكتشف الأماكن",
+  "guest.step1.body":
+    "تصفّح قاعات بلياردو وصالات ألعاب ومطاعم ومقاهٍ وبارات وكاريوكي في مدينتك.",
+  "guest.step2.title": "احجز مكانك",
+  "guest.step2.body":
+    "اختر وقتًا وثبّت واحضر — طاولة أو محطة أو بوث بانتظارك.",
+  "guest.step3.title": "أكّد وانطلق",
+  "guest.step3.body":
+    "اقفل الحجز واحصل على تأكيد واحضر جاهزًا — مكانك ينتظر.",
+  "guest.promise1.title": "مجاني دائمًا للضيوف",
+  "guest.promise1.body":
+    "الأماكن تدفع مقابل أدواتها — أنت لا تدفع لـ Locora مقابل التصفح أو الاكتشاف أو الحجز.",
+  "guest.promise2.title": "أماكن حقيقية ومعلومات حقيقية",
+  "guest.promise2.body":
+    "كل قائمة يديرها المكان نفسه: صوره وساعاته وأسعاره وقواعده.",
+  "guest.promise3.title": "دليل ينمو",
+  "guest.promise3.body":
+    "نضمّ المشغّلين مدينة بمدينة. تظهر أماكن جديدة فور النشر.",
+
+  "pain.eyebrow": "سيناريوهات المنتج",
+  "pain.title": "الليالي الفوضوية",
+  "pain.titleAccent": "التي بُني Locora من أجلها.",
+  "pain.subtitle":
+    "مشكلات توضيحية يصفها المشغّلون — وليست اقتباسات من العملاء.",
+  "pain.1.title": "مؤقتات منسية",
+  "pain.1.body":
+    "الليالي المزدحمة تتحول إلى تخمين. الدقائق تفلت والفواتير تكبر ولا أحد يتفق على الساعة.",
+  "pain.2.title": "تعارض الحجوزات",
+  "pain.2.body":
+    "الزوّار بلا حجز يصطدمون بالحجوزات، والـ VIP يتداخلون، وخريطة المدير الذهنية لا تطابق القاعة.",
+  "pain.3.title": "فواتير خاطئة أو متنازع عليها",
+  "pain.3.body":
+    "الأسعار بالساعة والإضافات والخصومات تختلط عندما يعيش كل شيء على ورق أو في الدردشات.",
+  "pain.4.title": "خصومات الموظفين بلا رقابة",
+  "pain.4.body":
+    "تحتاج ثقة في القاعة — وأيضًا حدودًا وأدوارًا وأثرًا عندما يبدو شيء خاطئًا.",
+  "pain.5.title": "لا رؤية مباشرة للقاعة",
+  "pain.5.body":
+    "المالك يغيب ساعة ويفقد رؤية ما يُلعب وما هو محجوز وما يُدرّ دخلًا فعليًا.",
+  "pain.6.title": "تقارير ضعيفة في نهاية الليلة",
+  "pain.6.body":
+    "إغلاق الصندوق لا يجب أن يحتاج جداول. تريد وضوحًا لكل طاولة وكاشير — بلا دراما.",
+
+  "gallery.eyebrow": "أجواء · وليست قائمة أماكن",
+  "gallery.title": "أنواع الليالي",
+  "gallery.titleAccent": "التي من أجلها Locora.",
+  "gallery.subtitle":
+    "صور جاهزة للمزاج فقط — لا تمثّل أماكن شريكة ولا التوفر المباشر.",
+  "gallery.tag.1": "بلياردو",
+  "gallery.tag.2": "ألعاب",
+  "gallery.tag.3": "صالة كمبيوتر",
+  "gallery.tag.4": "ألعاب لوحية",
+  "gallery.tag.5": "بلايستيشن",
+  "gallery.tag.6": "سهام",
+  "gallery.tag.7": "لاونج",
+  "gallery.tag.8": "أركيد",
+  "gallery.tag.9": "بولينغ",
+
+  "finder.openDirectory": "افتح الدليل الكامل",
+  "finder.published": "منشور على Locora",
+  "finder.preview": "معاينة الدليل",
+  "finder.seeAll": "عرض الكل",
+  "finder.empty": "لا أماكن منشورة بعد — كن من الأوائل.",
+
+  "footer.poweredBy": "Powered by",
+  "footer.rights": "جميع الحقوق محفوظة.",
+  "footer.builtWith": "مبني بـ Next.js · NestJS · PostgreSQL ·",
+  "footer.busyNights": "مصنوع للّيالي المزدحمة",
+
   "stats.days.label": "أيام مجانية لكل مكان جديد",
   "stats.days.hint": "بدون بطاقة للبدء",
   "stats.free.label": "لنوع مكانك — للأبد",
@@ -2859,7 +4824,7 @@ const ar: Dict = {
   "faq.titleAccent": "سؤاله أولًا.",
   "faq.owner.1.q": "هل أحتاج لتثبيت شيء في مكاني؟",
   "faq.owner.1.a":
-    "لا. يعمل GoSpots في المتصفح على الجهاز الذي لديك بالفعل — لابتوب أو تابلت أو جهاز الكاونتر. التحديثات تصل تلقائيًا.",
+    "لا. يعمل Locora في المتصفح على الجهاز الذي لديك بالفعل — لابتوب أو تابلت أو جهاز الكاونتر. التحديثات تصل تلقائيًا.",
   "faq.owner.2.q": "هل يمكنني التجربة قبل الدفع؟",
   "faq.owner.2.a":
     "نعم. الأماكن الجديدة تحصل على تجربة مجانية لمدة 90 يومًا — بدون بطاقة. اختر أي ميزات وغيّرها بحرية أثناء التجربة. لا يُخصم شيء دون موافقتك.",
@@ -2878,10 +4843,10 @@ const ar: Dict = {
   "faq.owner.7.q": "ماذا عن أخطاء الموظفين؟",
   "faq.owner.7.a":
     "كل إجراء مهم — خصم أو إلغاء أو استرداد أو تغيير سعر — يدخل سجل تدقيق غير قابل للتغيير مرتبطًا بالمستخدم.",
-  "faq.player.1.q": "هل GoSpots مجاني للضيوف؟",
+  "faq.player.1.q": "هل Locora مجاني للضيوف؟",
   "faq.player.1.a":
     "تمامًا. تصفح الأماكن والتفاصيل والحجز لا يكلفك شيئًا — الأماكن تدفع مقابل أدواتها، لا أنت.",
-  "faq.player.2.q": "ما أنواع الأماكن على GoSpots؟",
+  "faq.player.2.q": "ما أنواع الأماكن على Locora؟",
   "faq.player.2.a":
     "أكثر بكثير من الألعاب. قاعات بلياردو وصالات ألعاب ومقاهي إسبورتس — بالإضافة إلى مطاعم ومقاهٍ وبارات وحانات وكاريوكي وبولينغ ونوادي وترفيه عائلي.",
   "faq.player.3.q": "كيف أجد مكانًا قريبًا مني؟",
@@ -2895,7 +4860,7 @@ const ar: Dict = {
     "لا حاجة لحساب للتصفح واكتشاف الأماكن. تسجّل الدخول فقط إذا تطلّب مسار الحجز ذلك.",
   "faq.player.6.q": "لماذا لا أرى أماكن كثيرة بعد؟",
   "faq.player.6.a":
-    "GoSpots في نسخة تجريبية خاصة ويبدأ بضم المشغّلين. ينمو الدليل العام مع كل مكان يفعّل النشر.",
+    "Locora في نسخة تجريبية خاصة ويبدأ بضم المشغّلين. ينمو الدليل العام مع كل مكان يفعّل النشر.",
 
   "cta.manage.titleA": "لا تخسر المال بسبب",
   "cta.manage.titleB": "مؤقتات منسية.",
@@ -2918,6 +4883,7 @@ const ar: Dict = {
     "قاعات بلياردو وصالات ألعاب وأماكن ترفيه بالقرب منك. يدير المالكون الليالي من لوحة تحكم فورية واحدة.",
   "footer.product": "المنتج",
   "footer.explore": "استكشف",
+  "footer.forVenues": "لأصحاب الأماكن",
   "footer.forGuests": "للضيوف",
   "footer.company": "الشركة",
   "footer.findSpot": "اعثر على مكان",
@@ -2933,7 +4899,7 @@ const ar: Dict = {
   "footer.privacy": "الخصوصية",
   "footer.terms": "الشروط",
 
-  "marquee.owner.title": "ما صُمم GoSpots لإدارته",
+  "marquee.owner.title": "ما صُمم Locora لإدارته",
   "marquee.owner.1": "حالة الصالة مباشرة",
   "marquee.owner.2": "مؤقتات الجلسة مربوطة بالطاولة",
   "marquee.owner.3": "زوار وحجوزات في عرض واحد",
@@ -2942,7 +4908,7 @@ const ar: Dict = {
   "marquee.owner.6": "سجل تدقيق غير قابل للتغيير",
   "marquee.owner.7": "إيراد لكل طاولة ولكل وردية",
   "marquee.owner.8": "للبلياردو · سنوكر · صالات · مقاهي ألعاب",
-  "marquee.player.title": "ما تجده على GoSpots",
+  "marquee.player.title": "ما تجده على Locora",
   "marquee.player.1": "قاعات بلياردو ونوادي سنوكر",
   "marquee.player.2": "صالات ألعاب ومقاهي إسبورتس",
   "marquee.player.3": "مطاعم ومقاهٍ وبارات",

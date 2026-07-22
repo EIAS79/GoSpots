@@ -36,7 +36,7 @@ import { fetchMenu, type FullMenu } from "@/lib/menu-client";
 import { orderMetaDraftMatches } from "@/lib/order-display-label";
 import { publishLiveEvent } from "@/lib/live-events";
 import { useLiveData } from "@/lib/use-live-data";
-import { useVenueSettings } from "@/lib/venue-settings-context";
+import { useVenueSettings, useVenueSettingsOptional } from "@/lib/venue-settings-context";
 
 type ConfirmState =
   | null
@@ -49,15 +49,15 @@ type Tab = "PENDING" | "COMPLETED" | "CANCELED" | "ARCHIVED";
 
 const ORDERS_PER_PAGE = 6;
 
-const TABS: {
+const TAB_DEFS: {
   id: Tab;
-  label: string;
+  labelKey: string;
   icon: typeof ChefHat;
 }[] = [
-  { id: "PENDING", label: "Preparing", icon: ChefHat },
-  { id: "COMPLETED", label: "Handed off", icon: PackageCheck },
-  { id: "CANCELED", label: "Canceled", icon: XCircle },
-  { id: "ARCHIVED", label: "Archived", icon: Archive },
+  { id: "PENDING", labelKey: "orders.tabPreparing", icon: ChefHat },
+  { id: "COMPLETED", labelKey: "orders.tabHandedOff", icon: PackageCheck },
+  { id: "CANCELED", labelKey: "orders.tabCanceled", icon: XCircle },
+  { id: "ARCHIVED", labelKey: "orders.tabArchived", icon: Archive },
 ];
 
 function orderMatchesTab(order: ShopOrder, tab: Tab): boolean {
@@ -72,6 +72,7 @@ export function MenuOrdersPanel({
   canWrite: boolean;
 }) {
   const { formatMoney } = useVenueSettings();
+  const t = useVenueSettingsOptional()?.t ?? ((k: string) => k);
   const [tab, setTab] = useState<Tab>("PENDING");
   const [orders, setOrders] = useState<ShopOrder[]>([]);
   const [menu, setMenu] = useState<FullMenu | null>(null);
@@ -107,19 +108,19 @@ export function MenuOrdersPanel({
       tabOverride?: Tab,
       opts?: { silent?: boolean },
     ): Promise<ShopOrder[]> => {
-      const t = tabOverride ?? tab;
+      const activeTab = tabOverride ?? tab;
       const gen = ++loadGen.current;
       if (!opts?.silent) setError(null);
       try {
         const list = await fetchShopOrders({
-          status: t === "ARCHIVED" ? "ALL" : t,
-          archived: t === "ARCHIVED" ? "only" : "exclude",
+          status: activeTab === "ARCHIVED" ? "ALL" : activeTab,
+          archived: activeTab === "ARCHIVED" ? "only" : "exclude",
           from: filterFrom || undefined,
           to: filterTo || undefined,
           q: searchQ || undefined,
           take: 80,
         });
-        const filtered = list.filter((o) => orderMatchesTab(o, t));
+        const filtered = list.filter((o) => orderMatchesTab(o, activeTab));
         if (gen !== loadGen.current) return filtered;
         setOrders(filtered);
         setSelectedIds((prev) => {
@@ -138,24 +139,33 @@ export function MenuOrdersPanel({
         return filtered;
       } catch (e) {
         if (gen !== loadGen.current) return [];
+        // Session expiry is Mode D — do not feed Mode F.
         if (opts?.silent && e instanceof ApiError && e.status === 401) {
           return [];
         }
         if (e instanceof ApiError && e.status === 401) {
-          setError("Session expired. Refresh the page or sign in again.");
+          setError(t("orders.sessionExpired"));
         } else {
           setError(
-            e instanceof Error ? e.message : "Could not load orders.",
+            e instanceof Error ? e.message : t("orders.loadFailed"),
           );
         }
+        // Rethrow so useLiveData silent polls still report Mode F.
+        if (opts?.silent) throw e;
         return [];
       }
     },
-    [tab, filterFrom, filterTo, searchQ],
+    [tab, filterFrom, filterTo, searchQ, t],
   );
 
-  const mainTabs = TABS.filter((t) => t.id !== "ARCHIVED");
-  const archivedTab = TABS.find((t) => t.id === "ARCHIVED")!;
+  const mainTabs = TAB_DEFS.filter((x) => x.id !== "ARCHIVED").map((x) => ({
+    ...x,
+    label: t(x.labelKey),
+  }));
+  const archivedTab = {
+    ...TAB_DEFS.find((x) => x.id === "ARCHIVED")!,
+    label: t("orders.tabArchived"),
+  };
 
   const displayOrders = useMemo(
     () => orders.filter((o) => orderMatchesTab(o, tab)),
@@ -290,7 +300,7 @@ export function MenuOrdersPanel({
           }, 2000);
         })
         .catch((e) => {
-          setError(e instanceof Error ? e.message : "Could not save ticket.");
+          setError(e instanceof Error ? e.message : t("orders.saveTicketFailed"));
           setMetaAutosave("idle");
         });
     }, 2000);
@@ -327,7 +337,7 @@ export function MenuOrdersPanel({
       publishLiveEvent({ section: "shop_orders" });
       return result;
     } catch (e) {
-      setError(e instanceof Error ? e.message : "Request failed.");
+      setError(e instanceof Error ? e.message : t("orders.requestFailed"));
     } finally {
       setBusy(false);
     }
@@ -380,7 +390,7 @@ export function MenuOrdersPanel({
       {topSellers.length > 0 ? (
         <div className="shrink-0 rounded-xl border border-white/10 bg-zinc-900/40 px-3 py-2">
           <p className="mb-1.5 text-[10px] font-medium uppercase tracking-wider text-zinc-500">
-            Top sellers · 30 days
+            {t("orders.topSellers")}
           </p>
           <div className="flex gap-2 overflow-x-auto pb-0.5">
             {topSellers.map((item, i) => (
@@ -411,8 +421,8 @@ export function MenuOrdersPanel({
           <header className="shrink-0 space-y-3 border-b border-white/10 p-3 sm:p-4">
             <div className="flex flex-wrap items-center justify-between gap-2">
               <div>
-                <h2 className="text-sm font-semibold text-white">Orders</h2>
-                <p className="text-[11px] text-zinc-500">{displayOrders.length} in view</p>
+                <h2 className="text-sm font-semibold text-white">{t("orders.title")}</h2>
+                <p className="text-[11px] text-zinc-500">{t("orders.inView", { n: displayOrders.length })}</p>
               </div>
               <div className="flex flex-wrap gap-1.5">
                 {canWrite ? (
@@ -432,7 +442,7 @@ export function MenuOrdersPanel({
                     className="inline-flex items-center gap-1 rounded-lg bg-emerald-600 px-3 py-2 text-xs font-medium text-white hover:bg-emerald-500 disabled:opacity-50"
                   >
                     <Plus size={15} />
-                    New
+                    {t("orders.new")}
                   </button>
                 ) : null}
                 <button
@@ -455,13 +465,13 @@ export function MenuOrdersPanel({
                 type="search"
                 value={searchDraft}
                 onChange={(e) => setSearchDraft(e.target.value)}
-                placeholder="Search table or guest…"
+                placeholder={t("orders.searchPlaceholder")}
                 className="w-full rounded-xl border border-white/10 bg-zinc-950/80 py-2.5 pl-9 pr-9 text-sm text-white placeholder:text-zinc-600 focus:border-emerald-500/40 focus:outline-none focus:ring-2 focus:ring-emerald-500/15"
               />
               {searchDraft ? (
                 <button
                   type="button"
-                  aria-label="Clear search"
+                  aria-label={t("orders.clearSearch")}
                   onClick={() => setSearchDraft("")}
                   className="absolute right-2 top-1/2 grid h-7 w-7 -translate-y-1/2 place-items-center rounded-full text-zinc-500 hover:bg-white/5"
                 >
@@ -508,14 +518,14 @@ export function MenuOrdersPanel({
             <div className="flex flex-wrap items-center gap-2">
               <div className="hidden min-w-0 flex-1 items-center gap-2 md:flex">
                 <span className="shrink-0 text-[10px] font-medium uppercase tracking-wide text-zinc-600">
-                  Dates
+                  {t("orders.dates")}
                 </span>
                 <input
                   type="date"
                   value={filterFrom}
                   onChange={(e) => setFilterFrom(e.target.value)}
                   className="min-w-0 flex-1 rounded-lg border border-white/10 bg-zinc-950 px-2 py-1.5 text-xs text-white"
-                  aria-label="From date"
+                  aria-label={t("orders.fromDate")}
                 />
                 <span className="text-zinc-600">–</span>
                 <input
@@ -523,7 +533,7 @@ export function MenuOrdersPanel({
                   value={filterTo}
                   onChange={(e) => setFilterTo(e.target.value)}
                   className="min-w-0 flex-1 rounded-lg border border-white/10 bg-zinc-950 px-2 py-1.5 text-xs text-white"
-                  aria-label="To date"
+                  aria-label={t("orders.toDate")}
                 />
                 {hasDateFilter ? (
                   <button
@@ -534,7 +544,7 @@ export function MenuOrdersPanel({
                     }}
                     className="shrink-0 text-[11px] text-zinc-500 hover:text-zinc-300"
                   >
-                    Clear
+                    {t("orders.clear")}
                   </button>
                 ) : null}
               </div>
@@ -550,7 +560,7 @@ export function MenuOrdersPanel({
                 )}
               >
                 <Filter size={14} />
-                Date range
+                {t("orders.dateRange")}
                 {hasDateFilter ? (
                   <span className="size-1.5 rounded-full bg-emerald-400" />
                 ) : null}
@@ -569,7 +579,7 @@ export function MenuOrdersPanel({
                       : "border-white/10 text-zinc-400 hover:bg-white/5 hover:text-zinc-200",
                   )}
                 >
-                  {selectionMode ? "Done" : "Select"}
+                  {selectionMode ? t("orders.done") : t("orders.select")}
                 </button>
               ) : null}
             </div>
@@ -577,10 +587,7 @@ export function MenuOrdersPanel({
             {selectionMode && canWrite ? (
               <div className="flex flex-wrap items-center justify-between gap-2 rounded-xl border border-white/10 bg-zinc-950/80 px-3 py-2.5">
                 <p className="text-xs text-zinc-400">
-                  <span className="font-semibold text-white">
-                    {selectedIds.size}
-                  </span>{" "}
-                  selected
+                  {t("orders.selected", { n: selectedIds.size })}
                 </p>
                 <div className="flex flex-wrap items-center gap-2">
                   <button
@@ -588,7 +595,7 @@ export function MenuOrdersPanel({
                     onClick={toggleSelectAll}
                     className="rounded-lg border border-white/10 px-2.5 py-1.5 text-[11px] text-zinc-300 hover:bg-white/5"
                   >
-                    {allGridSelected ? "Clear all" : "Select all"}
+                    {allGridSelected ? t("orders.clearAll") : t("orders.selectAll")}
                   </button>
                   {selectedIds.size > 0 ? (
                     tab === "ARCHIVED" ? (
@@ -604,7 +611,7 @@ export function MenuOrdersPanel({
                         }
                         className="rounded-lg bg-emerald-600 px-3 py-1.5 text-[11px] font-medium text-white hover:bg-emerald-500 disabled:opacity-50"
                       >
-                        Unarchive
+                        {t("orders.unarchive")}
                       </button>
                     ) : (
                       <button
@@ -619,7 +626,7 @@ export function MenuOrdersPanel({
                         }
                         className="rounded-lg bg-violet-600 px-3 py-1.5 text-[11px] font-medium text-white hover:bg-violet-500 disabled:opacity-50"
                       >
-                        Archive
+                        {t("orders.archive")}
                       </button>
                     )
                   ) : null}
@@ -628,7 +635,7 @@ export function MenuOrdersPanel({
                     onClick={exitSelectionMode}
                     className="rounded-lg border border-white/15 px-2.5 py-1.5 text-[11px] text-zinc-300"
                   >
-                    Cancel
+                    {t("orders.cancel")}
                   </button>
                 </div>
               </div>
@@ -645,7 +652,7 @@ export function MenuOrdersPanel({
             </div>
           ) : displayOrders.length === 0 ? (
             <div className="rounded-lg border border-dashed border-white/15 p-8 text-center text-sm text-zinc-500">
-              No orders in this view.
+              {t("orders.empty")}
             </div>
           ) : (
             <>
@@ -673,12 +680,14 @@ export function MenuOrdersPanel({
               {displayOrders.length > ORDERS_PER_PAGE ? (
                 <div className="mt-3 flex items-center justify-between gap-2 border-t border-white/5 pt-3">
                   <span className="text-[11px] text-zinc-500">
-                    {safeOrderPage * ORDERS_PER_PAGE + 1}–
-                    {Math.min(
-                      (safeOrderPage + 1) * ORDERS_PER_PAGE,
-                      displayOrders.length,
-                    )}{" "}
-                    of {displayOrders.length}
+                    {t("orders.rangeOf", {
+                      from: safeOrderPage * ORDERS_PER_PAGE + 1,
+                      to: Math.min(
+                        (safeOrderPage + 1) * ORDERS_PER_PAGE,
+                        displayOrders.length,
+                      ),
+                      total: displayOrders.length,
+                    })}
                   </span>
                   <div className="flex items-center gap-1">
                     <button
@@ -686,7 +695,7 @@ export function MenuOrdersPanel({
                       disabled={safeOrderPage <= 0}
                       onClick={() => setOrderPage((p) => Math.max(0, p - 1))}
                       className="grid h-8 w-8 place-items-center rounded-lg border border-white/10 text-zinc-300 disabled:opacity-40"
-                      aria-label="Previous page"
+                      aria-label={t("orders.prevPage")}
                     >
                       ‹
                     </button>
@@ -700,7 +709,7 @@ export function MenuOrdersPanel({
                         setOrderPage((p) => Math.min(orderPageCount - 1, p + 1))
                       }
                       className="grid h-8 w-8 place-items-center rounded-lg border border-white/10 text-zinc-300 disabled:opacity-40"
-                      aria-label="Next page"
+                      aria-label={t("orders.nextPage")}
                     >
                       ›
                     </button>
@@ -722,9 +731,9 @@ export function MenuOrdersPanel({
         {!selected ? (
           <div className="flex flex-1 flex-col items-center justify-center p-8 text-center">
             <PackageCheck className="mb-3 size-10 text-zinc-600" />
-            <p className="text-sm font-medium text-zinc-400">No ticket selected</p>
+            <p className="text-sm font-medium text-zinc-400">{t("orders.noTicket")}</p>
             <p className="mt-1 max-w-xs text-xs text-zinc-600">
-              Pick a card from the grid or start a new order.
+              {t("orders.noTicketHint")}
             </p>
           </div>
         ) : (
@@ -816,10 +825,10 @@ export function MenuOrdersPanel({
 
       <ConfirmDialog
         open={pendingConfirm?.kind === "cancelOrder"}
-        title="Cancel this order?"
-        description="All lines will be marked canceled. Stock for active lines will be restored."
-        confirmLabel="Cancel order"
-        cancelLabel="Keep order"
+        title={t("orders.cancelOrderTitle")}
+        description={t("orders.cancelOrderDesc")}
+        confirmLabel={t("orders.cancelOrderConfirm")}
+        cancelLabel={t("orders.keepOrder")}
         variant="danger"
         busy={busy}
         onCancel={() => setPendingConfirm(null)}
@@ -839,10 +848,10 @@ export function MenuOrdersPanel({
       />
       <ConfirmDialog
         open={pendingConfirm?.kind === "deleteOrder"}
-        title="Delete order permanently?"
-        description="This will remove the current order from data and history. This cannot be undone."
-        confirmLabel="Delete"
-        cancelLabel="Keep"
+        title={t("orders.deleteOrderTitle")}
+        description={t("orders.deleteOrderDesc")}
+        confirmLabel={t("orders.deleteConfirm")}
+        cancelLabel={t("orders.keep")}
         variant="danger"
         busy={busy}
         onCancel={() => setPendingConfirm(null)}
@@ -859,10 +868,10 @@ export function MenuOrdersPanel({
       />
       <ConfirmDialog
         open={pendingConfirm?.kind === "deleteLine"}
-        title="Remove line?"
-        description="This line will be removed from the order. Stock will be restored if applicable."
-        confirmLabel="Remove"
-        cancelLabel="Keep"
+        title={t("orders.removeLineTitle")}
+        description={t("orders.removeLineDesc")}
+        confirmLabel={t("orders.removeConfirm")}
+        cancelLabel={t("orders.keep")}
         variant="danger"
         busy={busy}
         onCancel={() => setPendingConfirm(null)}
@@ -883,25 +892,25 @@ export function MenuOrdersPanel({
           <div className="fixed inset-0 z-[400] flex items-end justify-center sm:items-center sm:p-4">
             <button
               type="button"
-              aria-label="Close filters"
+              aria-label={t("orders.closeFilters")}
               className="absolute inset-0 bg-black/70 backdrop-blur-sm"
               onClick={() => setFiltersOpen(false)}
             />
             <div className="relative z-10 w-full max-w-md overflow-hidden rounded-t-2xl border border-white/10 bg-zinc-950 shadow-2xl sm:rounded-2xl">
               <div className="flex items-center justify-between border-b border-white/10 px-5 py-4">
-                <h3 className="text-sm font-semibold text-white">Date range</h3>
+                <h3 className="text-sm font-semibold text-white">{t("orders.dateRange")}</h3>
                 <button
                   type="button"
                   onClick={() => setFiltersOpen(false)}
                   className="grid h-8 w-8 place-items-center rounded-lg text-zinc-400 hover:bg-white/5"
-                  aria-label="Close"
+                  aria-label={t("orders.close")}
                 >
                   ×
                 </button>
               </div>
               <div className="space-y-3 p-5">
                 <label className="block text-xs text-zinc-500">
-                  From
+                  {t("orders.from")}
                   <input
                     type="date"
                     value={filterFrom}
@@ -910,7 +919,7 @@ export function MenuOrdersPanel({
                   />
                 </label>
                 <label className="block text-xs text-zinc-500">
-                  To
+                  {t("orders.to")}
                   <input
                     type="date"
                     value={filterTo}
@@ -928,14 +937,14 @@ export function MenuOrdersPanel({
                   }}
                   className="flex-1 rounded-lg border border-white/15 py-2.5 text-sm text-zinc-300 hover:bg-white/5"
                 >
-                  Clear
+                  {t("orders.clear")}
                 </button>
                 <button
                   type="button"
                   onClick={() => setFiltersOpen(false)}
                   className="flex-1 rounded-lg bg-emerald-600 py-2.5 text-sm font-medium text-white hover:bg-emerald-500"
                 >
-                  Done
+                  {t("orders.done")}
                 </button>
               </div>
             </div>

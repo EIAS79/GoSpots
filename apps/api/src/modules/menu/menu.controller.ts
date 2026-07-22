@@ -12,8 +12,8 @@ import {
 } from '@nestjs/common';
 import { FileInterceptor } from '@nestjs/platform-express';
 import { ApiTags } from '@nestjs/swagger';
-import { memoryStorage } from 'multer';
 import type { MenuImageUpload } from './menu-upload.util';
+import { imageUploadMulterOptions } from '../../common/image-media.util';
 import { PERMISSIONS } from '../../common/permissions';
 import { CurrentUser } from '../auth/decorators/current-user.decorator';
 import { RequirePermissions } from '../auth/decorators/roles.decorator';
@@ -61,12 +61,7 @@ export class MenuController {
 
   @Post('sections/:id/image')
   @RequirePermissions(PERMISSIONS.MENU_WRITE)
-  @UseInterceptors(
-    FileInterceptor('file', {
-      storage: memoryStorage(),
-      limits: { fileSize: 8 * 1024 * 1024 },
-    }),
-  )
+  @UseInterceptors(FileInterceptor('file', imageUploadMulterOptions()))
   uploadSectionImage(
     @CurrentUser() user: JwtAccessPayload,
     @Param('id') id: string,
@@ -117,12 +112,7 @@ export class MenuController {
 
   @Post('items/:id/images/:slot')
   @RequirePermissions(PERMISSIONS.MENU_WRITE)
-  @UseInterceptors(
-    FileInterceptor('file', {
-      storage: memoryStorage(),
-      limits: { fileSize: 8 * 1024 * 1024 },
-    }),
-  )
+  @UseInterceptors(FileInterceptor('file', imageUploadMulterOptions()))
   uploadItemImage(
     @CurrentUser() user: JwtAccessPayload,
     @Param('id') id: string,

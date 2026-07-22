@@ -1,4 +1,3 @@
-import { randomBytes } from 'crypto';
 import {
   BadRequestException,
   ForbiddenException,
@@ -12,6 +11,11 @@ import {
 } from '@prisma/client';
 import { PrismaService } from '../../prisma/prisma.service';
 import { requireShopId } from '../../common/tenant';
+import { assertShopHasFeature } from '../../common/venue-entitlements';
+import {
+  assertPrivacyConsentAccepted,
+  recordConsent,
+} from '../../common/gdpr-consent.util';
 import { AuditService } from '../audit/audit.service';
 import type { JwtAccessPayload } from '../auth/auth.service';
 import { NotificationsService } from '../notifications/notifications.service';
@@ -21,6 +25,17 @@ import {
   EventRequestQueryDto,
   ReviewEventRequestDto,
 } from './dto/event-requests.dto';
+import {
+  assertGuestTokenActive,
+  guestTokenLookupWhere,
+  guestTokenNeedsRevoke,
+  guestTokenPersistFields,
+  guestTokenRevokeFields,
+  issueGuestToken,
+  verifyPresentedGuestToken,
+} from '../../common/guest-token.util';
+import { assertWithinOpeningHours } from '../../common/opening-hours.util';
+import { guestVenueStatusPath } from '../../common/reservation-notification-href';
 
 function parseDateRange(startsAt: string, endsAt?: string) {
   const preferredStartsAt = new Date(startsAt);
@@ -76,12 +91,9 @@ export class EventRequestsService {
     return `${date} · ${start}–${end}`;
   }
 
-  private generateGuestToken() {
-    return randomBytes(24).toString('base64url');
-  }
-
   private guestStatusPayload(row: {
     guestToken: string | null;
+    guestTokenHash: string | null;
     status: EventRequestStatus;
     eventType: EventRequestType;
     guestName: string;
@@ -95,7 +107,7 @@ export class EventRequestsService {
     resourceCategory: { id: string; name: string; type: string } | null;
     shop: { slug: string; name: string };
   }) {
-    if (!row.guestToken) return null;
+    if (!row.guestToken && !row.guestTokenHash) return null;
     const canCancel =
       row.status === EventRequestStatus.PENDING ||
       (row.status === EventRequestStatus.APPROVED &&
@@ -130,12 +142,15 @@ export class EventRequestsService {
     if (!shop) throw new NotFoundException('Venue not found.');
 
     const row = await this.prisma.eventRequest.findFirst({
-      where: { shopId: shop.id, guestToken: token },
+      where: guestTokenLookupWhere(shop.id, token),
       include: {
         resourceCategory: { select: { id: true, name: true, type: true } },
       },
     });
-    if (!row) throw new NotFoundException('Request not found.');
+    if (!row || !verifyPresentedGuestToken(row, token)) {
+      throw new NotFoundException('Request not found.');
+    }
+    assertGuestTokenActive(row);
 
     return this.guestStatusPayload({ ...row, shop });
   }
@@ -148,14 +163,24 @@ export class EventRequestsService {
     if (!shop) throw new NotFoundException('Venue not found.');
 
     const existing = await this.prisma.eventRequest.findFirst({
-      where: { shopId: shop.id, guestToken: token },
+      where: guestTokenLookupWhere(shop.id, token),
       include: {
         resourceCategory: { select: { id: true, name: true, type: true } },
       },
     });
-    if (!existing) throw new NotFoundException('Request not found.');
+    if (!existing || !verifyPresentedGuestToken(existing, token)) {
+      throw new NotFoundException('Request not found.');
+    }
+    assertGuestTokenActive(existing);
 
     if (existing.status === EventRequestStatus.CANCELED) {
+      // Legacy / race: canceled without revoke — seal once; reused revoked links fail above.
+      if (guestTokenNeedsRevoke(existing)) {
+        await this.prisma.eventRequest.update({
+          where: { id: existing.id, shopId: shop.id },
+          data: guestTokenRevokeFields(),
+        });
+      }
       return {
         ok: true,
         message: 'This request was already canceled.',
@@ -188,10 +213,11 @@ export class EventRequestsService {
         });
       }
       return tx.eventRequest.update({
-        where: { id: existing.id },
+        where: { id: existing.id, shopId: shop.id },
         data: {
           status: EventRequestStatus.CANCELED,
           seatingTableGroupId: null,
+          ...guestTokenRevokeFields(),
         },
         include: {
           resourceCategory: { select: { id: true, name: true, type: true } },
@@ -261,17 +287,36 @@ export class EventRequestsService {
     reviewedById: string | null;
     seatingTableGroupId: string | null;
     resourceCategoryId: string | null;
-    guestToken: string | null;
+    guestToken?: string | null;
+    guestTokenHash?: string | null;
+    guestTokenExpiresAt?: Date | null;
+    guestTokenRevokedAt?: Date | null;
     createdAt: Date;
     updatedAt: Date;
     resourceCategory?: { id: string; name: string; type: string } | null;
   }) {
     return {
-      ...row,
-      resourceCategory: row.resourceCategory ?? null,
+      id: row.id,
+      shopId: row.shopId,
+      eventType: row.eventType,
+      source: row.source,
+      guestName: row.guestName,
+      guestEmail: row.guestEmail,
+      guestPhone: row.guestPhone,
+      partySize: row.partySize,
       preferredStartsAt: row.preferredStartsAt.toISOString(),
       preferredEndsAt: row.preferredEndsAt?.toISOString() ?? null,
+      zone: row.zone,
+      floor: row.floor,
+      message: row.message,
+      status: row.status,
+      staffResponseNote: row.staffResponseNote,
       reviewedAt: row.reviewedAt?.toISOString() ?? null,
+      reviewedById: row.reviewedById,
+      seatingTableGroupId: row.seatingTableGroupId,
+      resourceCategoryId: row.resourceCategoryId,
+      resourceCategory: row.resourceCategory ?? null,
+      hasGuestLink: !!(row.guestTokenHash || row.guestToken),
       createdAt: row.createdAt.toISOString(),
       updatedAt: row.updatedAt.toISOString(),
     };
@@ -279,6 +324,7 @@ export class EventRequestsService {
 
   async list(actor: JwtAccessPayload, query: EventRequestQueryDto) {
     const shopId = requireShopId(actor);
+    await assertShopHasFeature(this.prisma, shopId, 'reservation');
     const rows = await this.prisma.eventRequest.findMany({
       where: {
         shopId,
@@ -299,16 +345,28 @@ export class EventRequestsService {
   }
 
   async createFromPublic(slug: string, dto: CreatePublicEventRequestDto) {
+    // shopId always from published slug — never from client body.
     const shop = await this.prisma.shop.findFirst({
       where: { slug, isPublished: true },
-      select: { id: true, name: true },
+      select: { id: true, name: true, slug: true },
     });
     if (!shop) throw new NotFoundException('Venue not found.');
+    await assertShopHasFeature(this.prisma, shop.id, 'reservation');
 
+    assertPrivacyConsentAccepted(dto.privacyConsentAccepted);
+
+    if (!dto.guestName?.trim()) {
+      throw new BadRequestException('Guest name is required.');
+    }
     if (!dto.guestEmail?.trim() && !dto.guestPhone?.trim()) {
       throw new BadRequestException(
         'Provide an email or phone number so the venue can reach you.',
       );
+    }
+
+    const party = dto.partySize ?? 1;
+    if (!Number.isInteger(party) || party < 1 || party > 100) {
+      throw new BadRequestException('Party size must be between 1 and 100.');
     }
 
     const { preferredStartsAt, preferredEndsAt } = parseDateRange(
@@ -316,7 +374,16 @@ export class EventRequestsService {
       dto.preferredEndsAt,
     );
 
-    const guestToken = this.generateGuestToken();
+    await assertWithinOpeningHours(
+      this.prisma,
+      shop.id,
+      preferredStartsAt,
+      preferredEndsAt ?? preferredStartsAt,
+    );
+
+    const issued = issueGuestToken({
+      from: preferredEndsAt ?? preferredStartsAt,
+    });
 
     if (dto.resourceCategoryId) {
       const cat = await this.prisma.resourceCategory.findFirst({
@@ -345,13 +412,13 @@ export class EventRequestsService {
         guestName: dto.guestName.trim(),
         guestEmail: dto.guestEmail?.trim() || null,
         guestPhone: dto.guestPhone?.trim() || null,
-        partySize: dto.partySize,
+        partySize: party,
         preferredStartsAt,
         preferredEndsAt,
         zone: dto.zone ?? null,
         message: dto.message?.trim() || null,
         resourceCategoryId: dto.resourceCategoryId ?? null,
-        guestToken,
+        ...guestTokenPersistFields(issued),
       },
     });
 
@@ -373,6 +440,14 @@ export class EventRequestsService {
       },
     });
 
+    await recordConsent(this.prisma, {
+      shopId: shop.id,
+      purpose: 'EVENT_REQUEST',
+      guestEmail: row.guestEmail,
+      sourceEntityType: 'eventRequest',
+      sourceEntityId: row.id,
+    });
+
     const title =
       row.eventType === EventRequestType.TABLE
         ? 'New table request'
@@ -391,20 +466,26 @@ export class EventRequestsService {
       message:
         'Your request was sent. The venue will review it and get back to you.',
       id: row.id,
-      guestToken,
-      statusPath: `/venue/${slug}/event-status/${guestToken}`,
+      guestToken: issued.raw,
+      // Slug from DB row, not raw request param (same lookup, defense in depth).
+      statusPath: guestVenueStatusPath(shop.slug, issued.raw, 'event'),
     };
   }
 
   async createStaff(actor: JwtAccessPayload, dto: CreateStaffEventRequestDto) {
     this.assertWrite(actor);
     const shopId = requireShopId(actor);
+    await assertShopHasFeature(this.prisma, shopId, 'reservation');
     const maxFloors = await this.shopFloorCount(shopId);
 
     const { preferredStartsAt, preferredEndsAt } = parseDateRange(
       dto.preferredStartsAt,
       dto.preferredEndsAt,
     );
+
+    const issued = issueGuestToken({
+      from: preferredEndsAt ?? preferredStartsAt,
+    });
 
     const row = await this.prisma.eventRequest.create({
       data: {
@@ -421,7 +502,7 @@ export class EventRequestsService {
         floor:
           dto.floor != null ? this.resolveFloor(dto.floor, maxFloors) : null,
         message: dto.message?.trim() || null,
-        guestToken: this.generateGuestToken(),
+        ...guestTokenPersistFields(issued),
       },
     });
 
@@ -432,7 +513,18 @@ export class EventRequestsService {
       meta: { requestId: row.id, source: row.source },
     });
 
-    return this.serialize(row);
+    const shop = await this.prisma.shop.findUnique({
+      where: { id: shopId },
+      select: { slug: true },
+    });
+    // Raw token once — DB stores hash only; list/get cannot re-derive it.
+    return {
+      ...this.serialize(row),
+      guestToken: issued.raw,
+      statusPath: shop?.slug
+        ? guestVenueStatusPath(shop.slug, issued.raw, 'event')
+        : null,
+    };
   }
 
   async review(
@@ -442,6 +534,7 @@ export class EventRequestsService {
   ) {
     this.assertWrite(actor);
     const shopId = requireShopId(actor);
+    await assertShopHasFeature(this.prisma, shopId, 'reservation');
 
     const existing = await this.prisma.eventRequest.findFirst({
       where: { id, shopId },
@@ -463,7 +556,7 @@ export class EventRequestsService {
       }
 
       const row = await this.prisma.eventRequest.update({
-        where: { id },
+        where: { id, shopId },
         data: {
           status: EventRequestStatus.DECLINED,
           staffResponseNote: note,
@@ -536,7 +629,7 @@ export class EventRequestsService {
     }
 
     const row = await this.prisma.eventRequest.update({
-      where: { id },
+      where: { id, shopId },
       data: {
         status: EventRequestStatus.APPROVED,
         staffResponseNote: dto.staffResponseNote?.trim() || null,
@@ -589,8 +682,11 @@ export class EventRequestsService {
     if (!existing) throw new NotFoundException('Event request not found.');
 
     const row = await this.prisma.eventRequest.update({
-      where: { id },
-      data: { status: EventRequestStatus.CANCELED },
+      where: { id, shopId },
+      data: {
+        status: EventRequestStatus.CANCELED,
+        ...guestTokenRevokeFields(),
+      },
     });
 
     await this.audit.record(actor, {

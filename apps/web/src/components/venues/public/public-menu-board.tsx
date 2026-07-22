@@ -68,7 +68,10 @@ function sectionMatchesQuery(
   return items.some((i) => itemMatchesQuery(i, q));
 }
 
-function sectionScheduleLabel(section: PublicMenuSection) {
+function sectionScheduleLabel(
+  section: PublicMenuSection,
+  t: (key: string, vars?: Record<string, string | number>) => string,
+) {
   return publicMenuScheduleLabel(
     {
       useSectionTiming: true,
@@ -77,6 +80,7 @@ function sectionScheduleLabel(section: PublicMenuSection) {
       availableDays: section.availableDays,
     },
     section,
+    t,
   );
 }
 
@@ -88,7 +92,7 @@ export function PublicMenuBoard({
 }: {
   sections: PublicMenuSection[];
   items: PublicMenuItem[];
-  formatPrice: (n: number) => string;
+  formatPrice: (n: import("@/lib/money").MoneyWire) => string;
   onOpenItem: (item: PublicMenuItem, section: PublicMenuSection | null) => void;
 }) {
   const { t } = usePublicPrefs();
@@ -416,7 +420,7 @@ function SectionHero({ section }: { section: CatalogSection }) {
   const timing =
     section.id === UNCATEGORIZED_ID
       ? null
-      : sectionScheduleLabel(section);
+      : sectionScheduleLabel(section, t);
   const period =
     section.mealPeriod && section.id !== UNCATEGORIZED_ID
       ? t(`meal.${section.mealPeriod as MealPeriod}`)
@@ -473,12 +477,13 @@ function PublicMenuItemRow({
 }: {
   item: PublicMenuItem;
   section: PublicMenuSection | null;
-  formatPrice: (n: number) => string;
+  formatPrice: (n: import("@/lib/money").MoneyWire) => string;
   onOpen: () => void;
 }) {
+  const { t } = usePublicPrefs();
   const imageSrc = item.imageUrl ?? item.imageUrl2;
-  const availability = getPublicMenuItemAvailability(item, section);
-  const schedule = publicMenuScheduleLabel(item, section);
+  const availability = getPublicMenuItemAvailability(item, section, { t });
+  const schedule = publicMenuScheduleLabel(item, section, t);
 
   return (
     <li>

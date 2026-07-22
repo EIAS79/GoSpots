@@ -75,7 +75,7 @@ export class RegisterDto {
 }
 
 export class LoginDto {
-  /** Owner: real email · Staff: username@venue-slug.gospots */
+  /** Owner: real email · Staff: username@venue-slug.locora */
   @IsString()
   @IsNotEmpty()
   @MaxLength(200)
@@ -117,11 +117,81 @@ export class StaffForgotPasswordDto {
   @MaxLength(120)
   venueName!: string;
 
-  /** Staff login ID, e.g. anna@venue.gospots */
+  /** Staff login ID, e.g. anna@venue.locora */
   @IsString()
   @IsNotEmpty()
   @MaxLength(200)
   loginId!: string;
+}
+
+/** Owner MFA enroll begin — recent password confirmation. */
+export class MfaTotpBeginDto {
+  @IsString()
+  @IsNotEmpty()
+  @MaxLength(128)
+  password!: string;
+}
+
+/** Confirm TOTP enroll + issue recovery codes once. */
+export class MfaTotpConfirmDto {
+  @IsString()
+  @IsNotEmpty()
+  @Matches(/^\d{6}$/, { message: 'TOTP code must be 6 digits.' })
+  code!: string;
+}
+
+/** Disable MFA — password + TOTP or recovery code. */
+export class MfaTotpDisableDto {
+  @IsString()
+  @IsNotEmpty()
+  @MaxLength(128)
+  password!: string;
+
+  @IsOptional()
+  @IsString()
+  @Matches(/^\d{6}$/, { message: 'TOTP code must be 6 digits.' })
+  code?: string;
+
+  @IsOptional()
+  @IsString()
+  @MaxLength(32)
+  recoveryCode?: string;
+}
+
+/** Regenerate recovery codes — password + TOTP or remaining recovery code. */
+export class MfaRecoveryRegenerateDto {
+  @IsString()
+  @IsNotEmpty()
+  @MaxLength(128)
+  password!: string;
+
+  @IsOptional()
+  @IsString()
+  @Matches(/^\d{6}$/, { message: 'TOTP code must be 6 digits.' })
+  code?: string;
+
+  @IsOptional()
+  @IsString()
+  @MaxLength(32)
+  recoveryCode?: string;
+}
+
+/** Complete MFA login challenge (does not set cookies until success). */
+export class MfaVerifyDto {
+  @IsString()
+  @IsNotEmpty()
+  @MaxLength(2000)
+  mfaToken!: string;
+
+  @IsOptional()
+  @IsString()
+  @Matches(/^\d{6}$/, { message: 'TOTP code must be 6 digits.' })
+  code?: string;
+
+  @IsOptional()
+  @IsString()
+  @MaxLength(32)
+  recoveryCode?: string;
 }
 
 export class UpdateVenuePackDto {

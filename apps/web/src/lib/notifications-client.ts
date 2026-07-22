@@ -1,5 +1,4 @@
-import { API_BASE_URL, ApiError, api } from "./api";
-import { getVenuePathHeaders } from "./venue-api-headers";
+import { ApiError, api, credentialedFetch } from "./api";
 
 export type NotificationRow = {
   id: string;
@@ -146,12 +145,8 @@ export async function downloadNotificationsCsv(q: NotificationQuery = {}) {
   if (q.section) params.set("section", q.section);
   if (q.status) params.set("status", q.status);
   const qs = params.toString();
-  const res = await fetch(
-    `${API_BASE_URL}/notifications/export${qs ? `?${qs}` : ""}`,
-    {
-      credentials: "include",
-      headers: getVenuePathHeaders(),
-    },
+  const res = await credentialedFetch(
+    `/notifications/export${qs ? `?${qs}` : ""}`,
   );
   if (!res.ok) {
     let body: unknown = null;
@@ -168,7 +163,7 @@ export async function downloadNotificationsCsv(q: NotificationQuery = {}) {
   const url = URL.createObjectURL(blob);
   const a = document.createElement("a");
   a.href = url;
-  a.download = `gospots-notifications-${new Date().toISOString().slice(0, 10)}.csv`;
+  a.download = `Locora-notifications-${new Date().toISOString().slice(0, 10)}.csv`;
   a.click();
   URL.revokeObjectURL(url);
 }

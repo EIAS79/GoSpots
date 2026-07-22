@@ -2,6 +2,7 @@ import { addMinutesToTime } from "./booking-time";
 import type { BookingMode, ResourceRate } from "./resources-client";
 import type { ResourceType } from "./resource-types";
 import { listBowlingModes, resolveBowlingMode, type BowlingCategoryRate } from "./bowling-modes";
+import { coerceMoney } from "./money";
 
 export type BowlingOfferingConfig = {
   defaultGames: number;
@@ -26,7 +27,12 @@ export function parseBowlingConfig(
   };
   const price = (key: string) => {
     const v = raw?.[key];
-    return typeof v === "number" && Number.isFinite(v) ? v : null;
+    if (typeof v !== "number" && typeof v !== "string") return null;
+    try {
+      return coerceMoney(v);
+    } catch {
+      return null;
+    }
   };
   return {
     defaultGames: n("defaultGames", 1),
@@ -180,7 +186,7 @@ export function estimateBowlingPrice(
 
 /** Estimate price from timed rate tiers (PC, billiard, lane rental, etc.). */
 export function estimateTimedRatesPrice(
-  rates: { label: string; durationMinutes: number | null; price: number }[],
+  rates: { label: string; durationMinutes: number | null; price: import("./money").MoneyWire }[],
   durationMinutes: number,
 ): number | null {
   if (rates.length === 0 || durationMinutes <= 0) return null;
@@ -191,7 +197,7 @@ export function estimateTimedRatesPrice(
   let best: number | null = null;
   for (const rate of blockRates) {
     const blocks = Math.ceil(durationMinutes / rate.durationMinutes!);
-    const amount = blocks * rate.price;
+    const amount = blocks * coerceMoney(rate.price);
     if (best === null || amount < best) best = amount;
   }
   return best;
@@ -204,7 +210,7 @@ export function suggestBowlingWalkInAmount(
     pricePerPerson: number | null;
     pricePerGame: number | null;
     slotMinutes: number;
-    rates: { label: string; durationMinutes: number | null; price: number }[];
+    rates: { label: string; durationMinutes: number | null; price: import("./money").MoneyWire }[];
   },
   playerCount: number,
   durationMinutes: number,

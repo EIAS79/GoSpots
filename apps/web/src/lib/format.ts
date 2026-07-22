@@ -1,16 +1,19 @@
+import { coerceMoney, type MoneyWire } from "./money";
+
 export function formatMoney(
-  n: number,
+  n: MoneyWire,
   currency = "EUR",
   locale = "en",
 ) {
+  const amount = coerceMoney(n);
   try {
     return new Intl.NumberFormat(locale, {
       style: "currency",
       currency,
       maximumFractionDigits: 2,
-    }).format(n);
+    }).format(amount);
   } catch {
-    return `${n} ${currency}`;
+    return `${amount} ${currency}`;
   }
 }
 

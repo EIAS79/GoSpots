@@ -56,6 +56,12 @@ export class CreateSeatingTableGroupDto {
   @IsOptional()
   @IsDateString()
   eventEndsAt?: string;
+
+  /** Option C Phase 2: link advisory row to a DiningTableGroup (not for isCustom). */
+  @IsOptional()
+  @IsString()
+  @MaxLength(64)
+  sourceDiningTableGroupId?: string;
 }
 
 export class UpdateSeatingTableGroupDto {

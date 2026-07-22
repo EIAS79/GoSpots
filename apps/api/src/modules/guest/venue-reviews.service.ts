@@ -8,6 +8,11 @@ import { ShopReviewsMode, VenueReviewStatus } from '@prisma/client';
 import { PrismaService } from '../../prisma/prisma.service';
 import { requireShopId } from '../../common/tenant';
 import { hasPermission, PERMISSIONS } from '../../common/permissions';
+import { assertShopHasFeature } from '../../common/venue-entitlements';
+import {
+  assertPrivacyConsentAccepted,
+  recordConsent,
+} from '../../common/gdpr-consent.util';
 import { AuditService } from '../audit/audit.service';
 import type { JwtAccessPayload } from '../auth/auth.service';
 import { NotificationsService } from '../notifications/notifications.service';
@@ -110,6 +115,8 @@ export class VenueReviewsService {
   }
 
   async createFromPublic(slug: string, dto: CreatePublicReviewDto) {
+    assertPrivacyConsentAccepted(dto.privacyConsentAccepted);
+
     const shop = await this.prisma.shop.findFirst({
       where: { slug, isPublished: true },
       select: { id: true, name: true, reviewsMode: true },
@@ -142,6 +149,14 @@ export class VenueReviewsService {
       meta: { reviewId: row.id, rating: row.rating, hidden },
     });
 
+    await recordConsent(this.prisma, {
+      shopId: shop.id,
+      purpose: 'REVIEW',
+      guestEmail: row.guestEmail,
+      sourceEntityType: 'venueReview',
+      sourceEntityId: row.id,
+    });
+
     await this.notifications.recordTeamEvent(shop.id, {
       title: 'New guest review',
       body: `${row.guestName} rated ${row.rating}/5 — awaiting moderation`,
@@ -164,6 +179,7 @@ export class VenueReviewsService {
   ) {
     this.assertRead(actor);
     const shopId = requireShopId(actor);
+    await assertShopHasFeature(this.prisma, shopId, 'reviews');
     const take = Math.min(Math.max(opts.take ?? 50, 1), 200);
     const skip = Math.max(opts.skip ?? 0, 0);
 
@@ -213,6 +229,7 @@ export class VenueReviewsService {
   ) {
     this.assertWrite(actor);
     const shopId = requireShopId(actor);
+    await assertShopHasFeature(this.prisma, shopId, 'reviews');
     if (
       status !== VenueReviewStatus.PUBLISHED &&
       status !== VenueReviewStatus.REJECTED &&
@@ -227,7 +244,7 @@ export class VenueReviewsService {
     if (!existing) throw new NotFoundException('Review not found.');
 
     const row = await this.prisma.venueReview.update({
-      where: { id },
+      where: { id, shopId },
       data: { status },
     });
 
@@ -253,12 +270,13 @@ export class VenueReviewsService {
   async remove(actor: JwtAccessPayload, id: string) {
     this.assertWrite(actor);
     const shopId = requireShopId(actor);
+    await assertShopHasFeature(this.prisma, shopId, 'reviews');
     const existing = await this.prisma.venueReview.findFirst({
       where: { id, shopId },
     });
     if (!existing) throw new NotFoundException('Review not found.');
 
-    await this.prisma.venueReview.delete({ where: { id } });
+    await this.prisma.venueReview.delete({ where: { id, shopId } });
 
     await this.audit.record(actor, {
       section: 'venue',

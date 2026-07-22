@@ -38,38 +38,46 @@ import {
 import {
   listBowlingModes,
   modeToOfferingConfig,
-  resolveBowlingMode,
 } from "@/lib/bowling-modes";
 import { bookingCollectsPartySize } from "@/lib/booking-unit-kind";
 import { fetchResourceCatalog, type ResourceCatalog } from "@/lib/resources-client";
 import { useLiveData } from "@/lib/use-live-data";
 import { useVenueHref } from "@/lib/venue-context";
 import { useVenueSettings } from "@/lib/venue-settings-context";
+import type { MessageKey } from "@/lib/i18n";
 import { GameBillingEditDialog } from "./game-billing-edit-dialog";
 
 const PAGE_SIZE = 10;
 
-const TABS: {
-  id: PlayBillingTab;
-  label: string;
-  hint: string;
-}[] = [
-  {
-    id: "in_progress",
-    label: "In progress",
-    hint: "Guests playing now — booked sessions move here automatically when their time starts.",
-  },
-  {
-    id: "awaiting_payment",
-    label: "Awaiting payment",
-    hint: "Sessions that ended and need payment. Mark paid when you collect.",
-  },
-  {
-    id: "paid",
-    label: "Paid",
-    hint: "Already collected. Filter by date to review past days.",
-  },
-];
+const TABS: PlayBillingTab[] = ["in_progress", "awaiting_payment", "paid"];
+
+function tabLabel(
+  id: PlayBillingTab,
+  t: (key: MessageKey, vars?: Record<string, string | number>) => string,
+) {
+  switch (id) {
+    case "in_progress":
+      return t("finance.playTabInProgress");
+    case "awaiting_payment":
+      return t("finance.playTabAwaiting");
+    case "paid":
+      return t("finance.playTabPaid");
+  }
+}
+
+function tabHint(
+  id: PlayBillingTab,
+  t: (key: MessageKey, vars?: Record<string, string | number>) => string,
+) {
+  switch (id) {
+    case "in_progress":
+      return t("finance.playTabInProgressHint");
+    case "awaiting_payment":
+      return t("finance.playTabAwaitingHint");
+    case "paid":
+      return t("finance.playTabPaidHint");
+  }
+}
 
 function formatSchedule(startsAt: string, endsAt: string) {
   return formatEventWindow(startsAt, endsAt) ?? "—";
@@ -79,7 +87,7 @@ export function GameBillingPanel({ canWrite }: { canWrite: boolean }) {
   const searchParams = useSearchParams();
   const focusReservationId = searchParams.get("reservationId");
   const initialTab = searchParams.get("tab") as PlayBillingTab | null;
-  const { formatMoney } = useVenueSettings();
+  const { formatMoney, t } = useVenueSettings();
   const sessionsHref = useVenueHref("/sessions?tab=schedule");
   const gamingHref = useVenueHref("/resources");
   const defaultRange = defaultPlayBillingRange();
@@ -126,17 +134,19 @@ export function GameBillingPanel({ canWrite }: { canWrite: boolean }) {
             pageSize: PAGE_SIZE,
           }),
         );
+        return true;
       } catch (e) {
         if (!opts?.silent) {
           setError(
-            e instanceof Error ? e.message : "Could not load game billing.",
+            e instanceof Error ? e.message : t("finance.playLoadFailed"),
           );
         }
+        return false;
       } finally {
         if (!opts?.silent) setLoading(false);
       }
     },
-    [tab, from, to, page],
+    [tab, from, to, page, t],
   );
 
   useEffect(() => {
@@ -164,7 +174,7 @@ export function GameBillingPanel({ canWrite }: { canWrite: boolean }) {
   const pageCount = data?.pageCount ?? 1;
   const currentPage = data?.page ?? page;
 
-  const activeTabHint = TABS.find((t) => t.id === tab)?.hint;
+  const activeTabHint = tabHint(tab, t);
 
   const walkInUnits = useMemo(
     () =>
@@ -298,7 +308,7 @@ export function GameBillingPanel({ canWrite }: { canWrite: boolean }) {
       publishLiveEvent({ section: "reservation" });
       await load({ silent: true });
     } catch (e) {
-      setError(e instanceof Error ? e.message : "Could not mark paid.");
+      setError(e instanceof Error ? e.message : t("finance.playMarkPaidFailed"));
     } finally {
       setBusyId(null);
     }
@@ -313,7 +323,7 @@ export function GameBillingPanel({ canWrite }: { canWrite: boolean }) {
       await load({ silent: true });
       setTab("awaiting_payment");
     } catch (e) {
-      setError(e instanceof Error ? e.message : "Could not end session.");
+      setError(e instanceof Error ? e.message : t("finance.playEndFailed"));
     } finally {
       setBusyId(null);
     }
@@ -373,7 +383,7 @@ export function GameBillingPanel({ canWrite }: { canWrite: boolean }) {
       setTab("in_progress");
       await load({ silent: true });
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Could not start walk-in.");
+      setError(err instanceof Error ? err.message : t("finance.playWalkInFailed"));
     } finally {
       setWiCreating(false);
     }
@@ -382,17 +392,17 @@ export function GameBillingPanel({ canWrite }: { canWrite: boolean }) {
   return (
     <div className="space-y-4">
       <div className="rounded-lg border border-white/10 bg-zinc-900/40 px-4 py-3 text-sm text-zinc-400">
-        Bookings from{" "}
+        {t("finance.playIntroBefore")}{" "}
         <Link href={sessionsHref} className="text-emerald-400 underline">
-          Reservations
+          {t("finance.playIntroReservations")}
         </Link>{" "}
-        appear here when they start and move to{" "}
-        <span className="text-zinc-300">Awaiting payment</span> when they end.
-        Rates come from{" "}
+        {t("finance.playIntroMid")}{" "}
+        <span className="text-zinc-300">{t("finance.playIntroAwaiting")}</span>{" "}
+        {t("finance.playIntroMid2")}{" "}
         <Link href={gamingHref} className="text-emerald-400 underline">
-          Gaming setup
+          {t("finance.playIntroGaming")}
         </Link>
-        . Add walk-ins for guests who showed up without a booking.
+        {t("finance.playIntroAfter")}
       </div>
 
       {canWrite ? (
@@ -404,7 +414,7 @@ export function GameBillingPanel({ canWrite }: { canWrite: boolean }) {
           >
             <span className="inline-flex items-center gap-2">
               <Plus size={16} className="text-emerald-400" />
-              Add walk-in session
+              {t("finance.playAddWalkIn")}
             </span>
             {showWalkInForm ? (
               <ChevronUp size={16} className="text-zinc-500" />
@@ -419,16 +429,16 @@ export function GameBillingPanel({ canWrite }: { canWrite: boolean }) {
             >
               <div className="grid gap-3 sm:grid-cols-2">
                 <label className="block text-xs text-zinc-500">
-                  Guest name (optional)
+                  {t("finance.playGuestOptional")}
                   <input
                     value={wiGuest}
                     onChange={(e) => setWiGuest(e.target.value)}
-                    placeholder="Walk-in"
+                    placeholder={t("finance.playWalkInPlaceholder")}
                     className="mt-1 w-full rounded-lg border border-white/10 bg-zinc-900 px-3 py-2 text-sm text-white"
                   />
                 </label>
                 <label className="block text-xs text-zinc-500">
-                  Unit
+                  {t("finance.playUnit")}
                   <select
                     value={wiResourceId}
                     onChange={(e) => {
@@ -437,7 +447,7 @@ export function GameBillingPanel({ canWrite }: { canWrite: boolean }) {
                     }}
                     className="mt-1 w-full rounded-lg border border-white/10 bg-zinc-900 px-3 py-2 text-sm text-white"
                   >
-                    <option value="">— pick later —</option>
+                    <option value="">{t("finance.playPickLater")}</option>
                     {walkInUnits.map((u) => (
                       <option key={u.id} value={u.id}>
                         {u.name} · {u.category}
@@ -454,13 +464,16 @@ export function GameBillingPanel({ canWrite }: { canWrite: boolean }) {
                         setWiBowlingModeId(id);
                         setWiAmountTouched(false);
                       }}
-                      label="Booking mode"
+                      label={t("finance.playBookingMode")}
                     />
                   </div>
                 ) : null}
                 {wiShowPlayers && wiBowlingConfig ? (
                   <label className="block text-xs text-zinc-500">
-                    Players ({wiBowlingConfig.minPlayers}–{wiBowlingConfig.maxPlayers})
+                    {t("finance.playPlayersRange", {
+                      min: wiBowlingConfig.minPlayers,
+                      max: wiBowlingConfig.maxPlayers,
+                    })}
                     <input
                       type="number"
                       min={wiBowlingConfig.minPlayers}
@@ -475,7 +488,7 @@ export function GameBillingPanel({ canWrite }: { canWrite: boolean }) {
                   </label>
                 ) : null}
                 <label className="block text-xs text-zinc-500">
-                  Duration (min)
+                  {t("finance.playDuration")}
                   <input
                     type="number"
                     min={1}
@@ -488,7 +501,7 @@ export function GameBillingPanel({ canWrite }: { canWrite: boolean }) {
                   />
                 </label>
                 <label className="block text-xs text-zinc-500 sm:col-span-2">
-                  Charge amount
+                  {t("finance.playChargeAmount")}
                   <input
                     type="number"
                     min={0}
@@ -501,17 +514,17 @@ export function GameBillingPanel({ canWrite }: { canWrite: boolean }) {
                     placeholder={
                       wiIsBowling
                         ? wiShowPlayers
-                          ? "Per-person price × players (auto from Gaming setup)"
-                          : "Lane rental for duration (auto from Gaming setup)"
-                        : "Enter price or leave 0 to set later"
+                          ? t("finance.playAmountPerPerson")
+                          : t("finance.playAmountLane")
+                        : t("finance.playAmountLater")
                     }
                     className="mt-1 w-full rounded-lg border border-white/10 bg-zinc-900 px-3 py-2 text-sm text-white"
                   />
                   {wiIsBowling ? (
                     <span className="mt-1 block text-[10px] text-zinc-600">
                       {wiShowPlayers
-                        ? "Per-person bowling — guest count affects the charge."
-                        : "Lane rental — guest count does not affect the charge."}
+                        ? t("finance.playBowlingPerPerson")
+                        : t("finance.playBowlingLane")}
                     </span>
                   ) : null}
                 </label>
@@ -524,7 +537,7 @@ export function GameBillingPanel({ canWrite }: { canWrite: boolean }) {
                 {wiCreating ? (
                   <Loader2 size={16} className="animate-spin" />
                 ) : (
-                  "Start walk-in"
+                  t("finance.playStartWalkIn")
                 )}
               </button>
             </form>
@@ -544,7 +557,9 @@ export function GameBillingPanel({ canWrite }: { canWrite: boolean }) {
                 : "border-sky-400/25 bg-sky-500/10 text-sky-200/80 hover:border-sky-400/40",
             )}
           >
-            {data.summary.inProgress} in progress
+            {t("finance.playSummaryInProgress", {
+              n: data.summary.inProgress,
+            })}
           </button>
           <button
             type="button"
@@ -556,7 +571,9 @@ export function GameBillingPanel({ canWrite }: { canWrite: boolean }) {
                 : "border-amber-400/25 bg-amber-500/10 text-amber-200/80 hover:border-amber-400/40",
             )}
           >
-            {data.summary.awaitingPayment} awaiting payment
+            {t("finance.playSummaryAwaiting", {
+              n: data.summary.awaitingPayment,
+            })}
           </button>
           <button
             type="button"
@@ -568,11 +585,15 @@ export function GameBillingPanel({ canWrite }: { canWrite: boolean }) {
                 : "border-emerald-400/25 bg-emerald-500/10 text-emerald-200/80 hover:border-emerald-400/40",
             )}
           >
-            <span className="block">{data.summary.paid} paid</span>
+            <span className="block">
+              {t("finance.playSummaryPaid", { n: data.summary.paid })}
+            </span>
             {tab !== "in_progress" ? (
               <span className="mt-0.5 block text-[10px] opacity-70">
-                {formatMoney(data.summary.unpaidTotal)} due ·{" "}
-                {formatMoney(data.summary.paidTotal)} collected
+                {t("finance.playSummaryTotals", {
+                  due: formatMoney(data.summary.unpaidTotal),
+                  collected: formatMoney(data.summary.paidTotal),
+                })}
               </span>
             ) : null}
           </button>
@@ -581,19 +602,19 @@ export function GameBillingPanel({ canWrite }: { canWrite: boolean }) {
 
       <div className="space-y-2">
         <div className="flex flex-wrap items-center gap-2">
-          {TABS.map((t) => (
+          {TABS.map((tabId) => (
             <button
-              key={t.id}
+              key={tabId}
               type="button"
-              onClick={() => setTab(t.id)}
+              onClick={() => setTab(tabId)}
               className={cn(
                 "rounded-lg px-3 py-1.5 text-xs font-medium",
-                tab === t.id
+                tab === tabId
                   ? "bg-emerald-500/20 text-emerald-200"
                   : "bg-white/5 text-zinc-400 hover:text-zinc-200",
               )}
             >
-              {t.label}
+              {tabLabel(tabId, t)}
             </button>
           ))}
         </div>
@@ -605,7 +626,7 @@ export function GameBillingPanel({ canWrite }: { canWrite: boolean }) {
       {tab !== "in_progress" ? (
         <div className="flex flex-wrap items-end gap-3 rounded-xl border border-white/10 bg-zinc-950/50 p-3">
           <label className="min-w-0 flex-1 text-xs text-zinc-500 sm:flex-none">
-            From
+            {t("finance.playFrom")}
             <input
               type="date"
               value={from}
@@ -614,7 +635,7 @@ export function GameBillingPanel({ canWrite }: { canWrite: boolean }) {
             />
           </label>
           <label className="min-w-0 flex-1 text-xs text-zinc-500 sm:flex-none">
-            To
+            {t("finance.playTo")}
             <input
               type="date"
               value={to}
@@ -627,7 +648,7 @@ export function GameBillingPanel({ canWrite }: { canWrite: boolean }) {
             onClick={() => void load()}
             className="rounded-lg border border-white/10 px-3 py-1.5 text-xs text-zinc-300 hover:bg-white/5"
           >
-            Apply
+            {t("finance.playApply")}
           </button>
         </div>
       ) : null}
@@ -641,10 +662,10 @@ export function GameBillingPanel({ canWrite }: { canWrite: boolean }) {
       ) : total === 0 ? (
         <p className="rounded-lg border border-dashed border-white/15 p-10 text-center text-sm text-zinc-500">
           {tab === "in_progress"
-            ? "No games in use right now."
+            ? t("finance.playEmptyInProgress")
             : tab === "awaiting_payment"
-              ? "Nothing waiting for payment — finished sessions show up here automatically."
-              : "No paid sessions in this period."}
+              ? t("finance.playEmptyAwaiting")
+              : t("finance.playEmptyPaid")}
         </p>
       ) : (
         <>
@@ -661,6 +682,7 @@ export function GameBillingPanel({ canWrite }: { canWrite: boolean }) {
                   item.id === focusReservationId
                 }
                 formatMoney={formatMoney}
+                t={t}
                 onMarkPaid={() => void onMarkPaid(item)}
                 onEdit={() => void openEdit(item)}
                 onEndWalkIn={() => void onEndWalkIn(item)}
@@ -673,6 +695,7 @@ export function GameBillingPanel({ canWrite }: { canWrite: boolean }) {
             pageSize={PAGE_SIZE}
             total={total}
             onPageChange={setPage}
+            t={t}
           />
         </>
       )}
@@ -701,12 +724,14 @@ function Pagination({
   pageSize,
   total,
   onPageChange,
+  t,
 }: {
   page: number;
   pageCount: number;
   pageSize: number;
   total: number;
   onPageChange: (p: number) => void;
+  t: (key: MessageKey, vars?: Record<string, string | number>) => string;
 }) {
   if (total === 0) return null;
   const start = (page - 1) * pageSize + 1;
@@ -714,7 +739,7 @@ function Pagination({
   return (
     <div className="flex flex-wrap items-center justify-between gap-2 border-t border-white/10 pt-3 text-xs">
       <span className="text-zinc-500">
-        Showing {start}–{end} of {total}
+        {t("finance.playShowing", { from: start, to: end, total })}
       </span>
       {pageCount > 1 ? (
         <div className="flex items-center gap-1">
@@ -723,7 +748,7 @@ function Pagination({
             disabled={page <= 1}
             onClick={() => onPageChange(page - 1)}
             className="rounded-lg border border-white/10 p-1.5 text-zinc-400 hover:bg-white/5 disabled:opacity-30"
-            aria-label="Previous page"
+            aria-label={t("finance.playPrevPage")}
           >
             <ChevronLeft size={14} />
           </button>
@@ -735,7 +760,7 @@ function Pagination({
             disabled={page >= pageCount}
             onClick={() => onPageChange(page + 1)}
             className="rounded-lg border border-white/10 p-1.5 text-zinc-400 hover:bg-white/5 disabled:opacity-30"
-            aria-label="Next page"
+            aria-label={t("finance.playNextPage")}
           >
             <ChevronRight size={14} />
           </button>
@@ -751,6 +776,7 @@ function BillingRow({
   busy,
   highlighted,
   formatMoney,
+  t,
   onMarkPaid,
   onEdit,
   onEndWalkIn,
@@ -759,7 +785,8 @@ function BillingRow({
   canWrite: boolean;
   busy: boolean;
   highlighted?: boolean;
-  formatMoney: (n: number) => string;
+  formatMoney: (n: import("@/lib/money").MoneyWire) => string;
+  t: (key: MessageKey, vars?: Record<string, string | number>) => string;
   onMarkPaid: () => void;
   onEdit: () => void;
   onEndWalkIn: () => void;
@@ -792,7 +819,9 @@ function BillingRow({
                 : "bg-zinc-500/15 text-zinc-400",
             )}
           >
-            {item.source === "walk_in" ? "Walk-in" : "Booked"}
+            {item.source === "walk_in"
+              ? t("finance.playSourceWalkIn")
+              : t("finance.playSourceBooked")}
           </span>
           {item.resource ? (
             <span className="text-[11px] font-normal text-zinc-500">
@@ -808,17 +837,21 @@ function BillingRow({
           {formatSchedule(item.startsAt, item.endsAt)}
           <span>·</span>
           <Clock size={12} />
-          {item.durationMinutes} min
+          {t("finance.playMinutes", { n: item.durationMinutes })}
           {item.collectsPartySize ? (
             <>
               <span>·</span>
-              {item.partySize} player{item.partySize > 1 ? "s" : ""}
+              {item.partySize > 1
+                ? t("finance.playPlayersMany", { n: item.partySize })
+                : t("finance.playPlayersOne", { n: item.partySize })}
             </>
           ) : null}
         </p>
         <p className="mt-1 text-[11px] text-zinc-600">
           {item.breakdown}
-          {item.discountPercent > 0 ? ` · −${item.discountPercent}% off` : ""}
+          {item.discountPercent > 0
+            ? ` ${t("finance.playDiscountOff", { n: item.discountPercent })}`
+            : ""}
         </p>
       </div>
       <div className="flex shrink-0 flex-col items-end gap-2">
@@ -844,7 +877,7 @@ function BillingRow({
               className="inline-flex items-center gap-1 rounded-lg border border-white/15 px-2.5 py-1.5 text-xs text-zinc-300 hover:bg-white/5 disabled:opacity-50"
             >
               <Pencil size={12} />
-              Edit
+              {t("finance.playEdit")}
             </button>
           ) : null}
           {item.bucket === "in_progress" &&
@@ -857,13 +890,15 @@ function BillingRow({
               className="inline-flex items-center gap-1 rounded-lg border border-amber-400/30 px-2.5 py-1.5 text-xs text-amber-200 hover:bg-amber-500/10 disabled:opacity-50"
             >
               <StopCircle size={12} />
-              End
+              {t("finance.playEnd")}
             </button>
           ) : null}
           {item.isPaid ? (
             <span className="inline-flex items-center gap-1 text-[10px] uppercase tracking-wide text-emerald-400/90">
               <Check size={12} />
-              {item.bucket === "in_progress" ? "Prepaid" : "Paid"}
+              {item.bucket === "in_progress"
+                ? t("finance.playPrepaid")
+                : t("finance.playPaid")}
             </span>
           ) : canWrite ? (
             <button
@@ -875,13 +910,17 @@ function BillingRow({
               {busy ? (
                 <Loader2 size={14} className="animate-spin" />
               ) : (
-                "Mark paid"
+                t("finance.playMarkPaid")
               )}
             </button>
           ) : item.bucket === "in_progress" ? (
-            <span className="text-[10px] text-sky-400/80">Playing</span>
+            <span className="text-[10px] text-sky-400/80">
+              {t("finance.playPlaying")}
+            </span>
           ) : (
-            <span className="text-[10px] text-zinc-600">Unpaid</span>
+            <span className="text-[10px] text-zinc-600">
+              {t("finance.playUnpaid")}
+            </span>
           )}
         </div>
       </div>

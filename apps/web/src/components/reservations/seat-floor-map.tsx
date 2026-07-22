@@ -6,11 +6,7 @@ import { BilliardTableIcon } from "@/components/icons/billiard-table-icon";
 import { ArcadeCabinetIcon } from "@/components/icons/arcade-cabinet-icon";
 import { FoosballTableIcon } from "@/components/icons/foosball-table-icon";
 import { PingPongTableIcon } from "@/components/icons/ping-pong-table-icon";
-import {
-  layoutScreenLabel,
-  layoutTapHint,
-  type FloorMapVisualType,
-} from "@/lib/gaming-floor-visual";
+import type { FloorMapVisualType } from "@/lib/gaming-floor-visual";
 import { cn } from "@/lib/cn";
 import {
   FLOOR_STATUS_DOT,
@@ -24,6 +20,68 @@ import type {
   ScheduleUnit,
 } from "@/lib/reservations-client";
 import { UnitStaffMenu } from "@/components/reservations/unit-staff-menu";
+import { useVenueSettingsOptional } from "@/lib/venue-settings-context";
+import { usePublicPrefsOptional } from "@/lib/public-prefs-context";
+
+/**
+ * Chrome translator shared by the staff dashboard (VenueSettingsProvider,
+ * "floor.*" keys) and public guest pages (PublicPrefsProvider,
+ * "venuePage.floor.*" keys). Returns `undefined` when neither provider is
+ * mounted, or when the resolved value is just the raw dotted key (i.e. the
+ * key doesn't exist in that catalog) — callers should `??` an English default.
+ */
+function useFloorChromeT() {
+  const venueSettings = useVenueSettingsOptional();
+  const publicPrefs = usePublicPrefsOptional();
+  return (suffix: string, vars?: Record<string, string | number>) => {
+    if (venueSettings?.t) {
+      const key = `floor.${suffix}`;
+      const val = venueSettings.t(key, vars);
+      if (val && val !== key) return val;
+    }
+    if (publicPrefs?.t) {
+      const key = `venuePage.floor.${suffix}`;
+      const val = publicPrefs.t(key, vars);
+      if (val && val !== key) return val;
+    }
+    return undefined;
+  };
+}
+
+function screenLabelFor(
+  visualType: FloorMapVisualType,
+  t: (suffix: string) => string | undefined,
+): string {
+  switch (visualType) {
+    case "dining":
+    case "billiard":
+    case "pingpong":
+    case "foosball":
+      return t("screenTables") ?? "Tables";
+    case "arcade":
+      return t("screenCabinets") ?? "Cabinets";
+    case "playstation":
+      return t("screenStations") ?? "Stations";
+    default:
+      return t("screenScreen") ?? "Screen";
+  }
+}
+
+function tapHintFor(
+  visualType: FloorMapVisualType,
+  t: (suffix: string) => string | undefined,
+): string {
+  if (visualType === "dining") {
+    return t("tapHintDining") ?? "Tap a table that fits your party size to book";
+  }
+  if (visualType === "billiard" || visualType === "pingpong" || visualType === "foosball") {
+    return t("tapHintTable") ?? "Tap a table to book or view the active session";
+  }
+  if (visualType === "arcade") {
+    return t("tapHintCabinet") ?? "Tap a cabinet to book or view the active session";
+  }
+  return t("tapHintSeat") ?? "Tap a seat to book or view the active session";
+}
 
 const DEFAULT_SEATS_PER_ROW = 6;
 const FULL_PAGE_SIZE = 48;
@@ -367,6 +425,12 @@ export type SeatFloorMapProps = {
   showScreenHeader?: boolean;
   /** Hide the bottom status legend (when the parent renders its own). */
   showLegend?: boolean;
+  /** Optional status legend / tile labels (public guest or staff i18n). */
+  guestStatusLabels?: Record<UnitFloorStatus, string>;
+  /** Optional fallback zone name when a section has no name. */
+  mainAreaLabel?: string;
+  /** Optional staff hint under the legend (write mode). */
+  staffStationHint?: string;
 };
 
 export function SeatFloorMap({
@@ -388,8 +452,21 @@ export function SeatFloorMap({
   onToggleNotWorking,
   showScreenHeader = true,
   showLegend = true,
+  guestStatusLabels,
+  mainAreaLabel,
+  staffStationHint,
 }: SeatFloorMapProps) {
+  const t = useFloorChromeT();
   const compact = variant === "compact";
+  const fallbackZone = mainAreaLabel ?? t("mainArea") ?? "Main area";
+  const tileLabels: Record<UnitFloorStatus, string> = {
+    AVAILABLE: t("tileFree") ?? "Free",
+    UNAVAILABLE: t("tileBusy") ?? "Busy",
+    NOT_WORKING: t("tileOff") ?? "Off",
+  };
+  const statusLabels =
+    guestStatusLabels ??
+    (precomputedStatus ? GUEST_WINDOW_STATUS_LABELS : FLOOR_STATUS_LABELS);
   const pageSize =
     pageSizeProp ?? (compact ? COMPACT_PAGE_SIZE : FULL_PAGE_SIZE);
   const [page, setPage] = useState(0);
@@ -449,13 +526,13 @@ export function SeatFloorMap({
   const zoneTabs = useMemo(() => {
     return sectionGroups.map((g, i) => ({
       id: g.section?.id ?? `zone-${i}`,
-      label: g.section?.name ?? "Main area",
+      label: g.section?.name ?? fallbackZone,
       isVip: g.section?.isVip ?? false,
       floor: g.section?.floor ?? 1,
       units: g.units,
       seatsPerRow: g.section?.seatsPerRow ?? DEFAULT_SEATS_PER_ROW,
     }));
-  }, [sectionGroups]);
+  }, [sectionGroups, fallbackZone]);
 
   useEffect(() => {
     if (compact && multiSection && zoneTabs.length > 0) {
@@ -609,7 +686,7 @@ export function SeatFloorMap({
                       <div className="flex items-center gap-2 rounded-full border border-white/10 bg-zinc-950/80 px-3 py-1 text-[10px] font-semibold uppercase tracking-[0.15em] text-zinc-400">
                         <SectionZoneIcon visualType={visualType} className="h-3 w-5" />
                         {group.section?.name ??
-                          (categoryLabel ? `${categoryLabel}` : "Main area")}
+                          (categoryLabel ? `${categoryLabel}` : fallbackZone)}
                         {group.section?.isVip ? (
                           <Crown
                             size={10}
@@ -628,7 +705,7 @@ export function SeatFloorMap({
                   </div>
                 ) : multiSection && compact && activeZoneId === "all" ? (
                   <p className="text-center text-[9px] font-semibold uppercase tracking-wide text-zinc-500">
-                    {group.section?.name ?? "Main area"}
+                    {group.section?.name ?? fallbackZone}
                     {group.section?.isVip ? " · VIP" : ""}
                   </p>
                 ) : null}
@@ -687,6 +764,8 @@ export function SeatFloorMap({
                                   }
                                   onInspectBlocked={onInspectBlocked}
                                   onToggleNotWorking={onToggleNotWorking}
+                                  statusLabels={statusLabels}
+                                  tileLabels={tileLabels}
                                 />
                               ))}
                             </div>
@@ -722,7 +801,7 @@ export function SeatFloorMap({
         disabled={current <= 0}
         onClick={onPrev}
         className="grid size-7 place-items-center rounded-md border border-white/10 disabled:opacity-40"
-        aria-label="Previous page"
+        aria-label={t("prev") ?? "Previous page"}
       >
         <ChevronLeft size={14} />
       </button>
@@ -734,7 +813,7 @@ export function SeatFloorMap({
         disabled={current >= total - 1}
         onClick={onNext}
         className="grid size-7 place-items-center rounded-md border border-white/10 disabled:opacity-40"
-        aria-label="Next page"
+        aria-label={t("next") ?? "Next page"}
       >
         <ChevronRight size={14} />
       </button>
@@ -752,16 +831,13 @@ export function SeatFloorMap({
     >
       {(["AVAILABLE", "UNAVAILABLE", "NOT_WORKING"] as UnitFloorStatus[]).map(
         (s) => {
-          const labels = precomputedStatus
-            ? GUEST_WINDOW_STATUS_LABELS
-            : FLOOR_STATUS_LABELS;
           return (
             <span
               key={s}
               className="inline-flex items-center gap-1 text-zinc-400"
             >
               {legendMapIcon(visualType, s, compact)}
-              {compact ? labels[s].split(" ")[0] : labels[s]}
+              {compact ? statusLabels[s].split(" ")[0] : statusLabels[s]}
             </span>
           );
         },
@@ -784,21 +860,21 @@ export function SeatFloorMap({
               <div className="flex items-center gap-2 rounded-full border border-white/10 bg-zinc-950/80 px-4 py-1.5 text-[10px] font-semibold uppercase tracking-[0.2em] text-zinc-400">
                 <SectionZoneIcon visualType={visualType} className="h-3.5 w-6" />
                 {categoryLabel ? `${categoryLabel} · ` : ""}
-                {layoutScreenLabel(visualType)}
+                {screenLabelFor(visualType, t)}
               </div>
               <div className="h-px flex-1 bg-gradient-to-r from-transparent via-zinc-600 to-transparent" />
             </div>
             <p className="text-[10px] text-zinc-600">
               {displayOnly
-              ? "Updates live as bookings start and end"
-              : layoutTapHint(visualType)}
+                ? t("updatesLive") ?? "Updates live as bookings start and end"
+                : tapHintFor(visualType, t)}
             </p>
           </div>
         ) : !compact && multiSection ? (
           <p className="mb-4 text-center text-[10px] text-zinc-600">
             {displayOnly
-              ? "Live map by zone and floor"
-              : layoutTapHint(visualType)}
+              ? t("liveMapByZone") ?? "Live map by zone and floor"
+              : tapHintFor(visualType, t)}
           </p>
         ) : null}
 
@@ -863,9 +939,14 @@ export function SeatFloorMap({
         <div className="space-y-2">
           {canWrite && onToggleNotWorking && !displayOnly ? (
             <p className="text-center text-[10px] text-zinc-600">
-              Tap a free station to book · use{" "}
-              <span className="text-zinc-500">⋮</span> to mark out of service ·
-              tap gray stations to restore
+              {staffStationHint ??
+                t("staffStationHint") ?? (
+                  <>
+                    Tap a free station to book · use{" "}
+                    <span className="text-zinc-500">⋮</span> to mark out of
+                    service · tap gray stations to restore
+                  </>
+                )}
             </p>
           ) : null}
           {legend}
@@ -889,6 +970,8 @@ function SeatButton({
   blockingBooking,
   onInspectBlocked,
   onToggleNotWorking,
+  statusLabels = FLOOR_STATUS_LABELS,
+  tileLabels = { AVAILABLE: "Free", UNAVAILABLE: "Busy", NOT_WORKING: "Off" },
 }: {
   unit: ScheduleUnit;
   nowMs: number;
@@ -903,6 +986,9 @@ function SeatButton({
   blockingBooking?: ScheduleBooking;
   onInspectBlocked?: (unitId: string, booking: ScheduleBooking) => void;
   onToggleNotWorking?: (unitId: string, notWorking: boolean) => void;
+  statusLabels?: Record<UnitFloorStatus, string>;
+  /** Short status chip text (Free/Busy/Off) — separate from the longer statusLabels tooltip text. */
+  tileLabels?: Record<UnitFloorStatus, string>;
 }) {
   const status = precomputedStatus
     ? unit.floorStatus
@@ -935,7 +1021,7 @@ function SeatButton({
 
   const tooltip = live
     ? `${unit.name} · Reserved ${formatTime(live.startsAt)}–${formatTime(live.endsAt)}`
-    : `${unit.name}${unit.capacity != null ? ` · ${unit.capacity} seats` : ""} · ${FLOOR_STATUS_LABELS[status]}`;
+    : `${unit.name}${unit.capacity != null ? ` · ${unit.capacity} seats` : ""} · ${statusLabels[status]}`;
 
   return (
     <div className="relative">
@@ -1006,11 +1092,7 @@ function SeatButton({
         <span
           className={cn("rounded-full", sm ? "size-0.5" : "size-1", FLOOR_STATUS_DOT[status])}
         />
-        {status === "AVAILABLE"
-          ? "Free"
-          : status === "UNAVAILABLE"
-            ? "Busy"
-            : "Off"}
+        {tileLabels[status]}
       </span>
     </button>
       {interactive && onToggleNotWorking && status !== "UNAVAILABLE" ? (

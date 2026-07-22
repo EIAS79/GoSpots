@@ -1,4 +1,5 @@
 import { BadRequestException, Injectable, Logger } from '@nestjs/common';
+import { Prisma } from '@prisma/client';
 import {
   isSupportedCurrency,
   normalizeCurrency,
@@ -6,6 +7,7 @@ import {
   SUPPORTED_CURRENCY_CODES,
   type SupportedCurrency,
 } from '../../common/locale-currency';
+import { convertMoney, fxCrossRate } from '../../common/money.util';
 
 /** 1 EUR equals `rates[code]` units of `code` */
 type RateTable = {
@@ -72,8 +74,8 @@ export class CurrencyRatesService {
           `No exchange rate from ${fromCode} to ${currency}.`,
         );
       }
-      const rate = toPivot / fromPivot;
-      const converted = roundMoney(amount * rate);
+      const rate = fxCrossRate(toPivot, fromPivot);
+      const converted = convertMoney(amount, rate);
       return { currency, amount: converted, rate };
     });
 
@@ -107,14 +109,18 @@ export class CurrencyRatesService {
       );
     }
     return {
-      rate: toPivot / fromPivot,
+      rate: fxCrossRate(toPivot, fromPivot),
       ratesAt: new Date(fetchedAt).toISOString(),
     };
   }
 
+  /** Apply a live FX rate to an amount; rounds via money.util. */
   convertAmount(amount: number, rate: number): number {
     if (!Number.isFinite(amount)) return 0;
-    return roundMoney(amount * rate);
+    if (!Number.isFinite(rate) || rate <= 0) {
+      throw new BadRequestException('Invalid exchange rate.');
+    }
+    return convertMoney(amount, rate);
   }
 
   private async getRateTable(opts?: {
@@ -275,12 +281,11 @@ export class CurrencyRatesService {
     for (const code of [...missing]) {
       const raw = providerRates[code];
       if (raw == null || raw <= 0) continue;
-      rates[code] = code === PIVOT ? 1 : raw / eurPerBase;
+      rates[code] =
+        code === PIVOT
+          ? 1
+          : new Prisma.Decimal(raw).div(eurPerBase).toNumber();
       missing.delete(code);
     }
   }
-}
-
-function roundMoney(n: number) {
-  return Math.round(n * 100) / 100;
 }

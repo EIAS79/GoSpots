@@ -71,7 +71,7 @@ export function FinanceHub({
       "overview",
     ),
   );
-  const [venueName, setVenueName] = useState("Venue");
+  const [venueName, setVenueName] = useState(() => t("finance.venueFallback"));
 
   useEffect(() => {
     const legacy = rawTab && LEGACY_TAB_REDIRECT[rawTab];
@@ -87,9 +87,9 @@ export function FinanceHub({
 
   useEffect(() => {
     void fetchDashboardOverview()
-      .then((d) => setVenueName(d.shop.name ?? "Venue"))
+      .then((d) => setVenueName(d.shop.name ?? t("finance.venueFallback")))
       .catch(() => undefined);
-  }, []);
+  }, [t]);
 
   const setTab = useCallback(
     (next: FinanceHubTab) => {
@@ -120,7 +120,7 @@ export function FinanceHub({
   if (rawTab && LEGACY_TAB_REDIRECT[rawTab]) {
     return (
       <div className="flex justify-center py-12 text-sm text-zinc-500">
-        Redirecting…
+        {t("finance.redirecting")}
       </div>
     );
   }
@@ -128,18 +128,18 @@ export function FinanceHub({
   return (
     <div className="space-y-4">
       <p className="rounded-lg border border-white/10 bg-zinc-900/40 px-3 py-2 text-xs text-zinc-500">
-        Track revenue, record quick sales and losses, and run reports. Kitchen
-        orders live under{" "}
-        <span className="text-zinc-400">Menu orders</span>;
-        game charges under{" "}
-        <span className="text-zinc-400">Game billing</span>;
-        reservations under{" "}
-        <span className="text-zinc-400">Reservations</span>.
+        {t("finance.hubHintBefore")}{" "}
+        <span className="text-zinc-400">{t("finance.hubHintMenuOrders")}</span>
+        {t("finance.hubHintMid")}{" "}
+        <span className="text-zinc-400">{t("finance.hubHintPlayBilling")}</span>
+        {t("finance.hubHintMid2")}{" "}
+        <span className="text-zinc-400">{t("finance.hubHintReservations")}</span>
+        {t("finance.hubHintAfter")}
       </p>
 
       <nav
         className="sticky top-0 z-10 -mx-1 flex gap-1 overflow-x-auto rounded-xl border border-white/10 bg-zinc-950/90 p-1 backdrop-blur-md scrollbar-none"
-        aria-label="Finance sections"
+        aria-label={t("finance.sectionsAria")}
       >
         {TABS.map((item) => {
           const Icon = item.icon;

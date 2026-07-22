@@ -362,7 +362,7 @@ export type Faq = { q: string; a: string };
 export const ownerFaqs: Faq[] = [
   {
     q: "Do I need to install anything in my venue?",
-    a: "No. GoSpots runs in the browser on the device you already have — laptop, tablet, or counter PC. Updates push automatically.",
+    a: "No. Locora runs in the browser on the device you already have — laptop, tablet, or counter PC. Updates push automatically.",
   },
   {
     q: "Can I try it before I pay?",
@@ -393,11 +393,11 @@ export const ownerFaqs: Faq[] = [
 /** FAQ shown in the guest / "find a spot" view */
 export const playerFaqs: Faq[] = [
   {
-    q: "Is GoSpots free for guests?",
+    q: "Is Locora free for guests?",
     a: "Completely. Browsing venues, checking details, and reserving a spot never costs you anything — venues pay for their tools, not you.",
   },
   {
-    q: "What kinds of places are on GoSpots?",
+    q: "What kinds of places are on Locora?",
     a: "Way more than gaming. Billiard halls, gaming lounges, and esports cafés — plus restaurants, cafés, bars, pubs, karaoke rooms, bowling alleys, night clubs, and family entertainment venues.",
   },
   {
@@ -414,7 +414,7 @@ export const playerFaqs: Faq[] = [
   },
   {
     q: "Why don't I see many venues yet?",
-    a: "GoSpots is in private beta and onboarding operators first. The public directory grows with every venue that turns on publishing.",
+    a: "Locora is in private beta and onboarding operators first. The public directory grows with every venue that turns on publishing.",
   },
 ];
 

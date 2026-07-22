@@ -1,5 +1,5 @@
 import type { ReactNode } from "react";
-import { GoSpotsLogo } from "@/components/brand/gospots-logo";
+import { LocoraLogo } from "@/components/brand/locora-logo";
 
 export default function AuthLayout({ children }: { children: ReactNode }) {
   return (
@@ -8,7 +8,7 @@ export default function AuthLayout({ children }: { children: ReactNode }) {
       <div className="aurora-blob aurora-blob-a -z-10 opacity-50" />
       <div className="aurora-blob aurora-blob-b -z-10 opacity-40" />
 
-      <GoSpotsLogo
+      <LocoraLogo
         href="/"
         size="sm"
         showTagline

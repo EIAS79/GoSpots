@@ -1,5 +1,6 @@
-export const BRAND_NAME = "GoSpots";
-export const BRAND_TAGLINE = "Find your next spot";
+export const BRAND_NAME = "Locora";
+export const BRAND_TAGLINE = "Host every location.";
 
-/** @deprecated Use `<GoSpotsMark />` — vector pin + G + star */
-export const BRAND_LOGO_SRC = "/gospots.png";
+/** Supporting SEO / hero line — verticals + dashboard + public site */
+export const BRAND_SUPPORTING =
+  "Dashboard for gaming centers, restaurants, and venues — publish your site, take reservations, collect reviews.";

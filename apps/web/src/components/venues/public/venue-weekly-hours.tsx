@@ -1,26 +1,19 @@
+"use client";
+
 import type { PublicOpeningHour } from "@/lib/shop-settings-client";
-
-const WEEKDAYS = [
-  "Sunday",
-  "Monday",
-  "Tuesday",
-  "Wednesday",
-  "Thursday",
-  "Friday",
-  "Saturday",
-];
-
-const WEEKDAYS_SHORT = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
+import { usePublicPrefs } from "@/lib/public-prefs-context";
 
 export function VenueWeeklyHours({
   hours,
 }: {
   hours?: PublicOpeningHour[];
 }) {
+  const { t } = usePublicPrefs();
+
   if (!hours?.length) {
     return (
       <p className="text-sm text-zinc-500">
-        Opening hours haven&apos;t been published yet.
+        {t("venuePage.overview.hoursUnpublished")}
       </p>
     );
   }
@@ -34,17 +27,23 @@ export function VenueWeeklyHours({
         return (
           <li key={row.weekday} className={cnRow(isToday)}>
             <span className="min-w-0 font-medium text-[var(--color-foreground)]">
-              <span className="sm:hidden">{WEEKDAYS_SHORT[row.weekday]}</span>
-              <span className="hidden sm:inline">{WEEKDAYS[row.weekday]}</span>
+              <span className="sm:hidden">
+                {t(`venuePage.weekdayShort.${row.weekday}`)}
+              </span>
+              <span className="hidden sm:inline">
+                {t(`venuePage.weekday.${row.weekday}`)}
+              </span>
               {isToday ? (
                 <span className="ml-2 text-[10px] font-semibold uppercase tracking-wide text-amber-700 dark:text-amber-400/90">
-                  Today
+                  {t("venuePage.overview.today")}
                 </span>
               ) : null}
             </span>
             <span className="shrink-0 tabular-nums text-xs text-zinc-600 dark:text-zinc-400 sm:text-sm">
               {row.isClosed ? (
-                <span className="text-zinc-500">Closed</span>
+                <span className="text-zinc-500">
+                  {t("venuePage.overview.closed")}
+                </span>
               ) : (
                 `${row.opensAt} – ${row.closesAt}`
               )}

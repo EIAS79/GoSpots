@@ -1,4 +1,5 @@
 import {
+  IsBoolean,
   IsEmail,
   IsIn,
   IsInt,
@@ -29,6 +30,15 @@ export class CreatePublicReviewDto {
   @IsString()
   @MaxLength(2000)
   comment?: string;
+
+  @IsBoolean()
+  privacyConsentAccepted!: boolean;
+
+  /** Optional CAPTCHA token (Turnstile/hCaptcha). Required only when provider+mode enforce. */
+  @IsOptional()
+  @IsString()
+  @MaxLength(2048)
+  captchaToken?: string;
 }
 
 export class UpdateReviewStatusDto {
@@ -59,6 +69,15 @@ export class CreatePublicContactDto {
   @IsString()
   @MaxLength(2000)
   message!: string;
+
+  @IsBoolean()
+  privacyConsentAccepted!: boolean;
+
+  /** Optional CAPTCHA token (Turnstile/hCaptcha). Required only when provider+mode enforce. */
+  @IsOptional()
+  @IsString()
+  @MaxLength(2048)
+  captchaToken?: string;
 }
 
 export class CreatePublicGuestChatDto {
@@ -80,6 +99,15 @@ export class CreatePublicGuestChatDto {
   @IsString()
   @MaxLength(2000)
   message?: string;
+
+  @IsBoolean()
+  privacyConsentAccepted!: boolean;
+
+  /** Optional CAPTCHA token (Turnstile/hCaptcha). Required only when provider+mode enforce. */
+  @IsOptional()
+  @IsString()
+  @MaxLength(2048)
+  captchaToken?: string;
 }
 
 export class GuestChatMessageDto {

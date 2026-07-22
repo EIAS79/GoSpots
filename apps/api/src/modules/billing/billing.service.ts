@@ -4,14 +4,19 @@ import {
   Injectable,
   Logger,
   NotFoundException,
+  OnModuleInit,
+  ServiceUnavailableException,
+  UnauthorizedException,
 } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
-import { createHmac, timingSafeEqual } from 'crypto';
-import { SubscriptionStatus } from '@prisma/client';
+import { createHash, createHmac, timingSafeEqual } from 'crypto';
+import { Prisma, SubscriptionStatus } from '@prisma/client';
 import {
   monthlyTotal,
+  resolveAddOnsCsv,
   resolvePackId,
   serializeAddOns,
+  syncSubscriptionAddOnRows,
   type AddOnId,
 } from '../../common/venue-packs';
 import { tierForPack } from '../../common/subscription-tier';
@@ -23,8 +28,41 @@ import { PrismaService } from '../../prisma/prisma.service';
 import { CurrencyRatesService } from '../shop/currency-rates.service';
 import { LemonSqueezyClient } from './lemon-squeezy.client';
 
+const LEMON_PROVIDER = 'lemon_squeezy';
+
+/** Events that may mutate Subscription / shop / audit. All others ack without mutation. */
+const LEMON_MUTATING_EVENTS = new Set([
+  'subscription_created',
+  'subscription_updated',
+  'subscription_resumed',
+  'subscription_unpaused',
+  'subscription_cancelled',
+  'subscription_expired',
+  'subscription_paused',
+]);
+
+type LemonWebhookPayload = {
+  meta?: {
+    event_name?: string;
+    event_id?: string;
+    webhook_id?: string;
+    custom_data?: Record<string, string>;
+  };
+  data?: {
+    id?: string;
+    type?: string;
+    attributes?: Record<string, unknown>;
+  };
+};
+
+function parseRenewsAt(value: unknown): Date | null {
+  if (value == null || value === '') return null;
+  const d = new Date(String(value));
+  return Number.isNaN(d.getTime()) ? null : d;
+}
+
 @Injectable()
-export class BillingService {
+export class BillingService implements OnModuleInit {
   private readonly logger = new Logger(BillingService.name);
 
   constructor(
@@ -34,6 +72,21 @@ export class BillingService {
     private readonly audit: AuditService,
     private readonly rates: CurrencyRatesService,
   ) {}
+
+  onModuleInit() {
+    const secret = this.config.get<string>('LEMON_SQUEEZY_WEBHOOK_SECRET')?.trim();
+    const isProd = this.config.get<string>('NODE_ENV') === 'production';
+    if (secret) return;
+    if (isProd) {
+      // Belt-and-suspenders with main.ts assertCriticalSecretsAtBoot.
+      throw new Error(
+        'LEMON_SQUEEZY_WEBHOOK_SECRET is required in production (unsigned Lemon webhooks must never be accepted).',
+      );
+    }
+    this.logger.warn(
+      'LEMON_SQUEEZY_WEBHOOK_SECRET unset — webhook endpoint will reject requests until configured.',
+    );
+  }
 
   status() {
     return {
@@ -56,7 +109,10 @@ export class BillingService {
     const shopId = requireShopId(actor);
     const shop = await this.prisma.shop.findUnique({
       where: { id: shopId },
-      include: { subscription: true, owner: true },
+      include: {
+        subscription: { include: { addOnRows: true } },
+        owner: true,
+      },
     });
     if (!shop?.subscription) throw new NotFoundException('Subscription not found.');
 
@@ -80,7 +136,7 @@ export class BillingService {
     );
     const addOns =
       (shop.subscription as { pendingAddOns?: string | null }).pendingAddOns ??
-      shop.subscription.addOns;
+      resolveAddOnsCsv({ addOnRows: shop.subscription.addOnRows });
     const seats =
       (shop.subscription as { pendingStaffSeatQuantity?: number | null })
         .pendingStaffSeatQuantity ??
@@ -98,8 +154,8 @@ export class BillingService {
       this.config.get<string>('WEB_APP_URL') ??
       this.config.get<string>('WEB_ORIGIN') ??
       'http://localhost:3000';
-    const dashboardPath = `${shop.slug}--${shop.dashboardKey}`;
-    const redirectUrl = `${webApp.replace(/\/$/, '')}/dashboard/${dashboardPath}/subscription?billing=success`;
+    // Slug-only return URL — never put dashboardKey in a shareable/Location URL.
+    const redirectUrl = `${webApp.replace(/\/$/, '')}/dashboard/${shop.slug}/subscription?billing=success`;
 
     const { url } = await this.lemon.createCheckout({
       email: shop.owner.email,
@@ -162,11 +218,17 @@ export class BillingService {
   }
 
   verifySignature(rawBody: Buffer | string, signature: string | undefined) {
-    const secret = this.config.get<string>('LEMON_SQUEEZY_WEBHOOK_SECRET') ?? '';
+    const secret = this.config.get<string>('LEMON_SQUEEZY_WEBHOOK_SECRET')?.trim() ?? '';
     if (!secret) {
-      throw new BadRequestException('Webhook secret not configured.');
+      // Never treat missing secret as "unsigned OK" — reject every delivery.
+      throw new ServiceUnavailableException(
+        'Webhook secret not configured. Set LEMON_SQUEEZY_WEBHOOK_SECRET.',
+      );
     }
-    if (!signature) throw new BadRequestException('Missing signature.');
+    // Auth failures → 401 (controller verifies before any receipt insert).
+    if (!signature) {
+      throw new UnauthorizedException('Missing signature.');
+    }
 
     const hmac = createHmac('sha256', secret);
     hmac.update(typeof rawBody === 'string' ? rawBody : rawBody);
@@ -174,27 +236,107 @@ export class BillingService {
     const a = Buffer.from(digest, 'utf8');
     const b = Buffer.from(signature, 'utf8');
     if (a.length !== b.length || !timingSafeEqual(a, b)) {
-      throw new BadRequestException('Invalid webhook signature.');
+      throw new UnauthorizedException('Invalid webhook signature.');
     }
   }
 
-  async handleWebhook(payload: {
-    meta?: {
-      event_name?: string;
-      custom_data?: Record<string, string>;
-    };
-    data?: {
-      id?: string;
-      type?: string;
-      attributes?: Record<string, unknown>;
-    };
-  }) {
-    const event = payload.meta?.event_name ?? '';
-    const custom = payload.meta?.custom_data ?? {};
-    const shopId = custom.shop_id;
+  /** Stable id for durable receipt: Lemon ids preferred, else payload fingerprint. */
+  resolveWebhookEventId(
+    payload: LemonWebhookPayload,
+    rawBody?: Buffer | string,
+  ): string {
+    const meta = payload.meta ?? {};
+    const fromMeta = meta.event_id ?? meta.webhook_id;
+    if (fromMeta) return String(fromMeta);
+    if (rawBody != null) {
+      const buf =
+        typeof rawBody === 'string' ? Buffer.from(rawBody, 'utf8') : rawBody;
+      return createHash('sha256').update(buf).digest('hex');
+    }
     const attrs = payload.data?.attributes ?? {};
+    return createHash('sha256')
+      .update(
+        JSON.stringify({
+          event: meta.event_name ?? '',
+          id: payload.data?.id ?? '',
+          status: attrs.status ?? '',
+          renews_at: attrs.renews_at ?? '',
+          updated_at: attrs.updated_at ?? '',
+        }),
+      )
+      .digest('hex');
+  }
 
-    this.logger.log(`Lemon webhook: ${event} shop=${shopId ?? 'n/a'}`);
+  async handleWebhook(
+    payload: LemonWebhookPayload,
+    rawBody?: Buffer | string,
+  ) {
+    // Malformed / empty payloads: ack without mutating (receipt only when we have an id).
+    if (!payload || typeof payload !== 'object') {
+      this.logger.warn('Lemon webhook: non-object payload ignored');
+      return { ok: true, ignored: true };
+    }
+
+    const event = payload.meta?.event_name ?? '';
+    const custom =
+      payload.meta?.custom_data &&
+      typeof payload.meta.custom_data === 'object'
+        ? payload.meta.custom_data
+        : {};
+    const shopId =
+      typeof custom.shop_id === 'string' && custom.shop_id
+        ? custom.shop_id
+        : undefined;
+    const attrs =
+      payload.data?.attributes &&
+      typeof payload.data.attributes === 'object'
+        ? payload.data.attributes
+        : {};
+    const eventId = this.resolveWebhookEventId(payload, rawBody);
+    const payloadHash =
+      rawBody != null
+        ? createHash('sha256')
+            .update(
+              typeof rawBody === 'string'
+                ? Buffer.from(rawBody, 'utf8')
+                : rawBody,
+            )
+            .digest('hex')
+        : null;
+
+    this.logger.log(
+      `Lemon webhook: ${event} shop=${shopId ?? 'n/a'} eventId=${eventId.slice(0, 12)}…`,
+    );
+
+    // Insert-or-skip before any subscription mutation (handles concurrent retries).
+    try {
+      await this.prisma.billingWebhookEvent.create({
+        data: {
+          provider: LEMON_PROVIDER,
+          eventId,
+          eventName: event || 'unknown',
+          shopId: shopId ?? null,
+          payloadHash,
+        },
+      });
+    } catch (err) {
+      if (
+        err instanceof Prisma.PrismaClientKnownRequestError &&
+        err.code === 'P2002'
+      ) {
+        this.logger.log(`Lemon webhook duplicate skipped: ${eventId}`);
+        return { ok: true, duplicate: true };
+      }
+      throw err;
+    }
+
+    // Unknown / non-subscription event names: durable receipt, no Subscription mutation.
+    if (!LEMON_MUTATING_EVENTS.has(event)) {
+      this.logger.log(
+        `Lemon webhook ignored (non-mutating event): ${event || 'empty'}`,
+      );
+      return { ok: true, ignored: true };
+    }
 
     if (!shopId) {
       // Still acknowledge — some events lack custom_data
@@ -203,6 +345,7 @@ export class BillingService {
 
     const sub = await this.prisma.subscription.findUnique({
       where: { shopId },
+      include: { addOnRows: true },
     });
     if (!sub) return { ok: true, ignored: true };
 
@@ -222,9 +365,7 @@ export class BillingService {
               ? SubscriptionStatus.CANCELED
               : SubscriptionStatus.ACTIVE;
 
-      const renewsAt = attrs.renews_at
-        ? new Date(String(attrs.renews_at))
-        : null;
+      const renewsAt = parseRenewsAt(attrs.renews_at);
 
       const pendingPackId = (sub as { pendingPackId?: string | null })
         .pendingPackId;
@@ -234,6 +375,10 @@ export class BillingService {
         (!sub.currentPeriodEnd ||
           renewsAt.getTime() > sub.currentPeriodEnd.getTime());
 
+      const currentAddOnsCsv = resolveAddOnsCsv({
+        addOnRows: sub.addOnRows,
+      });
+
       let packId = resolvePackId(custom.pack_id ?? sub.packId);
       let addOns =
         custom.add_ons != null
@@ -242,7 +387,7 @@ export class BillingService {
                 .split(',')
                 .filter(Boolean) as AddOnId[],
             )
-          : sub.addOns;
+          : currentAddOnsCsv;
       let staffSeatQuantity =
         (sub as { staffSeatQuantity?: number }).staffSeatQuantity ?? 0;
       let clearPending = false;
@@ -251,7 +396,7 @@ export class BillingService {
         packId = resolvePackId(pendingPackId!);
         addOns =
           (sub as { pendingAddOns?: string | null }).pendingAddOns ??
-          sub.addOns;
+          currentAddOnsCsv;
         staffSeatQuantity =
           (sub as { pendingStaffSeatQuantity?: number | null })
             .pendingStaffSeatQuantity ?? staffSeatQuantity;
@@ -270,12 +415,11 @@ export class BillingService {
 
       const tier = tierForPack(packId, addOns);
 
-      await this.prisma.subscription.update({
+      const updated = await this.prisma.subscription.update({
         where: { shopId },
         data: {
           status: lsStatus,
           packId,
-          addOns,
           tier,
           staffSeatQuantity,
           lemonSubscriptionId: payload.data?.id
@@ -298,6 +442,7 @@ export class BillingService {
             : {}),
         } as never,
       });
+      await syncSubscriptionAddOnRows(this.prisma, updated.id, addOns);
 
       if (periodAdvanced || lsStatus === SubscriptionStatus.ACTIVE) {
         await this.prisma.shop.update({
@@ -315,6 +460,7 @@ export class BillingService {
           addOns,
           lemonId: payload.data?.id,
           appliedPending: clearPending,
+          webhookEventId: eventId,
         },
         actorName: 'Lemon Squeezy',
       });
@@ -338,7 +484,7 @@ export class BillingService {
         section: 'subscription',
         action: `billing.${event}`,
         summary: `Billing ${event.replace(/_/g, ' ')}`,
-        meta: { lemonId: payload.data?.id },
+        meta: { lemonId: payload.data?.id, webhookEventId: eventId },
         actorName: 'Lemon Squeezy',
       });
     }

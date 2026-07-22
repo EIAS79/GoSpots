@@ -4,9 +4,12 @@ import { Loader2, Mail } from "lucide-react";
 import Link from "next/link";
 import { useState } from "react";
 import { AuthCard, Field } from "@/components/auth/auth-card";
+import { ensureCsrf } from "@/lib/api";
 import { requestOwnerPasswordReset } from "@/lib/auth-client";
+import { usePublicPrefs } from "@/lib/public-prefs-context";
 
 export default function ForgotPasswordPage() {
+  const { t } = usePublicPrefs();
   const [email, setEmail] = useState("");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -18,10 +21,13 @@ export default function ForgotPasswordPage() {
     setDoneMessage(null);
     setLoading(true);
     try {
+      await ensureCsrf();
       const res = await requestOwnerPasswordReset(email.trim().toLowerCase());
       setDoneMessage(res.message);
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Request failed.");
+      setError(
+        err instanceof Error ? err.message : t("auth.forgot.requestFailed"),
+      );
     } finally {
       setLoading(false);
     }
@@ -29,15 +35,15 @@ export default function ForgotPasswordPage() {
 
   return (
     <AuthCard
-      title="Forgot password"
-      subtitle="Owner accounts only. Staff cannot reset passwords here."
+      title={t("auth.forgot.title")}
+      subtitle={t("auth.forgot.subtitle")}
       footer={
         <>
           <Link
             href="/login"
             className="text-emerald-400 transition hover:text-emerald-300"
           >
-            Back to owner sign in
+            {t("auth.forgot.backToOwner")}
           </Link>
         </>
       }
@@ -51,12 +57,12 @@ export default function ForgotPasswordPage() {
             href="/login"
             className="inline-flex text-sm text-emerald-400 hover:underline"
           >
-            Return to sign in
+            {t("auth.forgot.returnToSignIn")}
           </Link>
         </div>
       ) : (
         <form onSubmit={onSubmit} className="flex flex-col gap-4" noValidate>
-          <Field label="Owner email">
+          <Field label={t("auth.forgot.ownerEmail")}>
             <div className="relative">
               <Mail
                 size={14}
@@ -68,7 +74,7 @@ export default function ForgotPasswordPage() {
                 autoComplete="email"
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
-                placeholder="you@venue.com"
+                placeholder={t("auth.forgot.emailPlaceholder")}
                 className="w-full rounded-lg border border-white/10 bg-zinc-900/60 py-2.5 pl-9 pr-3 text-sm text-white outline-none transition focus:border-emerald-400/60 focus:ring-2 focus:ring-emerald-400/20"
               />
             </div>
@@ -86,7 +92,9 @@ export default function ForgotPasswordPage() {
             className="inline-flex items-center justify-center gap-2 rounded-lg bg-emerald-400 py-2.5 text-sm font-semibold text-zinc-950 transition hover:bg-emerald-300 disabled:opacity-60"
           >
             {loading ? <Loader2 size={14} className="animate-spin" /> : null}
-            {loading ? "Sending…" : "Send reset link"}
+            {loading
+              ? t("auth.forgot.sending")
+              : t("auth.forgot.sendLink")}
           </button>
         </form>
       )}

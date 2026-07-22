@@ -196,7 +196,7 @@ export class HoursService {
     );
 
     const row = await this.prisma.scheduleException.update({
-      where: { id },
+      where: { id, shopId },
       data: {
         date: dto.date,
         label: dto.label === undefined ? undefined : dto.label?.trim() || null,
@@ -223,7 +223,7 @@ export class HoursService {
       where: { id, shopId },
     });
     if (!existing) throw new NotFoundException();
-    await this.prisma.scheduleException.delete({ where: { id } });
+    await this.prisma.scheduleException.delete({ where: { id, shopId } });
 
     await this.audit.record(actor, {
       section: 'hours',

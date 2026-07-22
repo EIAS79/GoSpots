@@ -9,12 +9,14 @@ import { useAuth } from "@/lib/use-auth";
 import { useCurrentMembership } from "@/lib/use-current-membership";
 import { useDashboardGuide } from "@/lib/use-dashboard-guide";
 import { useVenueAccess } from "@/lib/use-venue-access";
+import { useVenueSettings } from "@/lib/venue-settings-context";
 
 export default function GameBillingPage() {
   const guide = useDashboardGuide("playBilling");
   const { state } = useAuth();
   const membership = useCurrentMembership();
   const access = useVenueAccess();
+  const { t } = useVenueSettings();
   const unlocked = isFeatureUnlocked(access.enabledModules, "transaction");
   const perms = membership?.permissions ?? "";
   const canWrite =
@@ -28,7 +30,11 @@ export default function GameBillingPage() {
       description={guide.description}
       capabilities={guide.capabilities}
     >
-      <FeatureGate feature="transaction" unlocked={unlocked} title="Game billing">
+      <FeatureGate
+        feature="transaction"
+        unlocked={unlocked}
+        title={t("finance.playGateTitle")}
+      >
         <GameBillingPanel canWrite={canWrite} />
       </FeatureGate>
     </TenantPage>

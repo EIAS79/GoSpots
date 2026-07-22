@@ -12,6 +12,8 @@ import {
 } from 'class-validator';
 import { MealPeriod, TagType } from '@prisma/client';
 
+const FINITE_MONEY = { allowNaN: false, allowInfinity: false } as const;
+
 export class CreateSectionDto {
   @IsString()
   @MaxLength(80)
@@ -105,7 +107,7 @@ export class CreateMenuItemDto {
   @IsString()
   imageUrl2?: string;
 
-  @IsNumber()
+  @IsNumber(FINITE_MONEY)
   @Min(0)
   price!: number;
 
@@ -168,7 +170,7 @@ export class UpdateMenuItemDto {
   imageUrl2?: string | null;
 
   @IsOptional()
-  @IsNumber()
+  @IsNumber(FINITE_MONEY)
   @Min(0)
   price?: number;
 

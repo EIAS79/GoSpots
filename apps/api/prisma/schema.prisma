@@ -39,6 +39,11 @@ model User {
   /// Owner-only password reset (staff has no self-serve reset)
   passwordResetTokenHash String?
   passwordResetExpiresAt DateTime?
+  /// Owner TOTP MFA (opt-in). Staff remain password-only in v1.
+  totpEnabled     Boolean   @default(false)
+  /// AES-256-GCM ciphertext of base32 TOTP secret (`v1:…`); never plaintext.
+  totpSecretEnc   String?
+  totpVerifiedAt  DateTime?
   createdAt     DateTime @default(now())
   updatedAt     DateTime @updatedAt
 
@@ -46,23 +51,41 @@ model User {
   sessions      AuthSession[]
   ownedShops    Shop[] @relation("ShopOwner")
   notifications Notification[]
+  mfaRecoveryCodes MfaRecoveryCode[]
 
   @@index([accountType])
 }
 
-// Refresh token sessions — rotated on use, revocable, IP/UA bound
-model AuthSession {
-  id              String   @id @default(cuid())
-  userId          String
-  user            User     @relation(fields: [userId], references: [id], onDelete: Cascade)
-  refreshTokenHash String  // argon2-hashed refresh token
-  userAgent       String?
-  ipAddress       String?
-  expiresAt       DateTime
-  revokedAt       DateTime?
-  createdAt       DateTime @default(now())
+/// Single-use hashed recovery codes for owner TOTP MFA.
+model MfaRecoveryCode {
+  id        String    @id @default(cuid())
+  userId    String
+  user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  codeHash  String
+  usedAt    DateTime?
+  createdAt DateTime  @default(now())
 
+  @@unique([userId, codeHash])
   @@index([userId])
+}
+
+// Refresh token sessions — SHA-256 hashed, rotated on use, family-revoked on reuse
+model AuthSession {
+  id               String    @id @default(cuid())
+  userId           String
+  user             User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  /// Stable across rotations; reuse of a revoked token revokes the whole family
+  familyId         String
+  refreshTokenHash String // SHA-256 hex of raw refresh token
+  userAgent        String?
+  ipAddress        String?
+  expiresAt        DateTime
+  revokedAt        DateTime?
+  createdAt        DateTime  @default(now())
+
+  @@unique([refreshTokenHash])
+  @@index([userId])
+  @@index([familyId])
 }
 
 // ─────────────────────────────────────────────────────────────────
@@ -87,8 +110,10 @@ enum SubscriptionStatus {
 model Shop {
   id            String   @id @default(cuid())
   slug          String   @unique
-  /// Secret segment for /dashboard/{slug}--{dashboardKey} (unguessable, unique)
+  /// Secret segment (legacy tooling / rotate response). Bind is membership+slug only.
   dashboardKey  String   @unique
+  /// SHA-256 hex of dashboardKey (hash-at-rest). Dual-write until plaintext DROP.
+  dashboardKeyHash String? @unique
   name          String
   /// Public marketing title (defaults to name when empty)
   displayName   String?
@@ -107,6 +132,8 @@ model Shop {
   reviewsMode   ShopReviewsMode @default(ENABLED)
   /// BCP 47 — dashboard UI + public venue pages
   locale        String   @default("en")
+  /// IANA timezone for venue-local calendar days (stock reset, day buckets). Default UTC.
+  timezone      String   @default("UTC")
   /// ISO 4217 — prices, reports, marketing browse
   currency      String   @default("EUR")
   /// Dining / lounge floors tracked in reservations (1 = single level)
@@ -138,6 +165,7 @@ model Shop {
   transactions  Transaction[]
   shopOrders     ShopOrder[]
   playSessions  PlaySession[]
+  guestChecks   GuestCheck[]
   openingHours  OpeningHour[]
   scheduleExceptions ScheduleException[]
   galleryItems  GalleryItem[]
@@ -145,9 +173,12 @@ model Shop {
   auditLogs     AuditLog[]
   tags          ShopTag[]
   losses        ShopLoss[]
+  ledgerEntries LedgerEntry[]
   analytics     AnalyticsEvent[]
   notifications Notification[]
   storedImages  StoredImage[]
+  consentRecords ConsentRecord[]
+  guestDsarRequests GuestDsarRequest[]
 }
 
 /// Compressed venue images (menu, gallery, gaming, cover, etc.)
@@ -177,12 +208,11 @@ model Subscription {
   currentPeriodEnd DateTime?
   /// Venue pack: gaming | dining | bar | hotel_fb | mixed
   packId    String   @default("gaming")
-  /// Comma-separated add-on ids
-  addOns    String   @default("")
   /// Purchased employee seats (0 = none; create accounts up to this count)
   staffSeatQuantity Int @default(0)
   /// Scheduled plan changes (paid ACTIVE only) — apply at currentPeriodEnd
   pendingPackId             String?
+  /// Pending add-ons CSV (no relational twin yet — kept intentionally)
   pendingAddOns             String?
   pendingStaffSeatQuantity  Int?
   /// Lemon Squeezy subscription id (stringified)
@@ -193,6 +223,63 @@ model Subscription {
   billingCurrency     String  @default("EUR")
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
+
+  /// Relational add-ons (source of truth; CSV `addOns` column dropped).
+  addOnRows SubscriptionAddOn[]
+}
+
+/// Durable receipt for MoR / billing provider webhooks (idempotent delivery).
+model BillingWebhookEvent {
+  id          String   @id @default(cuid())
+  provider    String
+  eventId     String
+  eventName   String
+  shopId      String?
+  payloadHash String?
+  processedAt DateTime @default(now())
+
+  @@unique([provider, eventId])
+  @@index([shopId, processedAt])
+}
+
+/// Client Idempotency-Key receipts for hot money mutations (expand-only).
+/// Status: PENDING | COMPLETED. Unique on (shopId, scope, key).
+model IdempotencyReceipt {
+  id           String    @id @default(cuid())
+  shopId       String
+  scope        String
+  key          String
+  requestHash  String?
+  status       String    @default("PENDING")
+  responseJson String?
+  createdAt    DateTime  @default(now())
+  expiresAt    DateTime?
+
+  @@unique([shopId, scope, key])
+  @@index([shopId, createdAt])
+  @@index([expiresAt])
+}
+
+/// Durable transactional email outbox (expand-only).
+/// Status: PENDING | SENT | FAILED | DEAD | SKIPPED.
+/// payload JSON: { to, subject, html, text, required? }.
+model MailOutbox {
+  id             String    @id @default(cuid())
+  shopId         String?
+  idempotencyKey String?
+  status         String    @default("PENDING")
+  attempts       Int       @default(0)
+  nextAttemptAt  DateTime  @default(now())
+  lastError      String?
+  sentAt         DateTime?
+  /// JSON: to, subject, html, text, required
+  payload        Json
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime  @updatedAt
+
+  @@unique([idempotencyKey])
+  @@index([status, nextAttemptAt])
+  @@index([shopId, createdAt])
 }
 
 // ─────────────────────────────────────────────────────────────────
@@ -205,8 +292,7 @@ enum ShopRole {
   STAFF    // worker; only what owner grants via permissions[]
 }
 
-// Permission strings stored as comma-separated for SQLite compat.
-// In owner's case, '*' means all.
+// Permission keys live in MembershipPermission rows (`*` = full access).
 model Membership {
   id            String   @id @default(cuid())
   userId        String
@@ -214,7 +300,6 @@ model Membership {
   shopId        String
   shop          Shop     @relation(fields: [shopId], references: [id], onDelete: Cascade)
   role          ShopRole @default(STAFF)
-  permissions   String   @default("") // CSV: "menu.read,menu.write,reservation.write" or "*"
   isActive      Boolean  @default(true)
   invitedBy     String?
   acceptedAt    DateTime?
@@ -226,10 +311,33 @@ model Membership {
   createdAt     DateTime @default(now())
   updatedAt     DateTime @updatedAt
 
+  /// Relational permissions (source of truth; CSV `permissions` column dropped).
+  permissionRows MembershipPermission[]
+
   @@unique([userId, shopId])
   @@index([inviteTokenHash])
   @@index([shopId])
   @@index([shopId, role])
+}
+
+/// Join table for membership permissions (source of truth).
+model MembershipPermission {
+  membershipId String
+  permission   String
+  membership   Membership @relation(fields: [membershipId], references: [id], onDelete: Cascade)
+
+  @@id([membershipId, permission])
+  @@index([permission])
+}
+
+/// Join table for subscription add-ons (source of truth).
+model SubscriptionAddOn {
+  subscriptionId String
+  addOnId        String
+  subscription   Subscription @relation(fields: [subscriptionId], references: [id], onDelete: Cascade)
+
+  @@id([subscriptionId, addOnId])
+  @@index([addOnId])
 }
 
 // ─────────────────────────────────────────────────────────────────
@@ -275,7 +383,7 @@ model MenuItem {
   description       String?
   imageUrl          String?
   imageUrl2         String?
-  price             Float
+  price             Decimal  @db.Decimal(19, 4)
   stock             Int      @default(0)
   /// Daily baseline — stock resets to this at start of each venue day
   stockDaily        Int      @default(0)
@@ -457,8 +565,12 @@ model GuestChat {
   id              String          @id @default(cuid())
   shopId          String
   shop            Shop            @relation(fields: [shopId], references: [id], onDelete: Cascade)
-  /// Secret token for guest access (localStorage + URL). Unguessable.
-  guestToken      String          @unique
+  /// Legacy plaintext (dual-read only). New chats store hash only.
+  guestToken      String?         @unique
+  /// SHA-256 hex of raw guest token (preferred lookup).
+  guestTokenHash  String?         @unique
+  guestTokenExpiresAt DateTime?
+  guestTokenRevokedAt DateTime?
   guestName       String
   guestEmail      String?
   guestPhone      String?
@@ -559,6 +671,8 @@ model DiningTableGroup {
   createdAt   DateTime      @default(now())
   updatedAt   DateTime      @updatedAt
   resources   Resource[]
+  /// Advisory seating rows mirrored under Option C Phase 2 (bible #14).
+  mirroredSeatingGroups SeatingTableGroup[]
 
   @@index([shopId, sectionId, sortOrder])
 }
@@ -569,7 +683,7 @@ model ResourceRate {
   category        ResourceCategory @relation(fields: [categoryId], references: [id], onDelete: Cascade)
   label           String
   durationMinutes Int?
-  price           Float
+  price           Decimal          @db.Decimal(19, 4)
   sortOrder       Int              @default(0)
 
   @@index([categoryId])
@@ -589,7 +703,7 @@ model Resource {
   type       ResourceType     @default(OTHER)
   description String?
   imageUrl   String?
-  hourlyRate Float            @default(0)
+  hourlyRate Decimal          @default(0) @db.Decimal(19, 4)
   status     ResourceStatus   @default(AVAILABLE)
   /// Seat count for restaurant tables (DINING units).
   capacity   Int?
@@ -638,22 +752,32 @@ model Reservation {
   staffAlert  Boolean  @default(false)
   notes       String?
   /// Amount charged when booking is completed (separate from menu orders)
-  billedAmount  Float?
+  billedAmount  Decimal? @db.Decimal(19, 4)
   billedAt      DateTime?
-  /// Staff discount before payment (0–100)
+  /// Staff discount before payment (0–100) — percent, not money
   billingDiscountPercent Float @default(0)
   /// Staff-edited charge before discount; null = use rate calculation
-  billingBaseAmount Float?
+  billingBaseAmount Decimal? @db.Decimal(19, 4)
   /// Tender used when play billing is marked paid (CASH, CARD, etc.)
   billingPaymentMethod String?
-  /// Guest tracking link for online gaming bookings (no account).
+  /// ISO 4217 stamp when billed amounts are set (null = pre-M6 / dual-read → Shop.currency)
+  currency    String?
+  /// Legacy plaintext guest link (dual-read). Prefer guestTokenHash.
   guestToken    String?              @unique
+  guestTokenHash String?             @unique
+  guestTokenExpiresAt DateTime?
+  guestTokenRevokedAt DateTime?
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
 
   playSession PlaySession?
+  /// Optional open-tab container (bible #10 / Option A ops). Null = standalone.
+  guestCheckId String?
+  guestCheck   GuestCheck? @relation(fields: [guestCheckId], references: [id], onDelete: SetNull)
 
   @@index([shopId, startsAt])
+  @@index([shopId, currency, billedAt])
+  @@index([guestCheckId])
 }
 
 enum SeatingZone {
@@ -709,7 +833,11 @@ model EventRequest {
   seatingTableGroup   SeatingTableGroup? @relation(fields: [seatingTableGroupId], references: [id], onDelete: SetNull)
   resourceCategoryId  String?
   resourceCategory    ResourceCategory?  @relation(fields: [resourceCategoryId], references: [id], onDelete: SetNull)
+  /// Legacy plaintext guest link (dual-read). Prefer guestTokenHash.
   guestToken          String?              @unique
+  guestTokenHash      String?              @unique
+  guestTokenExpiresAt DateTime?
+  guestTokenRevokedAt DateTime?
   createdAt           DateTime             @default(now())
   updatedAt           DateTime             @updatedAt
 
@@ -739,6 +867,9 @@ model SeatingTableGroup {
   eventStartsAt   DateTime?
   eventEndsAt     DateTime?
   isCustom        Boolean  @default(false)
+  /// Option C Phase 2: advisory row mirrored from a bookable DiningTableGroup (null = lounge/custom/manual).
+  sourceDiningTableGroupId String? @unique
+  sourceDiningTableGroup   DiningTableGroup? @relation(fields: [sourceDiningTableGroupId], references: [id], onDelete: Cascade)
   sortOrder       Int      @default(0)
   createdAt       DateTime @default(now())
   updatedAt       DateTime @updatedAt
@@ -747,12 +878,49 @@ model SeatingTableGroup {
 
   @@index([shopId, sortOrder])
   @@index([shopId, zone, floor, sortOrder])
+  @@index([shopId, sourceDiningTableGroupId])
 }
 
 enum PlaySessionStatus {
   ACTIVE
   COMPLETED
   CANCELED
+}
+
+enum GuestCheckStatus {
+  OPEN
+  SETTLED
+  VOID
+}
+
+/// Open guest tab / visit container (bible #10 Option A). Children still bill via existing paths.
+model GuestCheck {
+  id            String           @id @default(cuid())
+  shopId        String
+  shop          Shop             @relation(fields: [shopId], references: [id], onDelete: Cascade)
+  status        GuestCheckStatus @default(OPEN)
+  guestName     String?
+  guestEmail    String?
+  guestPhone    String?
+  partySize     Int              @default(1)
+  label         String?
+  note          String?
+  /// ISO 4217 stamp at open (null = dual-read → Shop.currency)
+  currency      String?
+  paymentMethod String?
+  openedAt      DateTime         @default(now())
+  settledAt     DateTime?
+  voidedAt      DateTime?
+  createdById   String?
+  createdAt     DateTime         @default(now())
+  updatedAt     DateTime         @updatedAt
+
+  shopOrders   ShopOrder[]
+  playSessions PlaySession[]
+  reservations Reservation[]
+  ledgerEntries LedgerEntry[]
+
+  @@index([shopId, status, openedAt])
 }
 
 /// Walk-in or linked booking: billiard, PC, tables — players, duration, price.
@@ -768,8 +936,10 @@ model PlaySession {
   startedAt       DateTime          @default(now())
   endedAt         DateTime?
   durationMinutes Int?
-  amount          Float             @default(0)
-  /// Staff discount before payment (0–100)
+  amount          Decimal           @default(0) @db.Decimal(19, 4)
+  /// ISO 4217 stamp at write (null = pre-M6 / dual-read → Shop.currency)
+  currency        String?
+  /// Staff discount before payment (0–100) — percent, not money
   billingDiscountPercent Float @default(0)
   paymentMethod   PaymentMethod     @default(CASH)
   label           String?
@@ -780,9 +950,14 @@ model PlaySession {
   createdAt       DateTime          @default(now())
   updatedAt       DateTime          @updatedAt
   completedAt     DateTime?
+  /// Optional open-tab container (bible #10 / Option A ops). Null = standalone.
+  guestCheckId    String?
+  guestCheck      GuestCheck?       @relation(fields: [guestCheckId], references: [id], onDelete: SetNull)
 
   @@index([shopId, status, createdAt])
   @@index([shopId, archivedAt, createdAt])
+  @@index([shopId, currency, createdAt])
+  @@index([guestCheckId])
 }
 
 // ─────────────────────────────────────────────────────────────────
@@ -823,24 +998,31 @@ model ShopOrder {
   label         String?
   note          String?
   paymentMethod PaymentMethod   @default(CASH)
-  total         Float           @default(0)
+  total         Decimal         @default(0) @db.Decimal(19, 4)
   /// Guests on this ticket (for customer / covers analytics)
   guestCount    Int             @default(1)
   /// Dining table had a prior reservation (optional fee on ticket)
   tableReserved Boolean         @default(false)
   /// Charge for table reservation when tableReserved (null or 0 = free)
-  reservationFee Float?
+  reservationFee Decimal?       @db.Decimal(19, 4)
+  /// ISO 4217 stamp at write (null = pre-M6 / dual-read → Shop.currency)
+  currency      String?
   createdById   String?
   createdAt     DateTime        @default(now())
   updatedAt     DateTime        @updatedAt
   completedAt   DateTime?
   canceledAt    DateTime?
   archivedAt    DateTime?
+  /// Optional open-tab container (bible #10 / Option A ops). Null = standalone.
+  guestCheckId  String?
+  guestCheck    GuestCheck? @relation(fields: [guestCheckId], references: [id], onDelete: SetNull)
 
   lines ShopOrderLine[]
 
   @@index([shopId, status, createdAt])
   @@index([shopId, archivedAt, createdAt])
+  @@index([shopId, currency, createdAt])
+  @@index([guestCheckId])
 }
 
 model ShopOrderLine {
@@ -851,7 +1033,7 @@ model ShopOrderLine {
   menuItem    MenuItem?           @relation(fields: [menuItemId], references: [id], onDelete: SetNull)
   name        String
   quantity    Int                 @default(1)
-  unitPrice   Float
+  unitPrice   Decimal             @db.Decimal(19, 4)
   lineStatus  ShopOrderLineStatus @default(ACTIVE)
   createdAt   DateTime            @default(now())
   updatedAt   DateTime            @updatedAt
@@ -866,7 +1048,9 @@ model Transaction {
   shop        Shop     @relation(fields: [shopId], references: [id], onDelete: Cascade)
   kind        TransactionKind @default(SALE)
   method      PaymentMethod   @default(CASH)
-  amount      Float
+  amount      Decimal         @db.Decimal(19, 4)
+  /// ISO 4217 stamp at write (null = pre-M6 / dual-read → Shop.currency)
+  currency    String?
   note        String?
   items       String   @default("") // legacy JSON snapshot
   createdById String?
@@ -876,6 +1060,7 @@ model Transaction {
 
   @@index([shopId, createdAt])
   @@index([shopId, kind])
+  @@index([shopId, currency, createdAt])
 }
 
 model TransactionLineItem {
@@ -886,8 +1071,8 @@ model TransactionLineItem {
   menuItem      MenuItem? @relation(fields: [menuItemId], references: [id], onDelete: SetNull)
   name          String
   quantity      Int      @default(1)
-  unitPrice     Float
-  total         Float
+  unitPrice     Decimal  @db.Decimal(19, 4)
+  total         Decimal  @db.Decimal(19, 4)
 
   @@index([transactionId])
   @@index([menuItemId])
@@ -897,7 +1082,9 @@ model ShopLoss {
   id          String   @id @default(cuid())
   shopId      String
   shop        Shop     @relation(fields: [shopId], references: [id], onDelete: Cascade)
-  amount      Float
+  amount      Decimal  @db.Decimal(19, 4)
+  /// ISO 4217 stamp at write (null = pre-M6 / dual-read → Shop.currency)
+  currency    String?
   reason      String
   category    String?
   occurredAt  DateTime @default(now())
@@ -905,6 +1092,57 @@ model ShopLoss {
   createdAt   DateTime @default(now())
 
   @@index([shopId, occurredAt])
+  @@index([shopId, currency, occurredAt])
+}
+
+/// Append-only financial ledger (bible #6 / GO_SPOTS_LEDGER.md Phase 1–2).
+/// Dual-write behind LEDGER_DUAL_WRITE; analytics stay on interim channel sum until Phase 4.
+enum LedgerKind {
+  SALE
+  REFUND
+  EXPENSE
+  ADJUSTMENT
+  LOSS
+}
+
+enum LedgerChannel {
+  MENU_ORDERS
+  QUICK_SALES
+  PLAY_SESSIONS
+  RESERVATIONS
+}
+
+enum LedgerSourceType {
+  SHOP_ORDER
+  TRANSACTION
+  PLAY_SESSION
+  RESERVATION
+  SHOP_LOSS
+}
+
+model LedgerEntry {
+  id          String           @id @default(cuid())
+  shopId      String
+  shop        Shop             @relation(fields: [shopId], references: [id], onDelete: Cascade)
+  /// ISO 4217 stamped at post time
+  currency    String
+  amount      Decimal          @db.Decimal(19, 4)
+  kind        LedgerKind
+  channel     LedgerChannel?
+  sourceType  LedgerSourceType
+  sourceId    String
+  occurredAt  DateTime
+  createdAt   DateTime         @default(now())
+  createdById String?
+  /// Optional link when dual-write originated from a guest tab (Phase 3 settle residual).
+  guestCheckId String?
+  guestCheck   GuestCheck?     @relation(fields: [guestCheckId], references: [id], onDelete: SetNull)
+
+  @@unique([shopId, sourceType, sourceId, kind])
+  @@index([shopId, occurredAt])
+  @@index([shopId, channel, occurredAt])
+  @@index([shopId, sourceType, sourceId])
+  @@index([guestCheckId])
 }
 
 enum AnalyticsEventType {
@@ -1036,4 +1274,63 @@ model Notification {
   @@index([shopId, userId, readAt])
   @@index([shopId, archivedAt, createdAt])
   @@index([shopId, section, createdAt])
+}
+
+// ─────────────────────────────────────────────────────────────────
+// GDPR — consent records + guest DSAR inbox (bible #25)
+// ─────────────────────────────────────────────────────────────────
+
+enum ConsentPurpose {
+  BOOKING
+  EVENT_REQUEST
+  CONTACT
+  REVIEW
+  GUEST_CHAT
+}
+
+/// Art. 7-style consent receipt for public guest forms (email hashed at rest).
+model ConsentRecord {
+  id               String         @id @default(cuid())
+  shopId           String
+  shop             Shop           @relation(fields: [shopId], references: [id], onDelete: Cascade)
+  purpose          ConsentPurpose
+  policyVersion    String
+  /// SHA-256 hex of lowercased trimmed email when provided
+  subjectEmailHash String?
+  sourceEntityType String?
+  sourceEntityId   String?
+  ipAddress        String?
+  createdAt        DateTime       @default(now())
+
+  @@index([shopId, createdAt])
+  @@index([shopId, subjectEmailHash])
+  @@index([shopId, purpose, createdAt])
+}
+
+enum GuestDsarType {
+  ACCESS
+  ERASURE
+}
+
+enum GuestDsarStatus {
+  OPEN
+  IN_PROGRESS
+  CLOSED
+}
+
+/// Guest self-serve DSAR ticket for a published venue (owner inbox + mail).
+model GuestDsarRequest {
+  id         String          @id @default(cuid())
+  shopId     String
+  shop       Shop            @relation(fields: [shopId], references: [id], onDelete: Cascade)
+  type       GuestDsarType
+  status     GuestDsarStatus @default(OPEN)
+  guestEmail String
+  guestName  String?
+  message    String?
+  createdAt  DateTime        @default(now())
+  closedAt   DateTime?
+
+  @@index([shopId, status, createdAt])
+  @@index([shopId, guestEmail])
 }

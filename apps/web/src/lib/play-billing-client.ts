@@ -1,4 +1,10 @@
 import { api } from "./api";
+import {
+  idempotencyActionKey,
+  withIdempotentFinanceCall,
+  type IdempotentCallOptions,
+} from "./idempotency-key";
+import type { MoneyWire } from "./money";
 
 export type PlayBillingTab =
   | "in_progress"
@@ -16,7 +22,7 @@ export type PlayBillingItem = {
   startsAt: string;
   endsAt: string;
   status: string;
-  billedAmount: number | null;
+  billedAmount: MoneyWire | null;
   billedAt: string | null;
   discountPercent: number;
   notes: string | null;
@@ -30,10 +36,10 @@ export type PlayBillingItem = {
   } | null;
   durationMinutes: number;
   /** Rate-calculated amount from Gaming setup */
-  computedAmount: number;
+  computedAmount: MoneyWire;
   /** Charge before discount (staff-edited or from rates) */
-  baseAmount: number;
-  amountDue: number;
+  baseAmount: MoneyWire;
+  amountDue: MoneyWire;
   rateLabel: string;
   breakdown: string;
   collectsPartySize?: boolean;
@@ -42,8 +48,8 @@ export type PlayBillingItem = {
 export type PlayBillingDayGroup = {
   day: string;
   items: PlayBillingItem[];
-  totalDue: number;
-  totalPaid: number;
+  totalDue: MoneyWire;
+  totalPaid: MoneyWire;
 };
 
 export type PlayBillingResponse = {
@@ -57,8 +63,8 @@ export type PlayBillingResponse = {
     inProgress: number;
     awaitingPayment: number;
     paid: number;
-    unpaidTotal: number;
-    paidTotal: number;
+    unpaidTotal: MoneyWire;
+    paidTotal: MoneyWire;
   };
 };
 
@@ -88,40 +94,63 @@ export function markPlayBillingPaid(
     discountPercent?: number;
     paymentMethod?: string;
   },
+  opts?: IdempotentCallOptions,
 ) {
-  return api<PlayBillingItem>(
-    `/finance/play-billing/${reservationId}/mark-paid`,
-    {
-      method: "PATCH",
-      body: JSON.stringify(body ?? {}),
-    },
+  const payload = body ?? {};
+  return withIdempotentFinanceCall(
+    idempotencyActionKey("finance.play-billing.mark-paid", {
+      reservationId,
+      ...payload,
+    }),
+    (idempotencyKey) =>
+      api<PlayBillingItem>(
+        `/finance/play-billing/${reservationId}/mark-paid`,
+        {
+          method: "PATCH",
+          body: JSON.stringify(payload),
+          headers: { "Idempotency-Key": idempotencyKey },
+        },
+      ),
+    opts,
   );
 }
 
 export function markWalkInPaid(
   sessionId: string,
   body?: { amountOverride?: number; discountPercent?: number },
+  opts?: IdempotentCallOptions,
 ) {
-  return api<PlayBillingItem>(
-    `/finance/play-sessions/${sessionId}/mark-paid`,
-    {
-      method: "PATCH",
-      body: JSON.stringify(body ?? {}),
-    },
+  const payload = body ?? {};
+  return withIdempotentFinanceCall(
+    idempotencyActionKey("finance.play-sessions.mark-paid", {
+      sessionId,
+      ...payload,
+    }),
+    (idempotencyKey) =>
+      api<PlayBillingItem>(
+        `/finance/play-sessions/${sessionId}/mark-paid`,
+        {
+          method: "PATCH",
+          body: JSON.stringify(payload),
+          headers: { "Idempotency-Key": idempotencyKey },
+        },
+      ),
+    opts,
   );
 }
 
 export function markGameBillingPaid(
   item: Pick<PlayBillingItem, "id" | "source" | "discountPercent" | "amountDue">,
   body?: { amountOverride?: number; discountPercent?: number },
+  opts?: IdempotentCallOptions,
 ) {
   const payload = {
     discountPercent: body?.discountPercent ?? item.discountPercent,
     amountOverride: body?.amountOverride,
   };
   return item.source === "walk_in"
-    ? markWalkInPaid(item.id, payload)
-    : markPlayBillingPaid(item.id, payload);
+    ? markWalkInPaid(item.id, payload, opts)
+    : markPlayBillingPaid(item.id, payload, opts);
 }
 
 export type UpdatePlayBillingBody = {
@@ -140,11 +169,21 @@ export type UpdatePlayBillingBody = {
 export function updatePlayBilling(
   reservationId: string,
   body: UpdatePlayBillingBody,
+  opts?: IdempotentCallOptions,
 ) {
-  return api<PlayBillingItem>(`/finance/play-billing/${reservationId}`, {
-    method: "PATCH",
-    body: JSON.stringify(body),
-  });
+  return withIdempotentFinanceCall(
+    idempotencyActionKey("finance.play-billing.update", {
+      reservationId,
+      ...body,
+    }),
+    (idempotencyKey) =>
+      api<PlayBillingItem>(`/finance/play-billing/${reservationId}`, {
+        method: "PATCH",
+        body: JSON.stringify(body),
+        headers: { "Idempotency-Key": idempotencyKey },
+      }),
+    opts,
+  );
 }
 
 export type UpdateWalkInBody = {
@@ -159,17 +198,39 @@ export type UpdateWalkInBody = {
   clearPaid?: boolean;
 };
 
-export function updateWalkIn(sessionId: string, body: UpdateWalkInBody) {
-  return api(`/finance/play-sessions/${sessionId}`, {
-    method: "PATCH",
-    body: JSON.stringify(body),
-  });
+export function updateWalkIn(
+  sessionId: string,
+  body: UpdateWalkInBody,
+  opts?: IdempotentCallOptions,
+) {
+  return withIdempotentFinanceCall(
+    idempotencyActionKey("finance.play-sessions.update", {
+      sessionId,
+      ...body,
+    }),
+    (idempotencyKey) =>
+      api(`/finance/play-sessions/${sessionId}`, {
+        method: "PATCH",
+        body: JSON.stringify(body),
+        headers: { "Idempotency-Key": idempotencyKey },
+      }),
+    opts,
+  );
 }
 
-export function cancelWalkIn(sessionId: string) {
-  return api<{ ok: true; sessionId: string }>(
-    `/finance/play-sessions/${sessionId}/cancel`,
-    { method: "PATCH", body: JSON.stringify({}) },
+export function cancelWalkIn(sessionId: string, opts?: IdempotentCallOptions) {
+  return withIdempotentFinanceCall(
+    idempotencyActionKey("finance.play-sessions.cancel", { sessionId }),
+    (idempotencyKey) =>
+      api<{ ok: true; sessionId: string }>(
+        `/finance/play-sessions/${sessionId}/cancel`,
+        {
+          method: "PATCH",
+          body: JSON.stringify({}),
+          headers: { "Idempotency-Key": idempotencyKey },
+        },
+      ),
+    opts,
   );
 }
 
@@ -178,13 +239,25 @@ export type PlayBillingCancelReason = "NO_SHOW" | "CANCELED";
 export function cancelPlayBilling(
   reservationId: string,
   body?: { reason?: PlayBillingCancelReason },
+  opts?: IdempotentCallOptions,
 ) {
-  return api<{ ok: true; reason: PlayBillingCancelReason; reservationId: string }>(
-    `/finance/play-billing/${reservationId}/cancel`,
-    {
-      method: "PATCH",
-      body: JSON.stringify(body ?? { reason: "NO_SHOW" }),
-    },
+  const payload = body ?? { reason: "NO_SHOW" as PlayBillingCancelReason };
+  return withIdempotentFinanceCall(
+    idempotencyActionKey("finance.play-billing.cancel", {
+      reservationId,
+      ...payload,
+    }),
+    (idempotencyKey) =>
+      api<{
+        ok: true;
+        reason: PlayBillingCancelReason;
+        reservationId: string;
+      }>(`/finance/play-billing/${reservationId}/cancel`, {
+        method: "PATCH",
+        body: JSON.stringify(payload),
+        headers: { "Idempotency-Key": idempotencyKey },
+      }),
+    opts,
   );
 }
 
@@ -198,11 +271,20 @@ export type CreateWalkInBody = {
   note?: string;
 };
 
-export function createWalkIn(body: CreateWalkInBody) {
-  return api(`/finance/play-sessions`, {
-    method: "POST",
-    body: JSON.stringify(body),
-  });
+export function createWalkIn(
+  body: CreateWalkInBody,
+  opts?: IdempotentCallOptions,
+) {
+  return withIdempotentFinanceCall(
+    idempotencyActionKey("finance.play-sessions.create", body),
+    (idempotencyKey) =>
+      api(`/finance/play-sessions`, {
+        method: "POST",
+        body: JSON.stringify(body),
+        headers: { "Idempotency-Key": idempotencyKey },
+      }),
+    opts,
+  );
 }
 
 function dateInputDaysAgo(days: number) {

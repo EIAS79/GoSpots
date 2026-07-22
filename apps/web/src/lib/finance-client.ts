@@ -1,19 +1,26 @@
 import { api } from "./api";
+import {
+  idempotencyActionKey,
+  withIdempotentFinanceCall,
+  type IdempotentCallOptions,
+} from "./idempotency-key";
+import type { MoneyWire } from "./money";
+import { lineTotal } from "./money";
 
 export type TransactionLine = {
   id: string;
   menuItemId: string | null;
   name: string;
   quantity: number;
-  unitPrice: number;
-  total: number;
+  unitPrice: MoneyWire;
+  total: MoneyWire;
 };
 
 export type Transaction = {
   id: string;
   kind: string;
   method: string;
-  amount: number;
+  amount: MoneyWire;
   note: string | null;
   createdAt: string;
   lines: TransactionLine[];
@@ -21,7 +28,7 @@ export type Transaction = {
 
 export type ShopLoss = {
   id: string;
-  amount: number;
+  amount: MoneyWire;
   reason: string;
   category: string | null;
   occurredAt: string;
@@ -32,7 +39,7 @@ export type SalesByItem = {
   menuItemId: string | null;
   name: string;
   quantity: number;
-  revenue: number;
+  revenue: MoneyWire;
 };
 
 export type ShopOrderLine = {
@@ -40,7 +47,7 @@ export type ShopOrderLine = {
   menuItemId: string | null;
   name: string;
   quantity: number;
-  unitPrice: number;
+  unitPrice: MoneyWire;
   lineStatus: "ACTIVE" | "CANCELED";
   createdAt?: string;
 };
@@ -51,10 +58,10 @@ export type ShopOrder = {
   label: string | null;
   note: string | null;
   paymentMethod: string;
-  total: number;
+  total: MoneyWire;
   guestCount: number;
   tableReserved: boolean;
-  reservationFee: number | null;
+  reservationFee: MoneyWire | null;
   createdAt: string;
   updatedAt?: string;
   completedAt: string | null;
@@ -66,15 +73,15 @@ export type ShopOrder = {
 export type FinanceAnalytics = {
   days: number;
   summary: {
-    revenue: number;
-    revenueMenuOrders: number;
-    revenueQuickSales: number;
-    revenueReservations: number;
-    revenuePlaySessions: number;
-    revenueTransactions: number;
-    revenueOrders: number;
-    losses: number;
-    profit: number;
+    revenue: MoneyWire;
+    revenueMenuOrders: MoneyWire;
+    revenueQuickSales: MoneyWire;
+    revenueReservations: MoneyWire;
+    revenuePlaySessions: MoneyWire;
+    revenueTransactions: MoneyWire;
+    revenueOrders: MoneyWire;
+    losses: MoneyWire;
+    profit: MoneyWire;
     orderCount: number;
     completedOrderCount: number;
     customerCount: number;
@@ -89,13 +96,13 @@ export type FinanceAnalytics = {
   };
   revenueByDay: {
     day: string;
-    menuOrders: number;
-    reservations: number;
-    playSessions: number;
-    quickSales: number;
-    total: number;
+    menuOrders: MoneyWire;
+    reservations: MoneyWire;
+    playSessions: MoneyWire;
+    quickSales: MoneyWire;
+    total: MoneyWire;
   }[];
-  lossesByDay: { day: string; amount: number }[];
+  lossesByDay: { day: string; amount: MoneyWire }[];
   ordersByDay: {
     day: string;
     count: number;
@@ -112,16 +119,16 @@ export type FinanceAnalytics = {
   topItems: SalesByItem[];
   paymentMethodBreakdown?: {
     method: string;
-    amount: number;
+    amount: MoneyWire;
     count: number;
   }[];
   dailyClose?: {
     day: string;
-    menuOrders: number;
-    playSessions: number;
-    reservations: number;
-    quickSales: number;
-    total: number;
+    menuOrders: MoneyWire;
+    playSessions: MoneyWire;
+    reservations: MoneyWire;
+    quickSales: MoneyWire;
+    total: MoneyWire;
   };
 };
 
@@ -138,7 +145,7 @@ export type PlaySession = {
   } | null;
   playerCount: number;
   durationMinutes: number | null;
-  amount: number;
+  amount: MoneyWire;
   paymentMethod: string;
   label: string | null;
   note: string | null;
@@ -174,21 +181,31 @@ export function fetchShopOrder(id: string) {
 export function orderLinesSubtotal(order: ShopOrder): number {
   return order.lines
     .filter((l) => l.lineStatus === "ACTIVE")
-    .reduce((s, l) => s + l.quantity * l.unitPrice, 0);
+    .reduce((s, l) => s + lineTotal(l.quantity, l.unitPrice), 0);
 }
 
-export function createShopOrder(body?: {
-  label?: string;
-  note?: string;
-  paymentMethod?: string;
-  guestCount?: number;
-  tableReserved?: boolean;
-  reservationFee?: number | null;
-}) {
-  return api<ShopOrder>("/finance/orders", {
-    method: "POST",
-    body: JSON.stringify(body ?? {}),
-  });
+export function createShopOrder(
+  body?: {
+    label?: string;
+    note?: string;
+    paymentMethod?: string;
+    guestCount?: number;
+    tableReserved?: boolean;
+    reservationFee?: number | null;
+  },
+  opts?: IdempotentCallOptions,
+) {
+  const payload = body ?? {};
+  return withIdempotentFinanceCall(
+    idempotencyActionKey("finance.orders.create", payload),
+    (idempotencyKey) =>
+      api<ShopOrder>("/finance/orders", {
+        method: "POST",
+        body: JSON.stringify(payload),
+        headers: { "Idempotency-Key": idempotencyKey },
+      }),
+    opts,
+  );
 }
 
 export function updateShopOrder(
@@ -202,25 +219,52 @@ export function updateShopOrder(
     tableReserved?: boolean;
     reservationFee?: number | null;
   },
+  opts?: IdempotentCallOptions,
 ) {
-  return api<ShopOrder>(`/finance/orders/${id}`, {
-    method: "PATCH",
-    body: JSON.stringify(body),
-  });
+  return withIdempotentFinanceCall(
+    idempotencyActionKey("finance.orders.update", { orderId: id, ...body }),
+    (idempotencyKey) =>
+      api<ShopOrder>(`/finance/orders/${id}`, {
+        method: "PATCH",
+        body: JSON.stringify(body),
+        headers: { "Idempotency-Key": idempotencyKey },
+      }),
+    opts,
+  );
 }
 
-export function archiveShopOrders(ids: string[]) {
-  return api<{ updated: number }>("/finance/orders/bulk/archive", {
-    method: "PATCH",
-    body: JSON.stringify({ ids }),
-  });
+export function archiveShopOrders(
+  ids: string[],
+  opts?: IdempotentCallOptions,
+) {
+  const sorted = [...ids].sort();
+  return withIdempotentFinanceCall(
+    idempotencyActionKey("finance.orders.bulk.archive", { ids: sorted }),
+    (idempotencyKey) =>
+      api<{ updated: number }>("/finance/orders/bulk/archive", {
+        method: "PATCH",
+        body: JSON.stringify({ ids }),
+        headers: { "Idempotency-Key": idempotencyKey },
+      }),
+    opts,
+  );
 }
 
-export function unarchiveShopOrders(ids: string[]) {
-  return api<{ updated: number }>("/finance/orders/bulk/unarchive", {
-    method: "PATCH",
-    body: JSON.stringify({ ids }),
-  });
+export function unarchiveShopOrders(
+  ids: string[],
+  opts?: IdempotentCallOptions,
+) {
+  const sorted = [...ids].sort();
+  return withIdempotentFinanceCall(
+    idempotencyActionKey("finance.orders.bulk.unarchive", { ids: sorted }),
+    (idempotencyKey) =>
+      api<{ updated: number }>("/finance/orders/bulk/unarchive", {
+        method: "PATCH",
+        body: JSON.stringify({ ids }),
+        headers: { "Idempotency-Key": idempotencyKey },
+      }),
+    opts,
+  );
 }
 
 export function fetchTopSellers(days = 30, limit = 10) {
@@ -236,11 +280,21 @@ export function fetchFinanceAnalytics(days = 30) {
 export function addShopOrderLine(
   orderId: string,
   body: { menuItemId: string; quantity?: number },
+  opts?: IdempotentCallOptions,
 ) {
-  return api<ShopOrder>(`/finance/orders/${orderId}/lines`, {
-    method: "POST",
-    body: JSON.stringify(body),
-  });
+  return withIdempotentFinanceCall(
+    idempotencyActionKey("finance.orders.lines.add", {
+      orderId,
+      ...body,
+    }),
+    (idempotencyKey) =>
+      api<ShopOrder>(`/finance/orders/${orderId}/lines`, {
+        method: "POST",
+        body: JSON.stringify(body),
+        headers: { "Idempotency-Key": idempotencyKey },
+      }),
+    opts,
+  );
 }
 
 export function patchShopOrderLine(
@@ -251,45 +305,85 @@ export function patchShopOrderLine(
     unitPrice?: number;
     lineStatus?: "ACTIVE" | "CANCELED";
   },
+  opts?: IdempotentCallOptions,
 ) {
-  return api<ShopOrder>(
-    `/finance/orders/${orderId}/lines/${lineId}`,
-    {
-      method: "PATCH",
-      body: JSON.stringify(body),
-    },
+  return withIdempotentFinanceCall(
+    idempotencyActionKey("finance.orders.lines.patch", {
+      orderId,
+      lineId,
+      ...body,
+    }),
+    (idempotencyKey) =>
+      api<ShopOrder>(`/finance/orders/${orderId}/lines/${lineId}`, {
+        method: "PATCH",
+        body: JSON.stringify(body),
+        headers: { "Idempotency-Key": idempotencyKey },
+      }),
+    opts,
   );
 }
 
-export function deleteShopOrderLine(orderId: string, lineId: string) {
-  return api<ShopOrder>(`/finance/orders/${orderId}/lines/${lineId}`, {
-    method: "DELETE",
-  });
+export function deleteShopOrderLine(
+  orderId: string,
+  lineId: string,
+  opts?: IdempotentCallOptions,
+) {
+  return withIdempotentFinanceCall(
+    idempotencyActionKey("finance.orders.lines.delete", {
+      orderId,
+      lineId,
+    }),
+    (idempotencyKey) =>
+      api<ShopOrder>(`/finance/orders/${orderId}/lines/${lineId}`, {
+        method: "DELETE",
+        headers: { "Idempotency-Key": idempotencyKey },
+      }),
+    opts,
+  );
 }
 
-export function deleteShopOrder(id: string) {
-  return api<{ ok: boolean }>(`/finance/orders/${id}`, { method: "DELETE" });
+export function deleteShopOrder(id: string, opts?: IdempotentCallOptions) {
+  return withIdempotentFinanceCall(
+    idempotencyActionKey("finance.orders.delete", { orderId: id }),
+    (idempotencyKey) =>
+      api<{ ok: boolean }>(`/finance/orders/${id}`, {
+        method: "DELETE",
+        headers: { "Idempotency-Key": idempotencyKey },
+      }),
+    opts,
+  );
 }
 
 export function fetchTransactions(take = 40) {
   return api<Transaction[]>(`/finance/transactions?take=${take}`);
 }
 
-export function createTransaction(body: {
-  kind: "SALE" | "REFUND";
-  method?: string;
-  note?: string;
-  lines: {
-    menuItemId?: string;
-    name: string;
-    quantity: number;
-    unitPrice: number;
-  }[];
-}) {
-  return api<Transaction>("/finance/transactions", {
-    method: "POST",
-    body: JSON.stringify(body),
-  });
+export function createTransaction(
+  body: {
+    kind: "SALE" | "REFUND";
+    method?: string;
+    note?: string;
+    lines: {
+      menuItemId?: string;
+      name: string;
+      quantity: number;
+      unitPrice: number;
+    }[];
+  },
+  opts?: IdempotentCallOptions,
+) {
+  // One key per user action; reused on same-attempt retries (CSRF) and
+  // identical "Try again" after soft failure (Phase 2 handoff).
+  return withIdempotentFinanceCall(
+    idempotencyActionKey("finance.transactions.create", body),
+    (idempotencyKey) =>
+      api<Transaction>("/finance/transactions", {
+        method: "POST",
+        body: JSON.stringify(body),
+        headers: { "Idempotency-Key": idempotencyKey },
+      }),
+    opts,
+  );
 }
 
 export function fetchSalesByItem(days = 30) {
@@ -300,20 +394,37 @@ export function fetchLosses() {
   return api<ShopLoss[]>("/finance/losses");
 }
 
-export function createLoss(body: {
-  amount: number;
-  reason: string;
-  category?: string;
-  occurredAt?: string;
-}) {
-  return api<ShopLoss>("/finance/losses", {
-    method: "POST",
-    body: JSON.stringify(body),
-  });
+export function createLoss(
+  body: {
+    amount: number;
+    reason: string;
+    category?: string;
+    occurredAt?: string;
+  },
+  opts?: IdempotentCallOptions,
+) {
+  return withIdempotentFinanceCall(
+    idempotencyActionKey("finance.losses.create", body),
+    (idempotencyKey) =>
+      api<ShopLoss>("/finance/losses", {
+        method: "POST",
+        body: JSON.stringify(body),
+        headers: { "Idempotency-Key": idempotencyKey },
+      }),
+    opts,
+  );
 }
 
-export function deleteLoss(id: string) {
-  return api(`/finance/losses/${id}`, { method: "DELETE" });
+export function deleteLoss(id: string, opts?: IdempotentCallOptions) {
+  return withIdempotentFinanceCall(
+    idempotencyActionKey("finance.losses.delete", { lossId: id }),
+    (idempotencyKey) =>
+      api(`/finance/losses/${id}`, {
+        method: "DELETE",
+        headers: { "Idempotency-Key": idempotencyKey },
+      }),
+    opts,
+  );
 }
 
 export function fetchPlaySessions(params?: {
@@ -326,19 +437,28 @@ export function fetchPlaySessions(params?: {
   return api<PlaySession[]>(`/finance/play-sessions?${q.toString()}`);
 }
 
-export function createPlaySession(body: {
-  resourceId?: string;
-  playerCount?: number;
-  durationMinutes?: number;
-  amount?: number;
-  paymentMethod?: string;
-  label?: string;
-  note?: string;
-}) {
-  return api<PlaySession>("/finance/play-sessions", {
-    method: "POST",
-    body: JSON.stringify(body),
-  });
+export function createPlaySession(
+  body: {
+    resourceId?: string;
+    playerCount?: number;
+    durationMinutes?: number;
+    amount?: number;
+    paymentMethod?: string;
+    label?: string;
+    note?: string;
+  },
+  opts?: IdempotentCallOptions,
+) {
+  return withIdempotentFinanceCall(
+    idempotencyActionKey("finance.play-sessions.create", body),
+    (idempotencyKey) =>
+      api<PlaySession>("/finance/play-sessions", {
+        method: "POST",
+        body: JSON.stringify(body),
+        headers: { "Idempotency-Key": idempotencyKey },
+      }),
+    opts,
+  );
 }
 
 export function updatePlaySession(
@@ -352,9 +472,16 @@ export function updatePlaySession(
     label?: string | null;
     note?: string | null;
   },
+  opts?: IdempotentCallOptions,
 ) {
-  return api<PlaySession>(`/finance/play-sessions/${id}`, {
-    method: "PATCH",
-    body: JSON.stringify(body),
-  });
+  return withIdempotentFinanceCall(
+    idempotencyActionKey("finance.play-sessions.update", { id, ...body }),
+    (idempotencyKey) =>
+      api<PlaySession>(`/finance/play-sessions/${id}`, {
+        method: "PATCH",
+        body: JSON.stringify(body),
+        headers: { "Idempotency-Key": idempotencyKey },
+      }),
+    opts,
+  );
 }

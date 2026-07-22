@@ -23,7 +23,11 @@ import { TenantPage } from "@/components/layout/tenant-page";
 import { FeatureGate } from "@/components/subscription/feature-gate";
 import { cn } from "@/lib/cn";
 import { formatDate } from "@/lib/format";
-import { NOTIFICATION_SECTIONS, sectionLabel } from "@/lib/notification-sections";
+import type { MessageKey } from "@/lib/i18n";
+import {
+  NOTIFICATION_SECTION_VALUES,
+  sectionLabel,
+} from "@/lib/notification-sections";
 import {
   archiveNotifications,
   deleteNotifications,
@@ -43,7 +47,10 @@ import { useCurrentMembership } from "@/lib/use-current-membership";
 import { useDashboardGuide } from "@/lib/use-dashboard-guide";
 import { useVenueAccess } from "@/lib/use-venue-access";
 import { useVenueHref } from "@/lib/venue-context";
+import { useVenueSettingsOptional } from "@/lib/venue-settings-context";
 import { useLiveData } from "@/lib/use-live-data";
+import { useNotificationsSse } from "@/lib/use-notifications-sse";
+import { notificationNavHref } from "@/lib/safe-app-href";
 
 const TYPE_ICON: Record<string, typeof Bell> = {
   SYSTEM: Bell,
@@ -59,6 +66,11 @@ function todayIso() {
   return new Date().toISOString().slice(0, 10);
 }
 
+type NotifT = (
+  key: MessageKey,
+  vars?: Record<string, string | number>,
+) => string;
+
 function NotificationItem({
   row,
   selected,
@@ -68,6 +80,7 @@ function NotificationItem({
   hrefBase,
   showCheckboxes,
   isArchivedView,
+  t,
 }: {
   row: NotificationRow;
   selected: boolean;
@@ -77,10 +90,11 @@ function NotificationItem({
   hrefBase: string;
   showCheckboxes: boolean;
   isArchivedView: boolean;
+  t: NotifT;
 }) {
   const Icon = TYPE_ICON[row.type] ?? Bell;
   const unread = !row.readAt;
-  const target = row.href ? `${hrefBase}${row.href}` : null;
+  const target = notificationNavHref(hrefBase, row.href);
 
   const inner = (
     <>
@@ -112,7 +126,7 @@ function NotificationItem({
             {row.title}
           </p>
           <span className="rounded border border-white/10 px-1.5 py-0.5 text-[10px] text-zinc-500">
-            {sectionLabel(row.section)}
+            {sectionLabel(row.section, t)}
           </span>
           {unread ? (
             <span className="h-1.5 w-1.5 rounded-full bg-emerald-400" />
@@ -132,7 +146,7 @@ function NotificationItem({
                 }}
                 className="text-[11px] text-emerald-400 hover:underline"
               >
-                Mark read
+                {t("notif.markRead")}
               </button>
             ) : (
               <button
@@ -144,7 +158,7 @@ function NotificationItem({
                 }}
                 className="text-[11px] text-zinc-500 hover:underline"
               >
-                Mark unread
+                {t("notif.markUnread")}
               </button>
             )}
           </div>
@@ -182,6 +196,8 @@ function NotificationItem({
 
 export default function NotificationsPage() {
   const guide = useDashboardGuide("notifications");
+  const vs = useVenueSettingsOptional();
+  const t: NotifT = vs?.t ?? ((key) => key);
   const { state } = useAuth();
   const membership = useCurrentMembership();
   const access = useVenueAccess();
@@ -232,7 +248,9 @@ export default function NotificationsPage() {
           setUnreadCount(data.unreadCount);
           setCanDelete(data.canDelete ?? false);
           if (!opts.silent) setSelected(new Set());
+          return true as const;
         })
+        .catch(() => false as const)
         .finally(() => {
           if (!opts.silent) setLoading(false);
         });
@@ -246,6 +264,13 @@ export default function NotificationsPage() {
 
   useLiveData(() => load({ silent: true }), [status, section, from, to], {
     intervalMs: 20_000,
+  });
+
+  // SSE hint → silent refetch; 20s poll remains for multi-instance / reconnect gaps.
+  useNotificationsSse({
+    onNotification: () => {
+      void load({ silent: true });
+    },
   });
 
   useEffect(() => {
@@ -361,7 +386,7 @@ export default function NotificationsPage() {
         to: to || undefined,
       });
     } catch (e) {
-      setError(e instanceof Error ? e.message : "Export failed.");
+      setError(e instanceof Error ? e.message : t("notif.exportFailed"));
     } finally {
       setExporting(false);
     }
@@ -372,11 +397,11 @@ export default function NotificationsPage() {
     allMatching?: boolean;
   }) => {
     const count = opts.allMatching ? total : (opts.ids?.length ?? 0);
-    if (
-      !confirm(
-        `Permanently delete ${count} notification${count === 1 ? "" : "s"}? This cannot be undone.`,
-      )
-    ) {
+    const confirmMsg =
+      count === 1
+        ? t("notif.deleteConfirmOne")
+        : t("notif.deleteConfirmMany", { count });
+    if (!confirm(confirmMsg)) {
       return;
     }
     setDeleting(true);
@@ -391,7 +416,7 @@ export default function NotificationsPage() {
       });
       await load();
     } catch (e) {
-      setError(e instanceof Error ? e.message : "Delete failed.");
+      setError(e instanceof Error ? e.message : t("notif.deleteFailed"));
     } finally {
       setDeleting(false);
     }
@@ -400,20 +425,16 @@ export default function NotificationsPage() {
   if (state.status === "authed" && !canViewNotifications) {
     return (
       <TenantPage title={guide.title} description={guide.description}>
-        <p className="text-sm text-zinc-400">
-          You do not have permission to view notifications.
-        </p>
+        <p className="text-sm text-zinc-400">{t("notif.noPermission")}</p>
       </TenantPage>
     );
   }
 
   return (
     <TenantPage
-      title={isArchivedView ? "Archived notifications" : guide.title}
+      title={isArchivedView ? t("notif.archivedTitle") : guide.title}
       description={
-        isArchivedView
-          ? "Restore items to your inbox with Unarchive. Owners can permanently delete."
-          : guide.description
+        isArchivedView ? t("notif.archivedDescription") : guide.description
       }
       capabilities={guide.capabilities}
       actions={
@@ -430,7 +451,7 @@ export default function NotificationsPage() {
             ) : (
               <Download size={14} />
             )}
-            Export CSV
+            {t("notif.exportCsv")}
           </button>
           {isArchivedView ? (
             <Link
@@ -438,16 +459,16 @@ export default function NotificationsPage() {
               className="inline-flex items-center gap-1.5 rounded-lg border border-white/10 px-3 py-1.5 text-xs text-zinc-300 hover:bg-white/5"
             >
               <ArrowLeft size={14} />
-              Back to inbox
+              {t("notif.backToInbox")}
             </Link>
           ) : (
             <Link
               href={archivedHref}
               className="inline-flex items-center gap-1.5 rounded-lg border border-violet-400/30 bg-violet-500/10 px-3 py-1.5 text-xs text-violet-200"
-              title="View archived and restore to inbox"
+              title={t("notif.archivedLinkTitle")}
             >
               <Archive size={14} />
-              Archived
+              {t("notif.archived")}
             </Link>
           )}
         </div>
@@ -462,7 +483,7 @@ export default function NotificationsPage() {
       ) : null}
       <div className="mb-4 grid gap-3 rounded-xl border border-white/10 bg-white/[0.02] p-4 sm:grid-cols-2 lg:grid-cols-4">
         <label className="block text-xs text-zinc-500">
-          From
+          {t("notif.from")}
           <input
             type="date"
             value={from}
@@ -471,7 +492,7 @@ export default function NotificationsPage() {
           />
         </label>
         <label className="block text-xs text-zinc-500">
-          To
+          {t("notif.to")}
           <input
             type="date"
             value={to}
@@ -480,21 +501,21 @@ export default function NotificationsPage() {
           />
         </label>
         <label className="block text-xs text-zinc-500">
-          Section
+          {t("notif.section")}
           <select
             value={section}
             onChange={(e) => setSection(e.target.value)}
             className="mt-1 w-full rounded-lg border border-white/10 bg-zinc-950 px-3 py-2 text-sm text-white"
           >
-            {NOTIFICATION_SECTIONS.map((s) => (
-              <option key={s.value} value={s.value}>
-                {s.label}
+            {NOTIFICATION_SECTION_VALUES.map((value) => (
+              <option key={value} value={value}>
+                {sectionLabel(value, t)}
               </option>
             ))}
           </select>
         </label>
         <label className="block text-xs text-zinc-500">
-          Status
+          {t("notif.status")}
           <select
             value={status}
             onChange={(e) =>
@@ -502,20 +523,22 @@ export default function NotificationsPage() {
             }
             className="mt-1 w-full rounded-lg border border-white/10 bg-zinc-950 px-3 py-2 text-sm text-white"
           >
-            <option value="all">All</option>
-            <option value="unread">Unread</option>
-            <option value="read">Read</option>
-            <option value="archived">Archived</option>
+            <option value="all">{t("notif.statusAll")}</option>
+            <option value="unread">{t("notif.statusUnread")}</option>
+            <option value="read">{t("notif.statusRead")}</option>
+            <option value="archived">{t("notif.statusArchived")}</option>
           </select>
         </label>
       </div>
 
       <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
         <p className="text-xs text-zinc-500">
-          {total} notification{total === 1 ? "" : "s"}
-          {unreadCount > 0 && status !== "archived" ?
-            ` · ${unreadCount} unread`
-          : ""}
+          {total === 1
+            ? t("notif.countOne", { total })
+            : t("notif.countMany", { total })}
+          {unreadCount > 0 && status !== "archived"
+            ? t("notif.unreadSuffix", { unread: unreadCount })
+            : ""}
         </p>
         <div className="flex flex-wrap gap-2">
           {status !== "archived" && unreadCount > 0 ? (
@@ -530,7 +553,7 @@ export default function NotificationsPage() {
               ) : (
                 <CheckCheck size={14} />
               )}
-              Read all
+              {t("notif.readAll")}
             </button>
           ) : null}
           <button
@@ -539,7 +562,7 @@ export default function NotificationsPage() {
             disabled={items.length === 0}
             className="inline-flex items-center gap-2 rounded-lg border border-white/10 px-3 py-1.5 text-xs text-zinc-400 hover:text-zinc-200 disabled:opacity-50"
           >
-            Select all in view
+            {t("notif.selectAll")}
           </button>
           {selected.size > 0 ? (
             <button
@@ -547,7 +570,7 @@ export default function NotificationsPage() {
               onClick={() => setSelected(new Set())}
               className="inline-flex items-center gap-2 rounded-lg border border-white/10 px-3 py-1.5 text-xs text-zinc-400 hover:text-zinc-200"
             >
-              Clear selection
+              {t("notif.clearSelection")}
             </button>
           ) : null}
           {isArchivedView ? (
@@ -564,7 +587,7 @@ export default function NotificationsPage() {
                   ) : (
                     <ArchiveRestore size={14} />
                   )}
-                  Unarchive selected ({selected.size})
+                  {t("notif.unarchiveSelected", { n: selected.size })}
                 </button>
               ) : null}
               <button
@@ -574,7 +597,7 @@ export default function NotificationsPage() {
                 className="inline-flex items-center gap-2 rounded-lg border border-emerald-400/30 px-3 py-1.5 text-xs text-emerald-300 hover:bg-emerald-500/10 disabled:opacity-50"
               >
                 <ArchiveRestore size={14} />
-                Unarchive all matching
+                {t("notif.unarchiveAll")}
               </button>
             </>
           ) : (
@@ -591,7 +614,7 @@ export default function NotificationsPage() {
                   ) : (
                     <Archive size={14} />
                   )}
-                  Archive selected ({selected.size})
+                  {t("notif.archiveSelected", { n: selected.size })}
                 </button>
               ) : null}
               <button
@@ -601,7 +624,7 @@ export default function NotificationsPage() {
                 className="inline-flex items-center gap-2 rounded-lg border border-violet-400/30 px-3 py-1.5 text-xs text-violet-300 hover:bg-violet-500/10 disabled:opacity-50"
               >
                 <Archive size={14} />
-                Archive all matching
+                {t("notif.archiveAll")}
               </button>
             </>
           )}
@@ -619,7 +642,7 @@ export default function NotificationsPage() {
                   ) : (
                     <Trash2 size={14} />
                   )}
-                  Delete selected ({selected.size})
+                  {t("notif.deleteSelected", { n: selected.size })}
                 </button>
               ) : null}
               <button
@@ -629,7 +652,7 @@ export default function NotificationsPage() {
                 className="inline-flex items-center gap-2 rounded-lg border border-rose-400/30 px-3 py-1.5 text-xs text-rose-300 hover:bg-rose-500/10 disabled:opacity-50"
               >
                 <Trash2 size={14} />
-                Delete all matching
+                {t("notif.deleteAll")}
               </button>
             </>
           ) : null}
@@ -642,11 +665,11 @@ export default function NotificationsPage() {
         <div className="rounded-xl border border-dashed border-white/10 px-6 py-12 text-center">
           <Bell className="mx-auto h-8 w-8 text-zinc-600" />
           <p className="mt-3 text-sm text-zinc-400">
-            {status === "archived" ?
-              "No archived notifications for this filter."
-            : status === "unread" ?
-              "No unread notifications."
-            : "No notifications yet."}
+            {status === "archived"
+              ? t("notif.emptyArchived")
+              : status === "unread"
+                ? t("notif.emptyUnread")
+                : t("notif.emptyAll")}
           </p>
         </div>
       ) : (
@@ -662,6 +685,7 @@ export default function NotificationsPage() {
                 hrefBase={hrefBase}
                 showCheckboxes={showCheckboxes}
                 isArchivedView={isArchivedView}
+                t={t}
               />
             </li>
           ))}
@@ -671,15 +695,12 @@ export default function NotificationsPage() {
       {isArchivedView ? (
         <p className="mt-6 flex items-center gap-2 text-xs text-zinc-600">
           <ArchiveRestore size={12} />
-          Select notifications and unarchive to return them to your inbox. Use the
-          archive icon in the header anytime to open this view.
+          {t("notif.archivedFooter")}
         </p>
       ) : (
         <p className="mt-6 flex items-center gap-2 text-xs text-zinc-600">
           <MailOpen size={12} />
-          Use filters + archive to tidy your inbox, or click the{" "}
-          <Archive size={12} className="inline" /> icon in the header to review
-          archived items.
+          {t("notif.inboxFooter")}
         </p>
       )}
       </FeatureGate>

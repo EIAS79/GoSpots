@@ -22,6 +22,15 @@ import {
 import { PrismaService } from '../../prisma/prisma.service';
 import { requireShopId } from '../../common/tenant';
 import { assertShopFeature } from '../../common/subscription-feature.util';
+import { prepareOfferingConfigForWrite } from '../../common/offering-config.util';
+import { serializeMoney, toMoneyNumber } from '../../common/money.util';
+import {
+  buildDiningMirrorLabel,
+  deleteAdvisorySeatingForDiningGroup,
+  seatingZoneFromSectionZone,
+  syncAdvisorySeatingMirrorsForSection,
+  upsertAdvisorySeatingForDiningGroup,
+} from '../../common/resource-dining-dual-write.util';
 import { AuditService } from '../audit/audit.service';
 import type { JwtAccessPayload } from '../auth/auth.service';
 import {
@@ -49,9 +58,10 @@ const ACTIVE_RESERVATION: ReservationStatus[] = [
 ];
 
 function toInputJson(
-  value: Record<string, unknown> | undefined,
+  value: unknown,
 ): Prisma.InputJsonValue | undefined {
-  return value as Prisma.InputJsonValue | undefined;
+  if (value == null) return undefined;
+  return value as Prisma.InputJsonValue;
 }
 
 @Injectable()
@@ -166,10 +176,13 @@ export class ResourcesService {
           slotMinutes: cat.slotMinutes,
           sortOrder: cat.sortOrder,
           playstationGames: cat.playstationGames,
-          offeringConfig: cat.offeringConfig,
+          offeringConfig: prepareOfferingConfigForWrite(cat.offeringConfig),
           unitKind,
           unitLabels,
-          rates: cat.rates,
+          rates: cat.rates.map((r) => ({
+            ...r,
+            price: serializeMoney(r.price),
+          })),
           sections: cat.gamingSections.map((s) => ({
             id: s.id,
             name: s.name,
@@ -227,12 +240,14 @@ export class ResourcesService {
         description: dto.description,
         slotMinutes: dto.slotMinutes ?? 60,
         playstationGames: dto.playstationGames ?? [],
-        offeringConfig: toInputJson(dto.offeringConfig),
+        offeringConfig: toInputJson(
+          prepareOfferingConfigForWrite(dto.offeringConfig),
+        ),
         sortOrder: dto.sortOrder ?? 0,
       },
     });
     if (dto.rates?.length) {
-      await this.syncRates(category.id, dto.rates);
+      await this.syncRates(category.id, dto.rates, shopId);
     }
     if (dto.unitCount && dto.unitCount > 0 && !DINING_TYPES.includes(dto.type)) {
       const prefix =
@@ -278,7 +293,7 @@ export class ResourcesService {
     const shopId = actor.shopId!;
     const cat = await this.ensureCategory(shopId, id);
     await this.prisma.resourceCategory.update({
-      where: { id },
+      where: { id, shopId },
       data: {
         ...(dto.type != null && { type: dto.type }),
         ...(dto.name != null && { name: dto.name }),
@@ -289,18 +304,20 @@ export class ResourcesService {
           playstationGames: dto.playstationGames,
         }),
         ...(dto.offeringConfig !== undefined && {
-          offeringConfig: toInputJson(dto.offeringConfig),
+          offeringConfig: toInputJson(
+            prepareOfferingConfigForWrite(dto.offeringConfig),
+          ),
         }),
         ...(dto.sortOrder != null && { sortOrder: dto.sortOrder }),
       },
     });
     if (dto.type != null) {
       await this.prisma.resource.updateMany({
-        where: { categoryId: id },
+        where: { categoryId: id, shopId },
         data: { type: dto.type },
       });
     }
-    if (dto.rates) await this.syncRates(id, dto.rates);
+    if (dto.rates) await this.syncRates(id, dto.rates, shopId);
     if (dto.totalUnits != null && !DINING_TYPES.includes(cat.type)) {
       const type = dto.type ?? cat.type;
       const name = dto.name ?? cat.name;
@@ -324,7 +341,9 @@ export class ResourcesService {
   async deleteCategory(actor: JwtAccessPayload, id: string) {
     this.assertWrite(actor);
     const cat = await this.ensureCategory(actor.shopId!, id);
-    await this.prisma.resourceCategory.delete({ where: { id } });
+    await this.prisma.resourceCategory.delete({
+      where: { id, shopId: actor.shopId! },
+    });
     await this.audit.record(actor, {
       section: 'operations',
       action: 'resource.category.delete',
@@ -375,7 +394,7 @@ export class ResourcesService {
       }
     }
     const resource = await this.prisma.resource.update({
-      where: { id },
+      where: { id, shopId },
       data: {
         ...(dto.name != null && { name: dto.name }),
         ...(dto.description !== undefined && { description: dto.description }),
@@ -419,7 +438,7 @@ export class ResourcesService {
   async deleteResource(actor: JwtAccessPayload, id: string) {
     this.assertWrite(actor);
     const r = await this.ensureResource(actor.shopId!, id);
-    await this.prisma.resource.delete({ where: { id } });
+    await this.prisma.resource.delete({ where: { id, shopId: actor.shopId! } });
     await this.audit.record(actor, {
       section: 'operations',
       action: 'resource.unit.delete',
@@ -443,7 +462,7 @@ export class ResourcesService {
     const url = await this.media.replaceMediaPath(shopId, oldUrl, file);
     const data = slot === '1' ? { imageUrl: url } : { imageUrl2: url };
     await this.prisma.resourceCategory.update({
-      where: { id: categoryId },
+      where: { id: categoryId, shopId },
       data,
     });
     await this.audit.record(actor, {
@@ -583,7 +602,7 @@ export class ResourcesService {
     if (!existing) throw new NotFoundException('Gaming section not found.');
 
     await this.prisma.gamingSection.update({
-      where: { id },
+      where: { id, shopId },
       data: {
         ...(dto.name != null && { name: dto.name.trim() }),
         ...(dto.floor != null && {
@@ -632,6 +651,9 @@ export class ResourcesService {
 
     if (existing.category.type === 'DINING') {
       await this.syncShopFloorFromDiningSections(shopId);
+      if (dto.floor != null || dto.zone != null) {
+        await syncAdvisorySeatingMirrorsForSection(this.prisma, shopId, id);
+      }
     }
 
     await this.audit.record(actor, {
@@ -661,9 +683,9 @@ export class ResourcesService {
       );
     }
 
-    await this.prisma.gamingSection.delete({ where: { id } });
-    const cat = await this.prisma.resourceCategory.findUnique({
-      where: { id: section.categoryId },
+    await this.prisma.gamingSection.delete({ where: { id, shopId } });
+    const cat = await this.prisma.resourceCategory.findFirst({
+      where: { id: section.categoryId, shopId },
       select: { type: true },
     });
     if (cat?.type === 'DINING') {
@@ -698,7 +720,7 @@ export class ResourcesService {
     assertResourceImageFile(file);
     const url = await this.media.replaceMediaPath(shopId, section.imageUrl, file);
     await this.prisma.gamingSection.update({
-      where: { id: sectionId },
+      where: { id: sectionId, shopId },
       data: { imageUrl: url },
     });
     await this.audit.record(actor, {
@@ -753,6 +775,16 @@ export class ResourcesService {
       group.id,
     );
 
+    await upsertAdvisorySeatingForDiningGroup(this.prisma, {
+      shopId,
+      diningTableGroupId: group.id,
+      label: buildDiningMirrorLabel(group.name, capacity),
+      capacity,
+      totalCount: dto.tableCount,
+      floor: section.floor,
+      zone: seatingZoneFromSectionZone(section.zone),
+    });
+
     await this.audit.record(actor, {
       section: 'operations',
       action: 'dining.table_group.create',
@@ -782,7 +814,7 @@ export class ResourcesService {
         : group.capacity;
 
     await this.prisma.diningTableGroup.update({
-      where: { id },
+      where: { id, shopId },
       data: {
         ...(dto.name != null && { name: dto.name.trim() || `${capacity}-seat table` }),
         ...(dto.capacity != null && { capacity }),
@@ -811,6 +843,22 @@ export class ResourcesService {
         capacity,
       );
     }
+
+    const unitCount = await this.prisma.resource.count({
+      where: { shopId, tableGroupId: id },
+    });
+    await upsertAdvisorySeatingForDiningGroup(this.prisma, {
+      shopId,
+      diningTableGroupId: id,
+      label: buildDiningMirrorLabel(
+        dto.name != null ? dto.name.trim() || `${capacity}-seat table` : group.name,
+        capacity,
+      ),
+      capacity,
+      totalCount: unitCount,
+      floor: group.section.floor,
+      zone: seatingZoneFromSectionZone(group.section.zone),
+    });
 
     await this.audit.record(actor, {
       section: 'operations',
@@ -852,7 +900,8 @@ export class ResourcesService {
     }
 
     await this.prisma.resource.deleteMany({ where: { tableGroupId: id, shopId } });
-    await this.prisma.diningTableGroup.delete({ where: { id } });
+    await deleteAdvisorySeatingForDiningGroup(this.prisma, shopId, id);
+    await this.prisma.diningTableGroup.delete({ where: { id, shopId } });
     await this.audit.record(actor, {
       section: 'operations',
       action: 'dining.table_group.delete',
@@ -877,7 +926,7 @@ export class ResourcesService {
     assertResourceImageFile(file);
     const url = await this.media.replaceMediaPath(shopId, group.imageUrl, file);
     await this.prisma.diningTableGroup.update({
-      where: { id: groupId },
+      where: { id: groupId, shopId },
       data: { imageUrl: url },
     });
     await this.audit.record(actor, {
@@ -951,7 +1000,7 @@ export class ResourcesService {
       }
     }
     await this.prisma.resource.deleteMany({
-      where: { id: { in: toRemove.map((r) => r.id) } },
+      where: { id: { in: toRemove.map((r) => r.id) }, shopId },
     });
   }
 
@@ -1004,7 +1053,7 @@ export class ResourcesService {
       }
     }
     await this.prisma.resource.deleteMany({
-      where: { id: { in: toRemove.map((r) => r.id) } },
+      where: { id: { in: toRemove.map((r) => r.id) }, shopId },
     });
   }
 
@@ -1021,11 +1070,28 @@ export class ResourcesService {
       },
     });
     if (!cat) throw new NotFoundException('Category not found');
-    return cat;
+    return {
+      ...cat,
+      offeringConfig: prepareOfferingConfigForWrite(cat.offeringConfig),
+      rates: cat.rates.map((r) => ({
+        ...r,
+        price: serializeMoney(r.price),
+      })),
+      resources: cat.resources.map((r) => ({
+        ...r,
+        hourlyRate: serializeMoney(r.hourlyRate),
+      })),
+    };
   }
 
-  private async syncRates(categoryId: string, rates: ResourceRateDto[]) {
-    await this.prisma.resourceRate.deleteMany({ where: { categoryId } });
+  private async syncRates(
+    categoryId: string,
+    rates: ResourceRateDto[],
+    shopId: string,
+  ) {
+    await this.prisma.resourceRate.deleteMany({
+      where: { categoryId, category: { shopId } },
+    });
     if (rates.length) {
       await this.prisma.resourceRate.createMany({
         data: rates.map((r, i) => ({
@@ -1085,7 +1151,7 @@ export class ResourcesService {
     }
 
     await this.prisma.resource.deleteMany({
-      where: { id: { in: removable.map((r) => r.id) } },
+      where: { id: { in: removable.map((r) => r.id) }, shopId },
     });
   }
 
@@ -1112,8 +1178,8 @@ export class ResourcesService {
     });
     const hourly =
       defaultRate?.durationMinutes && defaultRate.durationMinutes > 0
-        ? (defaultRate.price / defaultRate.durationMinutes) * 60
-        : (defaultRate?.price ?? 0);
+        ? (toMoneyNumber(defaultRate.price) / defaultRate.durationMinutes) * 60
+        : toMoneyNumber(defaultRate?.price);
 
     const rows = Array.from({ length: count }, (_, i) => {
       const n = existing + i + 1;

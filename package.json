@@ -16,9 +16,12 @@
     "build:vercel": "pnpm --filter @gospots/web run build",
     "build:api": "pnpm --filter @gospots/api run build",
     "build:web": "pnpm --filter @gospots/web run build",
-    "lint": "pnpm --filter @gospots/api run lint && pnpm --filter @gospots/web run lint"
+    "lint": "pnpm --filter @gospots/api run lint && pnpm --filter @gospots/web run lint",
+    "test:e2e:smoke": "pnpm --filter @gospots/web run test:e2e:smoke",
+    "test:a11y:smoke": "pnpm --filter @gospots/web run test:a11y:smoke"
   },
   "devDependencies": {
+    "@types/jest": "^30.0.0",
     "concurrently": "^9.2.1",
     "pnpm": "10.12.1"
   },

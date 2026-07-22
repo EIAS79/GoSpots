@@ -14,15 +14,15 @@ import { useVenueSettings } from "@/lib/venue-settings-context";
 
 type TxMode = "SALE" | "REFUND";
 
-const PAYMENT_METHODS = [
-  { value: "CASH", label: "Cash" },
-  { value: "CARD", label: "Card" },
-  { value: "ONLINE", label: "Online" },
-  { value: "OTHER", label: "Other" },
+const PAYMENT_METHOD_KEYS = [
+  { value: "CASH", labelKey: "finance.txPayCash" },
+  { value: "CARD", labelKey: "finance.txPayCard" },
+  { value: "ONLINE", labelKey: "finance.txPayOnline" },
+  { value: "OTHER", labelKey: "finance.txPayOther" },
 ] as const;
 
 export function FinanceTransactionsPanel({ canWrite }: { canWrite: boolean }) {
-  const { formatMoney } = useVenueSettings();
+  const { formatMoney, t } = useVenueSettings();
   const [rows, setRows] = useState<Transaction[]>([]);
   const [loading, setLoading] = useState(true);
   const [busy, setBusy] = useState(false);
@@ -35,19 +35,26 @@ export function FinanceTransactionsPanel({ canWrite }: { canWrite: boolean }) {
   const [method, setMethod] = useState("CASH");
   const [note, setNote] = useState("");
 
-  const load = useCallback(async (opts?: { silent?: boolean }) => {
-    if (!opts?.silent) setLoading(true);
-    setError(null);
-    try {
-      setRows(await fetchTransactions(60));
-    } catch (e) {
-      if (!opts?.silent) {
-        setError(e instanceof Error ? e.message : "Could not load transactions.");
+  const load = useCallback(
+    async (opts?: { silent?: boolean }) => {
+      if (!opts?.silent) setLoading(true);
+      setError(null);
+      try {
+        setRows(await fetchTransactions(60));
+        return true;
+      } catch (e) {
+        if (!opts?.silent) {
+          setError(
+            e instanceof Error ? e.message : t("finance.txLoadFailed"),
+          );
+        }
+        return false;
+      } finally {
+        if (!opts?.silent) setLoading(false);
       }
-    } finally {
-      if (!opts?.silent) setLoading(false);
-    }
-  }, []);
+    },
+    [t],
+  );
 
   useEffect(() => {
     void load();
@@ -64,7 +71,7 @@ export function FinanceTransactionsPanel({ canWrite }: { canWrite: boolean }) {
     const unitPrice = parseFloat(amount);
     const quantity = parseInt(qty, 10);
     if (!name.trim() || !Number.isFinite(unitPrice) || unitPrice < 0) {
-      setError("Enter a name and valid amount.");
+      setError(t("finance.txEnterValid"));
       return;
     }
     setBusy(true);
@@ -89,7 +96,9 @@ export function FinanceTransactionsPanel({ canWrite }: { canWrite: boolean }) {
       publishLiveEvent({ section: "finance" });
       await load({ silent: true });
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Could not record transaction.");
+      setError(
+        err instanceof Error ? err.message : t("finance.txRecordFailed"),
+      );
     } finally {
       setBusy(false);
     }
@@ -128,7 +137,7 @@ export function FinanceTransactionsPanel({ canWrite }: { canWrite: boolean }) {
               )}
             >
               <Plus size={14} />
-              Sale
+              {t("finance.txSale")}
             </button>
             <button
               type="button"
@@ -141,29 +150,31 @@ export function FinanceTransactionsPanel({ canWrite }: { canWrite: boolean }) {
               )}
             >
               <RotateCcw size={14} />
-              Refund
+              {t("finance.txRefund")}
             </button>
           </div>
           <p className="mt-3 text-sm font-medium text-white">
-            {mode === "SALE" ? "Quick counter sale" : "Counter refund"}
+            {mode === "SALE"
+              ? t("finance.txSaleTitle")
+              : t("finance.txRefundTitle")}
           </p>
           <p className="mt-1 text-xs text-zinc-500">
             {mode === "SALE"
-              ? "Record a walk-up sale without building a full menu order."
-              : "Record a refund; stock is restored when a menu item ID is linked on the API."}
+              ? t("finance.txSaleHint")
+              : t("finance.txRefundHint")}
           </p>
           <div className="mt-3 grid gap-3 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5">
             <label className="block text-xs text-zinc-500 sm:col-span-2">
-              Item / label
+              {t("finance.txItemLabel")}
               <input
                 value={name}
                 onChange={(e) => setName(e.target.value)}
                 className="mt-1 w-full rounded-lg border border-white/10 bg-zinc-950 px-3 py-2 text-sm text-white"
-                placeholder="Drinks bundle, merch…"
+                placeholder={t("finance.txItemPlaceholder")}
               />
             </label>
             <label className="block text-xs text-zinc-500">
-              Amount
+              {t("finance.txAmount")}
               <input
                 type="number"
                 min={0}
@@ -174,7 +185,7 @@ export function FinanceTransactionsPanel({ canWrite }: { canWrite: boolean }) {
               />
             </label>
             <label className="block text-xs text-zinc-500">
-              Qty
+              {t("finance.txQty")}
               <input
                 type="number"
                 min={1}
@@ -184,27 +195,27 @@ export function FinanceTransactionsPanel({ canWrite }: { canWrite: boolean }) {
               />
             </label>
             <label className="block text-xs text-zinc-500">
-              Payment
+              {t("finance.txPayment")}
               <select
                 value={method}
                 onChange={(e) => setMethod(e.target.value)}
                 className="mt-1 w-full rounded-lg border border-white/10 bg-zinc-950 px-3 py-2 text-sm text-white"
               >
-                {PAYMENT_METHODS.map((m) => (
+                {PAYMENT_METHOD_KEYS.map((m) => (
                   <option key={m.value} value={m.value}>
-                    {m.label}
+                    {t(m.labelKey)}
                   </option>
                 ))}
               </select>
             </label>
           </div>
           <label className="mt-3 block text-xs text-zinc-500">
-            Note (optional)
+            {t("finance.txNote")}
             <input
               value={note}
               onChange={(e) => setNote(e.target.value)}
               className="mt-1 w-full rounded-lg border border-white/10 bg-zinc-950 px-3 py-2 text-sm text-white"
-              placeholder="Reason, reference…"
+              placeholder={t("finance.txNotePlaceholder")}
             />
           </label>
           <button
@@ -218,7 +229,9 @@ export function FinanceTransactionsPanel({ canWrite }: { canWrite: boolean }) {
             )}
           >
             {mode === "SALE" ? <Plus size={14} /> : <RotateCcw size={14} />}
-            {mode === "SALE" ? "Record sale" : "Record refund"}
+            {mode === "SALE"
+              ? t("finance.txRecordSale")
+              : t("finance.txRecordRefund")}
           </button>
         </form>
       ) : null}
@@ -227,41 +240,42 @@ export function FinanceTransactionsPanel({ canWrite }: { canWrite: boolean }) {
         <div className="flex items-center gap-2 border-b border-white/5 bg-zinc-900/60 px-4 py-2.5">
           <Receipt size={16} className="text-zinc-400" />
           <span className="text-xs font-medium text-zinc-300">
-            Recent transactions
+            {t("finance.txRecent")}
           </span>
           <span className="ml-auto text-[10px] text-zinc-600">
-            Auto-refreshes every 20s
+            {t("finance.txAutoRefresh")}
           </span>
         </div>
         {rows.length === 0 ? (
           <p className="px-4 py-10 text-center text-sm text-zinc-500">
-            No transactions yet.
+            {t("finance.txEmpty")}
           </p>
         ) : (
           <ul className="divide-y divide-white/5">
-            {rows.map((t) => (
+            {rows.map((row) => (
               <li
-                key={t.id}
+                key={row.id}
                 className="flex flex-wrap items-center justify-between gap-2 px-4 py-3 text-sm"
               >
                 <div className="min-w-0">
                   <p className="font-medium text-white">
-                    {t.lines.map((l) => l.name).join(", ") || "Sale"}
+                    {row.lines.map((l) => l.name).join(", ") ||
+                      t("finance.txSaleFallback")}
                   </p>
                   <p className="text-[11px] text-zinc-500">
-                    {new Date(t.createdAt).toLocaleString()} · {t.method} ·{" "}
-                    {t.kind}
-                    {t.note ? ` · ${t.note}` : ""}
+                    {new Date(row.createdAt).toLocaleString()} · {row.method} ·{" "}
+                    {row.kind}
+                    {row.note ? ` · ${row.note}` : ""}
                   </p>
                 </div>
                 <span
                   className={cn(
                     "shrink-0 font-semibold tabular-nums",
-                    t.kind === "REFUND" ? "text-rose-300" : "text-emerald-300",
+                    row.kind === "REFUND" ? "text-rose-300" : "text-emerald-300",
                   )}
                 >
-                  {t.kind === "REFUND" ? "−" : ""}
-                  {formatMoney(t.amount)}
+                  {row.kind === "REFUND" ? "−" : ""}
+                  {formatMoney(row.amount)}
                 </span>
               </li>
             ))}

@@ -32,6 +32,19 @@ import { UnitStaffMenu } from "@/components/reservations/unit-staff-menu";
 
 const LANES_PER_PAGE = 8;
 
+export type BowlingLaneChromeLabels = {
+  floor?: string;
+  floorN?: (n: number) => string;
+  layoutZone?: string;
+  noLanes?: string;
+  alleyHint?: string;
+  swipeLanes?: string;
+  prev?: string;
+  next?: string;
+  lanesRange?: (from: number, to: number, total: number) => string;
+  staffLaneHint?: string;
+};
+
 function formatTime(iso: string) {
   return new Date(iso).toLocaleTimeString(undefined, {
     hour: "2-digit",
@@ -73,6 +86,8 @@ export function BowlingLaneFloorMap({
   displayOnly = false,
   showLegend = true,
   lanesPerPage = LANES_PER_PAGE,
+  chromeLabels,
+  guestStatusLabels,
 }: {
   units: ScheduleUnit[];
   sections?: ScheduleCategorySection[];
@@ -88,7 +103,12 @@ export function BowlingLaneFloorMap({
   displayOnly?: boolean;
   showLegend?: boolean;
   lanesPerPage?: number;
+  /** Optional guest/public i18n chrome (staff callers omit → English defaults). */
+  chromeLabels?: BowlingLaneChromeLabels;
+  /** Optional guest-window legend / tile status labels (public i18n). */
+  guestStatusLabels?: Record<UnitFloorStatus, string>;
 }) {
+  const statusLabels = guestStatusLabels ?? FLOOR_STATUS_LABELS;
   const [activeFloor, setActiveFloor] = useState(1);
   const [activeLayoutKey, setActiveLayoutKey] = useState("");
   const [page, setPage] = useState(0);
@@ -145,7 +165,7 @@ export function BowlingLaneFloorMap({
   if (!units.length) {
     return (
       <p className="px-6 py-12 text-center text-sm text-zinc-500">
-        No lanes configured yet.
+        {chromeLabels?.noLanes ?? "No lanes configured yet."}
       </p>
     );
   }
@@ -159,7 +179,7 @@ export function BowlingLaneFloorMap({
         <div className="border-b border-white/10 bg-zinc-950/40 px-3 py-2.5">
           <p className="mb-1.5 flex items-center gap-1 text-[9px] font-semibold uppercase tracking-widest text-zinc-600">
             <Layers size={10} className="text-emerald-400/70" />
-            Floor
+            {chromeLabels?.floor ?? "Floor"}
           </p>
           <div className="flex flex-wrap gap-1">
             {floors.map((floor) => {
@@ -187,7 +207,9 @@ export function BowlingLaneFloorMap({
                       : "border-white/10 text-zinc-500 hover:text-zinc-300",
                   )}
                 >
-                  Floor {floor}
+                  {chromeLabels?.floorN
+                    ? chromeLabels.floorN(floor)
+                    : `Floor ${floor}`}
                   <span className="opacity-70">
                     · {free}/{count}
                   </span>
@@ -202,7 +224,7 @@ export function BowlingLaneFloorMap({
         <div className="border-b border-white/10 bg-zinc-900/20 px-3 py-2">
           <p className="mb-1.5 flex items-center gap-1 text-[9px] font-semibold uppercase tracking-widest text-zinc-600">
             <LayoutGrid size={10} className="text-amber-400/70" />
-            Layout / zone
+            {chromeLabels?.layoutZone ?? "Layout / zone"}
           </p>
           <div className="flex flex-wrap gap-1">
             {layoutsOnFloor.map((group, index) => {
@@ -242,11 +264,11 @@ export function BowlingLaneFloorMap({
       <div className="min-w-0 p-3 md:p-6">
         <div className="mx-auto w-full min-w-0 max-w-4xl rounded-2xl border border-white/10 bg-gradient-to-b from-zinc-900/80 to-zinc-950/90 px-2 py-4 md:px-6 md:py-6">
           <p className="mb-4 text-center text-[10px] font-semibold uppercase tracking-[0.2em] text-zinc-500 sm:tracking-[0.25em]">
-            Bowling alley · approach → pins
+            {chromeLabels?.alleyHint ?? "Bowling alley · approach → pins"}
           </p>
           <div className="overflow-x-auto pb-2 [-ms-overflow-style:none] [scrollbar-width:thin] [&::-webkit-scrollbar]:h-1.5">
             <p className="mb-2 text-center text-[10px] text-zinc-500 md:hidden">
-              Swipe to see lanes
+              {chromeLabels?.swipeLanes ?? "Swipe to see lanes"}
             </p>
             <div className="flex min-w-min items-end justify-center gap-2 px-1 pb-1 sm:gap-3 md:gap-4">
             {pageLanes.map((unit) => (
@@ -259,6 +281,7 @@ export function BowlingLaneFloorMap({
                 highlighted={highlightedUnitId === unit.id}
                 precomputedStatus={precomputedStatus}
                 blockingBooking={blockingBookingsByUnitId?.[unit.id]}
+                statusLabels={statusLabels}
                 onBookUnit={onBookUnit}
                 onEditBooking={onEditBooking}
                 onInspectBlocked={onInspectBlocked}
@@ -279,12 +302,19 @@ export function BowlingLaneFloorMap({
             className="inline-flex items-center gap-0.5 rounded-md border border-white/10 px-2 py-1 text-[11px] text-zinc-400 transition hover:bg-white/5 disabled:opacity-40"
           >
             <ChevronLeft size={14} />
-            Prev
+            {chromeLabels?.prev ?? "Prev"}
           </button>
           <p className="text-[11px] text-zinc-500">
-            Lanes {safePage * lanesPerPage + 1}–
-            {Math.min((safePage + 1) * lanesPerPage, lanesInLayout.length)} of{" "}
-            {lanesInLayout.length}
+            {chromeLabels?.lanesRange
+              ? chromeLabels.lanesRange(
+                  safePage * lanesPerPage + 1,
+                  Math.min(
+                    (safePage + 1) * lanesPerPage,
+                    lanesInLayout.length,
+                  ),
+                  lanesInLayout.length,
+                )
+              : `Lanes ${safePage * lanesPerPage + 1}–${Math.min((safePage + 1) * lanesPerPage, lanesInLayout.length)} of ${lanesInLayout.length}`}
           </p>
           <button
             type="button"
@@ -292,7 +322,7 @@ export function BowlingLaneFloorMap({
             onClick={() => setPage((p) => Math.min(pageCount - 1, p + 1))}
             className="inline-flex items-center gap-0.5 rounded-md border border-white/10 px-2 py-1 text-[11px] text-zinc-400 transition hover:bg-white/5 disabled:opacity-40"
           >
-            Next
+            {chromeLabels?.next ?? "Next"}
             <ChevronRight size={14} />
           </button>
         </div>
@@ -302,9 +332,13 @@ export function BowlingLaneFloorMap({
         <div className="space-y-2">
           {canWrite && onToggleNotWorking && !displayOnly ? (
             <p className="text-center text-[10px] text-zinc-600">
-              Tap a free lane to book · use{" "}
-              <span className="text-zinc-500">⋮</span> to mark out of service ·
-              tap gray lanes to restore
+              {chromeLabels?.staffLaneHint ?? (
+                <>
+                  Tap a free lane to book · use{" "}
+                  <span className="text-zinc-500">⋮</span> to mark out of
+                  service · tap gray lanes to restore
+                </>
+              )}
             </p>
           ) : null}
           <div className="flex flex-wrap justify-center gap-3 border-t border-white/5 px-4 py-3 text-[10px] text-zinc-400">
@@ -312,7 +346,7 @@ export function BowlingLaneFloorMap({
             (s) => (
               <span key={s} className="inline-flex items-center gap-1.5">
                 <BowlingLaneIcon status={s} className="h-8 w-5" />
-                {FLOOR_STATUS_LABELS[s]}
+                {statusLabels[s]}
               </span>
             ),
           )}
@@ -331,6 +365,7 @@ function LaneTile({
   highlighted,
   precomputedStatus,
   blockingBooking,
+  statusLabels,
   onBookUnit,
   onEditBooking,
   onInspectBlocked,
@@ -343,6 +378,7 @@ function LaneTile({
   highlighted: boolean;
   precomputedStatus: boolean;
   blockingBooking?: ScheduleBooking;
+  statusLabels: Record<UnitFloorStatus, string>;
   onBookUnit?: (unitId: string) => void;
   onEditBooking?: (booking: ScheduleBooking, unitId: string) => void;
   onInspectBlocked?: (unitId: string, booking: ScheduleBooking) => void;
@@ -377,7 +413,7 @@ function LaneTile({
 
   const tooltip = live
     ? `${unit.name} · ${formatTime(live.startsAt)}–${formatTime(live.endsAt)}`
-    : `${unit.name} · ${FLOOR_STATUS_LABELS[status]}`;
+    : `${unit.name} · ${statusLabels[status]}`;
 
   return (
     <div className="relative">
@@ -423,7 +459,7 @@ function LaneTile({
           )}
         >
           <span className={cn("size-1 rounded-full", FLOOR_STATUS_DOT[status])} />
-          {FLOOR_STATUS_LABELS[status].split(" ")[0]}
+          {statusLabels[status].split(/\s|—|–|-/)[0]}
         </span>
         {live && status === "UNAVAILABLE" ? (
           <span className="max-w-full truncate text-[8px] text-zinc-500">

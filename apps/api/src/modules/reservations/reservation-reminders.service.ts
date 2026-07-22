@@ -1,39 +1,34 @@
 import { Injectable, Logger } from '@nestjs/common';
-
 import { Cron, CronExpression } from '@nestjs/schedule';
-
 import { ReservationStatus, ResourceStatus } from '@prisma/client';
-
 import { ACTIVE_RESERVATION } from '../../common/booking-floor-status';
 import { isDiningResourceType } from '../../common/dining-reservation.util';
+import { guestTokenRevokeFields } from '../../common/guest-token.util';
+import { withReservationRemindersCronLock } from '../../common/pg-advisory-lock.util';
 import { reservationSessionsHref } from '../../common/reservation-notification-href';
 import { PrismaService } from '../../prisma/prisma.service';
 import { AuditService } from '../audit/audit.service';
 import { NotificationsService } from '../notifications/notifications.service';
 
-
+/** Only these statuses may auto-transition to NO_SHOW (double-run safe). */
+export const AUTO_NO_SHOW_FROM_STATUSES = [
+  ReservationStatus.CONFIRMED,
+  ReservationStatus.PENDING,
+] as const;
 
 /**
-
  * Background lifecycle work for reservations:
-
  *   - 5 minutes before the start time → notification
-
  *   - at (or just after) the start time → notification
-
  *   - after hold window ends without check-in → NO_SHOW and free the unit
-
  *   - after session endsAt (end of day) while still checked in → COMPLETED cleanup
-
+ *
+ * Multi-instance: `tick` takes a Postgres transaction advisory lock so only one
+ * API process runs reminder + NO_SHOW + auto-complete side effects per minute.
  */
-
 @Injectable()
-
 export class ReservationRemindersService {
-
   private readonly logger = new Logger(ReservationRemindersService.name);
-
-
 
   constructor(
     private readonly prisma: PrismaService,
@@ -41,17 +36,25 @@ export class ReservationRemindersService {
     private readonly audit: AuditService,
   ) {}
 
-
-
   @Cron(CronExpression.EVERY_MINUTE)
   async tick() {
     try {
-      await Promise.all([
-        this.upcomingIn5Min(),
-        this.startsNow(),
-        this.autoNoShowSessions(),
-        this.autoCompleteCheckedInSessions(),
-      ]);
+      const outcome = await withReservationRemindersCronLock(
+        this.prisma,
+        async () => {
+          await Promise.all([
+            this.upcomingIn5Min(),
+            this.startsNow(),
+            this.autoNoShowSessions(),
+            this.autoCompleteCheckedInSessions(),
+          ]);
+        },
+      );
+      if (!outcome.acquired) {
+        this.logger.debug(
+          'Reservation reminder tick skipped (another instance holds cron lock)',
+        );
+      }
     } catch (err) {
       // Schema/transient DB errors — avoid flooding the console every minute.
       const message = err instanceof Error ? err.message : String(err);
@@ -67,28 +70,22 @@ export class ReservationRemindersService {
 
 
 
-  /** Guest did not arrive within the grace window after reservation time. */
-
+  /**
+   * Guest did not arrive within the grace window after reservation time.
+   *
+   * Idempotent / multi-instance safe: status flips only via conditional
+   * `updateMany` (CONFIRMED|PENDING → NO_SHOW) with guest-token revoke in the
+   * same write. Side effects run only when `count === 1`.
+   */
   private async autoNoShowSessions() {
-
     const now = new Date();
-
+    const revokeAt = now;
     const rows = await this.prisma.reservation.findMany({
-
       where: {
-
-        status: {
-
-          in: [ReservationStatus.CONFIRMED, ReservationStatus.PENDING],
-
-        },
-
+        status: { in: [...AUTO_NO_SHOW_FROM_STATUSES] },
         endsAt: { lte: now },
-
         resourceId: { not: null },
-
       },
-
       select: {
         id: true,
         shopId: true,
@@ -97,71 +94,44 @@ export class ReservationRemindersService {
         startsAt: true,
         resource: { select: { type: true, name: true } },
       },
-
       take: 500,
-
     });
 
     if (rows.length === 0) return;
 
-
-
+    let marked = 0;
     for (const r of rows) {
-
       const result = await this.prisma.reservation.updateMany({
-
         where: {
-
           id: r.id,
-
-          status: {
-
-            in: [ReservationStatus.CONFIRMED, ReservationStatus.PENDING],
-
-          },
-
+          status: { in: [...AUTO_NO_SHOW_FROM_STATUSES] },
         },
-
-        data: { status: ReservationStatus.NO_SHOW },
-
+        data: {
+          status: ReservationStatus.NO_SHOW,
+          ...guestTokenRevokeFields(revokeAt),
+        },
       });
 
+      // Lost the race / already transitioned — skip free-unit + notify.
       if (result.count === 0 || !r.resourceId) continue;
-
-
+      marked += result.count;
 
       const stillBusy = await this.prisma.reservation.findFirst({
-
         where: {
-
           shopId: r.shopId,
-
           resourceId: r.resourceId,
-
           status: { in: ACTIVE_RESERVATION },
-
         },
-
         select: { id: true },
-
       });
-
       if (stillBusy) continue;
 
-
-
       await this.prisma.resource.updateMany({
-
         where: {
-
           id: r.resourceId,
-
           status: { not: ResourceStatus.MAINTENANCE },
-
         },
-
         data: { status: ResourceStatus.AVAILABLE },
-
       });
 
       const unitLabel = r.resource?.name ?? 'unit';
@@ -180,13 +150,9 @@ export class ReservationRemindersService {
         href: reservationSessionsHref(r.startsAt, tab),
         dedupeKey: `auto_no_show:${r.id}`,
       });
-
     }
 
-
-
-    this.logger.debug(`Marked ${rows.length} reservation(s) as no-show`);
-
+    this.logger.debug(`Marked ${marked} reservation(s) as no-show`);
   }
 
 

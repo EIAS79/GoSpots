@@ -10,30 +10,29 @@ import {
 import Link from "next/link";
 import { useParams } from "next/navigation";
 import { useCallback, useEffect, useState } from "react";
-import { GoSpotsLogo } from "@/components/brand/gospots-logo";
+import { LocoraLogo } from "@/components/brand/locora-logo";
 import { cn } from "@/lib/cn";
 import {
   cancelPublicEventRequest,
-  EVENT_REQUEST_STATUS_LABELS,
-  EVENT_REQUEST_TYPE_LABELS,
   fetchPublicEventRequestStatus,
   type PublicEventRequestStatus,
 } from "@/lib/event-requests-client";
+import { usePublicPrefs } from "@/lib/public-prefs-context";
 import { useLiveData } from "@/lib/use-live-data";
 
-function formatWhen(startsAt: string, endsAt: string | null) {
+function formatWhen(startsAt: string, endsAt: string | null, locale: string) {
   const start = new Date(startsAt);
-  const date = start.toLocaleDateString(undefined, {
+  const date = start.toLocaleDateString(locale, {
     weekday: "long",
     month: "long",
     day: "numeric",
   });
-  const startTime = start.toLocaleTimeString(undefined, {
+  const startTime = start.toLocaleTimeString(locale, {
     hour: "numeric",
     minute: "2-digit",
   });
   if (!endsAt) return `${date} · ${startTime}`;
-  const endTime = new Date(endsAt).toLocaleTimeString(undefined, {
+  const endTime = new Date(endsAt).toLocaleTimeString(locale, {
     hour: "numeric",
     minute: "2-digit",
   });
@@ -64,6 +63,7 @@ const STATUS_STYLES = {
 } as const;
 
 export default function EventRequestStatusPage() {
+  const { t, locale } = usePublicPrefs();
   const params = useParams();
   const slug = params.slug as string;
   const token = params.token as string;
@@ -80,18 +80,20 @@ export default function EventRequestStatusPage() {
         const row = await fetchPublicEventRequestStatus(slug, token);
         setData(row);
         setError(null);
+        return true;
       } catch (e) {
         if (!opts.silent) {
           setData(null);
           setError(
-            e instanceof Error ? e.message : "Could not load request.",
+            e instanceof Error ? e.message : t("guestStatus.event.loadError"),
           );
         }
+        return false;
       } finally {
         if (!opts.silent) setLoading(false);
       }
     },
-    [slug, token],
+    [slug, token, t],
   );
 
   useEffect(() => {
@@ -106,9 +108,7 @@ export default function EventRequestStatusPage() {
   async function handleCancel() {
     if (
       !data?.canCancel ||
-      !confirm(
-        "Cancel this event request? The venue will be notified immediately.",
-      )
+      !confirm(t("guestStatus.event.cancelConfirm"))
     ) {
       return;
     }
@@ -119,7 +119,7 @@ export default function EventRequestStatusPage() {
       await loadStatus({ silent: true });
     } catch (e) {
       setCancelError(
-        e instanceof Error ? e.message : "Could not cancel request.",
+        e instanceof Error ? e.message : t("guestStatus.event.cancelError"),
       );
     } finally {
       setCancelBusy(false);
@@ -128,8 +128,9 @@ export default function EventRequestStatusPage() {
 
   if (loading) {
     return (
-      <div className="flex min-h-screen items-center justify-center bg-zinc-950">
+      <div className="flex min-h-screen flex-col items-center justify-center gap-3 bg-zinc-950 text-zinc-500">
         <Loader2 className="size-8 animate-spin text-violet-400" />
+        <p className="text-sm">{t("guestStatus.event.loading")}</p>
       </div>
     );
   }
@@ -137,9 +138,14 @@ export default function EventRequestStatusPage() {
   if (error || !data) {
     return (
       <div className="flex min-h-screen flex-col items-center justify-center gap-4 bg-zinc-950 px-4 text-center">
-        <p className="text-zinc-400">{error ?? "Request not found."}</p>
-        <Link href={`/venue/${slug}`} className="text-sm text-violet-400 hover:text-violet-300">
-          Back to venue
+        <p className="text-zinc-400">
+          {error ?? t("guestStatus.event.notFound")}
+        </p>
+        <Link
+          href={`/venue/${slug}`}
+          className="text-sm text-violet-400 hover:text-violet-300"
+        >
+          {t("guestStatus.backToVenue")}
         </Link>
       </div>
     );
@@ -152,7 +158,7 @@ export default function EventRequestStatusPage() {
     <div className="min-h-screen bg-zinc-950 text-zinc-100">
       <header className="border-b border-white/10 bg-zinc-950/80 backdrop-blur">
         <div className="mx-auto flex max-w-lg items-center justify-between px-4 py-4">
-          <GoSpotsLogo href="/" size="sm" />
+          <LocoraLogo href="/" size="sm" />
           <Link
             href={`/venue/${slug}`}
             className="text-xs text-zinc-500 hover:text-zinc-300"
@@ -171,10 +177,10 @@ export default function EventRequestStatusPage() {
         >
           <Icon className="mx-auto" size={36} />
           <p className="mt-3 text-xs uppercase tracking-wide opacity-80">
-            Event request
+            {t("guestStatus.event.eyebrow")}
           </p>
           <h1 className="mt-1 text-xl font-semibold text-white">
-            {EVENT_REQUEST_TYPE_LABELS[data.eventType]}
+            {t(`guestStatus.event.type.${data.eventType}`)}
           </h1>
           <span
             className={cn(
@@ -182,7 +188,7 @@ export default function EventRequestStatusPage() {
               style.badge,
             )}
           >
-            {EVENT_REQUEST_STATUS_LABELS[data.status]}
+            {t(`guestStatus.event.status.${data.status}`)}
           </span>
         </div>
 
@@ -190,51 +196,66 @@ export default function EventRequestStatusPage() {
           <div className="flex items-start gap-3">
             <PartyPopper className="mt-0.5 shrink-0 text-violet-300" size={18} />
             <div>
-              <p className="text-sm text-zinc-400">Guest</p>
+              <p className="text-sm text-zinc-400">
+                {t("guestStatus.event.guest")}
+              </p>
               <p className="font-medium text-white">
                 {data.guestName}
-                {data.partySize > 1 ? ` · ${data.partySize} guests` : ""}
+                {data.partySize > 1
+                  ? ` · ${t("guestStatus.event.guestsMany", {
+                      count: data.partySize,
+                    })}`
+                  : ""}
               </p>
             </div>
           </div>
           <div>
-            <p className="text-sm text-zinc-400">Preferred time</p>
+            <p className="text-sm text-zinc-400">
+              {t("guestStatus.event.preferredTime")}
+            </p>
             <p className="mt-0.5 text-white">
-              {formatWhen(data.preferredStartsAt, data.preferredEndsAt)}
+              {formatWhen(
+                data.preferredStartsAt,
+                data.preferredEndsAt,
+                locale,
+              )}
             </p>
           </div>
           {data.resourceCategory ? (
             <div>
               <p className="text-sm text-zinc-400">
                 {data.resourceCategory.type === "DINING"
-                  ? "Dining area"
-                  : "Activity"}
+                  ? t("guestStatus.event.diningArea")
+                  : t("guestStatus.event.activity")}
               </p>
               <p className="mt-0.5 text-white">{data.resourceCategory.name}</p>
             </div>
           ) : null}
           {data.message ? (
             <div>
-              <p className="text-sm text-zinc-400">Your note</p>
+              <p className="text-sm text-zinc-400">
+                {t("guestStatus.event.yourNote")}
+              </p>
               <p className="mt-0.5 text-sm text-zinc-300">{data.message}</p>
             </div>
           ) : null}
           {data.staffResponseNote ? (
             <div className="rounded-lg border border-white/10 bg-zinc-950/60 px-4 py-3">
-              <p className="text-xs text-zinc-500">Message from the venue</p>
+              <p className="text-xs text-zinc-500">
+                {t("guestStatus.event.venueMessage")}
+              </p>
               <p className="mt-1 text-sm text-zinc-200">{data.staffResponseNote}</p>
             </div>
           ) : null}
           {data.status === "PENDING" ? (
             <p className="text-xs text-zinc-500">
-              The venue is reviewing your request against their live floor setup.
-              Bookmark this page — no account needed.
+              {t("guestStatus.event.hintPending")}
             </p>
           ) : null}
-          {data.status === "APPROVED" && data.resourceCategory?.type === "DINING" ? (
+          {data.status === "APPROVED" &&
+          data.resourceCategory?.type === "DINING" ? (
             <p className="text-xs text-zinc-500">
-              Approved — staff will hold tables on the dining floor map for your
-              party. Contact the venue if details change.
+              {t("guestStatus.event.hintApprovedDining")}
             </p>
           ) : null}
         </div>
@@ -255,25 +276,27 @@ export default function EventRequestStatusPage() {
               {cancelBusy ? (
                 <span className="inline-flex items-center gap-2">
                   <Loader2 size={16} className="animate-spin" />
-                  Canceling…
+                  {t("guestStatus.canceling")}
                 </span>
               ) : (
-                "Cancel request"
+                t("guestStatus.event.cancel")
               )}
             </button>
             <p className="text-center text-[11px] text-zinc-600">
-              You can cancel while pending, or after approval before the event
-              start time.
+              {t("guestStatus.event.cancelHint")}
             </p>
           </div>
         ) : null}
 
         <p className="mt-8 text-center text-xs text-zinc-600">
-          Questions? Contact {data.venueName} directly using the details on their{" "}
-          <Link href={`/venue/${slug}`} className="text-violet-400 hover:underline">
-            venue page
+          {t("guestStatus.event.questionsBefore", { name: data.venueName })}{" "}
+          <Link
+            href={`/venue/${slug}`}
+            className="text-violet-400 hover:underline"
+          >
+            {t("guestStatus.event.venuePage")}
           </Link>
-          .
+          {t("guestStatus.event.questionsAfter")}
         </p>
       </main>
     </div>

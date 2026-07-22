@@ -11,6 +11,8 @@ import {
   togglePerm,
   type DashboardAccessGroup,
 } from "@/lib/dashboard-access";
+import { localizeAccessGroup } from "@/lib/staff-access-i18n";
+import { useVenueSettingsOptional } from "@/lib/venue-settings-context";
 
 export function StaffAccessEditor({
   perms,
@@ -25,11 +27,17 @@ export function StaffAccessEditor({
   disabled?: boolean;
   compact?: boolean;
 }) {
+  const vs = useVenueSettingsOptional();
+  const t = vs?.t ?? ((key: string, vars?: Record<string, string | number>) => key);
+
   const allowed = new Set(assignablePermissions);
-  const visibleGroups = DASHBOARD_ACCESS_GROUPS.map((group) => ({
-    ...group,
-    toggles: group.toggles.filter((t) => allowed.has(t.perm)),
-  })).filter((g) => g.toggles.length > 0);
+  const visibleGroups = DASHBOARD_ACCESS_GROUPS.map((group) => {
+    const filtered: DashboardAccessGroup = {
+      ...group,
+      toggles: group.toggles.filter((tog) => allowed.has(tog.perm)),
+    };
+    return localizeAccessGroup(t, filtered);
+  }).filter((g) => g.toggles.length > 0);
 
   const [openId, setOpenId] = useState<string | null>(
     visibleGroups[0]?.id ?? null,
@@ -39,7 +47,7 @@ export function StaffAccessEditor({
     () =>
       visibleGroups.reduce(
         (n, g) =>
-          n + g.toggles.filter((t) => hasPermInList(perms, t.perm)).length,
+          n + g.toggles.filter((tog) => hasPermInList(perms, tog.perm)).length,
         0,
       ),
     [visibleGroups, perms],
@@ -53,7 +61,7 @@ export function StaffAccessEditor({
     <div className={cn("space-y-3", compact && "space-y-2.5")}>
       {!disabled ? (
         <p className="text-[11px] text-zinc-500">
-          {enabledCount}/{totalCount} permissions on
+          {t("team.permsOn", { enabled: enabledCount, total: totalCount })}
         </p>
       ) : null}
 
@@ -70,6 +78,8 @@ export function StaffAccessEditor({
             }
             onChange={onChange}
             isLast={i === visibleGroups.length - 1}
+            allOnLabel={t("team.allOn")}
+            allLabel={t("team.all")}
           />
         ))}
       </div>
@@ -85,6 +95,8 @@ function AccessGroupAccordion({
   onToggleOpen,
   onChange,
   isLast,
+  allOnLabel,
+  allLabel,
 }: {
   group: DashboardAccessGroup;
   perms: string[];
@@ -93,10 +105,12 @@ function AccessGroupAccordion({
   onToggleOpen: () => void;
   onChange: (perms: string[]) => void;
   isLast: boolean;
+  allOnLabel: string;
+  allLabel: string;
 }) {
   const sectionOn = isGroupFullyEnabled(perms, group);
-  const activeCount = group.toggles.filter((t) =>
-    hasPermInList(perms, t.perm),
+  const activeCount = group.toggles.filter((tog) =>
+    hasPermInList(perms, tog.perm),
   ).length;
   const anyOn = activeCount > 0;
 
@@ -150,7 +164,7 @@ function AccessGroupAccordion({
                 : "border-white/10 text-zinc-500 hover:text-zinc-300",
             )}
           >
-            {sectionOn ? "All on" : "All"}
+            {sectionOn ? allOnLabel : allLabel}
           </button>
         ) : null}
       </div>

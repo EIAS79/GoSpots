@@ -5,7 +5,8 @@ import {
   NestInterceptor,
 } from '@nestjs/common';
 import { Observable } from 'rxjs';
-import { parseDashboardPath } from './dashboard-path';
+import { classifyVenuePath } from './dashboard-path';
+import { permissionsToEffectiveCsv } from './permissions';
 import type { JwtAccessPayload } from '../modules/auth/auth.service';
 import { PrismaService } from '../prisma/prisma.service';
 
@@ -36,11 +37,12 @@ export class VenueContextInterceptor implements NestInterceptor {
   }
 
   private async applyVenueContext(user: JwtAccessPayload, venuePath: string) {
-    const parsed = parseDashboardPath(venuePath);
-    if (!parsed) return;
+    const ref = classifyVenuePath(venuePath);
+    if (!ref) return;
 
+    // Phase 3: always slug-only (legacy slug--key strips to slug; key not verified).
     const shop = await this.prisma.shop.findFirst({
-      where: { slug: parsed.slug, dashboardKey: parsed.dashboardKey },
+      where: { slug: ref.slug },
       select: {
         id: true,
         subscription: { select: { tier: true } },
@@ -58,13 +60,19 @@ export class VenueContextInterceptor implements NestInterceptor {
 
     const membership = await this.prisma.membership.findFirst({
       where: { userId: user.sub, shopId: shop.id, isActive: true },
-      select: { role: true, permissions: true },
+      select: {
+        role: true,
+        permissionRows: { select: { permission: true } },
+      },
     });
     if (!membership) return;
 
     user.shopId = shop.id;
     user.shopRole = membership.role;
-    user.perms = membership.permissions;
+    // Rows-primary: computed perms CSV for JWT (Membership.permissions column dropped).
+    user.perms = permissionsToEffectiveCsv({
+      permissionRows: membership.permissionRows,
+    });
     user.tier = shop.subscription?.tier;
   }
 }

@@ -1,5 +1,4 @@
-import { API_BASE_URL, ApiError, api } from "./api";
-import { getVenuePathHeaders } from "./venue-api-headers";
+import { ApiError, api, credentialedFetch } from "./api";
 
 export type AuditEntry = {
   id: string;
@@ -72,10 +71,7 @@ export function deleteAuditEntries(body: {
 }
 
 export async function downloadAuditCsv(params: AuditListParams = {}) {
-  const res = await fetch(`${API_BASE_URL}/audit/export${toQuery(params)}`, {
-    credentials: "include",
-    headers: getVenuePathHeaders(),
-  });
+  const res = await credentialedFetch(`/audit/export${toQuery(params)}`);
   if (!res.ok) {
     let body: unknown = null;
     try {
@@ -91,7 +87,7 @@ export async function downloadAuditCsv(params: AuditListParams = {}) {
   const url = URL.createObjectURL(blob);
   const a = document.createElement("a");
   a.href = url;
-  a.download = `gospots-audit-${new Date().toISOString().slice(0, 10)}.csv`;
+  a.download = `Locora-audit-${new Date().toISOString().slice(0, 10)}.csv`;
   a.click();
   URL.revokeObjectURL(url);
 }

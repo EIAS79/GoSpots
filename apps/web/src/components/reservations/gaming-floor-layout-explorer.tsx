@@ -43,6 +43,8 @@ export function GamingFloorLayoutExplorer({
   floorTabsSlot,
   onToggleNotWorking,
   mapVariant = "full",
+  chromeLabels,
+  guestStatusLabels,
 }: {
   units: ScheduleUnit[];
   sections?: ScheduleCategorySection[];
@@ -63,6 +65,24 @@ export function GamingFloorLayoutExplorer({
   onToggleNotWorking?: (unitId: string, notWorking: boolean) => void;
   /** Compact seats for narrow public screens. */
   mapVariant?: "full" | "compact";
+  /** Optional i18n chrome (public guest + staff dashboard). Defaults keep English. */
+  chromeLabels?: {
+    floor?: string;
+    floorN?: (n: number) => string;
+    layoutZone?: string;
+    noStations?: string;
+    noStationsInLayout?: string;
+    prev?: string;
+    next?: string;
+    pageOf?: (page: number, total: number) => string;
+    stationsRange?: (from: number, to: number, total: number) => string;
+    mainArea?: string;
+    staffStationHint?: string;
+  };
+  guestStatusLabels?: Record<
+    "AVAILABLE" | "UNAVAILABLE" | "NOT_WORKING",
+    string
+  >;
 }) {
   const [activeFloor, setActiveFloor] = useState(1);
   const [activeLayoutKey, setActiveLayoutKey] = useState("");
@@ -162,7 +182,9 @@ export function GamingFloorLayoutExplorer({
             )}
           >
             <Layers size={10} className="opacity-70" />
-            Floor {floor}
+            {chromeLabels?.floorN
+              ? chromeLabels.floorN(floor)
+              : `Floor ${floor}`}
             <span className="opacity-70">
               · {free}/{count}
             </span>
@@ -175,7 +197,8 @@ export function GamingFloorLayoutExplorer({
   if (!units.length) {
     return (
       <p className="px-6 py-12 text-center text-sm text-zinc-500">
-        No stations configured for this activity yet.
+        {chromeLabels?.noStations ??
+          "No stations configured for this activity yet."}
       </p>
     );
   }
@@ -188,7 +211,7 @@ export function GamingFloorLayoutExplorer({
         <div className="border-b border-white/10 bg-zinc-950/40 px-3 py-2.5">
           <p className="mb-1.5 flex items-center gap-1 text-[9px] font-semibold uppercase tracking-widest text-zinc-600">
             <Layers size={10} className="text-emerald-400/70" />
-            Floor
+            {chromeLabels?.floor ?? "Floor"}
           </p>
           {floorTabs}
         </div>
@@ -198,7 +221,7 @@ export function GamingFloorLayoutExplorer({
         <div className="border-b border-white/10 bg-zinc-900/20 px-3 py-2">
           <p className="mb-1.5 flex items-center gap-1 text-[9px] font-semibold uppercase tracking-widest text-zinc-600">
             <LayoutGrid size={10} className="text-amber-400/70" />
-            Layout / zone
+            {chromeLabels?.layoutZone ?? "Layout / zone"}
           </p>
           <div className="flex flex-wrap gap-1">
             {layoutsOnFloor.map((group, index) => {
@@ -266,10 +289,13 @@ export function GamingFloorLayoutExplorer({
             onEditBooking={onEditBooking}
             onToggleNotWorking={onToggleNotWorking}
             showScreenHeader={false}
+            guestStatusLabels={guestStatusLabels}
+            mainAreaLabel={chromeLabels?.mainArea}
+            staffStationHint={chromeLabels?.staffStationHint}
           />
         ) : (
           <p className="py-12 text-center text-sm text-zinc-500">
-            No stations in this layout.
+            {chromeLabels?.noStationsInLayout ?? "No stations in this layout."}
           </p>
         )}
       </div>
@@ -283,18 +309,27 @@ export function GamingFloorLayoutExplorer({
             className="inline-flex items-center gap-0.5 rounded-md border border-white/10 px-2 py-1 text-[11px] text-zinc-400 transition hover:bg-white/5 disabled:opacity-40"
           >
             <ChevronLeft size={14} />
-            Prev
+            {chromeLabels?.prev ?? "Prev"}
           </button>
           <p className="text-[11px] text-zinc-500">
-            Page {safePage + 1} of {pageCount}
+            {chromeLabels?.pageOf
+              ? chromeLabels.pageOf(safePage + 1, pageCount)
+              : `Page ${safePage + 1} of ${pageCount}`}
             <span className="text-zinc-600">
               {" "}
-              · stations {safePage * stationsPerPage + 1}–
-              {Math.min(
-                (safePage + 1) * stationsPerPage,
-                unitsInLayout.length,
-              )}{" "}
-              of {unitsInLayout.length}
+              {chromeLabels?.stationsRange
+                ? chromeLabels.stationsRange(
+                    safePage * stationsPerPage + 1,
+                    Math.min(
+                      (safePage + 1) * stationsPerPage,
+                      unitsInLayout.length,
+                    ),
+                    unitsInLayout.length,
+                  )
+                : `· stations ${safePage * stationsPerPage + 1}–${Math.min(
+                    (safePage + 1) * stationsPerPage,
+                    unitsInLayout.length,
+                  )} of ${unitsInLayout.length}`}
             </span>
           </p>
           <button
@@ -303,7 +338,7 @@ export function GamingFloorLayoutExplorer({
             onClick={() => setPage((p) => Math.min(pageCount - 1, p + 1))}
             className="inline-flex items-center gap-0.5 rounded-md border border-white/10 px-2 py-1 text-[11px] text-zinc-400 transition hover:bg-white/5 disabled:opacity-40"
           >
-            Next
+            {chromeLabels?.next ?? "Next"}
             <ChevronRight size={14} />
           </button>
         </div>

@@ -18,7 +18,7 @@ export function VenueMenuTab({ venue }: { venue: PublicVenueDetail }) {
     section: PublicMenuSection | null;
   } | null>(null);
 
-  const formatPrice = (n: number) => formatMoney(n, venue.currency);
+  const formatPrice = (n: import("@/lib/money").MoneyWire) => formatMoney(n, venue.currency);
 
   if (!menu?.items.length) {
     return <p className="text-sm text-zinc-500">{t("menu.notAvailable")}</p>;

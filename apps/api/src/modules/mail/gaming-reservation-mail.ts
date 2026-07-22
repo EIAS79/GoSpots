@@ -11,7 +11,8 @@ export type GamingReservationMailDetails = {
   startsAt: Date;
   endsAt: Date;
   status: string;
-  statusUrl: string;
+  /** Present when the raw guest token is known (create / cancel with URL token). */
+  statusUrl?: string | null;
   notes?: string | null;
   isDining?: boolean;
 };
@@ -112,13 +113,19 @@ export function buildGamingReservationEmail(
     `Time: ${when.range}`,
     `Status: ${statusLabel}`,
     details.notes ? `Notes: ${details.notes}` : '',
-    '',
-    `Track your booking: ${details.statusUrl}`,
+    details.statusUrl ? '' : null,
+    details.statusUrl ? `Track your booking: ${details.statusUrl}` : null,
     '',
     'If you have questions, contact the venue directly.',
   ]
-    .filter(Boolean)
+    .filter((line): line is string => line != null && line !== '')
     .join('\n');
+
+  const statusCta = details.statusUrl
+    ? `<p style="margin:24px 0 0;text-align:center;">
+            <a href="${escapeHtml(details.statusUrl)}" style="display:inline-block;background:#059669;color:#ffffff;text-decoration:none;font-weight:600;font-size:14px;padding:12px 22px;border-radius:10px;">View booking status</a>
+          </p>`
+    : '';
 
   const html = `<!DOCTYPE html>
 <html>
@@ -127,7 +134,7 @@ export function buildGamingReservationEmail(
     <tr><td align="center">
       <table width="100%" style="max-width:520px;background:#ffffff;border-radius:16px;overflow:hidden;border:1px solid #e4e4e7;">
         <tr><td style="background:linear-gradient(135deg,#f59e0b,#d97706);padding:24px 28px;">
-          <p style="margin:0;font-size:12px;letter-spacing:0.12em;text-transform:uppercase;color:rgba(255,255,255,0.85);">GoSpots booking</p>
+          <p style="margin:0;font-size:12px;letter-spacing:0.12em;text-transform:uppercase;color:rgba(255,255,255,0.85);">Locora booking</p>
           <h1 style="margin:8px 0 0;font-size:22px;color:#ffffff;">${details.venueName}</h1>
         </td></tr>
         <tr><td style="padding:28px;">
@@ -143,9 +150,7 @@ export function buildGamingReservationEmail(
               ${details.notes ? `<p style="margin:12px 0 0;font-size:13px;color:#71717a;">Notes: ${escapeHtml(details.notes)}</p>` : ''}
             </td></tr>
           </table>
-          <p style="margin:24px 0 0;text-align:center;">
-            <a href="${details.statusUrl}" style="display:inline-block;background:#059669;color:#ffffff;text-decoration:none;font-weight:600;font-size:14px;padding:12px 22px;border-radius:10px;">View booking status</a>
-          </p>
+          ${statusCta}
         </td></tr>
       </table>
     </td></tr>

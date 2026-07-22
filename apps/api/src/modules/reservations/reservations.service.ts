@@ -15,10 +15,20 @@ import { NotificationsService } from '../notifications/notifications.service';
 import {
   ACTIVE_RESERVATION,
   computeUnitFloorStatus,
-  dayBoundsLocal,
 } from '../../common/booking-floor-status';
 import { assertBookingSlotFree } from '../../common/booking-overlap.util';
+import { withResourceBookingLock } from '../../common/booking-lock.util';
+import {
+  assertPrivacyConsentAccepted,
+  recordConsent,
+} from '../../common/gdpr-consent.util';
 import { assertWithinOpeningHours } from '../../common/opening-hours.util';
+import { loadShopVenueTimeContext } from '../../common/shop-venue-time.util';
+import {
+  calendarDayInTimeZone,
+  dayBoundsInTimeZone,
+  parseDateKey,
+} from '../../common/venue-timezone.util';
 import {
   walkInEffectiveEnd,
   walkInToScheduleBooking,
@@ -35,7 +45,6 @@ import {
   UpdateReservationDto,
 } from './dto/reservations.dto';
 import { CreatePublicGamingReservationDto } from '../guest/dto/public-gaming.dto';
-import { randomBytes } from 'crypto';
 import { MailService } from '../mail/mail.service';
 import {
   buildGamingReservationEmail,
@@ -54,10 +63,24 @@ import {
 import { FEATURED_GAME_TYPES } from '../../common/booking-unit-kind';
 import { resolveGuestGamingPhase } from '../../common/guest-gaming-booking-status';
 import {
+  absoluteAppUrl,
+  guestVenueStatusPath,
   reservationSessionsHref,
   type ReservationNotificationTab,
 } from '../../common/reservation-notification-href';
 import { canGuestCancelReservation } from '../../common/guest-reservation-cancel.util';
+import {
+  assertGuestTokenActive,
+  guestTokenLookupWhere,
+  guestTokenNeedsRevoke,
+  guestTokenPersistFields,
+  guestTokenRevokeFields,
+  issueGuestToken,
+  verifyPresentedGuestToken,
+} from '../../common/guest-token.util';
+import { serializeMoneyOrNull, toMoneyNumber } from '../../common/money.util';
+import { loadShopCurrency } from '../../common/currency-stamp.util';
+import { postReservationBilled } from '../../common/ledger-post.util';
 
 @Injectable()
 export class ReservationsService {
@@ -130,6 +153,7 @@ export class ReservationsService {
 
   async list(actor: JwtAccessPayload, query: ReservationQueryDto) {
     const shopId = requireShopId(actor);
+    await assertShopFeature(this.prisma, shopId, 'reservation');
     const where: {
       shopId: string;
       resourceId?: string;
@@ -162,9 +186,18 @@ export class ReservationsService {
 
   async getSchedule(actor: JwtAccessPayload, query: ScheduleQueryDto) {
     const shopId = requireShopId(actor);
+    await assertShopFeature(this.prisma, shopId, 'reservation');
     return this.buildScheduleForShop(shopId, query);
   }
 
+  /**
+   * Public availability snapshot for one venue day.
+   *
+   * TOCTOU (accepted): a free slot here is not a reservation. Concurrent guests
+   * (or staff) can take the unit between this read and POST create. Create must
+   * re-check under `withResourceBookingLock` + `assertBookingSlotFree` and may
+   * 409; clients should refresh schedule on conflict.
+   */
   async getPublicSchedule(
     slug: string,
     query: ScheduleQueryDto,
@@ -185,34 +218,107 @@ export class ReservationsService {
     return !!type && (FEATURED_GAME_TYPES as string[]).includes(type);
   }
 
+  /** Schedule look-ahead / look-back vs venue "today" (calendar days). */
+  private static readonly SCHEDULE_PAST_DAYS = 1;
+  private static readonly SCHEDULE_FUTURE_DAYS = 366;
+  /** Allow a short skew so "now" booking UIs aren't flaky. */
+  private static readonly BOOKING_PAST_GRACE_MS = 5 * 60 * 1000;
+
+  private assertScheduleDateWithinHorizon(
+    dateKey: string,
+    timeZone: string,
+    at: Date = new Date(),
+  ) {
+    const todayKey = calendarDayInTimeZone(timeZone, at);
+    const today = parseDateKey(todayKey);
+    const target = parseDateKey(dateKey);
+    const todayUtc = Date.UTC(today.y, today.m - 1, today.d);
+    const targetUtc = Date.UTC(target.y, target.m - 1, target.d);
+    const deltaDays = Math.round((targetUtc - todayUtc) / 86_400_000);
+    if (deltaDays < -ReservationsService.SCHEDULE_PAST_DAYS) {
+      throw new BadRequestException(
+        'Schedule date is too far in the past.',
+      );
+    }
+    if (deltaDays > ReservationsService.SCHEDULE_FUTURE_DAYS) {
+      throw new BadRequestException(
+        'Schedule date is too far in the future.',
+      );
+    }
+  }
+
+  private assertBookingStartWithinHorizon(
+    startsAt: Date,
+    timeZone: string,
+    at: Date = new Date(),
+  ) {
+    if (startsAt.getTime() < at.getTime() - ReservationsService.BOOKING_PAST_GRACE_MS) {
+      throw new BadRequestException('Start time cannot be in the past.');
+    }
+    const startKey = calendarDayInTimeZone(timeZone, startsAt);
+    this.assertScheduleDateWithinHorizon(startKey, timeZone, at);
+  }
+
   private guestStatusPath(
     venueSlug: string,
     token: string,
     resourceType: string | null | undefined,
   ) {
-    return isDiningResourceType(resourceType)
-      ? `/venue/${venueSlug}/dining-status/${token}`
-      : `/venue/${venueSlug}/gaming-status/${token}`;
+    return guestVenueStatusPath(
+      venueSlug,
+      token,
+      isDiningResourceType(resourceType) ? 'dining' : 'gaming',
+    );
   }
 
+  /**
+   * Public booking create. Availability GET is advisory only (see getPublicSchedule
+   * TOCTOU). Overlap + bookability are enforced here under a resource row lock.
+   */
   async createPublicGamingBooking(
     slug: string,
     dto: CreatePublicGamingReservationDto,
     kind?: 'dining' | 'gaming',
   ) {
+    // shopId always from published slug — never from client body.
     const shop = await this.prisma.shop.findFirst({
       where: { slug, isPublished: true },
       select: { id: true, name: true, slug: true },
     });
     if (!shop) throw new NotFoundException('Venue not found.');
+    await assertShopFeature(this.prisma, shop.id, 'reservation');
 
+    assertPrivacyConsentAccepted(dto.privacyConsentAccepted);
+
+    if (!dto.guestName?.trim()) {
+      throw new BadRequestException('Guest name is required.');
+    }
     if (!dto.guestEmail?.trim()) {
       throw new BadRequestException(
         'An email address is required so we can send your booking confirmation.',
       );
     }
 
+    const party = dto.partySize ?? 1;
+    if (!Number.isInteger(party) || party < 1 || party > 100) {
+      throw new BadRequestException('Party size must be between 1 and 100.');
+    }
+
     const startsAt = new Date(dto.startsAt);
+    let endsAt = new Date(dto.endsAt);
+    if (Number.isNaN(startsAt.getTime()) || Number.isNaN(endsAt.getTime())) {
+      throw new BadRequestException('Invalid start or end date/time.');
+    }
+    if (endsAt <= startsAt) {
+      throw new BadRequestException('End time must be after start time.');
+    }
+
+    const { resolvedTimeZone } = await loadShopVenueTimeContext(
+      this.prisma,
+      shop.id,
+    );
+    this.assertBookingStartWithinHorizon(startsAt, resolvedTimeZone);
+
     const resource = await this.prisma.resource.findFirst({
       where: { id: dto.resourceId, shopId: shop.id },
       include: { category: true },
@@ -228,28 +334,18 @@ export class ReservationsService {
       throw new BadRequestException('This unit is not available for gaming booking.');
     }
 
-    let endsAt = new Date(dto.endsAt);
-    if (usesSessionLifecycle(resource.type)) {
-      const party = dto.partySize ?? 1;
-      if (isDiningResourceType(resource.type)) {
-        if (party < 1) {
-          throw new BadRequestException('Party size must be at least 1.');
-        }
-        if (resource.capacity != null && party > resource.capacity) {
-          throw new BadRequestException(
-            `This table seats up to ${resource.capacity} guests.`,
-          );
-        }
-      }
-      const noShowMinutes = parseNoShowMinutes(resource.category?.offeringConfig);
-      endsAt = holdEndsAt(startsAt, noShowMinutes);
-    } else if (endsAt <= startsAt) {
+    if (resource.capacity != null && party > resource.capacity) {
       throw new BadRequestException(
-        'End time must be after start time.',
+        isDiningResourceType(resource.type)
+          ? `This table seats up to ${resource.capacity} guests.`
+          : `This unit holds up to ${resource.capacity} guests.`,
       );
     }
 
-    if (!usesSessionLifecycle(resource.type)) {
+    if (usesSessionLifecycle(resource.type)) {
+      const noShowMinutes = parseNoShowMinutes(resource.category?.offeringConfig);
+      endsAt = holdEndsAt(startsAt, noShowMinutes);
+    } else {
       const maxSpanMs = 24 * 60 * 60 * 1000;
       if (endsAt.getTime() - startsAt.getTime() > maxSpanMs) {
         throw new BadRequestException(
@@ -258,13 +354,6 @@ export class ReservationsService {
       }
     }
 
-    await assertBookingSlotFree(
-      this.prisma,
-      shop.id,
-      dto.resourceId,
-      startsAt,
-      endsAt,
-    );
     await assertWithinOpeningHours(
       this.prisma,
       shop.id,
@@ -272,29 +361,40 @@ export class ReservationsService {
       usesSessionLifecycle(resource.type) ? startsAt : endsAt,
     );
 
-    if (resource.type === 'DINING') {
-      // party size validated above
-    }
-
-    const guestToken = randomBytes(24).toString('base64url');
-
-    const row = await this.prisma.reservation.create({
-      data: {
-        shopId: shop.id,
-        resourceId: dto.resourceId,
-        guestName: dto.guestName.trim(),
-        guestEmail: dto.guestEmail?.trim() || null,
-        guestPhone: dto.guestPhone?.trim() || null,
-        partySize: dto.partySize,
-        startsAt,
-        endsAt,
-        status: ReservationStatus.CONFIRMED,
-        staffAlert: true,
-        notes: dto.notes?.trim() || null,
-        guestToken,
-      },
-      include: { resource: { include: { category: true } } },
+    const issued = issueGuestToken({
+      from: endsAt,
     });
+
+    const row = await withResourceBookingLock(
+      this.prisma,
+      dto.resourceId,
+      async (tx) => {
+        await assertBookingSlotFree(
+          tx,
+          shop.id,
+          dto.resourceId,
+          startsAt,
+          endsAt,
+        );
+        return tx.reservation.create({
+          data: {
+            shopId: shop.id,
+            resourceId: dto.resourceId,
+            guestName: dto.guestName.trim(),
+            guestEmail: dto.guestEmail?.trim() || null,
+            guestPhone: dto.guestPhone?.trim() || null,
+            partySize: party,
+            startsAt,
+            endsAt,
+            status: ReservationStatus.CONFIRMED,
+            staffAlert: true,
+            notes: dto.notes?.trim() || null,
+            ...guestTokenPersistFields(issued),
+          },
+          include: { resource: { include: { category: true } } },
+        });
+      },
+    );
 
     const isDining = isDiningResourceType(resource.type);
     const unitLabel = row.resource?.name ?? 'station';
@@ -322,6 +422,14 @@ export class ReservationsService {
       },
     });
 
+    await recordConsent(this.prisma, {
+      shopId: shop.id,
+      purpose: 'BOOKING',
+      guestEmail: row.guestEmail,
+      sourceEntityType: 'reservation',
+      sourceEntityId: row.id,
+    });
+
     await this.notifications.recordReservationEvent(shop.id, {
       title: isDining
         ? 'New online table reservation'
@@ -334,7 +442,11 @@ export class ReservationsService {
       dedupeKey: `public-reservation:${row.id}`,
     });
 
-    const statusPath = this.guestStatusPath(shop.slug, guestToken, resource.type);
+    const statusPath = this.guestStatusPath(
+      shop.slug,
+      issued.raw,
+      resource.type,
+    );
     let emailSent = false;
     try {
       const mailResult = await this.sendGuestReservationMail(
@@ -366,7 +478,7 @@ export class ReservationsService {
         ? 'Your booking is confirmed. Check your email for details and use the link below to track your session.'
         : 'Your booking is confirmed. Use the link below to track your session.',
       id: row.id,
-      guestToken,
+      guestToken: issued.raw,
       statusPath,
       emailSent,
     };
@@ -384,12 +496,15 @@ export class ReservationsService {
     if (!shop) throw new NotFoundException('Venue not found.');
 
     const row = await this.prisma.reservation.findFirst({
-      where: { shopId: shop.id, guestToken: token },
+      where: guestTokenLookupWhere(shop.id, token),
       include: {
         resource: { include: { category: true } },
       },
     });
-    if (!row) throw new NotFoundException('Booking not found.');
+    if (!row || !verifyPresentedGuestToken(row, token)) {
+      throw new NotFoundException('Booking not found.');
+    }
+    assertGuestTokenActive(row);
 
     const now = new Date();
     const isDining = isDiningResourceType(row.resource?.type);
@@ -429,7 +544,7 @@ export class ReservationsService {
       canCancel,
       isDining,
       billedAt: row.billedAt?.toISOString() ?? null,
-      billedAmount: row.billedAmount,
+      billedAmount: serializeMoneyOrNull(row.billedAmount),
       awaitingPayment:
         row.status === ReservationStatus.COMPLETED && row.billedAt == null,
     };
@@ -447,10 +562,13 @@ export class ReservationsService {
     if (!shop) throw new NotFoundException('Venue not found.');
 
     const row = await this.prisma.reservation.findFirst({
-      where: { shopId: shop.id, guestToken: token },
+      where: guestTokenLookupWhere(shop.id, token),
       include: { resource: { include: { category: true } } },
     });
-    if (!row) throw new NotFoundException('Booking not found.');
+    if (!row || !verifyPresentedGuestToken(row, token)) {
+      throw new NotFoundException('Booking not found.');
+    }
+    assertGuestTokenActive(row);
 
     const isDining = isDiningResourceType(row.resource?.type);
     if (kind === 'dining' && !isDining) {
@@ -461,6 +579,14 @@ export class ReservationsService {
     }
 
     if (row.status === ReservationStatus.CANCELED) {
+      // Legacy / race: canceled without revoke — seal the link, then ok once.
+      // Already-revoked tokens never reach here (assertGuestTokenActive).
+      if (guestTokenNeedsRevoke(row)) {
+        await this.prisma.reservation.update({
+          where: { id: row.id, shopId: shop.id },
+          data: guestTokenRevokeFields(),
+        });
+      }
       return { ok: true, message: 'This booking was already canceled.' };
     }
     if (row.status === ReservationStatus.COMPLETED) {
@@ -489,17 +615,18 @@ export class ReservationsService {
 
     const canceledAt = new Date();
     const updated = await this.prisma.reservation.update({
-      where: { id: row.id },
+      where: { id: row.id, shopId: shop.id },
       data: {
         status: ReservationStatus.CANCELED,
         endsAt: canceledAt,
+        ...guestTokenRevokeFields(canceledAt),
       },
       include: { resource: { include: { category: true } } },
     });
 
     if (updated.resourceId) {
       await this.prisma.resource.update({
-        where: { id: updated.resourceId },
+        where: { id: updated.resourceId, shopId: shop.id },
         data: { status: ResourceStatus.AVAILABLE },
       });
     }
@@ -574,12 +701,49 @@ export class ReservationsService {
     query: ScheduleQueryDto,
     options?: { sanitizeGuests?: boolean; kind?: 'dining' | 'gaming' },
   ) {
+    const { resolvedTimeZone } = await loadShopVenueTimeContext(
+      this.prisma,
+      shopId,
+    );
+
     let dayStart: Date;
     let dayEnd: Date;
     try {
-      ({ dayStart, dayEnd } = dayBoundsLocal(query.date));
-    } catch {
+      parseDateKey(query.date);
+      this.assertScheduleDateWithinHorizon(query.date, resolvedTimeZone);
+      ({ dayStart, dayEnd } = dayBoundsInTimeZone(
+        query.date,
+        resolvedTimeZone,
+      ));
+    } catch (err) {
+      if (err instanceof BadRequestException) throw err;
       throw new BadRequestException('Invalid date');
+    }
+
+    if (query.categoryId) {
+      const category = await this.prisma.resourceCategory.findFirst({
+        where: { id: query.categoryId, shopId },
+        select: { id: true, type: true },
+      });
+      if (!category) {
+        throw new BadRequestException('Category not found for this venue.');
+      }
+      if (
+        options?.kind === 'dining' &&
+        !isDiningResourceType(category.type)
+      ) {
+        throw new BadRequestException(
+          'Category is not available for dining schedule.',
+        );
+      }
+      if (
+        options?.kind === 'gaming' &&
+        !this.isGamingResourceType(category.type)
+      ) {
+        throw new BadRequestException(
+          'Category is not available for gaming schedule.',
+        );
+      }
     }
 
     let categories = await this.prisma.resourceCategory.findMany({
@@ -688,6 +852,7 @@ export class ReservationsService {
               })),
               now,
               query.date,
+              resolvedTimeZone,
             );
             return {
               id: unit.id,
@@ -814,6 +979,10 @@ export class ReservationsService {
   async create(actor: JwtAccessPayload, dto: CreateReservationDto) {
     this.assertWrite(actor);
     const shopId = actor.shopId!;
+    const party = dto.partySize ?? 1;
+    if (!Number.isInteger(party) || party < 1 || party > 100) {
+      throw new BadRequestException('Party size must be between 1 and 100.');
+    }
     await assertShopFeature(this.prisma, shopId, 'reservation');
     const startsAt = new Date(dto.startsAt);
     let endsAt = new Date(dto.endsAt);
@@ -850,41 +1019,68 @@ export class ReservationsService {
       }
     }
 
-    if (dto.resourceId) {
-      await assertBookingSlotFree(
-        this.prisma,
-        shopId,
-        dto.resourceId,
-        startsAt,
-        endsAt,
-      );
-      await assertWithinOpeningHours(
-        this.prisma,
-        shopId,
-        startsAt,
-        usesSessionLifecycle(resourceType) ? startsAt : endsAt,
-      );
-    }
+    await assertWithinOpeningHours(
+      this.prisma,
+      shopId,
+      startsAt,
+      usesSessionLifecycle(resourceType) ? startsAt : endsAt,
+    );
     const guestEmail = dto.guestEmail?.trim() || null;
-    const row = await this.prisma.reservation.create({
-      data: {
-        shopId,
-        resourceId: dto.resourceId,
-        guestName: dto.guestName,
-        guestEmail,
-        guestPhone: dto.guestPhone,
-        partySize: dto.partySize ?? 1,
-        startsAt,
-        endsAt,
-        status: dto.status ?? ReservationStatus.CONFIRMED,
-        staffAlert: dto.staffAlert ?? false,
-        notes: dto.notes,
-        ...(guestEmail
-          ? { guestToken: randomBytes(24).toString('base64url') }
-          : {}),
-      },
-      include: { resource: { include: { category: true } } },
-    });
+    const issuedGuest = guestEmail
+      ? issueGuestToken({ from: endsAt })
+      : null;
+    const guestTokenData = issuedGuest
+      ? guestTokenPersistFields(issuedGuest)
+      : {};
+
+    const row = dto.resourceId
+      ? await withResourceBookingLock(
+          this.prisma,
+          dto.resourceId,
+          async (tx) => {
+            await assertBookingSlotFree(
+              tx,
+              shopId,
+              dto.resourceId!,
+              startsAt,
+              endsAt,
+            );
+            return tx.reservation.create({
+              data: {
+                shopId,
+                resourceId: dto.resourceId,
+                guestName: dto.guestName,
+                guestEmail,
+                guestPhone: dto.guestPhone,
+                partySize: party,
+                startsAt,
+                endsAt,
+                status: dto.status ?? ReservationStatus.CONFIRMED,
+                staffAlert: dto.staffAlert ?? false,
+                notes: dto.notes,
+                ...guestTokenData,
+              },
+              include: { resource: { include: { category: true } } },
+            });
+          },
+        )
+      : await this.prisma.reservation.create({
+          data: {
+            shopId,
+            resourceId: dto.resourceId,
+            guestName: dto.guestName,
+            guestEmail,
+            guestPhone: dto.guestPhone,
+            partySize: party,
+            startsAt,
+            endsAt,
+            status: dto.status ?? ReservationStatus.CONFIRMED,
+            staffAlert: dto.staffAlert ?? false,
+            notes: dto.notes,
+            ...guestTokenData,
+          },
+          include: { resource: { include: { category: true } } },
+        });
     const unitLabel = row.resource?.name ?? 'unassigned unit';
     const window = this.formatWindow(row.startsAt, row.endsAt);
     await this.logBooking(
@@ -910,12 +1106,23 @@ export class ReservationsService {
       row.startsAt,
       notifyTab,
     );
-    return row;
+
+    // Raw token once (hash-only in DB). Staff/clients that previously read
+    // plaintext from the row still get it on create only.
+    if (!issuedGuest) return row;
+    return { ...row, guestToken: issuedGuest.raw };
   }
 
   async update(actor: JwtAccessPayload, id: string, dto: UpdateReservationDto) {
     this.assertWrite(actor);
     const shopId = actor.shopId!;
+    if (dto.partySize != null) {
+      const party = dto.partySize;
+      if (!Number.isInteger(party) || party < 1 || party > 100) {
+        throw new BadRequestException('Party size must be between 1 and 100.');
+      }
+    }
+    await assertShopFeature(this.prisma, shopId, 'reservation');
     const existing = await this.ensureReservation(shopId, id);
     const existingResource = existing.resourceId
       ? await this.prisma.resource.findFirst({
@@ -977,15 +1184,10 @@ export class ReservationsService {
       }
     }
 
-    if (resourceId) {
-      await assertBookingSlotFree(
-        this.prisma,
-        shopId,
-        resourceId,
-        startsAt,
-        endsAt,
-        id,
-      );
+    const terminalStatus =
+      nextStatus === ReservationStatus.CANCELED ||
+      nextStatus === ReservationStatus.NO_SHOW;
+    if (resourceId && !terminalStatus) {
       await assertWithinOpeningHours(
         this.prisma,
         shopId,
@@ -993,32 +1195,71 @@ export class ReservationsService {
         isSession ? startsAt : endsAt,
       );
     }
-    const row = await this.prisma.reservation.update({
-      where: { id },
-      data: {
-        ...(dto.resourceId !== undefined && { resourceId: dto.resourceId }),
-        ...(dto.guestName != null && { guestName: dto.guestName }),
-        ...(dto.guestEmail !== undefined && { guestEmail: dto.guestEmail }),
-        ...(dto.guestPhone !== undefined && { guestPhone: dto.guestPhone }),
-        ...(dto.partySize != null && { partySize: dto.partySize }),
-        ...(dto.startsAt != null && { startsAt }),
-        ...(dto.endsAt != null && { endsAt }),
-        ...(dto.status != null && { status: dto.status }),
-        ...(dto.staffAlert !== undefined && { staffAlert: dto.staffAlert }),
-        ...(dto.notes !== undefined && { notes: dto.notes }),
-        ...(dto.billedAmount !== undefined && {
-          billedAmount: dto.billedAmount,
-          billedAt:
-            dto.billedAmount != null && dto.billedAmount > 0
-              ? new Date()
-              : null,
-        }),
-      },
-      include: { resource: { include: { category: true } } },
-    });
+    const updateData = {
+      ...(dto.resourceId !== undefined && { resourceId: dto.resourceId }),
+      ...(dto.guestName != null && { guestName: dto.guestName }),
+      ...(dto.guestEmail !== undefined && { guestEmail: dto.guestEmail }),
+      ...(dto.guestPhone !== undefined && { guestPhone: dto.guestPhone }),
+      ...(dto.partySize != null && { partySize: dto.partySize }),
+      ...(dto.startsAt != null && { startsAt }),
+      ...(dto.endsAt != null && { endsAt }),
+      ...(dto.status != null && { status: dto.status }),
+      ...(dto.staffAlert !== undefined && { staffAlert: dto.staffAlert }),
+      ...(dto.notes !== undefined && { notes: dto.notes }),
+      ...(dto.billedAmount !== undefined && {
+        billedAmount: dto.billedAmount,
+        billedAt:
+          dto.billedAmount != null && dto.billedAmount > 0
+            ? new Date()
+            : null,
+      }),
+      // Always revoke on cancel / no-show (incl. re-apply) so guest links die.
+      ...(dto.status === ReservationStatus.CANCELED ||
+      dto.status === ReservationStatus.NO_SHOW
+        ? guestTokenRevokeFields()
+        : {}),
+    };
+    const row = resourceId
+      ? await withResourceBookingLock(this.prisma, resourceId, async (tx) => {
+          await assertBookingSlotFree(
+            tx,
+            shopId,
+            resourceId,
+            startsAt,
+            endsAt,
+            id,
+          );
+          return tx.reservation.update({
+            where: { id, shopId },
+            data: updateData,
+            include: { resource: { include: { category: true } } },
+          });
+        })
+      : await this.prisma.reservation.update({
+          where: { id, shopId },
+          data: updateData,
+          include: { resource: { include: { category: true } } },
+        });
+    if (
+      dto.billedAmount !== undefined &&
+      row.billedAmount != null &&
+      toMoneyNumber(row.billedAmount) > 0 &&
+      row.billedAt
+    ) {
+      const currency = await loadShopCurrency(this.prisma, shopId);
+      await postReservationBilled(this.prisma, {
+        shopId,
+        reservationId: row.id,
+        billedAmount: row.billedAmount,
+        currency: row.currency ?? currency,
+        billedAt: row.billedAt,
+        resourceId: row.resourceId,
+        createdById: actor.sub,
+      });
+    }
     if (dto.status === ReservationStatus.CHECKED_IN && row.resourceId) {
       await this.prisma.resource.update({
-        where: { id: row.resourceId },
+        where: { id: row.resourceId, shopId },
         data: { status: ResourceStatus.BUSY },
       });
     }
@@ -1029,7 +1270,7 @@ export class ReservationsService {
     ) {
       if (row.resourceId) {
         await this.prisma.resource.update({
-          where: { id: row.resourceId },
+          where: { id: row.resourceId, shopId },
           data: { status: ResourceStatus.AVAILABLE },
         });
       }
@@ -1112,7 +1353,7 @@ export class ReservationsService {
     }
 
     if (
-      row.guestToken &&
+      (row.guestTokenHash || row.guestToken) &&
       row.guestEmail?.trim() &&
       dto.status != null &&
       dto.status !== existing.status
@@ -1125,6 +1366,15 @@ export class ReservationsService {
         let kind: 'confirmed' | 'canceled' | 'updated' = 'updated';
         if (dto.status === ReservationStatus.CONFIRMED) kind = 'confirmed';
         if (dto.status === ReservationStatus.CANCELED) kind = 'canceled';
+        // Status URL only when legacy plaintext still present (hash-only rows
+        // cannot re-derive the raw token; guest keeps the original email link).
+        const statusPath = row.guestToken
+          ? this.guestStatusPath(
+              shop.slug,
+              row.guestToken,
+              row.resource?.type,
+            )
+          : null;
         void this.sendGuestReservationMail(
           {
             guestName: row.guestName,
@@ -1137,11 +1387,7 @@ export class ReservationsService {
             endsAt: row.endsAt,
             status: row.status,
             notes: row.notes,
-            statusPath: this.guestStatusPath(
-              shop.slug,
-              row.guestToken,
-              row.resource?.type,
-            ),
+            statusPath,
             isDining: isDiningResourceType(row.resource?.type),
           },
           kind,
@@ -1155,6 +1401,7 @@ export class ReservationsService {
   async delete(actor: JwtAccessPayload, id: string) {
     this.assertWrite(actor);
     const shopId = actor.shopId!;
+    await assertShopFeature(this.prisma, shopId, 'reservation');
     const existing = await this.prisma.reservation.findFirst({
       where: { id, shopId },
       include: { resource: { include: { category: true } } },
@@ -1164,12 +1411,22 @@ export class ReservationsService {
     const unitLabel = existing.resource?.name ?? 'unassigned unit';
     const window = this.formatWindow(existing.startsAt, existing.endsAt);
 
-    if (existing.guestToken && existing.guestEmail?.trim()) {
+    if (
+      (existing.guestTokenHash || existing.guestToken) &&
+      existing.guestEmail?.trim()
+    ) {
       const shop = await this.prisma.shop.findUnique({
         where: { id: shopId },
         select: { name: true, slug: true },
       });
       if (shop) {
+        const statusPath = existing.guestToken
+          ? this.guestStatusPath(
+              shop.slug,
+              existing.guestToken,
+              existing.resource?.type,
+            )
+          : null;
         void this.sendGuestReservationMail(
           {
             guestName: existing.guestName,
@@ -1182,11 +1439,7 @@ export class ReservationsService {
             endsAt: existing.endsAt,
             status: ReservationStatus.CANCELED,
             notes: existing.notes,
-            statusPath: this.guestStatusPath(
-              shop.slug,
-              existing.guestToken,
-              existing.resource?.type,
-            ),
+            statusPath,
             isDining: isDiningResourceType(existing.resource?.type),
           },
           'canceled',
@@ -1194,7 +1447,7 @@ export class ReservationsService {
       }
     }
 
-    await this.prisma.reservation.delete({ where: { id } });
+    await this.prisma.reservation.delete({ where: { id, shopId } });
 
     await this.logBooking(
       actor,
@@ -1248,12 +1501,13 @@ export class ReservationsService {
       endsAt: Date;
       status: string;
       notes?: string | null;
-      statusPath: string;
+      statusPath?: string | null;
       isDining?: boolean;
     },
     kind: 'created' | 'confirmed' | 'canceled' | 'updated',
   ) {
-    const statusUrl = `${this.webAppBaseUrl()}${input.statusPath.startsWith('/') ? input.statusPath : `/${input.statusPath}`}`;
+    // Only same-app relative paths — never concatenate attacker absolute URLs.
+    const statusUrl = absoluteAppUrl(this.webAppBaseUrl(), input.statusPath);
     const details: GamingReservationMailDetails = {
       guestName: input.guestName,
       venueName: input.venueName,

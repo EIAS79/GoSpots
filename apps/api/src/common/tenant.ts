@@ -8,6 +8,14 @@ export function requireShopId(actor: JwtAccessPayload): string {
   return actor.shopId;
 }
 
+/**
+ * Prisma extended-where-unique for tenant-owned rows.
+ * Prefer this on update/delete so a wrong shopId cannot mutate another tenant's id.
+ */
+export function shopScopedWhere(id: string, shopId: string) {
+  return { id, shopId };
+}
+
 export function slugifyTag(name: string): string {
   return name
     .toLowerCase()

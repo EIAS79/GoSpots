@@ -7,6 +7,10 @@ import {
 import { PrismaService } from '../../prisma/prisma.service';
 import { hasPermission, PERMISSIONS } from '../../common/permissions';
 import { requireShopId } from '../../common/tenant';
+import {
+  assertPrivacyConsentAccepted,
+  recordConsent,
+} from '../../common/gdpr-consent.util';
 import type { JwtAccessPayload } from '../auth/auth.service';
 import { AuditService } from '../audit/audit.service';
 import { NotificationsService } from '../notifications/notifications.service';
@@ -54,6 +58,8 @@ export class ContactMessagesService {
   }
 
   async createFromPublic(slug: string, dto: CreatePublicContactDto) {
+    assertPrivacyConsentAccepted(dto.privacyConsentAccepted);
+
     const shop = await this.prisma.shop.findFirst({
       where: { slug, isPublished: true },
       select: { id: true, name: true },
@@ -86,6 +92,14 @@ export class ContactMessagesService {
         guestName: row.guestName,
         subject: row.subject,
       },
+    });
+
+    await recordConsent(this.prisma, {
+      shopId: shop.id,
+      purpose: 'CONTACT',
+      guestEmail: row.guestEmail,
+      sourceEntityType: 'contactMessage',
+      sourceEntityId: row.id,
     });
 
     await this.notifications.recordOperationsEvent(shop.id, {

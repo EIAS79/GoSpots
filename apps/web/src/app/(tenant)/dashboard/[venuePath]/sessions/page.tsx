@@ -41,6 +41,7 @@ import { useCurrentMembership } from "@/lib/use-current-membership";
 import { useDashboardGuide } from "@/lib/use-dashboard-guide";
 import { useVenueAccess } from "@/lib/use-venue-access";
 import { useVenueHref } from "@/lib/venue-context";
+import { useVenueSettingsOptional } from "@/lib/venue-settings-context";
 import { useLiveData } from "@/lib/use-live-data";
 import { publishLiveEvent } from "@/lib/live-events";
 import {
@@ -102,6 +103,7 @@ function TabNotificationBadge({
 }
 
 export default function ReservationsPage() {
+  const t = useVenueSettingsOptional()?.t ?? ((k: string) => k);
   const searchParams = useSearchParams();
   const router = useRouter();
   const playBillingHref = useVenueHref("/play-billing");
@@ -155,7 +157,7 @@ export default function ReservationsPage() {
     if (diningUi) {
       tabs.push({
         id: "dining",
-        label: "Dining bookings",
+        label: t("sessionsPage.tabDining"),
         badge: "dining",
         variant: "amber",
       });
@@ -163,19 +165,19 @@ export default function ReservationsPage() {
     if (gamingUi) {
       tabs.push({
         id: "schedule",
-        label: "Game bookings",
+        label: t("sessionsPage.tabGaming"),
         badge: "gaming",
         variant: "emerald",
       });
     }
     tabs.push({
       id: "events",
-      label: "Event requests",
+      label: t("sessionsPage.tabEvents"),
       badge: "events",
       variant: "violet",
     });
     return tabs;
-  }, [diningUi, gamingUi]);
+  }, [diningUi, gamingUi, t]);
 
   const defaultView: ReservationsView = diningUi && !gamingUi
     ? "dining"
@@ -208,15 +210,19 @@ export default function ReservationsPage() {
           ...sched,
           agenda: Array.isArray(sched.agenda) ? sched.agenda : [],
         });
+        return true;
       } catch (e) {
         if (!opts.silent) {
-          setError(e instanceof Error ? e.message : "Failed to load schedule.");
+          setError(
+            e instanceof Error ? e.message : t("sessionsPage.loadFailed"),
+          );
         }
+        return false;
       } finally {
         if (!opts.silent) setLoading(false);
       }
     },
-    [day],
+    [day, t],
   );
 
   useEffect(() => {
@@ -361,7 +367,9 @@ export default function ReservationsPage() {
             )}
           >
             <Plus size={14} />
-            {boardMode === "dining" ? "New table booking" : "New booking"}
+            {boardMode === "dining"
+              ? t("sessionsPage.newTableBooking")
+              : t("sessionsPage.newBooking")}
           </button>
         ) : null
       }
@@ -436,14 +444,14 @@ export default function ReservationsPage() {
                       className="w-full rounded-lg border border-white/10 bg-zinc-900 px-3 py-2 text-sm text-white sm:max-w-xs"
                       aria-label={
                         boardMode === "dining"
-                          ? "Filter by restaurant"
-                          : "Filter by game activity"
+                          ? t("sessionsPage.filterByRestaurant")
+                          : t("sessionsPage.filterByGameActivity")
                       }
                     >
                       <option value="">
                         {boardMode === "dining"
-                          ? "All restaurants — day schedule"
-                          : "All games — day schedule"}
+                          ? t("sessionsPage.allRestaurantsDaySchedule")
+                          : t("sessionsPage.allGamesDaySchedule")}
                       </option>
                       {viewCatalogCategories.map((c) => {
                         const labels = getBookingUnitLabels(
@@ -466,25 +474,24 @@ export default function ReservationsPage() {
                       isAmber ? "text-amber-400" : "text-emerald-400",
                     )}
                   >
-                    Today
+                    {t("sessionsPage.today")}
                   </button>
                 </div>
 
                 {boardMode === "dining" ? (
                   <p className="text-[11px] text-zinc-500">
-                    Tables come from{" "}
+                    {t("sessionsPage.diningHintPrefix")}{" "}
                     <Link
                       href={diningLayoutHref}
                       className="text-amber-300/90 hover:underline"
                     >
-                      Dining layout
+                      {t("nav.dining")}
                     </Link>
-                    . Tap a table to book · ⋮ to mark out of service.
+                    {t("sessionsPage.diningHintSuffix")}
                   </p>
                 ) : (
                   <p className="text-[11px] text-zinc-500">
-                    Tap a station to book · ⋮ to mark out of service · agenda
-                    shows paid / awaiting payment.
+                    {t("sessionsPage.gamingHint")}
                   </p>
                 )}
 
@@ -492,9 +499,9 @@ export default function ReservationsPage() {
                   <div className="inline-flex max-w-full overflow-x-auto rounded-lg bg-zinc-950/80 p-1 ring-1 ring-white/10 [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
                     {(
                       [
-                        { id: "both", label: "Schedule + map" },
-                        { id: "agenda", label: "Day schedule" },
-                        { id: "floor", label: "Floor map" },
+                        { id: "both", label: t("sessionsPage.viewScheduleMap") },
+                        { id: "agenda", label: t("sessionsPage.viewDaySchedule") },
+                        { id: "floor", label: t("sessionsPage.viewFloorMap") },
                       ] as const
                     ).map(({ id, label }) => (
                       <button
@@ -541,10 +548,10 @@ export default function ReservationsPage() {
                     <div ref={agendaRef} className="min-w-0 w-full">
                       <div className="mb-3 flex flex-col gap-1 sm:flex-row sm:items-center sm:justify-between">
                         <h3 className="text-sm font-semibold text-white">
-                          Day schedule
+                          {t("sessionsPage.daySchedule")}
                         </h3>
                         <p className="text-[11px] text-zinc-500">
-                          Search · filter · collect payment
+                          {t("sessionsPage.scheduleSubtitle")}
                         </p>
                       </div>
                       <BookingDayAgenda
@@ -556,7 +563,13 @@ export default function ReservationsPage() {
                         variant={boardMode}
                         onEdit={openAgendaItem}
                         onCancel={async (item) => {
-                          if (!confirm(`Cancel booking for ${item.guestName}?`))
+                          if (
+                            !confirm(
+                              t("sessionsPage.cancelBookingConfirm", {
+                                guest: item.guestName,
+                              }),
+                            )
+                          )
                             return;
                           setSaving(true);
                           try {
@@ -569,7 +582,7 @@ export default function ReservationsPage() {
                             setError(
                               e instanceof Error
                                 ? e.message
-                                : "Could not cancel.",
+                                : t("sessionsPage.cancelFailed"),
                             );
                           } finally {
                             setSaving(false);
@@ -587,7 +600,7 @@ export default function ReservationsPage() {
                             setError(
                               e instanceof Error
                                 ? e.message
-                                : "Could not check in guest.",
+                                : t("sessionsPage.checkInFailed"),
                             );
                           } finally {
                             setSaving(false);
@@ -596,7 +609,10 @@ export default function ReservationsPage() {
                         onGuestLeft={async (item) => {
                           if (
                             !confirm(
-                              `Mark ${item.guestName} as left and free ${item.unitName ?? "the unit"}?`,
+                              t("sessionsPage.guestLeftConfirmNamed", {
+                                guest: item.guestName,
+                                unit: item.unitName ?? t("sessionsPage.theUnit"),
+                              }),
                             )
                           ) {
                             return;
@@ -613,7 +629,7 @@ export default function ReservationsPage() {
                             setError(
                               e instanceof Error
                                 ? e.message
-                                : "Could not free unit.",
+                                : t("sessionsPage.freeUnitFailed"),
                             );
                           } finally {
                             setSaving(false);
@@ -627,7 +643,9 @@ export default function ReservationsPage() {
                         onRemove={async (item) => {
                           if (
                             !confirm(
-                              `Permanently remove booking for ${item.guestName}?`,
+                              t("sessionsPage.removeBookingConfirm", {
+                                guest: item.guestName,
+                              }),
                             )
                           ) {
                             return;
@@ -640,7 +658,7 @@ export default function ReservationsPage() {
                             setError(
                               e instanceof Error
                                 ? e.message
-                                : "Could not remove.",
+                                : t("sessionsPage.removeFailed"),
                             );
                           } finally {
                             setSaving(false);
@@ -655,13 +673,13 @@ export default function ReservationsPage() {
                       <div className="mb-3 flex flex-col gap-1 sm:flex-row sm:items-center sm:justify-between">
                         <h3 className="text-sm font-semibold text-white">
                           {boardMode === "dining"
-                            ? "Live table map"
-                            : "Digital floor map"}
+                            ? t("sessionsPage.liveTableMap")
+                            : t("sessionsPage.digitalFloorMap")}
                         </h3>
                         <p className="text-[11px] text-zinc-500">
                           {boardMode === "dining"
-                            ? "Areas & mixed table types from your layout"
-                            : "Floor & layout tabs inside the map"}
+                            ? t("sessionsPage.tableMapSubtitle")
+                            : t("sessionsPage.floorMapSubtitle")}
                         </p>
                       </div>
                       <GameBookingSchedule
@@ -713,7 +731,7 @@ export default function ReservationsPage() {
                             setError(
                               e instanceof Error
                                 ? e.message
-                                : "Could not check in guest.",
+                                : t("sessionsPage.checkInFailed"),
                             );
                           } finally {
                             setSaving(false);
@@ -722,7 +740,9 @@ export default function ReservationsPage() {
                         onGuestLeftBooking={async (booking) => {
                           if (
                             !confirm(
-                              `Mark ${booking.guestName} as left and free the unit?`,
+                              t("sessionsPage.guestLeftConfirmUnit", {
+                                guest: booking.guestName,
+                              }),
                             )
                           ) {
                             return;
@@ -739,7 +759,7 @@ export default function ReservationsPage() {
                             setError(
                               e instanceof Error
                                 ? e.message
-                                : "Could not free unit.",
+                                : t("sessionsPage.freeUnitFailed"),
                             );
                           } finally {
                             setSaving(false);
@@ -755,7 +775,7 @@ export default function ReservationsPage() {
                             setError(
                               e instanceof Error
                                 ? e.message
-                                : "Could not update table status.",
+                                : t("sessionsPage.tableStatusFailed"),
                             );
                           }
                         }}
@@ -798,7 +818,7 @@ export default function ReservationsPage() {
           onCancelBooking={
             dialog.booking && dialog.booking.status !== "CANCELED"
               ? async () => {
-                  if (!confirm("Cancel this booking? The slot will open up.")) {
+                  if (!confirm(t("sessionsPage.cancelThisBookingConfirm"))) {
                     return;
                   }
                   setSaving(true);
@@ -820,11 +840,7 @@ export default function ReservationsPage() {
           onDelete={
             dialog.booking
               ? async () => {
-                  if (
-                    !confirm(
-                      "Permanently remove this booking? This cannot be undone.",
-                    )
-                  ) {
+                  if (!confirm(t("sessionsPage.removeThisBookingConfirm"))) {
                     return;
                   }
                   setSaving(true);

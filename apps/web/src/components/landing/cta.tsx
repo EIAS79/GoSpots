@@ -1,44 +1,28 @@
 "use client";
 
-import { AnimatePresence, motion, useReducedMotion } from "framer-motion";
+import { motion, useReducedMotion } from "framer-motion";
 import { ArrowRight } from "lucide-react";
 import Link from "next/link";
 import { Magnetic } from "@/components/effects/magnetic";
 import { cn } from "@/lib/cn";
 import { usePublicPrefs } from "@/lib/public-prefs-context";
-import { useMode } from "./mode-context";
 
 const EASE = [0.22, 1, 0.36, 1] as const;
 
-const hrefs = {
-  manage: {
-    primary: "/register",
-    secondary: "/venues",
-  },
-  play: {
-    primary: "/venues",
-    secondary: "/register",
-  },
-} as const;
-
-const glow = {
-  manage: { glowA: "bg-emerald-500/25", glowB: "bg-violet-500/20" },
-  play: { glowA: "bg-cyan-500/25", glowB: "bg-amber-500/15" },
-} as const;
-
+/** Owner CTA — primary register; secondary guest directory. */
 export function Cta() {
   const reduce = useReducedMotion();
-  const { mode } = useMode();
   const { t } = usePublicPrefs();
-  const prefix = mode === "manage" ? "cta.manage" : "cta.play";
+  const prefix = "cta.manage";
   const c = {
     titleA: t(`${prefix}.titleA`),
     titleB: t(`${prefix}.titleB`),
     body: t(`${prefix}.body`),
     note: t(`${prefix}.note`),
-    primary: { label: t(`${prefix}.primary`), href: hrefs[mode].primary },
-    secondary: { label: t(`${prefix}.secondary`), href: hrefs[mode].secondary },
-    ...glow[mode],
+    primary: { label: t(`${prefix}.primary`), href: "/register" },
+    secondary: { label: t(`${prefix}.secondary`), href: "/venues" },
+    glowA: "bg-emerald-500/25",
+    glowB: "bg-amber-500/15",
   };
 
   return (
@@ -49,7 +33,7 @@ export function Cta() {
           whileInView={{ opacity: 1, y: 0 }}
           viewport={{ once: true }}
           transition={{ duration: 0.55, ease: EASE }}
-          className="relative overflow-hidden rounded-3xl border border-[var(--color-border)] bg-[var(--color-surface)]/40 p-5 dark:border-white/10 dark:bg-zinc-950/40 sm:p-8 md:p-14"
+          className="relative overflow-hidden rounded-3xl border border-[var(--color-border)] bg-[var(--color-surface)]/40 p-5 sm:p-8 md:p-14"
         >
           {!reduce && (
             <>
@@ -80,44 +64,35 @@ export function Cta() {
           )}
           <div className="absolute inset-0 -z-0 bg-grid [mask-image:radial-gradient(circle_at_center,black,transparent_75%)] opacity-25" />
 
-          <AnimatePresence mode="wait" initial={false}>
-            <motion.div
-              key={mode}
-              initial={{ opacity: 0, y: 14 }}
-              animate={{ opacity: 1, y: 0 }}
-              exit={{ opacity: 0, y: -10 }}
-              transition={{ duration: 0.35, ease: EASE }}
-              className="relative flex flex-col items-center text-center"
-            >
-              <h2 className="text-balance text-3xl font-bold leading-tight sm:text-4xl md:text-6xl">
-                {c.titleA} <span className="text-gradient">{c.titleB}</span>
-              </h2>
-              <p className="mt-5 max-w-2xl text-base text-zinc-700 dark:text-zinc-300 md:text-lg">
-                {c.body}
-              </p>
-              <p className="mt-3 text-sm text-zinc-500">{c.note}</p>
-              <div className="mt-8 flex w-full flex-col items-stretch gap-3 sm:w-auto sm:flex-row sm:items-center sm:justify-center">
-                <Magnetic>
-                  <Link
-                    href={c.primary.href}
-                    className="group inline-flex w-full items-center justify-center gap-2 rounded-full bg-zinc-900 px-7 py-3.5 text-sm font-semibold text-white shadow-[0_20px_60px_-15px_rgba(255,255,255,0.35)] transition hover:bg-zinc-700 sm:w-auto dark:bg-white dark:text-zinc-950 dark:hover:bg-zinc-200"
-                  >
-                    {c.primary.label}
-                    <ArrowRight
-                      size={16}
-                      className="transition-transform group-hover:translate-x-1"
-                    />
-                  </Link>
-                </Magnetic>
+          <div className="relative flex flex-col items-center text-center">
+            <h2 className="text-balance text-3xl font-bold leading-tight sm:text-4xl md:text-6xl">
+              {c.titleA} <span className="text-gradient">{c.titleB}</span>
+            </h2>
+            <p className="mt-5 max-w-2xl text-base text-zinc-700 dark:text-zinc-300 md:text-lg">
+              {c.body}
+            </p>
+            <p className="mt-3 text-sm text-zinc-500">{c.note}</p>
+            <div className="mt-8 flex w-full flex-col items-stretch gap-3 sm:w-auto sm:flex-row sm:items-center sm:justify-center">
+              <Magnetic>
                 <Link
-                  href={c.secondary.href}
-                  className="inline-flex w-full items-center justify-center rounded-full border border-[var(--color-border)] bg-[var(--color-surface)]/60 px-7 py-3.5 text-sm font-medium text-[var(--color-foreground)] backdrop-blur transition hover:bg-black/5 sm:w-auto dark:border-white/20 dark:bg-white/5 dark:text-white dark:hover:bg-white/10"
+                  href={c.primary.href}
+                  className="group inline-flex w-full items-center justify-center gap-2 rounded-full bg-zinc-900 px-7 py-3.5 text-sm font-semibold text-white shadow-[0_20px_60px_-15px_rgba(255,255,255,0.35)] transition hover:bg-zinc-700 sm:w-auto dark:bg-white dark:text-zinc-950 dark:hover:bg-zinc-200"
                 >
-                  {c.secondary.label}
+                  {c.primary.label}
+                  <ArrowRight
+                    size={16}
+                    className="transition-transform group-hover:translate-x-1"
+                  />
                 </Link>
-              </div>
-            </motion.div>
-          </AnimatePresence>
+              </Magnetic>
+              <Link
+                href={c.secondary.href}
+                className="inline-flex w-full items-center justify-center rounded-full border border-[var(--color-border)] bg-[var(--color-surface)]/60 px-7 py-3.5 text-sm font-medium text-[var(--color-foreground)] backdrop-blur transition hover:bg-black/5 sm:w-auto dark:border-white/20 dark:bg-white/5 dark:text-white dark:hover:bg-white/10"
+              >
+                {c.secondary.label}
+              </Link>
+            </div>
+          </div>
         </motion.div>
       </div>
     </section>

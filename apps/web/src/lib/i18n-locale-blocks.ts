@@ -146,7 +146,7 @@ export const deLocaleBlocks: LocaleBlocks = {
       name: "Venue-Seite & Entdeckung",
       tagline: "Öffentliche Venue-Seite plus Verzeichnisplatzierung.",
       details:
-        "Veröffentlichen Sie Ihre Venue auf GoSpots mit einer eigenen öffentlichen Seite und schalten Sie Werbung / prominente Platzierung im Venue-Verzeichnis frei, damit mehr Gäste Sie finden.",
+        "Veröffentlichen Sie Ihre Venue auf Locora mit einer eigenen öffentlichen Seite und schalten Sie Werbung / prominente Platzierung im Venue-Verzeichnis frei, damit mehr Gäste Sie finden.",
     },
     guest_chat: {
       name: "Gästenachrichten",
@@ -482,7 +482,7 @@ export const frLocaleBlocks: LocaleBlocks = {
       name: "Page du lieu et découverte",
       tagline: "Page publique du lieu plus placement dans l’annuaire.",
       details:
-        "Publiez votre lieu sur GoSpots avec une page publique dédiée, et débloquez la publicité / le placement promu dans l’annuaire pour que plus de clients vous trouvent.",
+        "Publiez votre lieu sur Locora avec une page publique dédiée, et débloquez la publicité / le placement promu dans l’annuaire pour que plus de clients vous trouvent.",
     },
     guest_chat: {
       name: "Messagerie clients",
@@ -818,7 +818,7 @@ export const esLocaleBlocks: LocaleBlocks = {
       name: "Página del local y descubrimiento",
       tagline: "Página pública del local más presencia en el directorio.",
       details:
-        "Publique su local en GoSpots con una página pública dedicada y desbloquee publicidad / colocación promocionada en el directorio para que más invitados le encuentren.",
+        "Publique su local en Locora con una página pública dedicada y desbloquee publicidad / colocación promocionada en el directorio para que más invitados le encuentren.",
     },
     guest_chat: {
       name: "Mensajería de invitados",
@@ -1154,7 +1154,7 @@ export const arLocaleBlocks: LocaleBlocks = {
       name: "صفحة المكان والاكتشاف",
       tagline: "صفحة عامة للمكان بالإضافة إلى الظهور في الدليل.",
       details:
-        "انشر مكانك على GoSpots بصفحة عامة مخصصة، وافتح الإعلان / الموضع المروَّج في دليل الأماكن ليجدك المزيد من الضيوف.",
+        "انشر مكانك على Locora بصفحة عامة مخصصة، وافتح الإعلان / الموضع المروَّج في دليل الأماكن ليجدك المزيد من الضيوف.",
     },
     guest_chat: {
       name: "مراسلة الضيوف",

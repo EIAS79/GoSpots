@@ -63,3 +63,24 @@ export const RESOURCE_STATUS_COLORS: Record<ResourceStatus, string> = {
   RESERVED: "bg-amber-500/15 text-amber-200 border-amber-400/30",
   MAINTENANCE: "bg-zinc-700/50 text-zinc-400 border-white/10",
 };
+
+type ResourceLabelTranslate = (
+  key: string,
+  vars?: Record<string, string | number>,
+) => string;
+
+/** Localized resource type label — pass the venue-settings `t()`. */
+export function resourceTypeLabel(
+  t: ResourceLabelTranslate,
+  type: ResourceType,
+): string {
+  return t(`resources.labels.type.${type}`);
+}
+
+/** Localized resource status label — pass the venue-settings `t()`. */
+export function resourceStatusLabel(
+  t: ResourceLabelTranslate,
+  status: ResourceStatus,
+): string {
+  return t(`resources.labels.status.${status}`);
+}

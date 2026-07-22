@@ -17,15 +17,18 @@ import { VenueBarChart, VenueLineChart } from "@/components/charts/venue-chart";
 import { cn } from "@/lib/cn";
 import type { DashboardOverview } from "@/lib/dashboard-client";
 import { formatDate } from "@/lib/format";
+import { coerceMoney } from "@/lib/money";
+import { useVenueSettingsOptional } from "@/lib/venue-settings-context";
 
 type OverviewTab = "summary" | "finance" | "orders" | "audience" | "activity";
+type OverviewT = (key: string, vars?: Record<string, string | number>) => string;
 
-const TABS: { id: OverviewTab; label: string; icon: typeof LayoutGrid }[] = [
-  { id: "summary", label: "Summary", icon: LayoutGrid },
-  { id: "finance", label: "Finance", icon: TrendingUp },
-  { id: "orders", label: "Orders", icon: UtensilsCrossed },
-  { id: "audience", label: "Marketing", icon: Eye },
-  { id: "activity", label: "Activity", icon: CalendarRange },
+const TABS: { id: OverviewTab; tKey: string; icon: typeof LayoutGrid }[] = [
+  { id: "summary", tKey: "tabSummary", icon: LayoutGrid },
+  { id: "finance", tKey: "tabFinance", icon: TrendingUp },
+  { id: "orders", tKey: "tabOrders", icon: UtensilsCrossed },
+  { id: "audience", tKey: "tabAudience", icon: Eye },
+  { id: "activity", tKey: "tabActivity", icon: CalendarRange },
 ];
 
 export function OverviewDashboard({
@@ -35,7 +38,7 @@ export function OverviewDashboard({
   links,
 }: {
   data: DashboardOverview;
-  formatMoney: (n: number) => string;
+  formatMoney: (n: import("@/lib/money").MoneyWire) => string;
   locale: string;
   links: {
     reports: string;
@@ -49,12 +52,14 @@ export function OverviewDashboard({
 }) {
   const [tab, setTab] = useState<OverviewTab>("summary");
   const { kpis, charts, topMenuItems, recentReservations, recentAudit } = data;
+  const vs = useVenueSettingsOptional();
+  const t: OverviewT = vs?.t ?? ((key) => key);
 
   return (
     <div className="space-y-5">
       <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         <div className="flex flex-wrap gap-1 rounded-xl bg-zinc-950/80 p-1 ring-1 ring-white/10">
-          {TABS.map(({ id, label, icon: Icon }) => (
+          {TABS.map(({ id, tKey, icon: Icon }) => (
             <button
               key={id}
               type="button"
@@ -67,7 +72,7 @@ export function OverviewDashboard({
               )}
             >
               <Icon size={14} className="shrink-0 opacity-80" />
-              {label}
+              {t(`dashOverview.${tKey}`)}
             </button>
           ))}
         </div>
@@ -76,13 +81,13 @@ export function OverviewDashboard({
             href={links.subscription}
             className="rounded-lg border border-white/10 px-2.5 py-1.5 text-zinc-400 hover:bg-white/5"
           >
-            Plan
+            {t("dashOverview.planLink")}
           </Link>
           <Link
             href={links.reports}
             className="rounded-lg border border-emerald-400/30 bg-emerald-500/10 px-2.5 py-1.5 text-emerald-200"
           >
-            Reports
+            {t("dashOverview.reportsLink")}
           </Link>
         </div>
       </div>
@@ -91,24 +96,26 @@ export function OverviewDashboard({
         <div className="space-y-4">
           <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
             <KpiCard
-              label="Revenue today"
+              label={t("dashOverview.revenueToday")}
               value={formatMoney(kpis.revenueToday)}
               icon={TrendingUp}
             />
             <KpiCard
-              label="Profit (7d)"
+              label={t("dashOverview.profitWeek")}
               value={formatMoney(kpis.profitWeek)}
-              hint={`Sales ${formatMoney(kpis.revenueWeek)}`}
+              hint={t("dashOverview.salesHint", {
+                amount: formatMoney(kpis.revenueWeek),
+              })}
               icon={TrendingUp}
               tone="amber"
             />
             <KpiCard
-              label="Orders today"
+              label={t("dashOverview.ordersToday")}
               value={String(kpis.ordersToday)}
               icon={UtensilsCrossed}
             />
             <KpiCard
-              label="Guests (7d)"
+              label={t("dashOverview.guestsWeek")}
               value={String(kpis.customersWeek)}
               icon={Users}
               tone="sky"
@@ -116,24 +123,24 @@ export function OverviewDashboard({
           </div>
           <div className="grid gap-3 lg:grid-cols-2">
             <MiniChartCard
-              title="Revenue trend"
-              subtitle="Last 7 days"
+              title={t("dashOverview.revenueTrendTitle")}
+              subtitle={t("dashOverview.last7Days")}
               href={links.reports}
-              linkLabel="Reports"
+              linkLabel={t("dashOverview.reportsLink")}
             >
               <VenueLineChart
                 data={(charts.revenueByDay ?? []).map((d) => ({
                   label: d.day,
-                  value: Math.round(d.total * 100) / 100,
+                  value: Math.round(coerceMoney(d.total) * 100) / 100,
                 }))}
-                label="Revenue"
+                label={t("dashOverview.revenueSeriesLabel")}
               />
             </MiniChartCard>
             <MiniChartCard
-              title="Recent reservations"
-              subtitle="Latest bookings"
+              title={t("dashOverview.recentReservationsTitle")}
+              subtitle={t("dashOverview.latestBookings")}
               href={links.sessions}
-              linkLabel="All reservations"
+              linkLabel={t("dashOverview.allReservationsLink")}
             >
               <ul className="divide-y divide-white/5">
                 {recentReservations.slice(0, 4).map((r) => (
@@ -155,44 +162,48 @@ export function OverviewDashboard({
         <div className="space-y-4">
           <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
             <KpiCard
-              label="Revenue (7d)"
+              label={t("dashOverview.revenueWeek")}
               value={formatMoney(kpis.revenueWeek)}
               icon={LineChart}
             />
             <KpiCard
-              label="Profit (7d)"
+              label={t("dashOverview.profitWeek")}
               value={formatMoney(kpis.profitWeek)}
-              hint={`Losses ${formatMoney(kpis.lossesWeek)}`}
+              hint={t("dashOverview.lossesHint", {
+                amount: formatMoney(kpis.lossesWeek),
+              })}
               icon={TrendingUp}
               tone="amber"
             />
             <KpiCard
-              label="Revenue today"
+              label={t("dashOverview.revenueToday")}
               value={formatMoney(kpis.revenueToday)}
               icon={TrendingUp}
             />
           </div>
           <MiniChartCard
-            title="Revenue breakdown"
-            subtitle="Menu orders + quick sales"
+            title={t("dashOverview.revenueBreakdownTitle")}
+            subtitle={t("dashOverview.revenueBreakdownSubtitle")}
             href={links.reports}
-            linkLabel="Full finance reports"
+            linkLabel={t("dashOverview.fullFinanceReportsLink")}
             className="max-w-3xl"
           >
             <VenueLineChart
               data={(charts.revenueByDay ?? []).map((d) => ({
                 label: d.day,
-                value: Math.round(d.total * 100) / 100,
+                value: Math.round(coerceMoney(d.total) * 100) / 100,
               }))}
-              label="Revenue"
+              label={t("dashOverview.revenueSeriesLabel")}
             />
           </MiniChartCard>
-          {kpis.lossesWeek > 0 ? (
+          {coerceMoney(kpis.lossesWeek) > 0 ? (
             <p className="flex items-center gap-2 text-xs text-rose-300/90">
               <TrendingDown size={14} />
-              Losses this week: {formatMoney(kpis.lossesWeek)} —{" "}
+              {t("dashOverview.lossesWeekMessage", {
+                amount: formatMoney(kpis.lossesWeek),
+              })}{" "}
               <Link href={links.losses} className="underline">
-                Review losses
+                {t("dashOverview.reviewLossesLink")}
               </Link>
             </p>
           ) : null}
@@ -203,43 +214,51 @@ export function OverviewDashboard({
         <div className="space-y-4">
           <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
             <KpiCard
-              label="Orders today"
+              label={t("dashOverview.ordersToday")}
               value={String(kpis.ordersToday)}
-              hint={`${kpis.completedOrdersWeek} handed off (7d)`}
+              hint={t("dashOverview.ordersHandedOffHint", {
+                count: kpis.completedOrdersWeek,
+              })}
               icon={UtensilsCrossed}
             />
             <KpiCard
-              label="Guests (7d)"
+              label={t("dashOverview.guestsWeek")}
               value={String(kpis.customersWeek)}
               icon={Users}
               tone="sky"
             />
             <KpiCard
-              label="Revenue today"
+              label={t("dashOverview.revenueToday")}
               value={formatMoney(kpis.revenueToday)}
               icon={TrendingUp}
             />
           </div>
           <div className="grid gap-3 lg:grid-cols-2">
             <MiniChartCard
-              title="Guests per day"
-              subtitle="Menu order covers"
+              title={t("dashOverview.guestsPerDayTitle")}
+              subtitle={t("dashOverview.guestsPerDaySubtitle")}
               href={links.orders}
-              linkLabel="Menu orders"
+              linkLabel={t("dashOverview.menuOrdersLink")}
             >
               <VenueBarChart
                 data={(charts.ordersByDay ?? []).map((d) => ({
                   label: d.day,
                   value: d.customers,
                 }))}
-                label="Guests"
+                label={t("dashOverview.guestsSeriesLabel")}
                 color="rgba(56, 189, 248, 0.85)"
               />
             </MiniChartCard>
-            <MiniChartCard title="Top sellers (7d)" href={links.menu} linkLabel="Manage menu">
+            <MiniChartCard
+              title={t("dashOverview.topSellersTitle")}
+              href={links.menu}
+              linkLabel={t("dashOverview.manageMenuLink")}
+            >
               <ul className="space-y-2">
                 {topMenuItems.length === 0 ? (
-                  <li className="text-xs text-zinc-500">No sales yet.</li>
+                  <li className="text-xs text-zinc-500">
+                    {t("dashOverview.noSalesYet")}
+                  </li>
                 ) : (
                   topMenuItems.map((item) => (
                     <li
@@ -263,26 +282,26 @@ export function OverviewDashboard({
         <div className="space-y-4">
           <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
             <KpiCard
-              label="Venue views (7d)"
+              label={t("dashOverview.venueViews")}
               value={String(kpis.venueViews7d)}
               icon={Eye}
             />
             <KpiCard
-              label="Menu views (7d)"
+              label={t("dashOverview.menuViews")}
               value={String(kpis.menuViews7d)}
               icon={UtensilsCrossed}
               tone="sky"
             />
             <KpiCard
-              label="Book clicks (7d)"
+              label={t("dashOverview.bookClicks")}
               value={String(kpis.reservationClicks7d)}
               icon={CalendarRange}
               tone="amber"
             />
           </div>
           <MiniChartCard
-            title="Profile views"
-            subtitle="Marketing page traffic"
+            title={t("dashOverview.profileViewsTitle")}
+            subtitle={t("dashOverview.marketingTraffic")}
             className="max-w-2xl"
           >
             <VenueBarChart
@@ -290,7 +309,7 @@ export function OverviewDashboard({
                 label: d.day,
                 value: d.count,
               }))}
-              label="Views"
+              label={t("dashOverview.viewsSeriesLabel")}
               color="rgba(167, 139, 250, 0.85)"
             />
           </MiniChartCard>
@@ -300,10 +319,13 @@ export function OverviewDashboard({
       {tab === "activity" ? (
         <div className="grid gap-3 lg:grid-cols-2">
           <MiniChartCard
-            title="Reservations"
-            subtitle={`${kpis.reservationsToday} today · ${kpis.reservationsPending} pending`}
+            title={t("dashOverview.reservationsTitle")}
+            subtitle={t("dashOverview.reservationsSubtitle", {
+              today: kpis.reservationsToday,
+              pending: kpis.reservationsPending,
+            })}
             href={links.sessions}
-            linkLabel="Reservations"
+            linkLabel={t("dashOverview.reservationsLink")}
           >
             <ul className="divide-y divide-white/5">
               {recentReservations.map((r) => (
@@ -316,7 +338,7 @@ export function OverviewDashboard({
                       {r.guestName}
                     </p>
                     <p className="truncate text-zinc-500">
-                      {r.resource ?? "No table"} ·{" "}
+                      {r.resource ?? t("dashOverview.noTable")} ·{" "}
                       {formatDate(r.startsAt, locale)}
                     </p>
                   </div>
@@ -325,7 +347,11 @@ export function OverviewDashboard({
               ))}
             </ul>
           </MiniChartCard>
-          <MiniChartCard title="Audit log" href={links.audit} linkLabel="Full log">
+          <MiniChartCard
+            title={t("dashOverview.auditLogTitle")}
+            href={links.audit}
+            linkLabel={t("dashOverview.fullLogLink")}
+          >
             <ul className="space-y-2">
               {recentAudit.map((a) => (
                 <li key={a.id} className="text-xs leading-relaxed">

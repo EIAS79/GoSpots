@@ -1,5 +1,6 @@
-export const VENUE_PATH_STORAGE_KEY = "gospots.venuePath";
+export const VENUE_PATH_STORAGE_KEY = "Locora.venuePath";
 
+/** Persist public venue slug for API `x-venue-path` (membership-only bind). */
 export function setStoredVenuePath(venuePath: string | null) {
   if (typeof window === "undefined") return;
   if (venuePath) {

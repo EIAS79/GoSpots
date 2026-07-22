@@ -14,6 +14,7 @@ import {
 } from "chart.js";
 import { Bar, Doughnut, Line } from "react-chartjs-2";
 import { useMemo } from "react";
+import { useVenueSettingsOptional } from "@/lib/venue-settings-context";
 
 ChartJS.register(
   CategoryScale,
@@ -78,6 +79,7 @@ export function VenueBarChart({
   label?: string;
   color?: string;
 }) {
+  const vs = useVenueSettingsOptional();
   const chartData = useMemo(
     () => ({
       labels: data.map((d) => formatDayLabel(d.label)),
@@ -97,7 +99,7 @@ export function VenueBarChart({
   if (data.length === 0) {
     return (
       <p className="flex h-48 items-center justify-center text-sm text-zinc-500">
-        No data for this period.
+        {vs?.t("charts.noDataPeriod") ?? "No data for this period."}
       </p>
     );
   }
@@ -118,6 +120,7 @@ export function VenueLineChart({
   label?: string;
   color?: string;
 }) {
+  const vs = useVenueSettingsOptional();
   const chartData = useMemo(
     () => ({
       labels: data.map((d) => formatDayLabel(d.label)),
@@ -140,7 +143,7 @@ export function VenueLineChart({
   if (data.length === 0) {
     return (
       <p className="flex h-48 items-center justify-center text-sm text-zinc-500">
-        No data for this period.
+        {vs?.t("charts.noDataPeriod") ?? "No data for this period."}
       </p>
     );
   }
@@ -202,6 +205,7 @@ export function VenueDoughnutChart({
 }: {
   data: { label: string; value: number; color: string }[];
 }) {
+  const vs = useVenueSettingsOptional();
   const chartData = useMemo(
     () => ({
       labels: data.map((d) => d.label),
@@ -219,7 +223,7 @@ export function VenueDoughnutChart({
   if (data.every((d) => d.value === 0)) {
     return (
       <p className="flex h-48 items-center justify-center text-sm text-zinc-500">
-        No data.
+        {vs?.t("charts.noData") ?? "No data."}
       </p>
     );
   }

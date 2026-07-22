@@ -43,7 +43,7 @@ export function HeroVenueFloatCard({ venue }: { venue: VenueCard }) {
     <div
       className={cn(
         "overflow-hidden rounded-2xl border border-[var(--color-border)] bg-[var(--color-surface)]/55 shadow-[0_24px_60px_-20px_rgba(0,0,0,0.55)] backdrop-blur-md",
-        "dark:bg-zinc-950/45 dark:shadow-[0_24px_70px_-18px_rgba(251,146,60,0.12)]",
+        "dark:shadow-[0_24px_70px_-18px_rgba(232,140,43,0.12)]",
       )}
     >
       <div className="relative h-[72px] w-full overflow-hidden">

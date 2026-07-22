@@ -12,8 +12,8 @@ import {
   UseInterceptors,
 } from '@nestjs/common';
 import { FileInterceptor } from '@nestjs/platform-express';
-import { memoryStorage } from 'multer';
 import { ApiTags } from '@nestjs/swagger';
+import { imageUploadMulterOptions } from '../../common/image-media.util';
 import { PERMISSIONS } from '../../common/permissions';
 import { CurrentUser } from '../auth/decorators/current-user.decorator';
 import { RequirePermissions } from '../auth/decorators/roles.decorator';
@@ -95,12 +95,7 @@ export class ResourcesController {
 
   @Post('gaming-sections/:id/image')
   @RequirePermissions(PERMISSIONS.RESOURCE_WRITE)
-  @UseInterceptors(
-    FileInterceptor('file', {
-      storage: memoryStorage(),
-      limits: { fileSize: 8 * 1024 * 1024 },
-    }),
-  )
+  @UseInterceptors(FileInterceptor('file', imageUploadMulterOptions()))
   uploadGamingSectionImage(
     @CurrentUser() user: JwtAccessPayload,
     @Param('id') id: string,
@@ -139,12 +134,7 @@ export class ResourcesController {
 
   @Post('dining-table-groups/:id/image')
   @RequirePermissions(PERMISSIONS.RESOURCE_WRITE)
-  @UseInterceptors(
-    FileInterceptor('file', {
-      storage: memoryStorage(),
-      limits: { fileSize: 8 * 1024 * 1024 },
-    }),
-  )
+  @UseInterceptors(FileInterceptor('file', imageUploadMulterOptions()))
   uploadDiningTableGroupImage(
     @CurrentUser() user: JwtAccessPayload,
     @Param('id') id: string,
@@ -193,12 +183,7 @@ export class ResourcesController {
 
   @Post('categories/:id/images/:slot')
   @RequirePermissions(PERMISSIONS.RESOURCE_WRITE)
-  @UseInterceptors(
-    FileInterceptor('file', {
-      storage: memoryStorage(),
-      limits: { fileSize: 8 * 1024 * 1024 },
-    }),
-  )
+  @UseInterceptors(FileInterceptor('file', imageUploadMulterOptions()))
   uploadImage(
     @CurrentUser() user: JwtAccessPayload,
     @Param('id') id: string,

@@ -1,8 +1,8 @@
-# GoSpots
+# Locora
 
-Multi-tenant SaaS for gaming venues, dining reservations, menu orders, and finance.
+Multi-tenant SaaS for gaming centers, restaurants, and venues — host dashboard, public site, reservations, reviews, and contact.
 
-Product name: **GoSpots**. API routes and env var names are unchanged from the VenueFlow setup.
+Product name: **Locora**. Tagline: **Host every location.** npm package filters remain `@gospots/*` for now.
 
 ## Stack
 

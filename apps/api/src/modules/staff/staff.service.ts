@@ -5,20 +5,21 @@ import {
   Injectable,
   NotFoundException,
 } from '@nestjs/common';
-import { ShopRole, SubscriptionTier } from '@prisma/client';
+import { ShopRole } from '@prisma/client';
 import {
   PERMISSIONS,
   parsePermissions,
+  permissionsToEffectiveCsv,
   resolveManagerPermissions,
+  resolvePermissionSet,
+  syncMembershipPermissionRows,
 } from '../../common/permissions';
+import { TRIAL_STAFF_SEAT_LIMIT } from '../../common/subscription-tier';
 import {
-  moduleHasFeature,
-  resolveEnabledModules,
-  resolveEffectiveTier,
-  resolveStaffSeatLimit,
-  resolveSubscriptionAccess,
-  TRIAL_STAFF_SEAT_LIMIT,
-} from '../../common/subscription-tier';
+  assertStaffSeatCapacity,
+  getVenueEntitlements,
+  hasFeature,
+} from '../../common/venue-entitlements';
 import {
   buildStaffLoginEmail,
   isValidStaffHandle,
@@ -71,12 +72,15 @@ export class StaffService {
   private async getShopWithTier(shopId: string) {
     const shop = await this.prisma.shop.findUnique({
       where: { id: shopId },
-      include: { subscription: true },
+      include: {
+        subscription: { include: { addOnRows: true } },
+      },
     });
     if (!shop) throw new NotFoundException('Venue not found.');
-    const modules = resolveEnabledModules(shop.subscription);
-    const tier = resolveEffectiveTier(shop.subscription);
-    return { shop, tier, modules };
+    const entitlements = getVenueEntitlements(shop.subscription);
+    const modules = entitlements.enabledModules;
+    const tier = entitlements.effectiveTier;
+    return { shop, tier, modules, entitlements };
   }
 
   private async countStaffSeats(shopId: string): Promise<number> {
@@ -101,10 +105,10 @@ export class StaffService {
 
   async list(actor: JwtAccessPayload) {
     const shopId = this.assertShopContext(actor);
-    const { shop, tier, modules } = await this.getShopWithTier(shopId);
+    const { shop, tier, entitlements } = await this.getShopWithTier(shopId);
     const used = await this.countStaffSeats(shopId);
-    const limit = resolveStaffSeatLimit(shop.subscription);
-    const trialActive = resolveSubscriptionAccess(shop.subscription).trialActive;
+    const limit = entitlements.staffSeatLimit;
+    const trialActive = entitlements.trialActive;
 
     const rows = await this.prisma.membership.findMany({
       where: {
@@ -113,6 +117,7 @@ export class StaffService {
         user: { accountType: 'VENUE_STAFF' },
       },
       include: {
+        permissionRows: { select: { permission: true } },
         user: {
           select: {
             id: true,
@@ -136,14 +141,14 @@ export class StaffService {
       },
       canCreateEmployees:
         limit > 0 &&
-        moduleHasFeature(modules, 'roles') &&
+        hasFeature(entitlements, 'roles') &&
         actor.shopRole === 'OWNER',
       canEditStaff:
         actor.shopRole === 'OWNER' ||
         (actor.shopRole === 'MANAGER' &&
           (actor.perms === '*' ||
             parsePermissions(actor.perms ?? '').has(PERMISSIONS.STAFF_WRITE))),
-      loginSuffix: '.gospots',
+      loginSuffix: '.locora',
       venueSlug: shop.slug,
       seatPolicy: trialActive
         ? `Free trial: up to ${TRIAL_STAFF_SEAT_LIMIT} employee logins while Team accounts is on. After trial, buy seats on Subscription — turning features off never deletes your data.`
@@ -155,7 +160,9 @@ export class StaffService {
         username: m.user.staffHandle,
         name: m.user.name,
         role: m.role,
-        permissions: m.permissions,
+        permissions: permissionsToEffectiveCsv({
+          permissionRows: m.permissionRows,
+        }),
         isActive: m.isActive,
         activated: !!m.user.passwordSetAt,
         pendingInvite: !m.user.passwordSetAt,
@@ -179,21 +186,9 @@ export class StaffService {
       throw new BadRequestException('Invalid username.');
     }
 
-    const { shop, tier, modules } = await this.getShopWithTier(shopId);
-    if (!moduleHasFeature(modules, 'roles')) {
-      throw new ForbiddenException(
-        'Enable Team accounts on Subscription and buy at least one employee seat.',
-      );
-    }
+    const { shop, entitlements } = await this.getShopWithTier(shopId);
     const used = await this.countStaffSeats(shopId);
-    const limit = resolveStaffSeatLimit(shop.subscription);
-    if (limit === 0 || used >= limit) {
-      throw new ForbiddenException(
-        limit === 0
-          ? 'No employee seats purchased yet. Add seats on Subscription, then create accounts.'
-          : `Employee limit reached (${used}/${limit}). Buy more seats on Subscription.`,
-      );
-    }
+    assertStaffSeatCapacity(entitlements, used);
 
     const loginEmail = buildStaffLoginEmail(handle, shop.slug);
     const existing = await this.prisma.user.findUnique({
@@ -229,12 +224,11 @@ export class StaffService {
           passwordSetAt: null,
         },
       });
-      return tx.membership.create({
+      const created = await tx.membership.create({
         data: {
           userId: user.id,
           shopId,
           role,
-          permissions,
           invitedBy: actor.sub,
           isActive: true,
           inviteTokenHash,
@@ -251,6 +245,8 @@ export class StaffService {
           },
         },
       });
+      await syncMembershipPermissionRows(tx, created.id, permissions);
+      return created;
     });
 
     await this.audit.record(actor, {
@@ -275,7 +271,7 @@ export class StaffService {
       username: membership.user.staffHandle,
       name: membership.user.name,
       role: membership.role,
-      permissions: membership.permissions,
+      permissions,
       isActive: membership.isActive,
       activated: false,
       pendingInvite: true,
@@ -382,13 +378,26 @@ export class StaffService {
         shopId,
         user: { accountType: 'VENUE_STAFF' },
       },
-      include: { user: true },
+      include: {
+        user: true,
+        permissionRows: { select: { permission: true } },
+      },
     });
     if (!membership) throw new NotFoundException('Staff member not found.');
+
+    if (dto.isActive === true && !membership.isActive) {
+      const { entitlements } = await this.getShopWithTier(shopId);
+      const used = await this.countStaffSeats(shopId);
+      assertStaffSeatCapacity(entitlements, used);
+    }
 
     if (dto.role === ShopRole.OWNER) {
       throw new BadRequestException('Cannot promote staff to OWNER.');
     }
+
+    const existingPerms = resolvePermissionSet({
+      permissionRows: membership.permissionRows,
+    });
 
     const nextRole =
       dto.role != null
@@ -400,16 +409,15 @@ export class StaffService {
     const roleChanged = dto.role != null && nextRole !== membership.role;
     let nextPermsInput =
       dto.permissions ??
-      (roleChanged ? [...parsePermissions(membership.permissions)] : undefined);
+      (roleChanged ? [...existingPerms] : undefined);
 
     if (
       nextRole === ShopRole.MANAGER &&
       nextPermsInput != null &&
       actor.shopRole !== 'OWNER'
     ) {
-      const existing = parsePermissions(membership.permissions);
       const incoming = new Set(nextPermsInput);
-      if (existing.has(PERMISSIONS.SUBSCRIPTION_MANAGE)) {
+      if (existingPerms.has(PERMISSIONS.SUBSCRIPTION_MANAGE)) {
         incoming.add(PERMISSIONS.SUBSCRIPTION_MANAGE);
       } else {
         incoming.delete(PERMISSIONS.SUBSCRIPTION_MANAGE);
@@ -417,20 +425,28 @@ export class StaffService {
       nextPermsInput = [...incoming];
     }
 
-    const updated = await this.prisma.membership.update({
-      where: { id: membershipId },
-      data: {
-        ...(dto.role != null && { role: nextRole }),
-        ...(nextPermsInput != null && {
-          permissions: this.permissionsToCsv(nextRole, nextPermsInput),
-        }),
-        ...(dto.isActive != null && { isActive: dto.isActive }),
-      },
-      include: {
-        user: {
-          select: { id: true, email: true, name: true, staffHandle: true },
+    const nextPermsCsv =
+      nextPermsInput != null
+        ? this.permissionsToCsv(nextRole, nextPermsInput)
+        : null;
+
+    const updated = await this.prisma.$transaction(async (tx) => {
+      const row = await tx.membership.update({
+        where: { id: membershipId },
+        data: {
+          ...(dto.role != null && { role: nextRole }),
+          ...(dto.isActive != null && { isActive: dto.isActive }),
         },
-      },
+        include: {
+          user: {
+            select: { id: true, email: true, name: true, staffHandle: true },
+          },
+        },
+      });
+      if (nextPermsCsv != null) {
+        await syncMembershipPermissionRows(tx, row.id, nextPermsCsv);
+      }
+      return row;
     });
 
     if (dto.name != null) {
@@ -448,7 +464,9 @@ export class StaffService {
         membershipId,
         role: updated.role,
         isActive: updated.isActive,
-        permissions: updated.permissions,
+        permissions: nextPermsCsv ?? permissionsToEffectiveCsv({
+          permissionRows: membership.permissionRows,
+        }),
       },
     });
 
@@ -458,7 +476,11 @@ export class StaffService {
       username: updated.user.staffHandle,
       name: dto.name ?? updated.user.name,
       role: updated.role,
-      permissions: updated.permissions,
+      permissions:
+        nextPermsCsv ??
+        permissionsToEffectiveCsv({
+          permissionRows: membership.permissionRows,
+        }),
       isActive: updated.isActive,
     };
   }

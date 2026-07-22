@@ -1,5 +1,4 @@
-import { API_BASE_URL, ApiError, api } from "./api";
-import { getVenuePathHeaders } from "./venue-api-headers";
+import { ApiError, api, credentialedFetch } from "./api";
 import type { ResourceType } from "./resource-types";
 import type { SeatingZone } from "./seating-zone";
 
@@ -110,12 +109,10 @@ export async function uploadGamingSectionImage(
 ): Promise<{ sections: GamingSectionDetail[] }> {
   const form = new FormData();
   form.append("file", file);
-  const res = await fetch(
-    `${API_BASE_URL}/resources/gaming-sections/${sectionId}/image`,
+  const res = await credentialedFetch(
+    `/resources/gaming-sections/${sectionId}/image`,
     {
       method: "POST",
-      credentials: "include",
-      headers: getVenuePathHeaders(),
       body: form,
     },
   );
@@ -189,12 +186,10 @@ export async function uploadDiningTableGroupImage(
 ): Promise<{ sections: GamingSectionDetail[] }> {
   const form = new FormData();
   form.append("file", file);
-  const res = await fetch(
-    `${API_BASE_URL}/resources/dining-table-groups/${groupId}/image`,
+  const res = await credentialedFetch(
+    `/resources/dining-table-groups/${groupId}/image`,
     {
       method: "POST",
-      credentials: "include",
-      headers: getVenuePathHeaders(),
       body: form,
     },
   );

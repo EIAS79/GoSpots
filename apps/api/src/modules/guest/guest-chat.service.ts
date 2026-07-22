@@ -1,4 +1,3 @@
-import { randomBytes } from 'crypto';
 import {
   BadRequestException,
   ForbiddenException,
@@ -9,10 +8,23 @@ import { GuestChatSender, GuestChatStatus } from '@prisma/client';
 import { PrismaService } from '../../prisma/prisma.service';
 import { requireShopId } from '../../common/tenant';
 import { hasPermission, PERMISSIONS } from '../../common/permissions';
-import { resolveEnabledModules } from '../../common/subscription-tier';
+import { assertShopHasFeature } from '../../common/venue-entitlements';
 import { AuditService } from '../audit/audit.service';
 import type { JwtAccessPayload } from '../auth/auth.service';
 import { NotificationsService } from '../notifications/notifications.service';
+import {
+  assertGuestTokenActive,
+  GUEST_CHAT_TOKEN_TTL_MS,
+  guestTokenLookupWhere,
+  guestTokenPersistFields,
+  guestTokenRevokeFields,
+  issueGuestToken,
+  verifyPresentedGuestToken,
+} from '../../common/guest-token.util';
+import {
+  assertPrivacyConsentAccepted,
+  recordConsent,
+} from '../../common/gdpr-consent.util';
 
 const PING_COOLDOWN_MS = 2 * 60 * 1000;
 const MAX_BODY = 2000;
@@ -24,10 +36,6 @@ export class GuestChatService {
     private readonly notifications: NotificationsService,
     private readonly audit: AuditService,
   ) {}
-
-  private generateToken() {
-    return randomBytes(24).toString('base64url');
-  }
 
   private assertStaffRead(actor: JwtAccessPayload) {
     if (actor.shopRole === 'OWNER' || actor.shopRole === 'MANAGER') return;
@@ -69,7 +77,6 @@ export class GuestChatService {
   private serializeChat(
     chat: {
       id: string;
-      guestToken?: string;
       guestName: string;
       guestEmail: string | null;
       guestPhone: string | null;
@@ -89,13 +96,15 @@ export class GuestChatService {
         createdAt: Date;
       }[];
     },
-    opts: { includeToken?: boolean; venueName?: string; venueSlug?: string } = {},
+    opts: {
+      rawToken?: string;
+      venueName?: string;
+      venueSlug?: string;
+    } = {},
   ) {
     return {
       id: chat.id,
-      ...(opts.includeToken && chat.guestToken
-        ? { guestToken: chat.guestToken }
-        : {}),
+      ...(opts.rawToken ? { guestToken: opts.rawToken } : {}),
       guestName: chat.guestName,
       guestEmail: chat.guestEmail,
       guestPhone: chat.guestPhone,
@@ -122,26 +131,7 @@ export class GuestChatService {
   }
 
   async assertShopHasMessaging(shopId: string) {
-    const shop = await this.prisma.shop.findUnique({
-      where: { id: shopId },
-      select: {
-        subscription: {
-          select: {
-            tier: true,
-            status: true,
-            trialEndsAt: true,
-            packId: true,
-            addOns: true,
-          },
-        },
-      },
-    });
-    const modules = resolveEnabledModules(shop?.subscription ?? null);
-    if (!modules.has('messaging')) {
-      throw new BadRequestException(
-        'This venue does not have guest messaging enabled.',
-      );
-    }
+    await assertShopHasFeature(this.prisma, shopId, 'messaging');
   }
 
   async createFromPublic(
@@ -151,8 +141,11 @@ export class GuestChatService {
       guestEmail?: string;
       guestPhone?: string;
       message?: string;
+      privacyConsentAccepted?: boolean;
     },
   ) {
+    assertPrivacyConsentAccepted(dto.privacyConsentAccepted);
+
     const shop = await this.prisma.shop.findFirst({
       where: { slug, isPublished: true },
       select: { id: true, name: true, slug: true },
@@ -164,13 +157,13 @@ export class GuestChatService {
       throw new BadRequestException('Your name is required.');
     }
 
-    const guestToken = this.generateToken();
+    const issued = issueGuestToken({ ttlMs: GUEST_CHAT_TOKEN_TTL_MS });
     const firstBody = dto.message?.trim();
 
     const chat = await this.prisma.guestChat.create({
       data: {
         shopId: shop.id,
-        guestToken,
+        ...guestTokenPersistFields(issued),
         guestName: dto.guestName.trim(),
         guestEmail: dto.guestEmail?.trim() || null,
         guestPhone: dto.guestPhone?.trim() || null,
@@ -194,6 +187,14 @@ export class GuestChatService {
       meta: { chatId: chat.id },
     });
 
+    await recordConsent(this.prisma, {
+      shopId: shop.id,
+      purpose: 'GUEST_CHAT',
+      guestEmail: chat.guestEmail,
+      sourceEntityType: 'guestChat',
+      sourceEntityId: chat.id,
+    });
+
     await this.notifications.recordTeamEvent(shop.id, {
       title: 'Guest waiting to chat',
       body: `${chat.guestName} is waiting for staff on the venue page`,
@@ -204,13 +205,24 @@ export class GuestChatService {
     return {
       ok: true,
       message: 'Chat started. A staff member will join shortly.',
-      guestToken,
+      guestToken: issued.raw,
       chat: this.serializeChat(chat, {
-        includeToken: true,
+        rawToken: issued.raw,
         venueName: shop.name,
         venueSlug: shop.slug,
       }),
     };
+  }
+
+  private async findPublicChat(shopId: string, token: string) {
+    const chat = await this.prisma.guestChat.findFirst({
+      where: guestTokenLookupWhere(shopId, token),
+    });
+    if (!chat || !verifyPresentedGuestToken(chat, token)) {
+      throw new NotFoundException('Chat not found.');
+    }
+    assertGuestTokenActive(chat);
+    return chat;
   }
 
   async getPublicChat(slug: string, token: string) {
@@ -219,15 +231,18 @@ export class GuestChatService {
       select: { id: true, name: true, slug: true },
     });
     if (!shop) throw new NotFoundException('Venue not found.');
+    await this.assertShopHasMessaging(shop.id);
 
     const chat = await this.prisma.guestChat.findFirst({
-      where: { shopId: shop.id, guestToken: token },
+      where: guestTokenLookupWhere(shop.id, token),
       include: { messages: { orderBy: { createdAt: 'asc' }, take: 200 } },
     });
-    if (!chat) throw new NotFoundException('Chat not found.');
+    if (!chat || !verifyPresentedGuestToken(chat, token)) {
+      throw new NotFoundException('Chat not found.');
+    }
+    assertGuestTokenActive(chat);
 
     return this.serializeChat(chat, {
-      includeToken: true,
       venueName: shop.name,
       venueSlug: shop.slug,
     });
@@ -245,11 +260,9 @@ export class GuestChatService {
       select: { id: true, name: true, slug: true },
     });
     if (!shop) throw new NotFoundException('Venue not found.');
+    await this.assertShopHasMessaging(shop.id);
 
-    const chat = await this.prisma.guestChat.findFirst({
-      where: { shopId: shop.id, guestToken: token },
-    });
-    if (!chat) throw new NotFoundException('Chat not found.');
+    const chat = await this.findPublicChat(shop.id, token);
     if (chat.status === GuestChatStatus.ENDED) {
       throw new BadRequestException('This chat has ended.');
     }
@@ -262,7 +275,7 @@ export class GuestChatService {
       },
     });
     await this.prisma.guestChat.update({
-      where: { id: chat.id },
+      where: { id: chat.id, shopId: shop.id },
       data: { updatedAt: new Date() },
     });
 
@@ -282,11 +295,9 @@ export class GuestChatService {
       select: { id: true },
     });
     if (!shop) throw new NotFoundException('Venue not found.');
+    await this.assertShopHasMessaging(shop.id);
 
-    const chat = await this.prisma.guestChat.findFirst({
-      where: { shopId: shop.id, guestToken: token },
-    });
-    if (!chat) throw new NotFoundException('Chat not found.');
+    const chat = await this.findPublicChat(shop.id, token);
     if (chat.status === GuestChatStatus.ENDED) {
       throw new BadRequestException('This chat has ended.');
     }
@@ -305,7 +316,7 @@ export class GuestChatService {
     }
 
     await this.prisma.guestChat.update({
-      where: { id: chat.id },
+      where: { id: chat.id, shopId: shop.id },
       data: { lastGuestPingAt: new Date() },
     });
 
@@ -332,26 +343,29 @@ export class GuestChatService {
       select: { id: true, name: true, slug: true },
     });
     if (!shop) throw new NotFoundException('Venue not found.');
+    await this.assertShopHasMessaging(shop.id);
 
-    const chat = await this.prisma.guestChat.findFirst({
-      where: { shopId: shop.id, guestToken: token },
+    const chat = await this.findPublicChat(shop.id, token);
+    const withMessages = await this.prisma.guestChat.findFirst({
+      where: { id: chat.id, shopId: shop.id },
       include: { messages: { orderBy: { createdAt: 'asc' }, take: 200 } },
     });
-    if (!chat) throw new NotFoundException('Chat not found.');
-    if (chat.status === GuestChatStatus.ENDED) {
-      return this.serializeChat(chat, {
-        includeToken: true,
+    if (!withMessages) throw new NotFoundException('Chat not found.');
+
+    if (withMessages.status === GuestChatStatus.ENDED) {
+      return this.serializeChat(withMessages, {
         venueName: shop.name,
         venueSlug: shop.slug,
       });
     }
 
     const updated = await this.prisma.guestChat.update({
-      where: { id: chat.id },
+      where: { id: chat.id, shopId: shop.id },
       data: {
         status: GuestChatStatus.ENDED,
         endedAt: new Date(),
         endedBy: GuestChatSender.GUEST,
+        ...guestTokenRevokeFields(),
       },
       include: { messages: { orderBy: { createdAt: 'asc' }, take: 200 } },
     });
@@ -364,7 +378,6 @@ export class GuestChatService {
     });
 
     return this.serializeChat(updated, {
-      includeToken: true,
       venueName: shop.name,
       venueSlug: shop.slug,
     });
@@ -376,13 +389,13 @@ export class GuestChatService {
       select: { id: true },
     });
     if (!shop) throw new NotFoundException('Venue not found.');
+    await this.assertShopHasMessaging(shop.id);
 
-    const chat = await this.prisma.guestChat.findFirst({
-      where: { shopId: shop.id, guestToken: token },
+    const chat = await this.findPublicChat(shop.id, token);
+
+    await this.prisma.guestChat.delete({
+      where: { id: chat.id, shopId: shop.id },
     });
-    if (!chat) throw new NotFoundException('Chat not found.');
-
-    await this.prisma.guestChat.delete({ where: { id: chat.id } });
 
     await this.audit.recordForShop(shop.id, {
       section: 'venue',
@@ -400,6 +413,7 @@ export class GuestChatService {
   ) {
     this.assertStaffRead(actor);
     const shopId = requireShopId(actor);
+    await this.assertShopHasMessaging(shopId);
     const take = Math.min(Math.max(opts.take ?? 50, 1), 100);
     const skip = Math.max(opts.skip ?? 0, 0);
 
@@ -449,6 +463,7 @@ export class GuestChatService {
   async getForStaff(actor: JwtAccessPayload, id: string) {
     this.assertStaffRead(actor);
     const shopId = requireShopId(actor);
+    await this.assertShopHasMessaging(shopId);
     const chat = await this.prisma.guestChat.findFirst({
       where: { id, shopId },
       include: { messages: { orderBy: { createdAt: 'asc' }, take: 300 } },
@@ -460,6 +475,7 @@ export class GuestChatService {
   async staffJoin(actor: JwtAccessPayload, id: string) {
     this.assertStaffWrite(actor);
     const shopId = requireShopId(actor);
+    await this.assertShopHasMessaging(shopId);
     const chat = await this.prisma.guestChat.findFirst({
       where: { id, shopId },
       include: { messages: { orderBy: { createdAt: 'asc' }, take: 300 } },
@@ -470,7 +486,7 @@ export class GuestChatService {
     }
 
     const updated = await this.prisma.guestChat.update({
-      where: { id },
+      where: { id, shopId },
       data: {
         status: GuestChatStatus.OPEN,
         staffJoinedAt: chat.staffJoinedAt ?? new Date(),
@@ -496,6 +512,7 @@ export class GuestChatService {
   ) {
     this.assertStaffWrite(actor);
     const shopId = requireShopId(actor);
+    await this.assertShopHasMessaging(shopId);
     const chat = await this.prisma.guestChat.findFirst({
       where: { id, shopId },
     });
@@ -516,6 +533,7 @@ export class GuestChatService {
     if (status === GuestChatStatus.ENDED) {
       data.endedAt = new Date();
       data.endedBy = GuestChatSender.STAFF;
+      Object.assign(data, guestTokenRevokeFields());
     } else if (status === GuestChatStatus.OPEN) {
       data.endedAt = null;
       data.endedBy = null;
@@ -528,7 +546,7 @@ export class GuestChatService {
     }
 
     const updated = await this.prisma.guestChat.update({
-      where: { id },
+      where: { id, shopId },
       data,
       include: { messages: { orderBy: { createdAt: 'asc' }, take: 300 } },
     });
@@ -552,6 +570,7 @@ export class GuestChatService {
     }
 
     const shopId = requireShopId(actor);
+    await this.assertShopHasMessaging(shopId);
     const chat = await this.prisma.guestChat.findFirst({
       where: { id, shopId },
     });
@@ -561,7 +580,7 @@ export class GuestChatService {
     }
     if (chat.status === GuestChatStatus.WAITING) {
       await this.prisma.guestChat.update({
-        where: { id },
+        where: { id, shopId },
         data: {
           status: GuestChatStatus.OPEN,
           staffJoinedAt: new Date(),
@@ -579,7 +598,7 @@ export class GuestChatService {
       },
     });
     await this.prisma.guestChat.update({
-      where: { id },
+      where: { id, shopId },
       data: { updatedAt: new Date() },
     });
 
@@ -589,12 +608,13 @@ export class GuestChatService {
   async staffDelete(actor: JwtAccessPayload, id: string) {
     this.assertStaffWrite(actor);
     const shopId = requireShopId(actor);
+    await this.assertShopHasMessaging(shopId);
     const chat = await this.prisma.guestChat.findFirst({
       where: { id, shopId },
     });
     if (!chat) throw new NotFoundException('Chat not found.');
 
-    await this.prisma.guestChat.delete({ where: { id } });
+    await this.prisma.guestChat.delete({ where: { id, shopId } });
 
     await this.audit.record(actor, {
       section: 'venue',

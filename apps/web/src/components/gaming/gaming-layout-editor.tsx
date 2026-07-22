@@ -23,7 +23,9 @@ import {
   type GamingSectionDetail,
 } from "@/lib/gaming-layout-client";
 import type { GamingOffering } from "@/lib/gaming-menu-client";
-import { RESOURCE_TYPE_LABELS } from "@/lib/resource-types";
+import { resourceTypeLabel } from "@/lib/resource-types";
+import { useVenueSettingsOptional } from "@/lib/venue-settings-context";
+import { staffFloorT, type StaffFloorTranslate } from "@/lib/staff-floor-i18n";
 
 type SectionDraft = {
   name: string;
@@ -53,6 +55,11 @@ export function GamingLayoutEditor({
   onSaved: () => void | Promise<void>;
 }) {
   const isDining = offering.type === "DINING";
+  const vs = useVenueSettingsOptional();
+  const t = useMemo(
+    () => vs?.t ?? staffFloorT(vs?.locale),
+    [vs?.t, vs?.locale],
+  );
   const [sections, setSections] = useState<GamingSectionDetail[]>([]);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -88,11 +95,13 @@ export function GamingLayoutEditor({
       const data = await fetchGamingSections(offering.id);
       setSections(data.sections);
     } catch (e) {
-      setError(e instanceof Error ? e.message : "Failed to load layout.");
+      setError(
+        e instanceof Error ? e.message : t("gamingSetup.layout.loadError"),
+      );
     } finally {
       setLoading(false);
     }
-  }, [offering.id]);
+  }, [offering.id, t]);
 
   useEffect(() => {
     void load();
@@ -112,7 +121,7 @@ export function GamingLayoutEditor({
 
   const handleAdd = async () => {
     if (!addDraft.name.trim()) {
-      setError("Section name is required.");
+      setError(t("gamingSetup.layout.nameRequired"));
       return;
     }
     setSaving(true);
@@ -140,7 +149,9 @@ export function GamingLayoutEditor({
       });
       await onSaved();
     } catch (e) {
-      setError(e instanceof Error ? e.message : "Could not add section.");
+      setError(
+        e instanceof Error ? e.message : t("gamingSetup.layout.addError"),
+      );
     } finally {
       setSaving(false);
     }
@@ -148,7 +159,7 @@ export function GamingLayoutEditor({
 
   const handleUpdate = async (id: string) => {
     if (!editDraft.name.trim()) {
-      setError("Section name is required.");
+      setError(t("gamingSetup.layout.nameRequired"));
       return;
     }
     setSaving(true);
@@ -165,14 +176,16 @@ export function GamingLayoutEditor({
       setEditingId(null);
       await onSaved();
     } catch (e) {
-      setError(e instanceof Error ? e.message : "Could not update section.");
+      setError(
+        e instanceof Error ? e.message : t("gamingSetup.layout.updateError"),
+      );
     } finally {
       setSaving(false);
     }
   };
 
   const handleDelete = async (id: string) => {
-    if (!confirm("Delete this zone? Seats must be empty or moved first.")) return;
+    if (!confirm(t("gamingSetup.layout.deleteConfirm"))) return;
     setSaving(true);
     setError(null);
     try {
@@ -180,7 +193,9 @@ export function GamingLayoutEditor({
       await load();
       await onSaved();
     } catch (e) {
-      setError(e instanceof Error ? e.message : "Could not delete section.");
+      setError(
+        e instanceof Error ? e.message : t("gamingSetup.layout.deleteError"),
+      );
     } finally {
       setSaving(false);
     }
@@ -214,7 +229,9 @@ export function GamingLayoutEditor({
       setSections(data.sections);
       await onSaved();
     } catch (e) {
-      setError(e instanceof Error ? e.message : "Could not upload image.");
+      setError(
+        e instanceof Error ? e.message : t("gamingSetup.layout.imageError"),
+      );
     } finally {
       setSaving(false);
     }
@@ -235,15 +252,16 @@ export function GamingLayoutEditor({
           <header className="flex items-start justify-between gap-2 border-b border-white/10 px-4 py-3 sm:px-5 sm:py-4">
             <div className="min-w-0">
               <p className="text-[10px] uppercase tracking-wide text-emerald-500/80">
-                Floor layout · {RESOURCE_TYPE_LABELS[offering.type]}
+                {t("gamingSetup.layout.headerTitle")} ·{" "}
+                {resourceTypeLabel(t, offering.type)}
               </p>
               <h2 className="truncate text-base font-semibold text-white sm:text-lg">
                 {offering.name}
               </h2>
               <p className="mt-1 text-xs text-zinc-500 sm:block">
                 {isDining
-                  ? "Split your restaurant into dining rooms, floors, patio areas, and VIP sections."
-                  : "Split your venue into zones — VIP rooms, floors, PC vs PS5 areas."}
+                  ? t("gamingSetup.layout.subtitleDining")
+                  : t("gamingSetup.layout.subtitleGaming")}
               </p>
             </div>
             <button
@@ -284,7 +302,7 @@ export function GamingLayoutEditor({
                           )}
                         >
                           <Layers size={12} />
-                          Floor {floor}
+                          {t("floor.floorN", { n: floor })}
                           <span
                             className={cn(
                               "rounded-full px-1.5 py-px text-[9px]",
@@ -304,12 +322,14 @@ export function GamingLayoutEditor({
                 {sections.length === 0 ? (
                   <p className="rounded-xl border border-dashed border-white/15 p-6 text-center text-sm text-zinc-500">
                     {isDining
-                      ? "No dining zones yet. Add a main room, patio, or private area."
-                      : "No zones yet. Add a VIP room, main hall, or second-floor area."}
+                      ? t("gamingSetup.layout.emptyDining")
+                      : t("gamingSetup.layout.emptyGaming")}
                   </p>
                 ) : filteredSections.length === 0 ? (
                   <p className="rounded-xl border border-dashed border-white/15 p-6 text-center text-sm text-zinc-500">
-                    No zones on floor {activeFloor} yet.
+                    {t("gamingSetup.layout.emptyFloor", {
+                      n: activeFloor ?? 1,
+                    })}
                   </p>
                 ) : (
                   <ul className="space-y-3">
@@ -327,7 +347,8 @@ export function GamingLayoutEditor({
                             onCancel={() => setEditingId(null)}
                             onSubmit={() => void handleUpdate(section.id)}
                             saving={saving}
-                            submitLabel="Save zone"
+                            submitLabel={t("gamingSetup.layout.saveZone")}
+                            t={t}
                           />
                         ) : (
                           <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between sm:gap-3">
@@ -348,14 +369,17 @@ export function GamingLayoutEditor({
                                 {section.isVip ? (
                                   <span className="inline-flex items-center gap-1 rounded-full border border-amber-400/25 bg-amber-500/10 px-2 py-0.5 text-[10px] text-amber-200">
                                     <Crown size={10} />
-                                    VIP
+                                    {t("gamingSetup.layout.vipBadge")}
                                   </span>
                                 ) : null}
                               </div>
                               <p className="mt-1 text-xs text-zinc-500">
-                                Floor {section.floor} · {section.seatCount}{" "}
-                                {offering.unitLabels.plural} ·{" "}
-                                {section.seatsPerRow} per row
+                                {t("gamingSetup.layout.zoneStats", {
+                                  floor: section.floor,
+                                  count: section.seatCount,
+                                  plural: offering.unitLabels.plural,
+                                  perRow: section.seatsPerRow,
+                                })}
                               </p>
                             </div>
                             </div>
@@ -367,7 +391,9 @@ export function GamingLayoutEditor({
                                 )}
                               >
                                 <ImagePlus size={12} />
-                                {section.imageUrl ? "Change" : "Photo"}
+                                {section.imageUrl
+                                  ? t("gamingSetup.layout.changePhoto")
+                                  : t("gamingSetup.layout.addPhoto")}
                                 <input
                                   type="file"
                                   accept="image/*"
@@ -385,7 +411,7 @@ export function GamingLayoutEditor({
                                 onClick={() => startEdit(section)}
                                 className="rounded-lg border border-white/10 px-2.5 py-1.5 text-[11px] text-zinc-300 hover:bg-white/5"
                               >
-                                Edit
+                                {t("common.edit")}
                               </button>
                               <button
                                 type="button"
@@ -393,8 +419,8 @@ export function GamingLayoutEditor({
                                 onClick={() => void handleDelete(section.id)}
                                 title={
                                   section.seatCount > 0
-                                    ? "Move or remove seats before deleting"
-                                    : "Delete zone"
+                                    ? t("gamingSetup.layout.deleteTooltipMove")
+                                    : t("gamingSetup.layout.deleteTooltip")
                                 }
                                 className="grid size-8 place-items-center rounded-lg border border-rose-400/20 text-rose-300 hover:bg-rose-500/10 disabled:opacity-40"
                               >
@@ -411,7 +437,7 @@ export function GamingLayoutEditor({
                 {showAdd ? (
                   <div className="rounded-xl border border-emerald-400/20 bg-emerald-500/5 p-4">
                     <p className="mb-3 text-xs font-medium text-emerald-200">
-                      New zone
+                      {t("gamingSetup.layout.newZoneTitle")}
                     </p>
                     <SectionForm
                       draft={addDraft}
@@ -421,7 +447,8 @@ export function GamingLayoutEditor({
                       onCancel={() => setShowAdd(false)}
                       onSubmit={() => void handleAdd()}
                       saving={saving}
-                      submitLabel="Add zone"
+                      submitLabel={t("gamingSetup.layout.addZoneSubmit")}
+                      t={t}
                     />
                   </div>
                 ) : (
@@ -431,7 +458,9 @@ export function GamingLayoutEditor({
                     className="inline-flex w-full items-center justify-center gap-2 rounded-xl border border-dashed border-white/15 py-3 text-xs text-zinc-400 hover:border-emerald-400/30 hover:text-emerald-200"
                   >
                     <Plus size={14} />
-                    Add zone ({isDining ? "dining room, patio…" : "VIP room, floor, area…"})
+                    {isDining
+                      ? t("gamingSetup.layout.addZoneButtonDining")
+                      : t("gamingSetup.layout.addZoneButtonGaming")}
                   </button>
                 )}
               </div>
@@ -452,6 +481,7 @@ function SectionForm({
   onSubmit,
   saving,
   submitLabel,
+  t,
 }: {
   draft: SectionDraft;
   unitLabels: GamingOffering["unitLabels"];
@@ -461,32 +491,33 @@ function SectionForm({
   onSubmit: () => void;
   saving: boolean;
   submitLabel: string;
+  t: StaffFloorTranslate;
 }) {
   const perRowLabel =
     unitLabels.plural === "tables"
-      ? "Tables per row"
+      ? t("gamingSetup.layout.perRowTables")
       : unitLabels.plural === "lanes"
-        ? "Lanes per row"
-        : "Seats per row";
+        ? t("gamingSetup.layout.perRowLanes")
+        : t("gamingSetup.layout.perRowSeats");
   const countLabel = unitLabels.createCountLabel;
 
   return (
     <div className="space-y-3">
       <label className="block">
         <span className="text-[10px] uppercase tracking-wide text-zinc-500">
-          Zone name
+          {t("gamingSetup.layout.zoneNameLabel")}
         </span>
         <input
           value={draft.name}
           onChange={(e) => onChange({ ...draft, name: e.target.value })}
-          placeholder="VIP room, Main hall, 2nd floor PC…"
+          placeholder={t("gamingSetup.layout.zoneNamePlaceholder")}
           className="mt-1 w-full rounded-lg border border-white/10 bg-zinc-950 px-3 py-2 text-sm text-white"
         />
       </label>
       <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
         <label className="block">
           <span className="text-[10px] uppercase tracking-wide text-zinc-500">
-            Floor
+            {t("gamingSetup.layout.floorLabel")}
           </span>
           <input
             type="number"
@@ -529,7 +560,7 @@ function SectionForm({
       {showTableCapacity ? (
         <label className="block">
           <span className="text-[10px] uppercase tracking-wide text-zinc-500">
-            Default seats per table
+            {t("gamingSetup.layout.tableCapacityLabel")}
           </span>
           <input
             type="number"
@@ -542,8 +573,7 @@ function SectionForm({
             className="mt-1 w-full rounded-lg border border-white/10 bg-zinc-950 px-3 py-2 text-sm text-white"
           />
           <span className="mt-1 block text-[10px] text-zinc-600">
-            Applied when creating tables in this zone. You can edit individual
-            tables later.
+            {t("gamingSetup.layout.tableCapacityHint")}
           </span>
         </label>
       ) : null}
@@ -555,7 +585,7 @@ function SectionForm({
           className="rounded border-white/20 bg-zinc-950"
         />
         <Crown size={14} className="text-amber-400/80" />
-        VIP zone
+        {t("gamingSetup.layout.vipZoneLabel")}
       </label>
       <div className="flex justify-end gap-2 pt-1">
         <button
@@ -563,7 +593,7 @@ function SectionForm({
           onClick={onCancel}
           className="rounded-lg border border-white/10 px-3 py-1.5 text-xs text-zinc-400"
         >
-          Cancel
+          {t("common.cancel")}
         </button>
         <button
           type="button"

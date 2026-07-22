@@ -4,23 +4,37 @@ import {
   Injectable,
   NotFoundException,
 } from '@nestjs/common';
-import { TagType } from '@prisma/client';
+import { Prisma, TagType } from '@prisma/client';
 import { FEATURED_GAME_TYPES, DINING_TYPES } from '../../common/booking-unit-kind';
+import {
+  buildDashboardPath,
+  dashboardKeyPersistFields,
+  generateDashboardKey,
+} from '../../common/dashboard-path';
 import {
   isSupportedCurrency,
   isSupportedLocale,
   SUPPORTED_CURRENCIES,
   SUPPORTED_LOCALES,
 } from '../../common/locale-currency';
+import { isValidIanaTimeZone } from '../../common/venue-timezone.util';
+import { resolveEnabledModules } from '../../common/subscription-tier';
 import {
   slugifyVenueCategory,
   venueCategoryPreset,
   VENUE_CATEGORY_PRESETS,
 } from '../../common/venue-categories';
-import { SyncVenueCategoriesDto } from './dto/shop-settings.dto';
 import { sectionImageUrlsByShop } from '../../common/menu-section-image.util';
 import { hasPermission, PERMISSIONS } from '../../common/permissions';
-import { resolveEnabledModules } from '../../common/subscription-tier';
+import {
+  assertShopHasFeature,
+  getVenueEntitlements,
+  hasFeature,
+} from '../../common/venue-entitlements';
+import {
+  assertUserPassword,
+  requireConfirmPassword,
+} from '../../common/security/verify-password.util';
 import { requireShopId } from '../../common/tenant';
 import type { JwtAccessPayload } from '../auth/auth.service';
 import { AuditService } from '../audit/audit.service';
@@ -29,8 +43,49 @@ import { PrismaService } from '../../prisma/prisma.service';
 import { CurrencyRatesService } from './currency-rates.service';
 import {
   ConvertCurrencyDto,
+  PreviewCurrencyChangeDto,
+  RotateDashboardKeyDto,
+  SyncVenueCategoriesDto,
   UpdateShopSettingsDto,
 } from './dto/shop-settings.dto';
+import { mapOfferingConfigPrices, prepareOfferingConfigForWrite } from '../../common/offering-config.util';
+import {
+  serializeMoney,
+  toMoneyNumber,
+  toPrismaDecimal,
+} from '../../common/money.util';
+
+type CatalogCurrencyPlan = {
+  from: string;
+  to: string;
+  rate: number;
+  ratesAt: string;
+  menuItems: {
+    id: string;
+    name: string;
+    priceBefore: number;
+    priceAfter: number;
+  }[];
+  resourceRates: {
+    id: string;
+    label: string;
+    categoryId: string;
+    priceBefore: number;
+    priceAfter: number;
+  }[];
+  resources: {
+    id: string;
+    name: string;
+    hourlyRateBefore: number;
+    hourlyRateAfter: number;
+  }[];
+  offerings: {
+    id: string;
+    name: string;
+    offeringConfigBefore: unknown;
+    offeringConfigAfter: object;
+  }[];
+};
 
 @Injectable()
 export class ShopService {
@@ -48,6 +103,78 @@ export class ShopService {
     throw new ForbiddenException('Missing shop.manage permission.');
   }
 
+  private assertOwner(actor: JwtAccessPayload) {
+    if (!actor.shopId) throw new ForbiddenException('No venue selected.');
+    if (actor.shopRole !== 'OWNER') {
+      throw new ForbiddenException('Owner role required to rotate dashboard key.');
+    }
+  }
+
+  /**
+   * Owner-only: regenerate Shop.dashboardKey (+ hash) after password reauth.
+   * Phase 3: bind is membership/slug-only — rotate dual-writes hash-at-rest.
+   */
+  async rotateDashboardKey(
+    actor: JwtAccessPayload,
+    dto: RotateDashboardKeyDto,
+    confirmPasswordHeader?: string,
+  ) {
+    this.assertOwner(actor);
+    const shopId = requireShopId(actor);
+
+    const password = requireConfirmPassword(
+      dto.password,
+      confirmPasswordHeader,
+    );
+    await assertUserPassword(this.prisma, actor.sub, password);
+
+    const before = await this.prisma.shop.findUnique({
+      where: { id: shopId },
+      select: { id: true, slug: true, dashboardKey: true },
+    });
+    if (!before) throw new NotFoundException('Venue not found.');
+
+    const maxAttempts = 5;
+    let updated: { slug: string; dashboardKey: string } | null = null;
+    for (let attempt = 0; attempt < maxAttempts; attempt++) {
+      const nextKey = generateDashboardKey();
+      if (nextKey === before.dashboardKey) continue;
+      try {
+        updated = await this.prisma.shop.update({
+          where: { id: shopId },
+          data: dashboardKeyPersistFields(nextKey),
+          select: { slug: true, dashboardKey: true },
+        });
+        break;
+      } catch (err) {
+        if (
+          err instanceof Prisma.PrismaClientKnownRequestError &&
+          err.code === 'P2002'
+        ) {
+          continue;
+        }
+        throw err;
+      }
+    }
+    if (!updated) {
+      throw new BadRequestException(
+        'Could not allocate a unique dashboard key. Try again.',
+      );
+    }
+
+    await this.audit.record(actor, {
+      section: 'venue',
+      action: 'shop.dashboard_key.rotate',
+      summary: 'Rotated venue dashboard capability key',
+      meta: { shopId, rotated: true },
+    });
+
+    return {
+      slug: updated.slug,
+      dashboardPath: buildDashboardPath(updated.slug, updated.dashboardKey),
+    };
+  }
+
   private shopProfileSelect() {
     return {
       id: true,
@@ -62,6 +189,7 @@ export class ShopService {
       email: true,
       coverImage: true,
       locale: true,
+      timezone: true,
       currency: true,
       isPublished: true,
       advertiseOnVenuesPage: true,
@@ -104,6 +232,15 @@ export class ShopService {
     if (dto.locale != null && !isSupportedLocale(dto.locale)) {
       throw new BadRequestException('Unsupported language.');
     }
+    if (dto.timezone != null) {
+      const tz = dto.timezone.trim();
+      if (!tz || !isValidIanaTimeZone(tz)) {
+        throw new BadRequestException(
+          'Unsupported timezone. Use a valid IANA name (e.g. Europe/Warsaw).',
+        );
+      }
+      dto.timezone = tz;
+    }
     if (dto.currency != null && !isSupportedCurrency(dto.currency)) {
       throw new BadRequestException('Unsupported currency.');
     }
@@ -115,26 +252,7 @@ export class ShopService {
     }
 
     if (dto.isPublished === true || dto.advertiseOnVenuesPage === true) {
-      const shopSub = await this.prisma.shop.findUnique({
-        where: { id: shopId },
-        select: {
-          subscription: {
-            select: {
-              tier: true,
-              status: true,
-              trialEndsAt: true,
-              packId: true,
-              addOns: true,
-            },
-          },
-        },
-      });
-      const modules = resolveEnabledModules(shopSub?.subscription ?? null);
-      if (!modules.has('marketing')) {
-        throw new BadRequestException(
-          'Unlock the Venue page & discovery add-on to publish your public venue page or list on /venues.',
-        );
-      }
+      await assertShopHasFeature(this.prisma, shopId, 'marketing');
     }
 
     if (dto.floorCount != null) {
@@ -161,6 +279,11 @@ export class ShopService {
     } | null = null;
 
     if (currencyChanged) {
+      if (dto.confirm !== true) {
+        throw new BadRequestException(
+          'Currency change requires confirm: true. Call POST /shop/currency/preview first.',
+        );
+      }
       currencyConversion = await this.repriceCatalogToCurrency(
         shopId,
         before.currency,
@@ -172,6 +295,7 @@ export class ShopService {
       where: { id: shopId },
       data: {
         ...(dto.locale != null && { locale: dto.locale }),
+        ...(dto.timezone != null && { timezone: dto.timezone }),
         ...(dto.currency != null && { currency: nextCurrency }),
         ...(dto.name != null && { name: dto.name.trim() }),
         ...(dto.displayName !== undefined && {
@@ -202,6 +326,9 @@ export class ShopService {
     const changes: string[] = [];
     if (dto.locale != null && dto.locale !== before.locale) {
       changes.push(`language → ${dto.locale}`);
+    }
+    if (dto.timezone != null && dto.timezone !== before.timezone) {
+      changes.push(`timezone → ${dto.timezone}`);
     }
     if (currencyChanged) {
       changes.push(
@@ -285,6 +412,24 @@ export class ShopService {
       });
     }
 
+    if (currencyChanged && currencyConversion) {
+      await this.audit.record(actor, {
+        section: 'venue',
+        action: 'venue.currency.change',
+        summary: `Currency ${before.currency} → ${nextCurrency} (catalog ×${currencyConversion.rate.toFixed(6)})`,
+        meta: {
+          from: before.currency,
+          to: nextCurrency,
+          rate: currencyConversion.rate,
+          ratesAt: currencyConversion.ratesAt,
+          menuItems: currencyConversion.menuItems,
+          resourceRates: currencyConversion.resourceRates,
+          resources: currencyConversion.resources,
+          offerings: currencyConversion.offerings,
+        },
+      });
+    }
+
     if (publishChanged) {
       await this.notifications.recordTeamEvent(shopId, {
         title: shop.isPublished
@@ -305,81 +450,333 @@ export class ShopService {
   }
 
   /**
+   * Catalog FX conversion history for settings UI.
+   * Prefer dedicated `venue.currency.change` audits; also parse legacy
+   * `venue.settings.update` rows that flipped currency before this lane.
+   */
+  async listCurrencyHistory(actor: JwtAccessPayload, take = 30) {
+    this.assertVenueSettingsWrite(actor);
+    const shopId = requireShopId(actor);
+    const limit = Math.min(Math.max(take, 1), 100);
+
+    const rows = await this.prisma.auditLog.findMany({
+      where: {
+        shopId,
+        OR: [
+          { action: 'venue.currency.change' },
+          {
+            action: 'venue.settings.update',
+            summary: { contains: 'currency →' },
+          },
+        ],
+      },
+      orderBy: { createdAt: 'desc' },
+      take: limit * 2,
+      select: {
+        id: true,
+        action: true,
+        summary: true,
+        meta: true,
+        actorName: true,
+        actorEmail: true,
+        createdAt: true,
+      },
+    });
+
+    const history: Array<{
+      id: string;
+      createdAt: string;
+      from: string;
+      to: string;
+      rate: number | null;
+      ratesAt: string | null;
+      menuItems: number | null;
+      resourceRates: number | null;
+      resources: number | null;
+      offerings: number | null;
+      actorName: string | null;
+      actorEmail: string | null;
+      summary: string;
+    }> = [];
+
+    for (const row of rows) {
+      let meta: Record<string, unknown> = {};
+      if (row.meta) {
+        try {
+          meta = JSON.parse(row.meta) as Record<string, unknown>;
+        } catch {
+          meta = {};
+        }
+      }
+
+      let from: string | null = null;
+      let to: string | null = null;
+      let rate: number | null =
+        typeof meta.rate === 'number' ? meta.rate : null;
+      let ratesAt: string | null =
+        typeof meta.ratesAt === 'string' ? meta.ratesAt : null;
+      let menuItems: number | null =
+        typeof meta.menuItems === 'number' ? meta.menuItems : null;
+      let resourceRates: number | null =
+        typeof meta.resourceRates === 'number' ? meta.resourceRates : null;
+      let resources: number | null =
+        typeof meta.resources === 'number' ? meta.resources : null;
+      let offerings: number | null =
+        typeof meta.offerings === 'number' ? meta.offerings : null;
+
+      if (row.action === 'venue.currency.change') {
+        from =
+          typeof meta.from === 'string' ? meta.from.toUpperCase() : null;
+        to = typeof meta.to === 'string' ? meta.to.toUpperCase() : null;
+      } else {
+        const before = meta.before as { currency?: string } | undefined;
+        const after = meta.after as { currency?: string } | undefined;
+        from = before?.currency?.toUpperCase() ?? null;
+        to = after?.currency?.toUpperCase() ?? null;
+        if (!from || !to || from === to) continue;
+        const m = row.summary.match(/catalog ×([0-9.]+)/);
+        if (m && rate == null) rate = Number(m[1]);
+      }
+
+      if (!from || !to || from === to) continue;
+
+      history.push({
+        id: row.id,
+        createdAt: row.createdAt.toISOString(),
+        from,
+        to,
+        rate,
+        ratesAt,
+        menuItems,
+        resourceRates,
+        resources,
+        offerings,
+        actorName: row.actorName,
+        actorEmail: row.actorEmail,
+        summary: row.summary,
+      });
+      if (history.length >= limit) break;
+    }
+
+    return { items: history };
+  }
+
+  /**
+   * Proposed catalog price table for a currency change (no writes).
+   * Historical ShopOrder / Transaction / PlaySession amounts are never included
+   * or mutated — only live catalog rows.
+   */
+  async previewCurrencyChange(
+    actor: JwtAccessPayload,
+    dto: PreviewCurrencyChangeDto,
+  ) {
+    this.assertVenueSettingsWrite(actor);
+    const shopId = requireShopId(actor);
+
+    if (!isSupportedCurrency(dto.currency)) {
+      throw new BadRequestException('Unsupported currency.');
+    }
+
+    const shop = await this.prisma.shop.findUnique({
+      where: { id: shopId },
+      select: { currency: true },
+    });
+    if (!shop) throw new NotFoundException();
+
+    const to = dto.currency.toUpperCase();
+    const from = shop.currency.toUpperCase();
+    if (to === from) {
+      return {
+        from,
+        to,
+        rate: 1,
+        ratesAt: new Date().toISOString(),
+        historicalOrdersUntouched: true as const,
+        summary: {
+          menuItems: 0,
+          resourceRates: 0,
+          resources: 0,
+          offerings: 0,
+        },
+        menuItems: [] as CatalogCurrencyPlan['menuItems'],
+        resourceRates: [] as CatalogCurrencyPlan['resourceRates'],
+        resources: [] as CatalogCurrencyPlan['resources'],
+        offerings: [] as CatalogCurrencyPlan['offerings'],
+      };
+    }
+
+    const plan = await this.buildCatalogCurrencyPlan(shopId, from, to);
+    return {
+      from: plan.from,
+      to: plan.to,
+      rate: plan.rate,
+      ratesAt: plan.ratesAt,
+      historicalOrdersUntouched: true as const,
+      summary: {
+        menuItems: plan.menuItems.length,
+        resourceRates: plan.resourceRates.length,
+        resources: plan.resources.length,
+        offerings: plan.offerings.length,
+      },
+      menuItems: plan.menuItems,
+      resourceRates: plan.resourceRates,
+      resources: plan.resources,
+      offerings: plan.offerings,
+    };
+  }
+
+  /**
    * Rewrite live catalog amounts into the new shop currency using a fresh FX rate.
+   * All catalog price writes run in one `$transaction` (all-or-nothing).
    * Historical orders/transactions keep their original numbers (past sales).
+   * Missing / invalid FX rates are rejected before any write.
    */
   private async repriceCatalogToCurrency(
     shopId: string,
     from: string,
     to: string,
   ) {
+    const plan = await this.buildCatalogCurrencyPlan(shopId, from, to);
+
+    await this.prisma.$transaction(async (tx) => {
+      for (const item of plan.menuItems) {
+        await tx.menuItem.update({
+          where: { id: item.id },
+          data: { price: toPrismaDecimal(item.priceAfter) },
+        });
+      }
+
+      for (const r of plan.resourceRates) {
+        await tx.resourceRate.update({
+          where: { id: r.id },
+          data: { price: toPrismaDecimal(r.priceAfter) },
+        });
+      }
+
+      for (const u of plan.offerings) {
+        await tx.resourceCategory.update({
+          where: { id: u.id },
+          data: { offeringConfig: u.offeringConfigAfter },
+        });
+      }
+
+      for (const res of plan.resources) {
+        await tx.resource.update({
+          where: { id: res.id },
+          data: { hourlyRate: toPrismaDecimal(res.hourlyRateAfter) },
+        });
+      }
+    });
+
+    return {
+      from: plan.from,
+      to: plan.to,
+      rate: plan.rate,
+      ratesAt: plan.ratesAt,
+      menuItems: plan.menuItems.length,
+      resourceRates: plan.resourceRates.length,
+      resources: plan.resources.length,
+      offerings: plan.offerings.length,
+    };
+  }
+
+  /**
+   * Load live catalog + FX and compute proposed before/after prices.
+   * Does not write. Never touches ShopOrder / Transaction / PlaySession / ShopLoss.
+   */
+  private async buildCatalogCurrencyPlan(
+    shopId: string,
+    from: string,
+    to: string,
+  ): Promise<CatalogCurrencyPlan> {
     const { rate, ratesAt } = await this.rates.getRate(from, to, {
       forceRefresh: true,
     });
+    // Reject bad rates before touching the catalog (getRate already guards;
+    // convertAmount re-checks so a stale caller cannot pass rate ≤ 0).
+    this.rates.convertAmount(1, rate);
 
-    const menuItems = await this.prisma.menuItem.findMany({
-      where: { shopId },
-      select: { id: true, price: true },
+    const [menuItems, categories, resources] = await Promise.all([
+      this.prisma.menuItem.findMany({
+        where: { shopId },
+        select: { id: true, name: true, price: true },
+      }),
+      this.prisma.resourceCategory.findMany({
+        where: { shopId },
+        select: {
+          id: true,
+          name: true,
+          offeringConfig: true,
+          rates: { select: { id: true, label: true, price: true } },
+        },
+      }),
+      this.prisma.resource.findMany({
+        where: { shopId },
+        select: { id: true, name: true, hourlyRate: true },
+      }),
+    ]);
+
+    const menuPlan = menuItems.map((item) => {
+      const priceBefore = toMoneyNumber(item.price);
+      return {
+        id: item.id,
+        name: item.name,
+        priceBefore,
+        priceAfter: this.rates.convertAmount(priceBefore, rate),
+      };
     });
-    for (const item of menuItems) {
-      await this.prisma.menuItem.update({
-        where: { id: item.id },
-        data: { price: this.rates.convertAmount(item.price, rate) },
-      });
-    }
 
-    const categories = await this.prisma.resourceCategory.findMany({
-      where: { shopId },
-      select: {
-        id: true,
-        offeringConfig: true,
-        rates: { select: { id: true, price: true } },
-      },
-    });
+    const resourceRatePlan = categories.flatMap((cat) =>
+      cat.rates.map((r) => {
+        const priceBefore = toMoneyNumber(r.price);
+        return {
+          id: r.id,
+          label: r.label,
+          categoryId: cat.id,
+          priceBefore,
+          priceAfter: this.rates.convertAmount(priceBefore, rate),
+        };
+      }),
+    );
 
-    let resourceRates = 0;
-    let offerings = 0;
+    const offeringPlan: CatalogCurrencyPlan['offerings'] = [];
     for (const cat of categories) {
-      for (const r of cat.rates) {
-        await this.prisma.resourceRate.update({
-          where: { id: r.id },
-          data: { price: this.rates.convertAmount(r.price, rate) },
-        });
-        resourceRates += 1;
-      }
-      const nextConfig = scaleOfferingConfigPrices(cat.offeringConfig, (n) =>
-        this.rates.convertAmount(n, rate),
+      const nextConfig = prepareOfferingConfigForWrite(
+        mapOfferingConfigPrices(cat.offeringConfig, (n) =>
+          this.rates.convertAmount(toMoneyNumber(n), rate),
+        ),
       );
       if (nextConfig !== cat.offeringConfig) {
-        await this.prisma.resourceCategory.update({
-          where: { id: cat.id },
-          data: { offeringConfig: nextConfig as object },
+        offeringPlan.push({
+          id: cat.id,
+          name: cat.name,
+          offeringConfigBefore: cat.offeringConfig,
+          offeringConfigAfter: nextConfig as object,
         });
-        offerings += 1;
       }
     }
 
-    const resources = await this.prisma.resource.findMany({
-      where: { shopId },
-      select: { id: true, hourlyRate: true },
-    });
-    for (const res of resources) {
-      if (res.hourlyRate === 0) continue;
-      await this.prisma.resource.update({
-        where: { id: res.id },
-        data: { hourlyRate: this.rates.convertAmount(res.hourlyRate, rate) },
+    const resourcePlan = resources
+      .filter((r) => toMoneyNumber(r.hourlyRate) !== 0)
+      .map((res) => {
+        const hourlyRateBefore = toMoneyNumber(res.hourlyRate);
+        return {
+          id: res.id,
+          name: res.name,
+          hourlyRateBefore,
+          hourlyRateAfter: this.rates.convertAmount(hourlyRateBefore, rate),
+        };
       });
-    }
 
     return {
       from: from.toUpperCase(),
       to: to.toUpperCase(),
       rate,
       ratesAt,
-      menuItems: menuItems.length,
-      resourceRates,
-      resources: resources.filter((r) => r.hourlyRate !== 0).length,
-      offerings,
+      menuItems: menuPlan,
+      resourceRates: resourceRatePlan,
+      resources: resourcePlan,
+      offerings: offeringPlan,
     };
   }
 
@@ -693,7 +1090,7 @@ export class ShopService {
             status: true,
             trialEndsAt: true,
             packId: true,
-            addOns: true,
+            addOnRows: { select: { addOnId: true } },
           },
         },
       },
@@ -709,8 +1106,8 @@ export class ShopService {
       })
       .catch(() => undefined);
 
-    const modules = resolveEnabledModules(shop.subscription);
-    const hasGuestChat = modules.has('messaging');
+    const entitlements = getVenueEntitlements(shop.subscription);
+    const hasGuestChat = hasFeature(entitlements, 'messaging');
     const { subscription: _subscription, ...shopPublic } = shop;
 
     const today = new Date().toISOString().slice(0, 10);
@@ -860,7 +1257,7 @@ export class ShopService {
               description: i.description,
               imageUrl: i.imageUrl,
               imageUrl2: i.imageUrl2,
-              price: i.price,
+              price: serializeMoney(i.price),
               trackStock: i.trackStock,
               inStock: !i.trackStock || i.stock > 0,
               useSectionTiming: i.useSectionTiming,
@@ -882,10 +1279,16 @@ export class ShopService {
         imageUrl: o.imageUrl,
         bookingMode: o.bookingMode,
         playstationGames: o.playstationGames,
-        offeringConfig: o.offeringConfig,
+        offeringConfig: mapOfferingConfigPrices(
+          o.offeringConfig,
+          (n) => serializeMoney(n),
+        ),
         slotMinutes: o.slotMinutes,
         unitCount: o._count.resources,
-        rates: o.rates,
+        rates: o.rates.map((r) => ({
+          ...r,
+          price: serializeMoney(r.price),
+        })),
       })),
       diningOfferings: diningOfferings.map((o) => ({
         id: o.id,
@@ -896,7 +1299,10 @@ export class ShopService {
         bookingMode: o.bookingMode,
         slotMinutes: o.slotMinutes,
         unitCount: o._count.resources,
-        rates: o.rates,
+        rates: o.rates.map((r) => ({
+          ...r,
+          price: serializeMoney(r.price),
+        })),
       })),
       scheduleExceptions,
       menu,
@@ -909,48 +1315,4 @@ export class ShopService {
       },
     };
   }
-}
-
-const OFFERING_PRICE_KEYS = new Set([
-  'pricePerPerson',
-  'pricePerGame',
-  'pricePerHour',
-  'price',
-  'hourlyRate',
-  'basePrice',
-]);
-
-/** Deep-scale known price fields inside ResourceCategory.offeringConfig JSON. */
-function scaleOfferingConfigPrices(
-  config: unknown,
-  scale: (n: number) => number,
-): unknown {
-  if (config == null || typeof config !== 'object') return config;
-  let changed = false;
-
-  const walk = (value: unknown): unknown => {
-    if (Array.isArray(value)) {
-      return value.map((v) => walk(v));
-    }
-    if (value && typeof value === 'object') {
-      const out: Record<string, unknown> = {};
-      for (const [k, v] of Object.entries(value as Record<string, unknown>)) {
-        if (
-          OFFERING_PRICE_KEYS.has(k) &&
-          typeof v === 'number' &&
-          Number.isFinite(v)
-        ) {
-          out[k] = scale(v);
-          if (out[k] !== v) changed = true;
-        } else {
-          out[k] = walk(v);
-        }
-      }
-      return out;
-    }
-    return value;
-  };
-
-  const next = walk(config);
-  return changed ? next : config;
 }

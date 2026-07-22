@@ -1,18 +1,18 @@
 import type { Metadata } from "next";
 import Link from "next/link";
-import { GoSpotsLogo } from "@/components/brand/gospots-logo";
+import { LocoraLogo } from "@/components/brand/locora-logo";
 
 export const metadata: Metadata = {
   title: "Terms of Service",
   description:
-    "Terms governing use of the GoSpots venue operations and discovery platform.",
+    "Terms governing use of the Locora venue operations and discovery platform.",
 };
 
 export default function TermsPage() {
   return (
     <main className="min-h-full bg-zinc-950 text-zinc-200">
       <div className="mx-auto max-w-3xl px-4 py-12 md:px-8 md:py-16">
-        <GoSpotsLogo href="/" size="md" showTagline />
+        <LocoraLogo href="/" size="md" showTagline />
         <p className="mt-6">
           <Link
             href="/"
@@ -32,7 +32,7 @@ export default function TermsPage() {
         <div className="prose-invert mt-10 space-y-8 text-sm leading-relaxed text-zinc-300">
           <p>
             These Terms of Service (&quot;Terms&quot;) govern access to and use
-            of GoSpots, a software platform for venue operations (sessions,
+            of Locora, a software platform for venue operations (sessions,
             reservations, billing tools, staff controls) and public venue
             discovery. By creating an account or using the service, you agree to
             these Terms. This document is informational and is not legal advice.
@@ -43,7 +43,7 @@ export default function TermsPage() {
               1. The service
             </h2>
             <p>
-              GoSpots provides web-based tools for entertainment and hospitality
+              Locora provides web-based tools for entertainment and hospitality
               venues and a public directory where published venues can be found
               and, where enabled, reserved by guests. Features available to a
               venue depend on the modules and add-ons selected (and any trial
@@ -72,7 +72,7 @@ export default function TermsPage() {
             </h2>
             <p>
               You retain ownership of content you upload (photos, menus,
-              descriptions, rates). You grant GoSpots a license to host, display,
+              descriptions, rates). You grant Locora a license to host, display,
               and process that content to operate the platform, including public
               listings you choose to publish. You are solely responsible for the
               accuracy of venue information, pricing, availability, and
@@ -87,7 +87,7 @@ export default function TermsPage() {
             </h2>
             <p>
               Reservations and session records are between the guest and the
-              venue unless we expressly state otherwise. GoSpots is not a party
+              venue unless we expressly state otherwise. Locora is not a party
               to on-premise services sold by venues. Guests agree not to misuse
               bookings, scrape the directory, or interfere with other users.
             </p>
@@ -116,7 +116,7 @@ export default function TermsPage() {
               <li>Attempt to access another venue&apos;s tenant data</li>
               <li>Reverse engineer, overload, or disrupt the service</li>
               <li>Upload unlawful, infringing, or harmful content</li>
-              <li>Use GoSpots to send spam or deceptive communications</li>
+              <li>Use Locora to send spam or deceptive communications</li>
               <li>Misrepresent your venue or impersonate others</li>
             </ul>
           </section>
@@ -126,7 +126,7 @@ export default function TermsPage() {
               7. Intellectual property
             </h2>
             <p>
-              The GoSpots name, logo, software, and design are our property or
+              The Locora name, logo, software, and design are our property or
               that of our licensors. These Terms do not grant you rights to our
               trademarks except as needed to identify your use of the product.
             </p>
@@ -151,7 +151,7 @@ export default function TermsPage() {
               9. Limitation of liability
             </h2>
             <p>
-              To the fullest extent permitted by law, GoSpots and its suppliers
+              To the fullest extent permitted by law, Locora and its suppliers
               are not liable for indirect, incidental, special, consequential, or
               punitive damages, or for lost profits, revenue, or data, arising
               from use of the service. Our aggregate liability for claims
@@ -164,7 +164,7 @@ export default function TermsPage() {
           <section className="space-y-3">
             <h2 className="text-lg font-semibold text-white">10. Termination</h2>
             <p>
-              You may stop using GoSpots at any time. We may suspend or terminate
+              You may stop using Locora at any time. We may suspend or terminate
               access for breach of these Terms, non-payment, or risk to the
               platform. Provisions that by nature should survive (including IP,
               disclaimers, and liability limits) will survive termination.
@@ -187,10 +187,10 @@ export default function TermsPage() {
             <p>
               Questions about these Terms:{" "}
               <a
-                href="mailto:hello@gospots.app"
+                href="mailto:hello@locora.app"
                 className="text-emerald-400 hover:text-emerald-300"
               >
-                hello@gospots.app
+                hello@locora.app
               </a>
               . See also our{" "}
               <Link

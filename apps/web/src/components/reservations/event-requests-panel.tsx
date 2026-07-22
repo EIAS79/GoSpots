@@ -13,9 +13,9 @@ import { cn } from "@/lib/cn";
 import {
   cancelEventRequest,
   createStaffEventRequest,
-  EVENT_REQUEST_SOURCE_LABELS,
-  EVENT_REQUEST_STATUS_LABELS,
-  EVENT_REQUEST_TYPE_LABELS,
+  eventRequestSourceLabel,
+  eventRequestStatusLabel,
+  eventRequestTypeLabel,
   EVENT_REQUEST_TYPES,
   fetchEventRequests,
   reviewEventRequest,
@@ -36,6 +36,7 @@ import {
 } from "@/lib/seating-zone";
 import { publishLiveEvent } from "@/lib/live-events";
 import { useLiveData } from "@/lib/use-live-data";
+import { useVenueSettingsOptional } from "@/lib/venue-settings-context";
 
 const { start: defaultStartTime, end: defaultEndTime } = defaultEventTimes();
 
@@ -57,6 +58,7 @@ function initialLogDraft() {
 }
 
 export function EventRequestsPanel({ canWrite }: { canWrite: boolean }) {
+  const t = useVenueSettingsOptional()?.t ?? ((k: string) => k);
   const [requests, setRequests] = useState<EventRequest[]>([]);
   const [pendingCount, setPendingCount] = useState(0);
   const [filter, setFilter] = useState<Filter>("PENDING");
@@ -78,17 +80,19 @@ export function EventRequestsPanel({ canWrite }: { canWrite: boolean }) {
         );
         setRequests(data.requests);
         setPendingCount(data.pendingCount);
+        return true;
       } catch (e) {
         if (!opts.silent) {
           setError(
-            e instanceof Error ? e.message : "Failed to load event requests.",
+            e instanceof Error ? e.message : t("eventRequests.loadFailed"),
           );
         }
+        return false;
       } finally {
         if (!opts.silent) setLoading(false);
       }
     },
-    [filter],
+    [filter, t],
   );
 
   useEffect(() => {
@@ -111,11 +115,11 @@ export function EventRequestsPanel({ canWrite }: { canWrite: boolean }) {
       logDraft.eventEndTime,
     );
     if (!logDraft.guestName.trim()) {
-      setError("Guest name is required.");
+      setError(t("eventRequests.guestNameRequired"));
       return;
     }
     if (!preferredStartsAt) {
-      setError("Pick a date and start time.");
+      setError(t("eventRequests.pickDateAndTime"));
       return;
     }
     setBusyId("log");
@@ -137,7 +141,9 @@ export function EventRequestsPanel({ canWrite }: { canWrite: boolean }) {
       await load();
       publishLiveEvent({ section: "reservation" });
     } catch (e) {
-      setError(e instanceof Error ? e.message : "Could not log request.");
+      setError(
+        e instanceof Error ? e.message : t("eventRequests.logRequestFailed"),
+      );
     } finally {
       setBusyId(null);
     }
@@ -151,12 +157,12 @@ export function EventRequestsPanel({ canWrite }: { canWrite: boolean }) {
         action: "approve",
         // Legacy seating blocks only when guest did not pick a digital offering.
         createFloorBlock: !request.resourceCategoryId,
-        floorBlockLabel: `${EVENT_REQUEST_TYPE_LABELS[request.eventType]} — ${request.guestName}`,
+        floorBlockLabel: `${eventRequestTypeLabel(request.eventType, t)} — ${request.guestName}`,
       });
       await load();
       publishLiveEvent({ section: "reservation" });
     } catch (e) {
-      setError(e instanceof Error ? e.message : "Could not approve.");
+      setError(e instanceof Error ? e.message : t("eventRequests.approveFailed"));
     } finally {
       setBusyId(null);
     }
@@ -166,7 +172,7 @@ export function EventRequestsPanel({ canWrite }: { canWrite: boolean }) {
     if (!declineTarget || !canWrite) return;
     const note = declineNote.trim();
     if (!note) {
-      setError("Add a note explaining why this was declined.");
+      setError(t("eventRequests.declineNoteRequired"));
       return;
     }
     setBusyId(declineTarget.id);
@@ -180,14 +186,17 @@ export function EventRequestsPanel({ canWrite }: { canWrite: boolean }) {
       await load();
       publishLiveEvent({ section: "reservation" });
     } catch (e) {
-      setError(e instanceof Error ? e.message : "Could not decline.");
+      setError(e instanceof Error ? e.message : t("eventRequests.declineFailed"));
     } finally {
       setBusyId(null);
     }
   }
 
   async function dismiss(request: EventRequest) {
-    if (!canWrite || !confirm(`Remove ${request.guestName}'s request from the list?`)) {
+    if (
+      !canWrite ||
+      !confirm(t("eventRequests.removeConfirm", { guest: request.guestName }))
+    ) {
       return;
     }
     setBusyId(request.id);
@@ -195,7 +204,7 @@ export function EventRequestsPanel({ canWrite }: { canWrite: boolean }) {
       await cancelEventRequest(request.id);
       await load();
     } catch (e) {
-      setError(e instanceof Error ? e.message : "Could not remove.");
+      setError(e instanceof Error ? e.message : t("eventRequests.removeFailed"));
     } finally {
       setBusyId(null);
     }
@@ -211,19 +220,25 @@ export function EventRequestsPanel({ canWrite }: { canWrite: boolean }) {
         <div className="flex items-start gap-3">
           <PartyPopper className="mt-0.5 shrink-0 text-violet-300" size={20} />
           <div className="min-w-0 text-sm">
-            <p className="font-medium text-white">Two ways to handle events</p>
+            <p className="font-medium text-white">
+              {t("eventRequests.bannerTitle")}
+            </p>
             <ul className="mt-2 space-y-1.5 text-xs text-zinc-400">
               <li>
-                <span className="text-violet-200">Requests inbox</span> — guests
-                submit online (tied to your dining / gaming offerings) or you log
-                a phone call here. Decline requires a note for the guest.
+                <span className="text-violet-200">
+                  {t("eventRequests.bannerInboxLabel")}
+                </span>{" "}
+                — {t("eventRequests.bannerInboxText")}
               </li>
               <li>
-                <span className="text-amber-200">Digital dining</span> — when a
-                guest picks a dining area, approve then reserve tables on the{" "}
-                <strong className="font-medium text-zinc-300">Dining</strong>{" "}
-                tab in Sessions (same live floor map). Legacy capacity blocks are
-                only created when no offering was selected.
+                <span className="text-amber-200">
+                  {t("eventRequests.bannerDiningLabel")}
+                </span>{" "}
+                — {t("eventRequests.bannerDiningTextPrefix")}{" "}
+                <strong className="font-medium text-zinc-300">
+                  {t("eventRequests.bannerDiningTabName")}
+                </strong>{" "}
+                {t("eventRequests.bannerDiningTextSuffix")}
               </li>
             </ul>
           </div>
@@ -238,7 +253,7 @@ export function EventRequestsPanel({ canWrite }: { canWrite: boolean }) {
             className="ml-2 underline"
             onClick={() => setError(null)}
           >
-            Dismiss
+            {t("eventRequests.dismiss")}
           </button>
         </p>
       ) : null}
@@ -247,8 +262,8 @@ export function EventRequestsPanel({ canWrite }: { canWrite: boolean }) {
         <div className="flex gap-1 rounded-lg border border-white/10 bg-zinc-950/80 p-1">
           {(
             [
-              { id: "PENDING" as const, label: "Pending" },
-              { id: "ALL" as const, label: "All" },
+              { id: "PENDING" as const, label: t("eventRequests.filterPending") },
+              { id: "ALL" as const, label: t("eventRequests.filterAll") },
             ] as const
           ).map(({ id, label }) => (
             <button
@@ -278,7 +293,7 @@ export function EventRequestsPanel({ canWrite }: { canWrite: boolean }) {
             className="inline-flex items-center gap-1 rounded-lg border border-white/10 bg-zinc-900 px-3 py-1.5 text-xs text-zinc-200 hover:bg-white/5"
           >
             <Phone size={14} />
-            Log phone request
+            {t("eventRequests.logPhoneRequest")}
             <Plus
               size={12}
               className={cn("transition", showLogForm && "rotate-45")}
@@ -289,14 +304,15 @@ export function EventRequestsPanel({ canWrite }: { canWrite: boolean }) {
 
       {showLogForm && canWrite ? (
         <div className="rounded-xl border border-white/10 bg-zinc-900/60 p-4">
-          <p className="text-sm font-medium text-white">Log a phone / walk-in request</p>
+          <p className="text-sm font-medium text-white">
+            {t("eventRequests.logFormTitle")}
+          </p>
           <p className="mt-1 text-xs text-zinc-500">
-            Same flow as the online form — lands in pending until you approve or
-            decline.
+            {t("eventRequests.logFormSubtitle")}
           </p>
           <div className="mt-3 grid gap-3 sm:grid-cols-2">
             <label className="block text-xs text-zinc-400 sm:col-span-2">
-              Event type
+              {t("eventRequests.fieldEventType")}
               <select
                 value={logDraft.eventType}
                 onChange={(e) =>
@@ -307,15 +323,15 @@ export function EventRequestsPanel({ canWrite }: { canWrite: boolean }) {
                 }
                 className="mt-1 w-full rounded-lg border border-white/10 bg-zinc-950 px-3 py-2 text-sm text-white"
               >
-                {EVENT_REQUEST_TYPES.map((t) => (
-                  <option key={t} value={t}>
-                    {EVENT_REQUEST_TYPE_LABELS[t]}
+                {EVENT_REQUEST_TYPES.map((type) => (
+                  <option key={type} value={type}>
+                    {eventRequestTypeLabel(type, t)}
                   </option>
                 ))}
               </select>
             </label>
             <label className="block text-xs text-zinc-400">
-              Guest name
+              {t("eventRequests.fieldGuestName")}
               <input
                 value={logDraft.guestName}
                 onChange={(e) =>
@@ -325,7 +341,7 @@ export function EventRequestsPanel({ canWrite }: { canWrite: boolean }) {
               />
             </label>
             <label className="block text-xs text-zinc-400">
-              Party size
+              {t("eventRequests.fieldPartySize")}
               <input
                 type="number"
                 min={1}
@@ -340,7 +356,7 @@ export function EventRequestsPanel({ canWrite }: { canWrite: boolean }) {
               />
             </label>
             <label className="block text-xs text-zinc-400">
-              Phone
+              {t("eventRequests.fieldPhone")}
               <input
                 value={logDraft.guestPhone}
                 onChange={(e) =>
@@ -350,7 +366,7 @@ export function EventRequestsPanel({ canWrite }: { canWrite: boolean }) {
               />
             </label>
             <label className="block text-xs text-zinc-400">
-              Email
+              {t("eventRequests.fieldEmail")}
               <input
                 type="email"
                 value={logDraft.guestEmail}
@@ -361,7 +377,7 @@ export function EventRequestsPanel({ canWrite }: { canWrite: boolean }) {
               />
             </label>
             <label className="block text-xs text-zinc-400 sm:col-span-2">
-              Preferred area
+              {t("eventRequests.fieldPreferredArea")}
               <div className="mt-1 flex gap-1 rounded-lg border border-white/10 bg-zinc-950/80 p-0.5">
                 {SEATING_ZONES.map((z) => (
                   <button
@@ -381,7 +397,7 @@ export function EventRequestsPanel({ canWrite }: { canWrite: boolean }) {
               </div>
             </label>
             <label className="block text-xs text-zinc-400 sm:col-span-2">
-              Date
+              {t("eventRequests.fieldDate")}
               <input
                 type="date"
                 value={logDraft.eventDate}
@@ -392,7 +408,7 @@ export function EventRequestsPanel({ canWrite }: { canWrite: boolean }) {
               />
             </label>
             <label className="block text-xs text-zinc-400">
-              Start
+              {t("eventRequests.fieldStart")}
               <input
                 type="time"
                 value={logDraft.eventStartTime}
@@ -403,7 +419,7 @@ export function EventRequestsPanel({ canWrite }: { canWrite: boolean }) {
               />
             </label>
             <label className="block text-xs text-zinc-400">
-              End
+              {t("eventRequests.fieldEnd")}
               <input
                 type="time"
                 value={logDraft.eventEndTime}
@@ -414,14 +430,14 @@ export function EventRequestsPanel({ canWrite }: { canWrite: boolean }) {
               />
             </label>
             <label className="block text-xs text-zinc-400 sm:col-span-2">
-              Details
+              {t("eventRequests.fieldDetails")}
               <textarea
                 value={logDraft.message}
                 onChange={(e) =>
                   setLogDraft((d) => ({ ...d, message: e.target.value }))
                 }
                 rows={2}
-                placeholder="Cake, AV setup, private room…"
+                placeholder={t("eventRequests.detailsPlaceholder")}
                 className="mt-1 w-full rounded-lg border border-white/10 bg-zinc-950 px-3 py-2 text-sm text-white"
               />
             </label>
@@ -433,14 +449,14 @@ export function EventRequestsPanel({ canWrite }: { canWrite: boolean }) {
               onClick={() => void logPhoneRequest()}
               className="rounded-lg bg-violet-600 px-3 py-1.5 text-xs font-medium text-white hover:bg-violet-500 disabled:opacity-50"
             >
-              Save to inbox
+              {t("eventRequests.saveToInbox")}
             </button>
             <button
               type="button"
               onClick={() => setShowLogForm(false)}
               className="rounded-lg border border-white/10 px-3 py-1.5 text-xs text-zinc-400"
             >
-              Cancel
+              {t("eventRequests.cancel")}
             </button>
           </div>
         </div>
@@ -453,8 +469,8 @@ export function EventRequestsPanel({ canWrite }: { canWrite: boolean }) {
       ) : visible.length === 0 ? (
         <p className="rounded-xl border border-dashed border-white/10 py-12 text-center text-sm text-zinc-500">
           {filter === "PENDING"
-            ? "No pending event requests — online submissions and phone logs appear here."
-            : "No event requests yet."}
+            ? t("eventRequests.emptyPending")
+            : t("eventRequests.emptyAll")}
         </p>
       ) : (
         <div className="grid gap-3 sm:grid-cols-2">
@@ -464,6 +480,7 @@ export function EventRequestsPanel({ canWrite }: { canWrite: boolean }) {
               request={request}
               canWrite={canWrite}
               busy={busyId === request.id}
+              t={t}
               onApprove={() => void approve(request)}
               onDecline={() => {
                 setDeclineTarget(request);
@@ -479,17 +496,18 @@ export function EventRequestsPanel({ canWrite }: { canWrite: boolean }) {
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-4">
           <div className="max-h-[min(90dvh,32rem)] w-full max-w-md overflow-y-auto overscroll-contain rounded-xl border border-white/10 bg-zinc-900 p-4 shadow-xl">
             <h3 className="text-sm font-semibold text-white">
-              Decline {declineTarget.guestName}&apos;s request
+              {t("eventRequests.declineTitle", {
+                guest: declineTarget.guestName,
+              })}
             </h3>
             <p className="mt-1 text-xs text-zinc-500">
-              Explain why — guests will see this when accounts and notifications
-              are added.
+              {t("eventRequests.declineSubtitle")}
             </p>
             <textarea
               value={declineNote}
               onChange={(e) => setDeclineNote(e.target.value)}
               rows={3}
-              placeholder="e.g. Date fully booked, minimum party size is 15…"
+              placeholder={t("eventRequests.declinePlaceholder")}
               className="mt-3 w-full rounded-lg border border-white/10 bg-zinc-950 px-3 py-2 text-sm text-white"
               autoFocus
             />
@@ -499,7 +517,7 @@ export function EventRequestsPanel({ canWrite }: { canWrite: boolean }) {
                 onClick={() => setDeclineTarget(null)}
                 className="rounded-lg border border-white/10 px-3 py-1.5 text-xs text-zinc-400"
               >
-                Cancel
+                {t("eventRequests.cancel")}
               </button>
               <button
                 type="button"
@@ -507,7 +525,7 @@ export function EventRequestsPanel({ canWrite }: { canWrite: boolean }) {
                 onClick={() => void submitDecline()}
                 className="rounded-lg bg-rose-600 px-3 py-1.5 text-xs font-medium text-white hover:bg-rose-500 disabled:opacity-50"
               >
-                Decline request
+                {t("eventRequests.declineRequestBtn")}
               </button>
             </div>
           </div>
@@ -537,6 +555,7 @@ function EventRequestCard({
   onApprove,
   onDecline,
   onDismiss,
+  t,
 }: {
   request: EventRequest;
   canWrite: boolean;
@@ -544,6 +563,7 @@ function EventRequestCard({
   onApprove: () => void;
   onDecline: () => void;
   onDismiss: () => void;
+  t: (key: string, vars?: Record<string, string | number>) => string;
 }) {
   const schedule = formatEventWindow(
     request.preferredStartsAt,
@@ -558,8 +578,8 @@ function EventRequestCard({
             {request.guestName}
           </h3>
           <p className="text-[11px] text-zinc-500">
-            {EVENT_REQUEST_TYPE_LABELS[request.eventType]} · {request.partySize}{" "}
-            guests
+            {eventRequestTypeLabel(request.eventType, t)} · {request.partySize}{" "}
+            {t("eventRequests.guestsSuffix")}
           </p>
         </div>
         <span
@@ -568,7 +588,7 @@ function EventRequestCard({
             statusStyles(request.status),
           )}
         >
-          {EVENT_REQUEST_STATUS_LABELS[request.status]}
+          {eventRequestStatusLabel(request.status, t)}
         </span>
       </div>
 
@@ -578,12 +598,14 @@ function EventRequestCard({
 
       <div className="mt-2 flex flex-wrap gap-1.5 text-[10px]">
         <span className="rounded-full border border-white/10 bg-black/20 px-2 py-0.5 text-zinc-400">
-          {EVENT_REQUEST_SOURCE_LABELS[request.source]}
+          {eventRequestSourceLabel(request.source, t)}
         </span>
         {request.resourceCategory ? (
           <span className="rounded-full border border-amber-400/20 bg-amber-500/10 px-2 py-0.5 text-amber-100">
             {request.resourceCategory.name}
-            {request.resourceCategory.type === "DINING" ? " · dining" : ""}
+            {request.resourceCategory.type === "DINING"
+              ? ` ${t("eventRequests.diningSuffix")}`
+              : ""}
           </span>
         ) : null}
         {request.zone ? (
@@ -607,20 +629,20 @@ function EventRequestCard({
 
       {request.staffResponseNote && request.status === "DECLINED" ? (
         <p className="mt-2 rounded-lg border border-rose-500/20 bg-rose-500/5 px-2 py-1.5 text-[11px] text-rose-200/90">
-          Declined: {request.staffResponseNote}
+          {t("eventRequests.declinedNote", { note: request.staffResponseNote })}
         </p>
       ) : null}
 
       {request.status === "APPROVED" && request.seatingTableGroupId ? (
         <p className="mt-2 text-[11px] text-emerald-300/80">
-          Legacy floor block created — add tables in Dining layout if needed.
+          {t("eventRequests.legacyFloorBlockCreated")}
         </p>
       ) : null}
 
       {request.status === "APPROVED" &&
       request.resourceCategory?.type === "DINING" ? (
         <p className="mt-2 text-[11px] text-amber-200/80">
-          Reserve tables on Sessions → Dining bookings for this party.
+          {t("eventRequests.reserveTablesHint")}
         </p>
       ) : null}
 
@@ -638,8 +660,8 @@ function EventRequestCard({
               <Check size={12} />
             )}
             {request.resourceCategory?.type === "DINING"
-              ? "Accept · book tables next"
-              : "Accept"}
+              ? t("eventRequests.acceptBookNext")
+              : t("eventRequests.accept")}
           </button>
           <button
             type="button"
@@ -648,7 +670,7 @@ function EventRequestCard({
             className="inline-flex items-center gap-1 rounded-lg border border-rose-400/30 bg-rose-500/10 px-2.5 py-1 text-[11px] text-rose-200 hover:bg-rose-500/20 disabled:opacity-50"
           >
             <X size={12} />
-            Decline
+            {t("eventRequests.decline")}
           </button>
         </div>
       ) : null}
@@ -660,7 +682,7 @@ function EventRequestCard({
           onClick={onDismiss}
           className="mt-3 text-[11px] text-zinc-600 hover:text-zinc-400"
         >
-          Remove from list
+          {t("eventRequests.removeFromList")}
         </button>
       ) : null}
     </article>

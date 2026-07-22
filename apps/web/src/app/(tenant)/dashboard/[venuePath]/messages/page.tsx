@@ -38,26 +38,34 @@ import { useCurrentMembership } from "@/lib/use-current-membership";
 import { useDashboardGuide } from "@/lib/use-dashboard-guide";
 import { useLiveData } from "@/lib/use-live-data";
 import { useVenueAccess } from "@/lib/use-venue-access";
-
-const FILTERS: { id: "ALL" | GuestChatStatus; label: string }[] = [
-  { id: "ALL", label: "All" },
-  { id: "WAITING", label: "Waiting" },
-  { id: "OPEN", label: "Open" },
-  { id: "PAUSED", label: "Paused" },
-  { id: "ENDED", label: "Ended" },
-];
+import { useVenueSettingsOptional } from "@/lib/venue-settings-context";
 
 type InboxTab = "chats" | "contact";
 
-function formatWhen(iso: string) {
-  return new Date(iso).toLocaleString(undefined, {
+type MsgT = (
+  key: string,
+  vars?: Record<string, string | number>,
+) => string;
+
+function chatFilters(t: MsgT): { id: "ALL" | GuestChatStatus; label: string }[] {
+  return [
+    { id: "ALL", label: t("msg.filterAll") },
+    { id: "WAITING", label: t("msg.filterWaiting") },
+    { id: "OPEN", label: t("msg.filterOpen") },
+    { id: "PAUSED", label: t("msg.filterPaused") },
+    { id: "ENDED", label: t("msg.filterEnded") },
+  ];
+}
+
+function formatWhen(iso: string, locale?: string) {
+  return new Date(iso).toLocaleString(locale, {
     dateStyle: "medium",
     timeStyle: "short",
   });
 }
 
-function formatTime(iso: string) {
-  return new Date(iso).toLocaleTimeString(undefined, {
+function formatTime(iso: string, locale?: string) {
+  return new Date(iso).toLocaleTimeString(locale, {
     hour: "numeric",
     minute: "2-digit",
   });
@@ -78,16 +86,31 @@ function statusTone(status: GuestChatStatus) {
   }
 }
 
-function statusToneLabel(status: GuestChatStatus) {
+function statusBadgeLabel(status: GuestChatStatus, t: MsgT) {
   switch (status) {
     case "WAITING":
-      return "Guest waiting for staff";
+      return t("msg.statusWaiting");
     case "OPEN":
-      return "Live chat";
+      return t("msg.statusOpen");
     case "PAUSED":
-      return "Paused";
+      return t("msg.statusPaused");
     case "ENDED":
-      return "Ended";
+      return t("msg.statusEnded");
+    default:
+      return status;
+  }
+}
+
+function statusToneLabel(status: GuestChatStatus, t: MsgT) {
+  switch (status) {
+    case "WAITING":
+      return t("msg.statusWaitingHint");
+    case "OPEN":
+      return t("msg.statusOpenHint");
+    case "PAUSED":
+      return t("msg.statusPausedHint");
+    case "ENDED":
+      return t("msg.statusEndedHint");
     default:
       return status;
   }
@@ -124,7 +147,15 @@ function ActionBtn({
   );
 }
 
-function ContactInboxPanel({ canView }: { canView: boolean }) {
+function ContactInboxPanel({
+  canView,
+  t,
+  locale,
+}: {
+  canView: boolean;
+  t: MsgT;
+  locale?: string;
+}) {
   const [items, setItems] = useState<ContactMessageRow[]>([]);
   const [total, setTotal] = useState(0);
   const [loading, setLoading] = useState(true);
@@ -137,12 +168,14 @@ function ContactInboxPanel({ canView }: { canView: boolean }) {
       const data = await fetchContactMessages({ take: 100 });
       setItems(data.items);
       setTotal(data.total);
+      return true;
     } catch (e) {
-      setError(e instanceof Error ? e.message : "Could not load messages.");
+      setError(e instanceof Error ? e.message : t("msg.contactLoadFailed"));
+      return false;
     } finally {
       if (!opts?.silent) setLoading(false);
     }
-  }, []);
+  }, [t]);
 
   useEffect(() => {
     if (canView) void load();
@@ -169,7 +202,7 @@ function ContactInboxPanel({ canView }: { canView: boolean }) {
   if (items.length === 0) {
     return (
       <p className="rounded-xl border border-white/10 bg-zinc-900/40 px-4 py-10 text-center text-sm text-zinc-500">
-        No contact form messages yet.
+        {t("msg.contactEmpty")}
       </p>
     );
   }
@@ -177,7 +210,9 @@ function ContactInboxPanel({ canView }: { canView: boolean }) {
   return (
     <div className="space-y-3">
       <p className="text-[11px] text-zinc-500">
-        {total} message{total === 1 ? "" : "s"} from the public contact form
+        {total === 1
+          ? t("msg.contactCountOne", { total })
+          : t("msg.contactCountMany", { total })}
       </p>
       <ul className="divide-y divide-white/5 overflow-hidden rounded-xl border border-white/10 bg-zinc-900/40">
         {items.map((row) => (
@@ -190,7 +225,7 @@ function ContactInboxPanel({ canView }: { canView: boolean }) {
                 ) : null}
               </div>
               <p className="text-[10px] text-zinc-600">
-                {formatWhen(row.createdAt)}
+                {formatWhen(row.createdAt, locale)}
               </p>
             </div>
             <p className="mt-2 whitespace-pre-wrap text-sm text-zinc-300">
@@ -229,6 +264,9 @@ function MessagesPageInner() {
   const membership = useCurrentMembership();
   const access = useVenueAccess();
   const guide = useDashboardGuide("messages");
+  const vs = useVenueSettingsOptional();
+  const t: MsgT = vs?.t ?? ((key) => key);
+  const locale = vs?.locale;
   const unlocked = isFeatureUnlocked(access.enabledModules, "messaging");
   const canView =
     state.status === "authed" &&
@@ -241,6 +279,8 @@ function MessagesPageInner() {
     (membership?.role === "OWNER" ||
       hasPermission(membership?.permissions ?? "", "shop.manage") ||
       hasPermission(membership?.permissions ?? "", "messaging.write"));
+
+  const filters = useMemo(() => chatFilters(t), [t]);
 
   const [inboxTab, setInboxTab] = useState<InboxTab>(() =>
     searchParams.get("inbox") === "contact" ? "contact" : "chats",
@@ -274,13 +314,15 @@ function MessagesPageInner() {
         setItems(data.items);
         setTotal(data.total);
         setWaitingCount(data.waitingCount);
+        return true;
       } catch (e) {
-        setError(e instanceof Error ? e.message : "Could not load chats.");
+        setError(e instanceof Error ? e.message : t("msg.chatsLoadFailed"));
+        return false;
       } finally {
         if (!opts?.silent) setLoadingList(false);
       }
     },
-    [filter],
+    [filter, t],
   );
 
   const loadChat = useCallback(
@@ -289,16 +331,18 @@ function MessagesPageInner() {
       try {
         const data = await fetchGuestChat(id);
         setChat(data);
+        return true;
       } catch (e) {
         if (!opts?.silent) {
           setChat(null);
-          setError(e instanceof Error ? e.message : "Could not load chat.");
+          setError(e instanceof Error ? e.message : t("msg.chatLoadFailed"));
         }
+        return false;
       } finally {
         if (!opts?.silent) setLoadingChat(false);
       }
     },
-    [],
+    [t],
   );
 
   useEffect(() => {
@@ -317,8 +361,9 @@ function MessagesPageInner() {
   });
 
   useLiveData(
-    () => {
-      if (selectedId) void loadChat(selectedId, { silent: true });
+    async () => {
+      if (!selectedId) return true;
+      return loadChat(selectedId, { silent: true });
     },
     [selectedId, loadChat],
     {
@@ -350,7 +395,7 @@ function MessagesPageInner() {
       if (selectedId) await loadChat(selectedId);
       await loadList({ silent: true });
     } catch (e) {
-      setError(e instanceof Error ? e.message : "Action failed.");
+      setError(e instanceof Error ? e.message : t("msg.actionFailed"));
     } finally {
       setBusy(false);
     }
@@ -367,7 +412,7 @@ function MessagesPageInner() {
       await loadChat(selectedId);
       await loadList({ silent: true });
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Could not send.");
+      setError(err instanceof Error ? err.message : t("msg.sendFailed"));
     } finally {
       setBusy(false);
     }
@@ -376,9 +421,7 @@ function MessagesPageInner() {
   if (!canView) {
     return (
       <TenantPage title={guide.title} description={guide.description}>
-        <p className="text-sm text-zinc-500">
-          You do not have permission to view guest messages.
-        </p>
+        <p className="text-sm text-zinc-500">{t("msg.noPermission")}</p>
       </TenantPage>
     );
   }
@@ -401,7 +444,7 @@ function MessagesPageInner() {
               : "border-white/10 text-zinc-400 hover:text-zinc-200",
           )}
         >
-          Guest chat
+          {t("msg.tabGuestChat")}
           {waitingCount > 0 ? ` (${waitingCount})` : null}
         </button>
         <button
@@ -414,12 +457,12 @@ function MessagesPageInner() {
               : "border-white/10 text-zinc-400 hover:text-zinc-200",
           )}
         >
-          Contact form
+          {t("msg.tabContactForm")}
         </button>
       </div>
 
       {inboxTab === "contact" ? (
-        <ContactInboxPanel canView={canView} />
+        <ContactInboxPanel canView={canView} t={t} locale={locale} />
       ) : (
         <>
           {error ? (
@@ -427,7 +470,7 @@ function MessagesPageInner() {
           ) : null}
 
           <div className="mb-3 flex flex-wrap items-center gap-2">
-            {FILTERS.map((f) => (
+            {filters.map((f) => (
               <button
                 key={f.id}
                 type="button"
@@ -446,7 +489,9 @@ function MessagesPageInner() {
               </button>
             ))}
             <span className="ml-auto text-[11px] text-zinc-500">
-              {total} chat{total === 1 ? "" : "s"}
+              {total === 1
+                ? t("msg.chatCountOne", { total })
+                : t("msg.chatCountMany", { total })}
             </span>
           </div>
 
@@ -463,7 +508,7 @@ function MessagesPageInner() {
                 </div>
               ) : sortedItems.length === 0 ? (
                 <p className="px-4 py-10 text-center text-sm text-zinc-500">
-                  No chats in this filter.
+                  {t("msg.emptyFilter")}
                 </p>
               ) : (
                 <ul className="max-h-[70vh] divide-y divide-white/5 overflow-y-auto">
@@ -490,14 +535,14 @@ function MessagesPageInner() {
                               statusTone(row.status),
                             )}
                           >
-                            {row.status}
+                            {statusBadgeLabel(row.status, t)}
                           </span>
                         </div>
                         <p className="truncate text-xs text-zinc-500">
-                          {row.lastMessage?.body ?? "No messages yet"}
+                          {row.lastMessage?.body ?? t("msg.noMessagesYet")}
                         </p>
                         <p className="mt-1 text-[10px] text-zinc-600">
-                          {formatWhen(row.updatedAt)}
+                          {formatWhen(row.updatedAt, locale)}
                         </p>
                       </button>
                     </li>
@@ -515,7 +560,7 @@ function MessagesPageInner() {
               {!selectedId ? (
                 <div className="flex flex-1 flex-col items-center justify-center gap-2 px-4 text-center text-sm text-zinc-500">
                   <MessageSquare className="h-8 w-8 opacity-40" />
-                  Select a chat to reply.
+                  {t("msg.selectChat")}
                 </div>
               ) : loadingChat && !chat ? (
                 <div className="flex flex-1 items-center justify-center">
@@ -530,7 +575,7 @@ function MessagesPageInner() {
                           type="button"
                           onClick={() => setMobileView("list")}
                           className="mt-0.5 grid h-9 w-9 shrink-0 place-items-center rounded-lg border border-white/10 text-zinc-400 lg:hidden"
-                          aria-label="Back to chat list"
+                          aria-label={t("msg.backToList")}
                         >
                           <ChevronLeft size={18} />
                         </button>
@@ -539,9 +584,11 @@ function MessagesPageInner() {
                           {chat.guestName}
                         </h2>
                         <p className="mt-0.5 text-xs text-zinc-500">
-                          {statusToneLabel(chat.status)}
+                          {statusToneLabel(chat.status, t)}
                           {chat.endedAt
-                            ? ` · ended ${formatWhen(chat.endedAt)}`
+                            ? t("msg.endedSuffix", {
+                                when: formatWhen(chat.endedAt, locale),
+                              })
                             : null}
                         </p>
                         <div className="mt-2 flex flex-wrap gap-2 text-xs">
@@ -576,7 +623,7 @@ function MessagesPageInner() {
                               }
                               icon={<UserPlus size={13} />}
                             >
-                              Join
+                              {t("msg.join")}
                             </ActionBtn>
                           ) : null}
                           {chat.status === "OPEN" || chat.status === "WAITING" ? (
@@ -589,7 +636,7 @@ function MessagesPageInner() {
                               }
                               icon={<Pause size={13} />}
                             >
-                              Pause
+                              {t("msg.pause")}
                             </ActionBtn>
                           ) : null}
                           {chat.status === "PAUSED" || chat.status === "ENDED" ? (
@@ -602,7 +649,9 @@ function MessagesPageInner() {
                               }
                               icon={<Play size={13} />}
                             >
-                              {chat.status === "ENDED" ? "Reopen" : "Resume"}
+                              {chat.status === "ENDED"
+                                ? t("msg.reopen")
+                                : t("msg.resume")}
                             </ActionBtn>
                           ) : null}
                           {chat.status !== "ENDED" ? (
@@ -615,16 +664,14 @@ function MessagesPageInner() {
                               }
                               icon={<XCircle size={13} />}
                             >
-                              End
+                              {t("msg.end")}
                             </ActionBtn>
                           ) : null}
                           <ActionBtn
                             disabled={busy}
                             danger
                             onClick={() => {
-                              if (
-                                !window.confirm("Delete this chat permanently?")
-                              ) {
+                              if (!window.confirm(t("msg.deleteConfirm"))) {
                                 return;
                               }
                               void runAction(async () => {
@@ -635,7 +682,7 @@ function MessagesPageInner() {
                             }}
                             icon={<Trash2 size={13} />}
                           >
-                            Delete
+                            {t("msg.delete")}
                           </ActionBtn>
                         </div>
                       ) : null}
@@ -670,8 +717,8 @@ function MessagesPageInner() {
                                 staff ? "text-emerald-100/70" : "text-zinc-500",
                               )}
                             >
-                              {staff ? "Staff" : chat.guestName} ·{" "}
-                              {formatTime(m.createdAt)}
+                              {staff ? t("msg.staff") : chat.guestName} ·{" "}
+                              {formatTime(m.createdAt, locale)}
                             </p>
                           </div>
                         </div>
@@ -679,7 +726,7 @@ function MessagesPageInner() {
                     })}
                     {chat.messages.length === 0 ? (
                       <p className="py-8 text-center text-xs text-zinc-500">
-                        No messages yet.
+                        {t("msg.noMessagesYet")}
                       </p>
                     ) : null}
                   </div>
@@ -694,8 +741,8 @@ function MessagesPageInner() {
                         onChange={(e) => setDraft(e.target.value)}
                         placeholder={
                           chat.status === "WAITING"
-                            ? "Join by sending a reply…"
-                            : "Reply to guest…"
+                            ? t("msg.placeholderWaiting")
+                            : t("msg.placeholderReply")
                         }
                         className="min-w-0 flex-1 rounded-lg border border-white/10 bg-zinc-950 px-3 py-2 text-sm text-white outline-none focus:border-emerald-400/50"
                         maxLength={2000}
@@ -706,18 +753,18 @@ function MessagesPageInner() {
                         disabled={busy || !draft.trim()}
                         className="rounded-lg bg-emerald-600 px-4 text-sm font-semibold text-white hover:bg-emerald-500 disabled:opacity-50"
                       >
-                        Send
+                        {t("msg.send")}
                       </button>
                     </form>
                   ) : chat.status === "ENDED" ? (
                     <p className="border-t border-white/10 px-4 py-3 text-xs text-zinc-500">
-                      Chat ended. Reopen to continue messaging.
+                      {t("msg.chatEndedHint")}
                     </p>
                   ) : null}
                 </>
               ) : (
                 <p className="flex flex-1 items-center justify-center text-sm text-zinc-500">
-                  Chat not found.
+                  {t("msg.chatNotFound")}
                 </p>
               )}
             </section>

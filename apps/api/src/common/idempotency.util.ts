@@ -1,0 +1,343 @@
+import { createHash } from 'crypto';
+import {
+  BadRequestException,
+  ConflictException,
+} from '@nestjs/common';
+import { Prisma } from '@prisma/client';
+import type { PrismaClient } from '@prisma/client';
+
+/** Default receipt TTL (24h). */
+export const IDEMPOTENCY_DEFAULT_TTL_MS = 24 * 60 * 60 * 1000;
+
+export const IDEMPOTENCY_KEY_MAX_LEN = 128;
+
+export const IDEMPOTENCY_SCOPES = {
+  FINANCE_TRANSACTION_CREATE: 'finance.transactions.create',
+  FINANCE_PLAY_BILLING_MARK_PAID: 'finance.play-billing.mark-paid',
+  FINANCE_PLAY_SESSION_MARK_PAID: 'finance.play-sessions.mark-paid',
+  /** Tier A — money / stock / irreversible pay-cancel (Lane GGGG). */
+  FINANCE_ORDERS_CREATE: 'finance.orders.create',
+  FINANCE_ORDERS_LINES_ADD: 'finance.orders.lines.add',
+  FINANCE_LOSSES_CREATE: 'finance.losses.create',
+  FINANCE_PLAY_BILLING_CANCEL: 'finance.play-billing.cancel',
+  FINANCE_PLAY_SESSIONS_CANCEL: 'finance.play-sessions.cancel',
+  FINANCE_PLAY_SESSIONS_CREATE: 'finance.play-sessions.create',
+  /** Tier B — double-charge / double-restore risk (Lane LLLL). */
+  FINANCE_ORDERS_UPDATE: 'finance.orders.update',
+  FINANCE_ORDERS_LINES_PATCH: 'finance.orders.lines.patch',
+  FINANCE_ORDERS_LINES_DELETE: 'finance.orders.lines.delete',
+  FINANCE_ORDERS_DELETE: 'finance.orders.delete',
+  FINANCE_PLAY_BILLING_UPDATE: 'finance.play-billing.update',
+  FINANCE_PLAY_SESSIONS_UPDATE: 'finance.play-sessions.update',
+  /** Tier C — low urgency (Lane OOOO). */
+  FINANCE_LOSSES_DELETE: 'finance.losses.delete',
+  FINANCE_ORDERS_BULK_ARCHIVE: 'finance.orders.bulk.archive',
+  FINANCE_ORDERS_BULK_UNARCHIVE: 'finance.orders.bulk.unarchive',
+  /** Tier C residual — catalog FX apply via settings (Lane TTTT); keys optional. */
+  SHOP_CURRENCY_APPLY: 'shop.currency.apply',
+} as const;
+
+/**
+ * Hot + Tier A money scopes — Phase 3 `IDEMPOTENCY_REQUIRE_MONEY_KEYS` gate.
+ * Tier B/C stay optional even when the env flag is on.
+ */
+export const IDEMPOTENCY_TIER_A_SCOPES = [
+  IDEMPOTENCY_SCOPES.FINANCE_TRANSACTION_CREATE,
+  IDEMPOTENCY_SCOPES.FINANCE_PLAY_BILLING_MARK_PAID,
+  IDEMPOTENCY_SCOPES.FINANCE_PLAY_SESSION_MARK_PAID,
+  IDEMPOTENCY_SCOPES.FINANCE_ORDERS_CREATE,
+  IDEMPOTENCY_SCOPES.FINANCE_ORDERS_LINES_ADD,
+  IDEMPOTENCY_SCOPES.FINANCE_LOSSES_CREATE,
+  IDEMPOTENCY_SCOPES.FINANCE_PLAY_BILLING_CANCEL,
+  IDEMPOTENCY_SCOPES.FINANCE_PLAY_SESSIONS_CANCEL,
+  IDEMPOTENCY_SCOPES.FINANCE_PLAY_SESSIONS_CREATE,
+] as const;
+
+const TIER_A_SCOPE_SET = new Set<string>(IDEMPOTENCY_TIER_A_SCOPES);
+
+export function isIdempotencyTierAScope(scope: string): boolean {
+  return TIER_A_SCOPE_SET.has(scope);
+}
+
+/** Env `IDEMPOTENCY_REQUIRE_MONEY_KEYS=true|1` — default off (backward compat). */
+export function isIdempotencyMoneyKeysRequired(
+  env: Record<string, string | undefined> = process.env,
+): boolean {
+  const raw = env.IDEMPOTENCY_REQUIRE_MONEY_KEYS;
+  return raw === 'true' || raw === '1';
+}
+
+type MemoryEntry = {
+  response: unknown;
+  requestHash: string | null;
+  expiresAt: number;
+};
+
+/** Process-local replay cache (warm path). Cleared on TTL. */
+const memoryCache = new Map<string, MemoryEntry>();
+
+export type IdempotencyOptions = {
+  shopId: string;
+  scope: string;
+  /** Raw `Idempotency-Key` header (optional — absent means no dedupe). */
+  key: string | undefined | null;
+  /** Optional request fingerprint; mismatch with stored hash → 409. */
+  requestHash?: string | null;
+  ttlMs?: number;
+  /**
+   * Phase 3 — when true, missing/blank key → 400 instead of passthrough.
+   * Controllers pass this for Tier A scopes when `IDEMPOTENCY_REQUIRE_MONEY_KEYS` is on.
+   */
+  requireKey?: boolean;
+};
+
+type ReceiptRow = {
+  status: string;
+  requestHash: string | null;
+  responseJson: string | null;
+  expiresAt: Date | null;
+};
+
+function memoryKey(shopId: string, scope: string, key: string): string {
+  return `${shopId}\0${scope}\0${key}`;
+}
+
+function normalizeKey(raw: string | undefined | null): string | null {
+  if (raw == null) return null;
+  const key = String(raw).trim();
+  if (!key) return null;
+  if (key.length > IDEMPOTENCY_KEY_MAX_LEN) {
+    throw new BadRequestException(
+      `Idempotency-Key must be at most ${IDEMPOTENCY_KEY_MAX_LEN} characters`,
+    );
+  }
+  return key;
+}
+
+/** Stable SHA-256 hex of a JSON-serializable request body (or string). */
+export function hashIdempotencyRequest(body: unknown): string {
+  const payload =
+    typeof body === 'string' ? body : JSON.stringify(body ?? null);
+  return createHash('sha256').update(payload).digest('hex');
+}
+
+function parseStoredResponse(responseJson: string | null): unknown {
+  if (responseJson == null || responseJson === '') return null;
+  try {
+    return JSON.parse(responseJson) as unknown;
+  } catch {
+    return null;
+  }
+}
+
+function assertRequestHashMatch(
+  stored: string | null,
+  incoming: string | null | undefined,
+): void {
+  if (!stored || !incoming) return;
+  if (stored !== incoming) {
+    throw new ConflictException(
+      'Idempotency-Key reused with a different request payload',
+    );
+  }
+}
+
+function readMemory(
+  shopId: string,
+  scope: string,
+  key: string,
+  requestHash: string | null | undefined,
+): unknown | undefined {
+  const mk = memoryKey(shopId, scope, key);
+  const hit = memoryCache.get(mk);
+  if (!hit) return undefined;
+  if (hit.expiresAt <= Date.now()) {
+    memoryCache.delete(mk);
+    return undefined;
+  }
+  assertRequestHashMatch(hit.requestHash, requestHash);
+  return hit.response;
+}
+
+function writeMemory(
+  shopId: string,
+  scope: string,
+  key: string,
+  response: unknown,
+  requestHash: string | null,
+  ttlMs: number,
+): void {
+  memoryCache.set(memoryKey(shopId, scope, key), {
+    response,
+    requestHash,
+    expiresAt: Date.now() + ttlMs,
+  });
+}
+
+/** Test helper — clears process-local cache. */
+export function clearIdempotencyMemoryCache(): void {
+  memoryCache.clear();
+}
+
+function isUniqueViolation(err: unknown): boolean {
+  return (
+    err instanceof Prisma.PrismaClientKnownRequestError && err.code === 'P2002'
+  );
+}
+
+async function loadReceipt(
+  prisma: PrismaClient,
+  shopId: string,
+  scope: string,
+  key: string,
+): Promise<ReceiptRow | null> {
+  return prisma.idempotencyReceipt.findUnique({
+    where: { shopId_scope_key: { shopId, scope, key } },
+    select: {
+      status: true,
+      requestHash: true,
+      responseJson: true,
+      expiresAt: true,
+    },
+  });
+}
+
+function receiptStillValid(row: ReceiptRow): boolean {
+  if (row.expiresAt && row.expiresAt.getTime() <= Date.now()) return false;
+  return true;
+}
+
+/**
+ * Run `fn` once per (shopId, scope, Idempotency-Key).
+ *
+ * - Missing/blank key → passthrough (no receipt), unless `requireKey` → 400.
+ * - Replay → returns stored JSON response (memory first, then DB).
+ * - Concurrent claim → winner executes; loser waits briefly then replays, or 409 if still pending.
+ */
+export async function withClientIdempotency<T>(
+  prisma: PrismaClient,
+  options: IdempotencyOptions,
+  fn: () => Promise<T>,
+): Promise<T> {
+  const key = normalizeKey(options.key);
+  if (!key) {
+    if (options.requireKey) {
+      throw new BadRequestException(
+        'Idempotency-Key header is required for this money operation',
+      );
+    }
+    return fn();
+  }
+
+  const { shopId, scope } = options;
+  const requestHash = options.requestHash ?? null;
+  const ttlMs = options.ttlMs ?? IDEMPOTENCY_DEFAULT_TTL_MS;
+  const expiresAt = new Date(Date.now() + ttlMs);
+
+  const fromMem = readMemory(shopId, scope, key, requestHash);
+  if (fromMem !== undefined) return fromMem as T;
+
+  const existing = await loadReceipt(prisma, shopId, scope, key);
+  if (existing && receiptStillValid(existing)) {
+    if (existing.status === 'COMPLETED') {
+      assertRequestHashMatch(existing.requestHash, requestHash);
+      const parsed = parseStoredResponse(existing.responseJson) as T;
+      writeMemory(shopId, scope, key, parsed, existing.requestHash, ttlMs);
+      return parsed;
+    }
+    if (existing.status === 'PENDING') {
+      const replay = await waitForCompleted(prisma, shopId, scope, key, requestHash);
+      if (replay !== undefined) {
+        writeMemory(shopId, scope, key, replay, requestHash, ttlMs);
+        return replay as T;
+      }
+      throw new ConflictException(
+        'Idempotency-Key request is already in progress',
+      );
+    }
+  }
+
+  // Expired or missing — claim with PENDING (unique).
+  if (existing && !receiptStillValid(existing)) {
+    await prisma.idempotencyReceipt.delete({
+      where: { shopId_scope_key: { shopId, scope, key } },
+    }).catch(() => undefined);
+  }
+
+  try {
+    await prisma.idempotencyReceipt.create({
+      data: {
+        shopId,
+        scope,
+        key,
+        requestHash,
+        status: 'PENDING',
+        responseJson: null,
+        expiresAt,
+      },
+    });
+  } catch (err) {
+    if (!isUniqueViolation(err)) throw err;
+    const raced = await loadReceipt(prisma, shopId, scope, key);
+    if (raced?.status === 'COMPLETED' && receiptStillValid(raced)) {
+      assertRequestHashMatch(raced.requestHash, requestHash);
+      const parsed = parseStoredResponse(raced.responseJson) as T;
+      writeMemory(shopId, scope, key, parsed, raced.requestHash, ttlMs);
+      return parsed;
+    }
+    const replay = await waitForCompleted(prisma, shopId, scope, key, requestHash);
+    if (replay !== undefined) {
+      writeMemory(shopId, scope, key, replay, requestHash, ttlMs);
+      return replay as T;
+    }
+    throw new ConflictException(
+      'Idempotency-Key request is already in progress',
+    );
+  }
+
+  try {
+    const result = await fn();
+    const responseJson = JSON.stringify(result ?? null);
+    await prisma.idempotencyReceipt.update({
+      where: { shopId_scope_key: { shopId, scope, key } },
+      data: {
+        status: 'COMPLETED',
+        responseJson,
+        requestHash,
+        expiresAt,
+      },
+    });
+    writeMemory(shopId, scope, key, result, requestHash, ttlMs);
+    return result;
+  } catch (err) {
+    await prisma.idempotencyReceipt
+      .delete({ where: { shopId_scope_key: { shopId, scope, key } } })
+      .catch(() => undefined);
+    throw err;
+  }
+}
+
+async function waitForCompleted(
+  prisma: PrismaClient,
+  shopId: string,
+  scope: string,
+  key: string,
+  requestHash: string | null | undefined,
+  attempts = 8,
+  delayMs = 25,
+): Promise<unknown | undefined> {
+  for (let i = 0; i < attempts; i++) {
+    await sleep(delayMs);
+    const row = await loadReceipt(prisma, shopId, scope, key);
+    if (!row || !receiptStillValid(row)) return undefined;
+    if (row.status === 'COMPLETED') {
+      assertRequestHashMatch(row.requestHash, requestHash);
+      return parseStoredResponse(row.responseJson);
+    }
+  }
+  return undefined;
+}
+
+function sleep(ms: number): Promise<void> {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}

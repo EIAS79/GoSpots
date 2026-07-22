@@ -13,7 +13,7 @@ import { useLiveData } from "@/lib/use-live-data";
 import { useVenueSettings } from "@/lib/venue-settings-context";
 
 export function LossesPanel({ canWrite }: { canWrite: boolean }) {
-  const { formatMoney } = useVenueSettings();
+  const { formatMoney, t } = useVenueSettings();
   const [losses, setLosses] = useState<ShopLoss[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -22,18 +22,25 @@ export function LossesPanel({ canWrite }: { canWrite: boolean }) {
   const [reason, setReason] = useState("");
   const [category, setCategory] = useState("");
 
-  const load = useCallback(async (opts?: { silent?: boolean }) => {
-    setError(null);
-    try {
-      setLosses(await fetchLosses());
-    } catch (e) {
-      if (!opts?.silent) {
-        setError(e instanceof Error ? e.message : "Failed to load losses.");
+  const load = useCallback(
+    async (opts?: { silent?: boolean }) => {
+      setError(null);
+      try {
+        setLosses(await fetchLosses());
+        return true;
+      } catch (e) {
+        if (!opts?.silent) {
+          setError(
+            e instanceof Error ? e.message : t("finance.lossLoadFailed"),
+          );
+        }
+        return false;
+      } finally {
+        if (!opts?.silent) setLoading(false);
       }
-    } finally {
-      if (!opts?.silent) setLoading(false);
-    }
-  }, []);
+    },
+    [t],
+  );
 
   useEffect(() => {
     void load();
@@ -67,13 +74,17 @@ export function LossesPanel({ canWrite }: { canWrite: boolean }) {
                 return load({ silent: true });
               })
               .catch((err) =>
-                setError(err instanceof Error ? err.message : "Save failed."),
+                setError(
+                  err instanceof Error
+                    ? err.message
+                    : t("finance.lossSaveFailed"),
+                ),
               )
               .finally(() => setSaving(false));
           }}
         >
           <label className="block text-xs text-zinc-500">
-            Amount
+            {t("finance.lossAmount")}
             <input
               required
               type="number"
@@ -85,16 +96,16 @@ export function LossesPanel({ canWrite }: { canWrite: boolean }) {
             />
           </label>
           <label className="block text-xs text-zinc-500">
-            Category (optional)
+            {t("finance.lossCategory")}
             <input
               value={category}
               onChange={(e) => setCategory(e.target.value)}
-              placeholder="Spoilage, theft, etc."
+              placeholder={t("finance.lossCategoryPlaceholder")}
               className="mt-1 w-full rounded-lg border border-white/10 bg-zinc-950 px-3 py-2 text-sm text-white"
             />
           </label>
           <label className="block text-xs text-zinc-500 sm:col-span-2">
-            Reason
+            {t("finance.lossReason")}
             <input
               required
               value={reason}
@@ -108,7 +119,7 @@ export function LossesPanel({ canWrite }: { canWrite: boolean }) {
             className="inline-flex items-center gap-1 rounded-lg bg-rose-600/80 px-4 py-2 text-sm text-white sm:col-span-2 sm:justify-self-start"
           >
             {saving ? <Loader2 size={14} className="animate-spin" /> : <Plus size={14} />}
-            Record loss
+            {t("finance.lossRecord")}
           </button>
         </form>
       ) : null}
@@ -122,7 +133,9 @@ export function LossesPanel({ canWrite }: { canWrite: boolean }) {
       ) : (
         <ul className="divide-y divide-white/5 rounded-xl border border-white/10">
           {losses.length === 0 ? (
-            <li className="p-8 text-center text-sm text-zinc-500">No losses recorded.</li>
+            <li className="p-8 text-center text-sm text-zinc-500">
+              {t("finance.lossEmpty")}
+            </li>
           ) : (
             losses.map((l) => (
               <li
@@ -143,7 +156,7 @@ export function LossesPanel({ canWrite }: { canWrite: boolean }) {
                   <button
                     type="button"
                     onClick={() => {
-                      if (!confirm("Delete this loss entry?")) return;
+                      if (!confirm(t("finance.lossDeleteConfirm"))) return;
                       void deleteLoss(l.id).then(() => {
                         publishLiveEvent({ section: "finance" });
                         return load({ silent: true });

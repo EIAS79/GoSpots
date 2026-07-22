@@ -11,12 +11,11 @@ import {
 import Link from "next/link";
 import { useParams } from "next/navigation";
 import { useCallback, useEffect, useState } from "react";
-import { GoSpotsLogo } from "@/components/brand/gospots-logo";
+import { LocoraLogo } from "@/components/brand/locora-logo";
 import { cn } from "@/lib/cn";
 import { parseBowlingNotesSummary } from "@/lib/bowling-booking";
 import { bookingCollectsPartySize } from "@/lib/booking-unit-kind";
 import {
-  GUEST_GAMING_PHASE_LABELS,
   resolveGuestGamingPhase,
   type GuestGamingPhase,
 } from "@/lib/guest-gaming-booking-status";
@@ -25,16 +24,17 @@ import {
   cancelPublicGamingReservation,
   type PublicGamingReservationStatus,
 } from "@/lib/public-gaming-client";
+import { usePublicPrefs } from "@/lib/public-prefs-context";
 import { useLiveData } from "@/lib/use-live-data";
 
-function formatWhen(startsAt: string) {
+function formatWhen(startsAt: string, locale: string) {
   const start = new Date(startsAt);
-  const date = start.toLocaleDateString(undefined, {
+  const date = start.toLocaleDateString(locale, {
     weekday: "long",
     month: "long",
     day: "numeric",
   });
-  const startTime = start.toLocaleTimeString(undefined, {
+  const startTime = start.toLocaleTimeString(locale, {
     hour: "numeric",
     minute: "2-digit",
   });
@@ -82,6 +82,7 @@ const PHASE_STYLES: Record<
 };
 
 export default function GamingReservationStatusPage() {
+  const { t, locale } = usePublicPrefs();
   const params = useParams();
   const slug = params.slug as string;
   const token = params.token as string;
@@ -100,18 +101,20 @@ export default function GamingReservationStatusPage() {
         setData(row);
         setError(null);
         if (opts.silent) setNowMs(Date.now());
+        return true;
       } catch (e) {
         if (!opts.silent) {
           setData(null);
           setError(
-            e instanceof Error ? e.message : "Could not load booking.",
+            e instanceof Error ? e.message : t("guestStatus.gaming.loadError"),
           );
         }
+        return false;
       } finally {
         if (!opts.silent) setLoading(false);
       }
     },
-    [slug, token],
+    [slug, token, t],
   );
 
   useEffect(() => {
@@ -146,9 +149,7 @@ export default function GamingReservationStatusPage() {
   async function handleCancel() {
     if (
       !data?.canCancel ||
-      !confirm(
-        "Cancel this booking? You can book again anytime before the session starts.",
-      )
+      !confirm(t("guestStatus.gaming.cancelConfirm"))
     ) {
       return;
     }
@@ -159,7 +160,7 @@ export default function GamingReservationStatusPage() {
       await loadStatus({ silent: true });
     } catch (e) {
       setCancelError(
-        e instanceof Error ? e.message : "Could not cancel booking.",
+        e instanceof Error ? e.message : t("guestStatus.gaming.cancelError"),
       );
     } finally {
       setCancelBusy(false);
@@ -169,14 +170,14 @@ export default function GamingReservationStatusPage() {
   return (
     <div className="min-h-screen bg-zinc-950 text-zinc-100">
       <header className="border-b border-white/10 px-4 py-4">
-        <GoSpotsLogo href="/" size="sm" showTagline />
+        <LocoraLogo href="/" size="sm" showTagline />
       </header>
 
       <main className="mx-auto max-w-lg px-4 py-12">
         {loading ? (
           <div className="flex flex-col items-center gap-3 py-16 text-zinc-500">
             <Loader2 className="animate-spin" size={28} />
-            <p className="text-sm">Loading your booking…</p>
+            <p className="text-sm">{t("guestStatus.gaming.loading")}</p>
           </div>
         ) : error ? (
           <div className="rounded-2xl border border-rose-500/30 bg-rose-500/10 p-8 text-center">
@@ -185,7 +186,7 @@ export default function GamingReservationStatusPage() {
               href={`/venue/${slug}`}
               className="mt-4 inline-block text-sm text-amber-300 underline"
             >
-              Back to venue
+              {t("guestStatus.backToVenue")}
             </Link>
           </div>
         ) : data ? (
@@ -203,16 +204,16 @@ export default function GamingReservationStatusPage() {
                   style.badge,
                 )}
               >
-                {GUEST_GAMING_PHASE_LABELS[phase]}
+                {t(`guestStatus.phase.${phase}`)}
               </p>
               <h1 className="mt-4 text-xl font-bold text-white">
-                {data.unitName ?? "Gaming station"}
+                {data.unitName ?? t("guestStatus.gaming.fallbackUnit")}
               </h1>
               {data.categoryName ? (
                 <p className="mt-1 text-sm text-zinc-400">{data.categoryName}</p>
               ) : null}
               <p className="mt-4 text-sm text-zinc-300">
-                {formatWhen(data.startsAt)}
+                {formatWhen(data.startsAt, locale)}
               </p>
               {bowlingSummary ? (
                 <p className="mt-2 text-xs capitalize text-amber-200/90">
@@ -222,7 +223,15 @@ export default function GamingReservationStatusPage() {
               <p className="mt-2 text-xs text-zinc-500">
                 {data.guestName}
                 {showPartySize
-                  ? ` · ${data.partySize} player${data.partySize === 1 ? "" : "s"}`
+                  ? ` · ${
+                      data.partySize === 1
+                        ? t("guestStatus.gaming.playersOne", {
+                            count: data.partySize,
+                          })
+                        : t("guestStatus.gaming.playersMany", {
+                            count: data.partySize,
+                          })
+                    }`
                   : ""}
               </p>
             </div>
@@ -231,10 +240,10 @@ export default function GamingReservationStatusPage() {
               <p className="font-medium text-zinc-200">{data.venueName}</p>
               <p className="mt-1 text-xs">
                 {phase === "canceled" || phase === "no_show"
-                  ? "This booking was canceled or marked as no-show."
+                  ? t("guestStatus.gaming.hintCanceled")
                   : phase === "waiting"
-                    ? "Your start time has passed — check in with staff when you arrive."
-                    : "No fixed end time — stay as long as you like once checked in. This page updates automatically."}
+                    ? t("guestStatus.gaming.hintWaiting")
+                    : t("guestStatus.gaming.hintDefault")}
               </p>
             </div>
 
@@ -254,14 +263,14 @@ export default function GamingReservationStatusPage() {
                   {cancelBusy ? (
                     <span className="inline-flex items-center gap-2">
                       <Loader2 size={16} className="animate-spin" />
-                      Canceling…
+                      {t("guestStatus.canceling")}
                     </span>
                   ) : (
-                    "Cancel booking"
+                    t("guestStatus.gaming.cancel")
                   )}
                 </button>
                 <p className="text-center text-[11px] text-zinc-600">
-                  You can cancel before you are checked in at the venue.
+                  {t("guestStatus.gaming.cancelHint")}
                 </p>
               </div>
             ) : null}
@@ -270,7 +279,7 @@ export default function GamingReservationStatusPage() {
               href={`/venue/${slug}`}
               className="block text-center text-sm text-amber-300 underline"
             >
-              Return to {data.venueName}
+              {t("guestStatus.returnToVenue", { name: data.venueName })}
             </Link>
           </div>
         ) : null}

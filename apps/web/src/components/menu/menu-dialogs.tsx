@@ -15,25 +15,22 @@ import { sectionTimingLabel } from "@/lib/menu-timing";
 import { ModalPortal } from "@/components/ui/modal-portal";
 import { useVenueSettingsOptional } from "@/lib/venue-settings-context";
 
-const WEEKDAYS = [
-  { v: 0, label: "Sun" },
-  { v: 1, label: "Mon" },
-  { v: 2, label: "Tue" },
-  { v: 3, label: "Wed" },
-  { v: 4, label: "Thu" },
-  { v: 5, label: "Fri" },
-  { v: 6, label: "Sat" },
-];
+type MenuT = (
+  key: string,
+  vars?: Record<string, string | number>,
+) => string;
 
 function DialogShell({
   title,
   onClose,
   panelClassName,
+  closeLabel,
   children,
 }: {
   title: string;
   onClose: () => void;
   panelClassName?: string;
+  closeLabel: string;
   children: React.ReactNode;
 }) {
   return (
@@ -41,7 +38,7 @@ function DialogShell({
       <div className="fixed inset-0 z-[400] flex items-end justify-center sm:items-center sm:p-4">
       <button
         type="button"
-        aria-label="Close"
+        aria-label={closeLabel}
         className="absolute inset-0 bg-black/70 backdrop-blur-sm"
         onClick={onClose}
       />
@@ -73,25 +70,27 @@ function DialogShell({
 function WeekdayPicker({
   value,
   onChange,
+  t,
 }: {
   value: string;
   onChange: (csv: string) => void;
+  t: MenuT;
 }) {
   const selected = new Set(
     value.split(",").map((d) => parseInt(d.trim(), 10)),
   );
   return (
     <div className="flex flex-wrap gap-1.5">
-      {WEEKDAYS.map((d) => {
-        const on = selected.has(d.v);
+      {[0, 1, 2, 3, 4, 5, 6].map((v) => {
+        const on = selected.has(v);
         return (
           <button
-            key={d.v}
+            key={v}
             type="button"
             onClick={() => {
               const next = new Set(selected);
-              if (on) next.delete(d.v);
-              else next.add(d.v);
+              if (on) next.delete(v);
+              else next.add(v);
               onChange(
                 [...next].sort((a, b) => a - b).join(",") || "0",
               );
@@ -103,7 +102,7 @@ function WeekdayPicker({
                 : "bg-white/5 text-zinc-500",
             )}
           >
-            {d.label}
+            {t(`menu.day${v}`)}
           </button>
         );
       })}
@@ -136,6 +135,8 @@ export function SectionDialog({
   onClearImage?: () => Promise<void>;
   saving: boolean;
 }) {
+  const t: MenuT =
+    useVenueSettingsOptional()?.t ?? ((key) => key);
   const [name, setName] = useState(section?.name ?? "");
   const [imageUrl, setImageUrl] = useState(section?.imageUrl ?? null);
   const [pendingImage, setPendingImage] = useState<File | null>(null);
@@ -177,7 +178,8 @@ export function SectionDialog({
 
   return (
     <DialogShell
-      title={section ? "Edit section" : "New section"}
+      title={section ? t("menu.editSection") : t("menu.newSection")}
+      closeLabel={t("menu.close")}
       onClose={onClose}
     >
       <form
@@ -202,7 +204,7 @@ export function SectionDialog({
                 window.alert(
                   err instanceof Error
                     ? err.message
-                    : "Could not upload section photo.",
+                    : t("menu.uploadSectionFailed"),
                 );
                 onSaved?.();
                 return;
@@ -213,31 +215,32 @@ export function SectionDialog({
             onSaved?.();
           }).catch((err) => {
             window.alert(
-              err instanceof Error ? err.message : "Could not save section.",
+              err instanceof Error ? err.message : t("menu.saveSectionFailed"),
             );
           });
         }}
       >
         <label className="block text-xs text-zinc-500">
-          Section name
+          {t("menu.sectionName")}
           <input
             required
             value={name}
             onChange={(e) => setName(e.target.value)}
             className="mt-1 w-full rounded-lg border border-white/10 bg-zinc-900 px-3 py-2 text-sm text-white"
-            placeholder="e.g. Drinks, Food, Desserts"
+            placeholder={t("menu.sectionNamePlaceholder")}
           />
         </label>
 
         <div className="rounded-xl border border-white/10 bg-zinc-900/40 p-4">
-          <p className="text-sm font-medium text-zinc-200">Section photo</p>
+          <p className="text-sm font-medium text-zinc-200">{t("menu.sectionPhoto")}</p>
           <p className="mt-0.5 text-xs text-zinc-500">
-            Optional cover for this category — max 8 MB.
-            {!section && pendingImage ? " Uploads after you save." : null}
+            {t("menu.sectionPhotoHint")}
+            {!section && pendingImage ? t("menu.sectionPhotoHintPending") : null}
           </p>
           <div className="mt-3 max-w-xs">
             <MenuPhotoUpload
-              slotLabel="Cover"
+              slotLabel={t("menu.cover")}
+              t={t}
               previewPath={
                 section ? imageUrl ?? previewImage : previewImage
               }
@@ -256,7 +259,7 @@ export function SectionDialog({
                       window.alert(
                         err instanceof Error
                           ? err.message
-                          : "Could not upload section photo.",
+                          : t("menu.uploadSectionFailed"),
                       );
                     })
                     .finally(() => setUploadingImage(false));
@@ -277,7 +280,7 @@ export function SectionDialog({
         </div>
 
         <label className="block text-xs text-zinc-500">
-          Service period (optional)
+          {t("menu.servicePeriod")}
           <select
             value={mealPeriod}
             onChange={(e) => {
@@ -293,10 +296,10 @@ export function SectionDialog({
             }}
             className="mt-1 w-full rounded-lg border border-white/10 bg-zinc-900 px-3 py-2 text-sm text-white"
           >
-            <option value="">No preset</option>
+            <option value="">{t("menu.noPreset")}</option>
             {MEAL_PERIOD_PRESETS.map((p) => (
               <option key={p.value} value={p.value}>
-                {p.label}
+                {t(`menu.meal${p.value}`)}
               </option>
             ))}
           </select>
@@ -304,7 +307,7 @@ export function SectionDialog({
 
         <div className="grid grid-cols-2 gap-3">
           <label className="block text-xs text-zinc-500">
-            From
+            {t("menu.from")}
             <input
               type="time"
               value={availableFrom}
@@ -313,7 +316,7 @@ export function SectionDialog({
             />
           </label>
           <label className="block text-xs text-zinc-500">
-            To
+            {t("menu.to")}
             <input
               type="time"
               value={availableTo}
@@ -324,16 +327,13 @@ export function SectionDialog({
         </div>
 
         <div>
-          <p className="text-xs text-zinc-500">Available days</p>
+          <p className="text-xs text-zinc-500">{t("menu.availableDays")}</p>
           <div className="mt-2">
-            <WeekdayPicker value={availableDays} onChange={setAvailableDays} />
+            <WeekdayPicker value={availableDays} onChange={setAvailableDays} t={t} />
           </div>
         </div>
 
-        <p className="text-[11px] text-zinc-600">
-          Items can inherit this window when &quot;Use section hours&quot; is
-          enabled on the item.
-        </p>
+        <p className="text-[11px] text-zinc-600">{t("menu.inheritHint")}</p>
 
         <div className="flex flex-wrap gap-2 pt-2">
           {section && onDelete ? (
@@ -344,7 +344,7 @@ export function SectionDialog({
               className="inline-flex items-center gap-1 rounded-lg border border-rose-400/30 px-3 py-2 text-sm text-rose-300 hover:bg-rose-500/10"
             >
               <Trash2 size={14} />
-              Delete
+              {t("menu.delete")}
             </button>
           ) : null}
           <button
@@ -353,7 +353,7 @@ export function SectionDialog({
             className="ml-auto inline-flex items-center gap-2 rounded-lg bg-emerald-600 px-4 py-2 text-sm font-medium text-white hover:bg-emerald-500 disabled:opacity-50"
           >
             {saving ? <Loader2 size={14} className="animate-spin" /> : null}
-            Save section
+            {t("menu.saveSection")}
           </button>
         </div>
       </form>
@@ -373,12 +373,14 @@ function MenuPhotoUpload({
   uploading,
   onPick,
   onClear,
+  t,
 }: {
   slotLabel: string;
   previewPath: string | null;
   uploading: boolean;
   onPick: (file: File) => void;
   onClear: () => void;
+  t: MenuT;
 }) {
   const src = photoDisplayUrl(previewPath);
   return (
@@ -420,12 +422,12 @@ function MenuPhotoUpload({
             <ImagePlus size={20} />
           </span>
           <span className="text-xs text-zinc-400 group-hover:text-zinc-200">
-            Click to add {slotLabel}
+            {t("menu.clickToAdd", { slot: slotLabel })}
           </span>
         </span>
       )}
       <span className="absolute left-2 top-2 rounded-md bg-black/60 px-1.5 py-0.5 text-[10px] font-medium uppercase tracking-wide text-zinc-400">
-        {slotLabel} · optional
+        {t("menu.slotOptional", { slot: slotLabel })}
       </span>
       {src && !uploading ? (
         <button
@@ -437,7 +439,7 @@ function MenuPhotoUpload({
           }}
           className="absolute right-2 top-2 rounded-md bg-black/70 px-2 py-0.5 text-[10px] text-zinc-300 hover:text-rose-300"
         >
-          Remove
+          {t("menu.remove")}
         </button>
       ) : null}
     </label>
@@ -470,6 +472,7 @@ export function ItemDialog({
   saving: boolean;
 }) {
   const venueSettings = useVenueSettingsOptional();
+  const t: MenuT = venueSettings?.t ?? ((key) => key);
   const currency = venueSettings?.currency ?? "EUR";
   const [name, setName] = useState(item?.name ?? "");
   const [description, setDescription] = useState(item?.description ?? "");
@@ -548,8 +551,9 @@ export function ItemDialog({
 
   return (
     <DialogShell
-      title={item ? "Edit item" : "New item"}
+      title={item ? t("menu.editItem") : t("menu.newItem")}
       panelClassName="max-w-xl"
+      closeLabel={t("menu.close")}
       onClose={onClose}
     >
       <form
@@ -557,7 +561,7 @@ export function ItemDialog({
         onSubmit={(e) => {
           e.preventDefault();
           if (!item && !sectionId) {
-            window.alert("Choose a section — items must belong to a category.");
+            window.alert(t("menu.chooseSectionAlert"));
             return;
           }
           void onSave({
@@ -595,7 +599,7 @@ export function ItemDialog({
                   window.alert(
                     err instanceof Error
                       ? err.message
-                      : "Item saved but photo upload failed.",
+                      : t("menu.photoUploadPartial"),
                   );
                 } finally {
                   setUploadingImage(false);
@@ -605,13 +609,13 @@ export function ItemDialog({
             })
             .catch((err) => {
               window.alert(
-                err instanceof Error ? err.message : "Could not save item.",
+                err instanceof Error ? err.message : t("menu.saveItemFailed"),
               );
             });
         }}
       >
         <label className="block text-xs text-zinc-500">
-          Name
+          {t("menu.name")}
           <input
             required
             value={name}
@@ -621,7 +625,7 @@ export function ItemDialog({
         </label>
 
         <label className="block text-xs text-zinc-500">
-          Description
+          {t("menu.description")}
           <textarea
             value={description}
             onChange={(e) => setDescription(e.target.value)}
@@ -632,7 +636,7 @@ export function ItemDialog({
 
         <div className="grid grid-cols-2 gap-3">
           <label className="block text-xs text-zinc-500">
-            Price ({currency})
+            {t("menu.price", { currency })}
             <input
               required
               type="number"
@@ -644,7 +648,7 @@ export function ItemDialog({
             />
           </label>
           <label className="block text-xs text-zinc-500">
-            Section
+            {t("menu.section")}
             <select
               required
               value={sectionId}
@@ -653,10 +657,10 @@ export function ItemDialog({
             >
               {!item ? (
                 <option value="" disabled>
-                  Select section…
+                  {t("menu.selectSectionOption")}
                 </option>
               ) : (
-                <option value="">Uncategorized</option>
+                <option value="">{t("menu.uncategorized")}</option>
               )}
               {sections.map((s) => (
                 <option key={s.id} value={s.id}>
@@ -668,16 +672,17 @@ export function ItemDialog({
         </div>
 
         <div className="rounded-xl border border-white/10 bg-zinc-900/40 p-4">
-          <p className="text-sm font-medium text-zinc-200">Photos</p>
+          <p className="text-sm font-medium text-zinc-200">{t("menu.photos")}</p>
           <p className="mt-0.5 text-xs text-zinc-500">
-            Optional — up to 2 images, max 8 MB each (compressed when saved).
+            {t("menu.photosHint")}
             {!item && (pending1 || pending2)
-              ? " They upload right after you save."
+              ? t("menu.photosHintPending")
               : null}
           </p>
           <div className="mt-3 grid gap-3 sm:grid-cols-2">
             <MenuPhotoUpload
-              slotLabel="Photo 1"
+              slotLabel={t("menu.photo1")}
+              t={t}
               previewPath={item ? imageUrl ?? preview1 : preview1}
               uploading={uploadingSlot === "1" || (!!item && !!pending1)}
               onPick={(f) => {
@@ -697,7 +702,8 @@ export function ItemDialog({
               }}
             />
             <MenuPhotoUpload
-              slotLabel="Photo 2"
+              slotLabel={t("menu.photo2")}
+              t={t}
               previewPath={item ? imageUrl2 ?? preview2 : preview2}
               uploading={uploadingSlot === "2" || (!!item && !!pending2)}
               onPick={(f) => {
@@ -726,12 +732,12 @@ export function ItemDialog({
             onChange={(e) => setTrackStock(e.target.checked)}
             className="rounded border-white/20"
           />
-          Track stock for this item
+          {t("menu.trackStock")}
         </label>
 
         {trackStock ? (
           <label className="block text-xs text-zinc-500">
-            Quantity in stock
+            {t("menu.qtyInStock")}
             <input
               type="number"
               min={0}
@@ -744,11 +750,10 @@ export function ItemDialog({
 
         <fieldset className="space-y-3 rounded-lg border border-white/10 bg-zinc-900/40 p-4">
           <legend className="px-1 text-sm font-medium text-white">
-            When guests see this item
+            {t("menu.whenGuestsSee")}
           </legend>
           <p className="text-[11px] leading-relaxed text-zinc-500">
-            Pick a section above: use its schedule, or set custom times for this
-            item only.
+            {t("menu.whenGuestsHint")}
           </p>
           <label
             className={cn(
@@ -768,20 +773,23 @@ export function ItemDialog({
               onChange={() => setUseSectionTiming(true)}
             />
             <span className="min-w-0 flex-1 text-sm">
-              <span className="text-zinc-200">Same as section</span>
+              <span className="text-zinc-200">{t("menu.sameAsSection")}</span>
               <span className="mt-0.5 block text-xs text-zinc-500">
-                Uses section hours (breakfast / lunch, etc.).
+                {t("menu.sameAsSectionHint")}
               </span>
               {useSectionTiming && selectedSection ? (
                 <span className="mt-2 block rounded-md border border-white/10 bg-zinc-950/80 px-2 py-1.5 text-xs text-zinc-300">
-                  {selectedSection.name}:{" "}
-                  {sectionTimingLabel(selectedSection) ??
-                    "No section hours — shows all day"}
+                  {t("menu.sectionHoursPreview", {
+                    name: selectedSection.name,
+                    hours:
+                      sectionTimingLabel(selectedSection, t) ??
+                      t("menu.noSectionHours"),
+                  })}
                 </span>
               ) : null}
               {!sectionId ? (
                 <span className="mt-1 block text-xs text-amber-500/90">
-                  Select a section first.
+                  {t("menu.selectSectionFirst")}
                 </span>
               ) : null}
             </span>
@@ -802,9 +810,9 @@ export function ItemDialog({
               onChange={() => setUseSectionTiming(false)}
             />
             <span className="text-sm">
-              <span className="text-zinc-200">Custom for this item only</span>
+              <span className="text-zinc-200">{t("menu.customItemOnly")}</span>
               <span className="mt-0.5 block text-xs text-zinc-500">
-                Ignores section hours.
+                {t("menu.customItemOnlyHint")}
               </span>
             </span>
           </label>
@@ -813,7 +821,7 @@ export function ItemDialog({
           <div className="space-y-3 border-t border-white/10 pt-3">
             <div className="grid grid-cols-2 gap-3">
               <label className="block text-xs text-zinc-500">
-                From
+                {t("menu.from")}
                 <input
                   type="time"
                   value={availableFrom}
@@ -822,7 +830,7 @@ export function ItemDialog({
                 />
               </label>
               <label className="block text-xs text-zinc-500">
-                To
+                {t("menu.to")}
                 <input
                   type="time"
                   value={availableTo}
@@ -832,11 +840,12 @@ export function ItemDialog({
               </label>
             </div>
             <div>
-              <p className="text-xs text-zinc-500">Days</p>
+              <p className="text-xs text-zinc-500">{t("menu.days")}</p>
               <div className="mt-2">
                 <WeekdayPicker
                   value={availableDays}
                   onChange={setAvailableDays}
+                  t={t}
                 />
               </div>
             </div>
@@ -851,7 +860,7 @@ export function ItemDialog({
             onChange={(e) => setIsAvailable(e.target.checked)}
             className="rounded border-white/20"
           />
-          Visible on menu
+          {t("menu.visibleOnMenu")}
         </label>
 
         <div className="flex flex-wrap gap-2 pt-2">
@@ -863,7 +872,7 @@ export function ItemDialog({
               className="inline-flex items-center gap-1 rounded-lg border border-rose-400/30 px-3 py-2 text-sm text-rose-300 hover:bg-rose-500/10"
             >
               <Trash2 size={14} />
-              Delete item
+              {t("menu.deleteItem")}
             </button>
           ) : null}
           <button
@@ -875,10 +884,10 @@ export function ItemDialog({
               <Loader2 size={14} className="animate-spin" />
             ) : null}
             {item
-              ? "Save changes"
+              ? t("menu.saveChanges")
               : pending1 || pending2
-                ? "Save & upload photos"
-                : "Save item"}
+                ? t("menu.saveAndUpload")
+                : t("menu.saveItem")}
           </button>
         </div>
       </form>

@@ -9,6 +9,7 @@ import {
 } from "@/lib/bowling-modes";
 import { usePublicPrefs } from "@/lib/public-prefs-context";
 import type { PublicGamingOffering } from "@/lib/shop-settings-client";
+import { coerceMoney, type MoneyWire } from "@/lib/money";
 
 function chargeTypeMeta(
   type: BowlingModeDefinition["chargeType"],
@@ -38,7 +39,7 @@ function chargeTypeMeta(
 
 function modeSummaryLine(
   mode: BowlingModeDefinition,
-  formatPrice: (n: number) => string,
+  formatPrice: (n: import("@/lib/money").MoneyWire) => string,
   t: (key: string, vars?: Record<string, string | number>) => string,
 ) {
   if (mode.chargeType === "PERSON" && mode.pricePerPerson != null) {
@@ -70,7 +71,7 @@ export function OfferingPricingPanel({
   locale?: string;
 }) {
   const { formatMoney, t } = usePublicPrefs();
-  const formatPrice = (n: number) => formatMoney(n, currency);
+  const formatPrice = (n: import("@/lib/money").MoneyWire) => formatMoney(n, currency);
 
   if (offering.type === "BOWLING") {
     return (
@@ -99,14 +100,17 @@ function RatesPricingDropdown({
   unitHint,
 }: {
   rates: PublicGamingOffering["rates"];
-  formatPrice: (n: number) => string;
+  formatPrice: (n: MoneyWire) => string;
   unitHint: string;
 }) {
   const { t } = usePublicPrefs();
   const [open, setOpen] = useState(true);
   const fromPrice = rates.reduce(
-    (min, r) => (r.price < min ? r.price : min),
-    rates[0]?.price ?? 0,
+    (min, r) => {
+      const p = coerceMoney(r.price);
+      return p < min ? p : min;
+    },
+    coerceMoney(rates[0]?.price ?? 0),
   );
 
   return (
@@ -180,7 +184,7 @@ function BowlingPricingDropdown({
   formatPrice,
 }: {
   offering: PublicGamingOffering;
-  formatPrice: (n: number) => string;
+  formatPrice: (n: import("@/lib/money").MoneyWire) => string;
 }) {
   const { t } = usePublicPrefs();
   const modes = useMemo(

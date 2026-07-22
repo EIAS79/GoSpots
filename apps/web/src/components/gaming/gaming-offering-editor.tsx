@@ -25,7 +25,7 @@ import {
   type GamingOffering,
 } from "@/lib/gaming-menu-client";
 import type { BookingMode } from "@/lib/resources-client";
-import { RESOURCE_TYPE_LABELS } from "@/lib/resource-types";
+import { resourceTypeLabel } from "@/lib/resource-types";
 import {
   BowlingModesEditor,
   bowlingModeToDraft,
@@ -43,6 +43,8 @@ import {
   NO_SHOW_OPTIONS,
   parseNoShowMinutes,
 } from "@/lib/dining-reservation";
+import { useVenueSettingsOptional } from "@/lib/venue-settings-context";
+import { staffFloorT } from "@/lib/staff-floor-i18n";
 
 type RateRow = { label: string; durationMinutes: string; price: string };
 
@@ -77,6 +79,11 @@ export function GamingOfferingEditor({
   onDelete?: () => Promise<void>;
   onUploadImage?: (slot: "1" | "2", file: File) => Promise<string | null>;
 }) {
+  const vs = useVenueSettingsOptional();
+  const t = useMemo(
+    () => vs?.t ?? staffFloorT(vs?.locale),
+    [vs?.t, vs?.locale],
+  );
   const isNew = !offering;
   const isDiningEditor = variant === "dining" || offering?.type === "DINING";
   const [type, setType] = useState<ResourceType>(
@@ -148,7 +155,7 @@ export function GamingOfferingEditor({
     if (slot === "2" && !offering) {
       setFeedback({
         variant: "error",
-        message: "Save the game first, then add a second photo.",
+        message: t("gamingSetup.editor.secondPhotoHint"),
       });
       return;
     }
@@ -161,11 +168,17 @@ export function GamingOfferingEditor({
           else setUploadedImageUrl2(url);
         }
         if (slot === "1") setImageFile(null);
-        setFeedback({ variant: "success", message: "Photo updated." });
+        setFeedback({
+          variant: "success",
+          message: t("gamingSetup.editor.photoUpdated"),
+        });
       } catch (e) {
         setFeedback({
           variant: "error",
-          message: e instanceof Error ? e.message : "Photo upload failed.",
+          message:
+            e instanceof Error
+              ? e.message
+              : t("gamingSetup.editor.photoUploadFailed"),
         });
       } finally {
         setUploading(false);
@@ -176,15 +189,14 @@ export function GamingOfferingEditor({
   }
 
   const specPlaceholder =
-    GAMING_SPEC_PLACEHOLDERS[type] ??
-    "Hardware, rules, or what guests should know…";
+    GAMING_SPEC_PLACEHOLDERS[type] ?? t("gamingSetup.editor.specPlaceholder");
 
   return (
     <ModalPortal>
       <div className="fixed inset-0 z-[400] flex items-end justify-center sm:items-center sm:p-4">
         <button
           type="button"
-          aria-label="Close"
+          aria-label={t("gamingSetup.dialogs.closeAria")}
           className="absolute inset-0 bg-black/70 backdrop-blur-sm"
           onClick={onClose}
         />
@@ -193,11 +205,11 @@ export function GamingOfferingEditor({
             <h2 className="text-lg font-semibold text-white">
               {isNew
                 ? isDiningEditor
-                  ? "Add dining area"
-                  : "Add game"
+                  ? t("gamingSetup.editor.titleAddDining")
+                  : t("gamingSetup.editor.titleAddGame")
                 : isDiningEditor
-                  ? "Edit dining area"
-                  : "Edit game"}
+                  ? t("gamingSetup.editor.titleEditDining")
+                  : t("gamingSetup.editor.titleEditGame")}
             </h2>
             <button type="button" onClick={onClose} className="text-zinc-400">
               <X size={18} />
@@ -265,10 +277,13 @@ export function GamingOfferingEditor({
                 };
                 })(),
                 imageFile,
-              ).catch((e) => {
+                      ).catch((e) => {
                 setFeedback({
                   variant: "error",
-                  message: e instanceof Error ? e.message : "Save failed.",
+                  message:
+                    e instanceof Error
+                      ? e.message
+                      : t("gamingSetup.editor.saveFailed"),
                 });
               });
             }}
@@ -283,14 +298,14 @@ export function GamingOfferingEditor({
 
             {isNew && !isDiningEditor ? (
               <label className="block text-xs text-zinc-500">
-                Game type
+                {t("gamingSetup.editor.gameTypeLabel")}
                 <select
                   value={type}
                   onChange={(e) => {
-                    const t = e.target.value as ResourceType;
-                    setType(t);
-                    setBookingMode(t === "BOWLING" ? "TIME" : "TIME");
-                    if (t === "BOWLING") {
+                    const nextType = e.target.value as ResourceType;
+                    setType(nextType);
+                    setBookingMode(nextType === "BOWLING" ? "TIME" : "TIME");
+                    if (nextType === "BOWLING") {
                       setBowlingModeDrafts([
                         bowlingModeToDraft(
                           createBowlingMode(
@@ -301,25 +316,26 @@ export function GamingOfferingEditor({
                       ]);
                     }
                     if (!name.trim() || Object.values(GAMING_DEFAULT_NAMES).includes(name as never)) {
-                      setName(GAMING_DEFAULT_NAMES[t] ?? "");
+                      setName(GAMING_DEFAULT_NAMES[nextType] ?? "");
                     }
                   }}
                   className="mt-1 w-full rounded-lg border border-white/10 bg-zinc-900 px-3 py-2 text-sm text-white"
                 >
-                  {FEATURED_GAME_TYPES.map((t) => (
-                    <option key={t} value={t}>
-                      {RESOURCE_TYPE_LABELS[t]}
+                  {FEATURED_GAME_TYPES.map((gt) => (
+                    <option key={gt} value={gt}>
+                      {resourceTypeLabel(t, gt)}
                     </option>
                   ))}
                 </select>
               </label>
             ) : isNew && isDiningEditor ? (
               <p className="text-xs text-zinc-500">
-                {RESOURCE_TYPE_LABELS.DINING} · restaurant table layout
+                {resourceTypeLabel(t, "DINING")} ·{" "}
+                {t("gamingSetup.editor.diningTypeHint")}
               </p>
             ) : (
               <p className="text-xs text-zinc-500">
-                {RESOURCE_TYPE_LABELS[offering!.type]} · {labels.plural}
+                {resourceTypeLabel(t, offering!.type)} · {labels.plural}
               </p>
             )}
 
@@ -328,13 +344,13 @@ export function GamingOfferingEditor({
                 {([
                   {
                     slot: "1" as const,
-                    label: "Photo 1",
+                    label: t("gamingSetup.editor.photoLabel", { n: 1 }),
                     preview: localPreview ?? remotePreview,
                     disabled: false,
                   },
                   {
                     slot: "2" as const,
-                    label: "Photo 2",
+                    label: t("gamingSetup.editor.photoLabel", { n: 2 }),
                     preview: remotePreview2,
                     disabled: !offering,
                   },
@@ -355,7 +371,7 @@ export function GamingOfferingEditor({
                         )
                       ) : (
                         <div className="flex h-full items-center justify-center text-[10px] text-zinc-600">
-                          No image
+                          {t("gamingSetup.editor.noImage")}
                         </div>
                       )}
                     </div>
@@ -367,7 +383,9 @@ export function GamingOfferingEditor({
                       }`}
                     >
                       <Upload size={12} />
-                      {uploading ? "Uploading…" : "Choose image"}
+                      {uploading
+                        ? t("gamingSetup.editor.uploading")
+                        : t("gamingSetup.editor.chooseImage")}
                       <input
                         type="file"
                         accept={RESOURCE_IMAGE_ACCEPT}
@@ -382,19 +400,20 @@ export function GamingOfferingEditor({
                     </label>
                     {disabled ? (
                       <p className="mt-1 max-w-[6.5rem] text-[9px] leading-tight text-zinc-600">
-                        Save first to unlock the second photo.
+                        {t("gamingSetup.editor.secondPhotoHint")}
                       </p>
                     ) : null}
                   </div>
                 ))}
                 <p className="col-span-2 max-w-[13.5rem] text-[9px] leading-tight text-zinc-600">
-                  Max {formatImageSize(RESOURCE_IMAGE_MAX_BYTES)} upload per photo
-                  {" "}· JPEG, PNG, WebP, GIF, AVIF
+                  {t("gamingSetup.editor.uploadHint", {
+                    size: formatImageSize(RESOURCE_IMAGE_MAX_BYTES),
+                  })}
                 </p>
               </div>
               <div className="min-w-0 flex-1 space-y-3">
                 <label className="block text-xs text-zinc-500">
-                  Display name
+                  {t("gamingSetup.editor.displayName")}
                   <input
                     required
                     value={name}
@@ -404,7 +423,9 @@ export function GamingOfferingEditor({
                 </label>
                 {!isDiningEditor ? (
                   <label className="block text-xs text-zinc-500">
-                    Total {labels.plural}
+                    {t("gamingSetup.editor.totalUnits", {
+                      plural: labels.plural,
+                    })}
                     <input
                       type="number"
                       min={0}
@@ -414,22 +435,27 @@ export function GamingOfferingEditor({
                       className="mt-1 w-full rounded-lg border border-white/10 bg-zinc-900 px-3 py-2 text-sm text-white"
                     />
                     <span className="mt-1 block text-[10px] text-zinc-600">
-                      Reservations use this stock — each booking takes one{" "}
-                      {labels.singular}.
+                      {t("gamingSetup.editor.stockHint", {
+                        singular: labels.singular,
+                      })}
                     </span>
                   </label>
                 ) : (
                   <p className="text-[11px] leading-relaxed text-zinc-600">
-                    Tables are added from{" "}
-                    <span className="text-zinc-400">Layout &amp; zones</span> after
-                    you save — same as the gaming floor map.
+                    {t("gamingSetup.editor.tablesAddedPrefix")}{" "}
+                    <span className="text-zinc-400">
+                      {t("gamingSetup.card.layoutZones")}
+                    </span>{" "}
+                    {t("gamingSetup.editor.tablesAddedSuffix")}
                   </p>
                 )}
               </div>
             </div>
 
             <label className="block text-xs text-zinc-500">
-              {isDiningEditor ? "Description for guests" : "Specs & description"}
+              {isDiningEditor
+                ? t("gamingSetup.editor.descriptionLabelDining")
+                : t("gamingSetup.editor.descriptionLabelGaming")}
               <textarea
                 value={description}
                 onChange={(e) => setDescription(e.target.value)}
@@ -442,7 +468,7 @@ export function GamingOfferingEditor({
             {!isDiningEditor ? (
             <>
             <label className="block text-xs text-zinc-500">
-              Default booking slot (minutes)
+              {t("gamingSetup.editor.slotMinutesLabel")}
               <input
                 type="number"
                 min={15}
@@ -451,11 +477,11 @@ export function GamingOfferingEditor({
                 className="mt-1 w-full max-w-[8rem] rounded-lg border border-white/10 bg-zinc-900 px-3 py-2 text-sm text-white"
               />
               <span className="mt-1 block text-[10px] text-zinc-600">
-                Used for price estimates — sessions have no fixed end time.
+                {t("gamingSetup.editor.slotMinutesHint")}
               </span>
             </label>
             <label className="block text-xs text-zinc-500">
-              No-show grace period
+              {t("gamingSetup.editor.noShowLabel")}
               <select
                 value={noShowMinutes}
                 onChange={(e) => setNoShowMinutes(e.target.value)}
@@ -463,19 +489,18 @@ export function GamingOfferingEditor({
               >
                 {NO_SHOW_OPTIONS.map((m) => (
                   <option key={m} value={m}>
-                    {m} minutes after start
+                    {t("gamingSetup.editor.noShowOptionStart", { m })}
                   </option>
                 ))}
               </select>
               <span className="mt-1 block text-[10px] leading-relaxed text-zinc-600">
-                If the guest does not arrive within this window, the unit is
-                freed automatically and marked as no-show.
+                {t("gamingSetup.editor.noShowHintUnit")}
               </span>
             </label>
             </>
             ) : (
               <label className="block text-xs text-zinc-500">
-                No-show grace period
+                {t("gamingSetup.editor.noShowLabel")}
                 <select
                   value={noShowMinutes}
                   onChange={(e) => setNoShowMinutes(e.target.value)}
@@ -483,20 +508,19 @@ export function GamingOfferingEditor({
                 >
                   {NO_SHOW_OPTIONS.map((m) => (
                     <option key={m} value={m}>
-                      {m} minutes after arrival
+                      {t("gamingSetup.editor.noShowOptionArrival", { m })}
                     </option>
                   ))}
                 </select>
                 <span className="mt-1 block text-[10px] leading-relaxed text-zinc-600">
-                  If the guest does not arrive within this window, the table is
-                  freed automatically and marked as no-show.
+                  {t("gamingSetup.editor.noShowHintTable")}
                 </span>
               </label>
             )}
 
             {type === "PLAYSTATION" ? (
               <label className="block text-xs text-zinc-500">
-                Optional games list
+                {t("gamingSetup.editor.gamesListLabel")}
                 <textarea
                   value={ps5GamesText}
                   onChange={(e) => setPs5GamesText(e.target.value)}
@@ -505,7 +529,7 @@ export function GamingOfferingEditor({
                   className="mt-1 w-full resize-none rounded-lg border border-white/10 bg-zinc-900 px-3 py-2 text-sm text-white"
                 />
                 <span className="mt-1 block text-[10px] text-zinc-600">
-                  One game per line. These titles can be shown to staff and on the public venue page.
+                  {t("gamingSetup.editor.gamesListHint")}
                 </span>
               </label>
             ) : null}
@@ -520,10 +544,13 @@ export function GamingOfferingEditor({
 
             {type !== "BOWLING" && !isDiningEditor ? (
             <div>
-              <p className="text-xs text-zinc-500">Pricing</p>
+              <p className="text-xs text-zinc-500">
+                {t("gamingSetup.editor.pricingLabel")}
+              </p>
               <p className="mt-1 text-[10px] leading-relaxed text-zinc-600">
-                Minutes = timed play. + Full day = {FULL_DAY_DURATION_MINUTES} min.
-                Leave minutes empty for a flat pass (e.g. custom full-day label).
+                {t("gamingSetup.editor.pricingHint", {
+                  min: FULL_DAY_DURATION_MINUTES,
+                })}
               </p>
               <div className="mt-2 flex flex-wrap gap-1.5">
                 {GAMING_PRICE_PRESETS.map((p) => (
@@ -553,7 +580,7 @@ export function GamingOfferingEditor({
                 {rates.map((r, i) => (
                   <li key={i} className="flex flex-wrap items-center gap-2">
                     <input
-                      placeholder="Label"
+                      placeholder={t("gamingSetup.editor.rateLabelPlaceholder")}
                       value={r.label}
                       onChange={(e) => {
                         const next = [...rates];
@@ -563,8 +590,10 @@ export function GamingOfferingEditor({
                       className="min-w-0 flex-1 rounded-lg border border-white/10 bg-zinc-900 px-2 py-1.5 text-xs text-white"
                     />
                     <input
-                      placeholder="Minutes"
-                      title="Leave empty for flat rate (e.g. full-day pass). 1440 = full day."
+                      placeholder={t(
+                        "gamingSetup.editor.rateMinutesPlaceholder",
+                      )}
+                      title={t("gamingSetup.editor.rateMinutesTitle")}
                       value={r.durationMinutes}
                       onChange={(e) => {
                         const next = [...rates];
@@ -574,7 +603,7 @@ export function GamingOfferingEditor({
                       className="w-[4.5rem] rounded-lg border border-white/10 bg-zinc-900 px-2 py-1.5 text-xs text-white"
                     />
                     <input
-                      placeholder="Price"
+                      placeholder={t("gamingSetup.editor.ratePricePlaceholder")}
                       value={r.price}
                       onChange={(e) => {
                         const next = [...rates];
@@ -605,7 +634,7 @@ export function GamingOfferingEditor({
                   className="inline-flex items-center gap-1 rounded-lg border border-rose-400/30 px-3 py-2 text-sm text-rose-300"
                 >
                   <Trash2 size={14} />
-                  Remove game
+                  {t("gamingSetup.editor.removeGame")}
                 </button>
               ) : null}
               <button
@@ -614,7 +643,7 @@ export function GamingOfferingEditor({
                 className="ml-auto inline-flex items-center gap-2 rounded-lg bg-emerald-600 px-4 py-2 text-sm text-white disabled:opacity-50"
               >
                 {saving ? <Loader2 size={14} className="animate-spin" /> : null}
-                Save
+                {t("common.save")}
               </button>
             </div>
           </form>

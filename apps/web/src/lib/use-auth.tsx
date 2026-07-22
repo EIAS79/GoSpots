@@ -8,7 +8,14 @@ import {
   useState,
   type ReactNode,
 } from "react";
-import { type AuthUser, fetchMe, logout as apiLogout, refresh as apiRefresh } from "./auth-client";
+import { ensureCsrf } from "./api";
+import { clearCachedCsrfToken } from "./csrf";
+import {
+  type AuthUser,
+  fetchMe,
+  logout as apiLogout,
+  refresh as apiRefresh,
+} from "./auth-client";
 
 type State =
   | { status: "loading"; user: null }
@@ -27,12 +34,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [state, setState] = useState<State>({ status: "loading", user: null });
 
   const reload = useCallback(async () => {
+    await ensureCsrf();
     try {
       const user = await fetchMe();
       setState({ status: "authed", user });
     } catch {
-      // Try refresh once
       try {
+        await ensureCsrf();
         await apiRefresh();
         const user = await fetchMe();
         setState({ status: "authed", user });
@@ -44,8 +52,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   const signOut = useCallback(async () => {
     try {
+      await ensureCsrf();
       await apiLogout();
     } finally {
+      clearCachedCsrfToken();
       setState({ status: "guest", user: null });
     }
   }, []);

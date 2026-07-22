@@ -11,10 +11,9 @@ import {
 import Link from "next/link";
 import { useParams } from "next/navigation";
 import { useCallback, useEffect, useState } from "react";
-import { GoSpotsLogo } from "@/components/brand/gospots-logo";
+import { LocoraLogo } from "@/components/brand/locora-logo";
 import { cn } from "@/lib/cn";
 import {
-  GUEST_DINING_PHASE_LABELS,
   resolveGuestDiningPhase,
   type GuestDiningPhase,
 } from "@/lib/guest-dining-booking-status";
@@ -23,16 +22,17 @@ import {
   fetchPublicDiningReservationStatus,
   type PublicDiningReservationStatus,
 } from "@/lib/public-dining-client";
+import { usePublicPrefs } from "@/lib/public-prefs-context";
 import { useLiveData } from "@/lib/use-live-data";
 
-function formatArrival(startsAt: string) {
+function formatArrival(startsAt: string, locale: string) {
   const start = new Date(startsAt);
-  const date = start.toLocaleDateString(undefined, {
+  const date = start.toLocaleDateString(locale, {
     weekday: "long",
     month: "long",
     day: "numeric",
   });
-  const time = start.toLocaleTimeString(undefined, {
+  const time = start.toLocaleTimeString(locale, {
     hour: "numeric",
     minute: "2-digit",
   });
@@ -80,6 +80,7 @@ const PHASE_STYLES: Record<
 };
 
 export default function DiningReservationStatusPage() {
+  const { t, locale } = usePublicPrefs();
   const params = useParams();
   const slug = params.slug as string;
   const token = params.token as string;
@@ -98,18 +99,20 @@ export default function DiningReservationStatusPage() {
         setData(row);
         setError(null);
         if (opts.silent) setNowMs(Date.now());
+        return true;
       } catch (e) {
         if (!opts.silent) {
           setData(null);
           setError(
-            e instanceof Error ? e.message : "Could not load reservation.",
+            e instanceof Error ? e.message : t("guestStatus.dining.loadError"),
           );
         }
+        return false;
       } finally {
         if (!opts.silent) setLoading(false);
       }
     },
-    [slug, token],
+    [slug, token, t],
   );
 
   useEffect(() => {
@@ -136,9 +139,7 @@ export default function DiningReservationStatusPage() {
   async function handleCancel() {
     if (
       !data?.canCancel ||
-      !confirm(
-        "Cancel this table reservation? The table will be freed for other guests.",
-      )
+      !confirm(t("guestStatus.dining.cancelConfirm"))
     ) {
       return;
     }
@@ -149,7 +150,7 @@ export default function DiningReservationStatusPage() {
       await loadStatus({ silent: true });
     } catch (e) {
       setCancelError(
-        e instanceof Error ? e.message : "Could not cancel reservation.",
+        e instanceof Error ? e.message : t("guestStatus.dining.cancelError"),
       );
     } finally {
       setCancelBusy(false);
@@ -159,14 +160,14 @@ export default function DiningReservationStatusPage() {
   return (
     <div className="min-h-screen bg-zinc-950 text-zinc-100">
       <header className="border-b border-white/10 px-4 py-4">
-        <GoSpotsLogo href="/" size="sm" showTagline />
+        <LocoraLogo href="/" size="sm" showTagline />
       </header>
 
       <main className="mx-auto max-w-lg px-4 py-12">
         {loading ? (
           <div className="flex flex-col items-center gap-3 py-16 text-zinc-500">
             <Loader2 className="animate-spin" size={28} />
-            <p className="text-sm">Loading your reservation…</p>
+            <p className="text-sm">{t("guestStatus.dining.loading")}</p>
           </div>
         ) : error ? (
           <div className="rounded-2xl border border-rose-500/30 bg-rose-500/10 p-8 text-center">
@@ -175,7 +176,7 @@ export default function DiningReservationStatusPage() {
               href={`/venue/${slug}`}
               className="mt-4 inline-block text-sm text-amber-300 underline"
             >
-              Back to venue
+              {t("guestStatus.backToVenue")}
             </Link>
           </div>
         ) : data ? (
@@ -193,21 +194,23 @@ export default function DiningReservationStatusPage() {
                   style.badge,
                 )}
               >
-                {GUEST_DINING_PHASE_LABELS[phase]}
+                {t(`guestStatus.phase.${phase}`)}
               </p>
               <h1 className="mt-4 text-xl font-bold text-white">
-                {data.unitName ?? "Table"}
+                {data.unitName ?? t("guestStatus.dining.fallbackUnit")}
               </h1>
               {data.categoryName ? (
                 <p className="mt-1 text-sm text-zinc-400">{data.categoryName}</p>
               ) : null}
               <p className="mt-4 text-sm text-zinc-300">
-                {formatArrival(data.startsAt)}
+                {formatArrival(data.startsAt, locale)}
               </p>
               <p className="mt-2 text-xs text-zinc-500">
                 {data.guestName}
                 {data.partySize > 1
-                  ? ` · party of ${data.partySize}`
+                  ? ` · ${t("guestStatus.dining.partyOf", {
+                      count: data.partySize,
+                    })}`
                   : ""}
               </p>
             </div>
@@ -216,10 +219,10 @@ export default function DiningReservationStatusPage() {
               <p className="font-medium text-zinc-200">{data.venueName}</p>
               <p className="mt-1 text-xs">
                 {phase === "canceled"
-                  ? "This reservation was canceled and the table has been released."
+                  ? t("guestStatus.dining.hintCanceled")
                   : phase === "waiting"
-                    ? "Your arrival time has passed — please check in with staff when you arrive."
-                    : "No fixed end time — stay as long as you like once seated. This page updates automatically."}
+                    ? t("guestStatus.dining.hintWaiting")
+                    : t("guestStatus.dining.hintDefault")}
               </p>
             </div>
 
@@ -239,14 +242,14 @@ export default function DiningReservationStatusPage() {
                   {cancelBusy ? (
                     <span className="inline-flex items-center gap-2">
                       <Loader2 size={16} className="animate-spin" />
-                      Canceling…
+                      {t("guestStatus.canceling")}
                     </span>
                   ) : (
-                    "Cancel reservation"
+                    t("guestStatus.dining.cancel")
                   )}
                 </button>
                 <p className="text-center text-[11px] text-zinc-600">
-                  You can cancel before you are seated at the table.
+                  {t("guestStatus.dining.cancelHint")}
                 </p>
               </div>
             ) : null}
@@ -255,7 +258,7 @@ export default function DiningReservationStatusPage() {
               href={`/venue/${slug}`}
               className="block text-center text-sm text-amber-300 underline"
             >
-              Return to {data.venueName}
+              {t("guestStatus.returnToVenue", { name: data.venueName })}
             </Link>
           </div>
         ) : null}

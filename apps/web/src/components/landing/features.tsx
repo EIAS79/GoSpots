@@ -103,6 +103,7 @@ function TimelineRow({
   side: "left" | "right";
   isHeart: boolean;
 }) {
+  const { t } = usePublicPrefs();
   const reduced = useReducedMotion();
   const fromX = reduced ? 0 : side === "left" ? -32 : 32;
 
@@ -176,7 +177,7 @@ function TimelineRow({
               {formatStep(step)}
               {isHeart && (
                 <span className="normal-case tracking-normal text-emerald-700 dark:text-emerald-200/90">
-                  · The heart
+                  · {t("features.heart")}
                 </span>
               )}
             </span>
@@ -196,16 +197,14 @@ function TimelineRow({
 
           {isHeart && (
             <div className="mt-4 flex flex-wrap gap-2 text-xs text-zinc-600 dark:text-zinc-400">
-              {["3-second floor view", "Live timer per resource", "One-tap actions"].map(
-                (chip) => (
-                  <span
-                    key={chip}
-                    className="rounded-full border border-[var(--color-border)] bg-[var(--color-surface)]/60 px-3 py-1 dark:border-white/10 dark:bg-white/5"
-                  >
-                    {chip}
-                  </span>
-                ),
-              )}
+              {[1, 2, 3].map((n) => (
+                <span
+                  key={n}
+                  className="rounded-full border border-[var(--color-border)] bg-[var(--color-surface)]/60 px-3 py-1 dark:border-white/10 dark:bg-white/5"
+                >
+                  {t(`features.chip${n}`)}
+                </span>
+              ))}
             </div>
           )}
         </div>

@@ -18,10 +18,10 @@ import {
 } from "@/lib/mock-data";
 import { usePublicPrefs } from "@/lib/public-prefs-context";
 import { formatVenueLocation, venueMarketingName } from "@/lib/venue-display";
-import { useMode } from "./mode-context";
 
 /** Sample cards only in local development — never on production builds. */
 const allowMockVenues = process.env.NODE_ENV === "development";
+
 
 type DisplayVenue =
   | (PublicVenue & { source: "api" })
@@ -76,9 +76,7 @@ function statusI18nKey(status: ShopStatus) {
 }
 
 export function Venues() {
-  const { mode } = useMode();
   const { t, formatMoney } = usePublicPrefs();
-  const isPlay = mode === "play";
   const [loadState, setLoadState] = useState<"loading" | "ok" | "error">("loading");
   const [apiVenues, setApiVenues] = useState<PublicVenue[]>([]);
 
@@ -169,31 +167,16 @@ export function Venues() {
         <Reveal className="flex flex-col items-start justify-between gap-6 md:flex-row md:items-end">
           <div className="max-w-2xl">
             <span className="text-xs font-medium uppercase tracking-widest text-violet-700 dark:text-violet-300">
-              {t(isPlay ? "homeVenues.play.eyebrow" : "homeVenues.manage.eyebrow")}
+              {t("homeVenues.manage.eyebrow")}
             </span>
             <h2 className="mt-3 text-balance text-3xl font-bold md:text-5xl">
-              {isPlay ? (
-                <>
-                  {t("homeVenues.play.title")}{" "}
-                  <span className="text-gradient">
-                    {t("homeVenues.play.titleAccent")}
-                  </span>
-                </>
-              ) : (
-                <>
-                  {t("homeVenues.manage.title")}{" "}
-                  <span className="text-gradient">
-                    {t("homeVenues.manage.titleAccent")}
-                  </span>
-                </>
-              )}
+              {t("homeVenues.manage.title")}{" "}
+              <span className="text-gradient">
+                {t("homeVenues.manage.titleAccent")}
+              </span>
             </h2>
             <p className="mt-4 text-base text-zinc-600 dark:text-zinc-400 md:text-lg">
-              {t(
-                isPlay
-                  ? "homeVenues.play.subtitle"
-                  : "homeVenues.manage.subtitle",
-              )}
+              {t("homeVenues.manage.subtitle")}
             </p>
           </div>
           <Link

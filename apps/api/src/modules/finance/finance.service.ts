@@ -13,9 +13,18 @@ import {
   resetMenuItemStockForDay,
 } from '../../common/menu-stock-db.util';
 import { canFulfillQty, venueDayKey } from '../../common/menu-stock.util';
+import { claimActiveLinesAndRestoreStock } from '../../common/shop-order-stock.util';
+import { loadShopCurrency } from '../../common/currency-stamp.util';
+import {
+  postReservationBilled,
+  postShopOrderCompleted,
+  postTransactionCreated,
+  postWalkInPlaySessionPaid,
+} from '../../common/ledger-post.util';
+import { loadShopVenueTimeContext } from '../../common/shop-venue-time.util';
 import { requireShopId } from '../../common/tenant';
 import { AuditService } from '../audit/audit.service';
-import type { JwtAccessPayload } from '../auth/auth.service';
+import type { JwtAccessPayload } from '../auth/auth.types';
 import { NotificationsService } from '../notifications/notifications.service';
 import { CreateLossDto, CreateTransactionDto } from './dto/finance.dto';
 import {
@@ -25,10 +34,8 @@ import {
   UpdateShopOrderDto,
 } from './dto/orders.dto';
 import { BulkOrderIdsDto } from './dto/bulk-orders.dto';
-import {
-  aggregateTopItems,
-  buildFinanceAnalytics,
-} from './finance-analytics.util';
+import { FinanceReportsService } from './finance-reports.service';
+import { ShopLossService } from './shop-loss.service';
 import {
   ReservationStatus,
   ResourceStatus,
@@ -44,6 +51,8 @@ import {
   assertNoWalkInOverlap,
   assertResourceBookable,
 } from '../../common/booking-overlap.util';
+import { withResourceBookingLock } from '../../common/booking-lock.util';
+import { assertWithinOpeningHours } from '../../common/opening-hours.util';
 import { walkInEffectiveEnd } from '../../common/walk-in-block.util';
 import {
   CreatePlaySessionDto,
@@ -73,6 +82,14 @@ import {
   computePlayBillingAmount,
 } from '../../common/play-billing.util';
 import {
+  addMoney,
+  lineTotal,
+  serializeMoney,
+  serializeMoneyOrNull,
+  toMoneyNumber,
+  type MoneyInput,
+} from '../../common/money.util';
+import {
   auditSummaryAddLine,
   auditSummaryCreate,
   auditSummaryDelete,
@@ -84,14 +101,14 @@ import {
   type ShopOrderForAudit,
 } from './shop-order-audit.util';
 
-const LARGE_LOSS_NOTIFY_THRESHOLD = 100;
-
 @Injectable()
 export class FinanceService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly audit: AuditService,
     private readonly notifications: NotificationsService,
+    private readonly reports: FinanceReportsService,
+    private readonly losses: ShopLossService,
   ) {}
 
   private async requireFeature(shopId: string, feature: string) {
@@ -106,25 +123,66 @@ export class FinanceService {
     }
   }
 
-  private async shopLocale(shopId: string) {
-    const shop = await this.prisma.shop.findUnique({
-      where: { id: shopId },
-      select: { locale: true },
-    });
-    return shop?.locale ?? 'en';
+  /** Prisma Decimal → decimal string for API JSON (canonical money wire). */
+  private serializeShopOrder<
+    T extends {
+      total: MoneyInput;
+      reservationFee: MoneyInput;
+      lines: Array<{ unitPrice: MoneyInput } & Record<string, unknown>>;
+    },
+  >(order: T) {
+    return {
+      ...order,
+      total: serializeMoney(order.total),
+      reservationFee: serializeMoneyOrNull(order.reservationFee),
+      lines: order.lines.map((l) => ({
+        ...l,
+        unitPrice: serializeMoney(l.unitPrice),
+      })),
+    };
+  }
+
+  private serializeTransaction<
+    T extends {
+      amount: MoneyInput;
+      lines: Array<
+        { unitPrice: MoneyInput; total: MoneyInput } & Record<string, unknown>
+      >;
+    },
+  >(tx: T) {
+    return {
+      ...tx,
+      amount: serializeMoney(tx.amount),
+      lines: tx.lines.map((l) => ({
+        ...l,
+        unitPrice: serializeMoney(l.unitPrice),
+        total: serializeMoney(l.total),
+      })),
+    };
+  }
+
+  private serializePlaySession<T extends { amount: MoneyInput }>(session: T) {
+    return { ...session, amount: serializeMoney(session.amount) };
   }
 
   private async ensureMenuItemStock(shopId: string, menuItemId: string) {
-    const locale = await this.shopLocale(shopId);
-    const today = venueDayKey(locale);
-    await resetMenuItemStockForDay(this.prisma, menuItemId, today);
+    const { resolvedTimeZone } = await loadShopVenueTimeContext(
+      this.prisma,
+      shopId,
+    );
+    const today = venueDayKey(resolvedTimeZone);
+    await resetMenuItemStockForDay(this.prisma, menuItemId, today, shopId);
     const item = await fetchMenuItemStockRow(this.prisma, shopId, menuItemId);
     if (!item) throw new NotFoundException('Menu item not found');
     return item;
   }
 
   private describeLinePatch(
-    line: { quantity: number; unitPrice: number; lineStatus: string },
+    line: {
+      quantity: number;
+      unitPrice: MoneyInput;
+      lineStatus: string;
+    },
     dto: PatchShopOrderLineDto,
   ) {
     const parts: string[] = [];
@@ -136,7 +194,10 @@ export class FinanceService {
     if (dto.quantity !== undefined && dto.quantity !== line.quantity) {
       parts.push(`Changed quantity to ${dto.quantity}`);
     }
-    if (dto.unitPrice !== undefined && dto.unitPrice !== line.unitPrice) {
+    if (
+      dto.unitPrice !== undefined &&
+      dto.unitPrice !== toMoneyNumber(line.unitPrice)
+    ) {
       parts.push(`Changed price to ${dto.unitPrice.toFixed(2)}`);
     }
     return parts.length ? parts.join('; ') : 'Updated line';
@@ -157,7 +218,7 @@ export class FinanceService {
   ) {
     await this.notifications.recordOperationsEvent(shopId, {
       title: 'Order handed off',
-      body: `${orderTicketLabel(order)} · ${order.total.toFixed(2)}`,
+      body: `${orderTicketLabel(order)} · ${toMoneyNumber(order.total).toFixed(2)}`,
       href: '/orders',
       dedupeKey: `shop-order-complete:${order.id}`,
     });
@@ -166,9 +227,11 @@ export class FinanceService {
   private async adjustMenuStock(
     menuItemId: string,
     delta: number,
+    shopId?: string,
+    db: Prisma.TransactionClient | PrismaService = this.prisma,
   ): Promise<void> {
     if (delta === 0) return;
-    const ok = await adjustMenuItemStockBy(this.prisma, menuItemId, delta);
+    const ok = await adjustMenuItemStockBy(db, menuItemId, delta, shopId);
     if (!ok) {
       throw new BadRequestException('Not enough stock for this item.');
     }
@@ -177,63 +240,103 @@ export class FinanceService {
   async listTransactions(actor: JwtAccessPayload, take = 40) {
     const shopId = requireShopId(actor);
     await this.requireFeature(shopId, 'transaction');
-    return this.prisma.transaction.findMany({
+    const rows = await this.prisma.transaction.findMany({
       where: { shopId },
       orderBy: { createdAt: 'desc' },
       take,
       include: { lines: true },
     });
+    return rows.map((tx) => this.serializeTransaction(tx));
   }
 
   async createTransaction(actor: JwtAccessPayload, dto: CreateTransactionDto) {
     this.assert(actor, 'transaction.write');
     const shopId = actor.shopId!;
     await this.requireFeature(shopId, 'transaction');
-    if (dto.kind === 'SALE') {
-      for (const line of dto.lines) {
-        if (!line.menuItemId) continue;
-        const item = await this.ensureMenuItemStock(shopId, line.menuItemId);
-        if (!canFulfillQty(item, line.quantity)) {
-          throw new BadRequestException(
-            `${item.name} is out of stock (${item.stock} left).`,
-          );
+    const currency = await loadShopCurrency(this.prisma, shopId);
+    const { resolvedTimeZone } = await loadShopVenueTimeContext(
+      this.prisma,
+      shopId,
+    );
+    const today = venueDayKey(resolvedTimeZone);
+    const amount = dto.lines.reduce(
+      (s, l) => addMoney(s, lineTotal(l.quantity, l.unitPrice)),
+      0,
+    );
+
+    // Stock adjust + SALE/REFUND row commit atomically (no orphan sale on stock fail).
+    const tx = await this.prisma.$transaction(async (db) => {
+      if (dto.kind === 'SALE' || dto.kind === 'REFUND') {
+        for (const line of dto.lines) {
+          if (!line.menuItemId) continue;
+          await resetMenuItemStockForDay(db, line.menuItemId, today, shopId);
+          if (dto.kind === 'SALE') {
+            const item = await fetchMenuItemStockRow(
+              db,
+              shopId,
+              line.menuItemId,
+            );
+            if (!item) throw new NotFoundException('Menu item not found');
+            if (!canFulfillQty(item, line.quantity)) {
+              throw new BadRequestException(
+                `${item.name} is out of stock (${item.stock} left).`,
+              );
+            }
+            const ok = await adjustMenuItemStockBy(
+              db,
+              line.menuItemId,
+              line.quantity,
+              shopId,
+            );
+            if (!ok) {
+              throw new BadRequestException(
+                `${item.name} is out of stock (${item.stock} left).`,
+              );
+            }
+          } else {
+            await adjustMenuItemStockBy(
+              db,
+              line.menuItemId,
+              -line.quantity,
+              shopId,
+            );
+          }
         }
       }
-    }
-    const amount = dto.lines.reduce((s, l) => s + l.quantity * l.unitPrice, 0);
-    const tx = await this.prisma.transaction.create({
-      data: {
-        shopId,
-        kind: dto.kind,
-        method: dto.method ?? 'CASH',
-        amount,
-        note: dto.note,
-        createdById: actor.sub,
-        lines: {
-          create: dto.lines.map((l) => ({
-            menuItemId: l.menuItemId,
-            name: l.name,
-            quantity: l.quantity,
-            unitPrice: l.unitPrice,
-            total: l.quantity * l.unitPrice,
-          })),
+
+      const created = await db.transaction.create({
+        data: {
+          shopId,
+          kind: dto.kind,
+          method: dto.method ?? 'CASH',
+          amount,
+          currency,
+          note: dto.note,
+          createdById: actor.sub,
+          lines: {
+            create: dto.lines.map((l) => ({
+              menuItemId: l.menuItemId,
+              name: l.name,
+              quantity: l.quantity,
+              unitPrice: l.unitPrice,
+              total: lineTotal(l.quantity, l.unitPrice),
+            })),
+          },
         },
-      },
-      include: { lines: true },
+        include: { lines: true },
+      });
+      await postTransactionCreated(db, {
+        shopId,
+        transactionId: created.id,
+        kind: dto.kind,
+        amount: created.amount,
+        currency: created.currency ?? currency,
+        createdAt: created.createdAt,
+        createdById: actor.sub,
+      });
+      return created;
     });
-    if (dto.kind === 'SALE') {
-      for (const line of dto.lines) {
-        if (line.menuItemId) {
-          await this.adjustMenuStock(line.menuItemId, line.quantity);
-        }
-      }
-    } else if (dto.kind === 'REFUND') {
-      for (const line of dto.lines) {
-        if (line.menuItemId) {
-          await this.adjustMenuStock(line.menuItemId, -line.quantity);
-        }
-      }
-    }
+
     await this.audit.record(actor, {
       section: 'finance',
       action: 'finance.transaction.create',
@@ -245,37 +348,19 @@ export class FinanceService {
         lineCount: dto.lines.length,
       },
     });
-    return tx;
+    return this.serializeTransaction(tx);
   }
 
   async salesByItem(actor: JwtAccessPayload, days = 30) {
-    this.assert(actor, 'transaction.read');
-    const shopId = requireShopId(actor);
-    await this.requireFeature(shopId, 'reports');
-    const since = new Date(Date.now() - days * 86400000);
-    const merged = await aggregateTopItems(this.prisma, shopId, since, 50);
-    await this.audit.record(actor, {
-      section: 'reports',
-      action: 'reports.sales_by_item',
-      summary: `Generated sales-by-item report (${days} days)`,
-      meta: { days, rowCount: merged.length },
-    });
-    return merged;
+    return this.reports.salesByItem(actor, days);
   }
 
   async getFinanceAnalytics(actor: JwtAccessPayload, days = 30) {
-    this.assert(actor, 'transaction.read');
-    const shopId = requireShopId(actor);
-    await this.requireFeature(shopId, 'reports');
-    return buildFinanceAnalytics(this.prisma, shopId, days);
+    return this.reports.getFinanceAnalytics(actor, days);
   }
 
   async getTopSellers(actor: JwtAccessPayload, days = 30, limit = 10) {
-    this.assert(actor, 'transaction.read');
-    const shopId = requireShopId(actor);
-    await this.requireFeature(shopId, 'reports');
-    const since = new Date(Date.now() - days * 86400000);
-    return aggregateTopItems(this.prisma, shopId, since, limit);
+    return this.reports.getTopSellers(actor, days, limit);
   }
 
   private shopOrderInclude() {
@@ -291,24 +376,32 @@ export class FinanceService {
     return o;
   }
 
-  private async recalcShopOrderTotal(orderId: string) {
+  private async recalcShopOrderTotal(
+    orderId: string,
+    shopId: string,
+    db: Prisma.TransactionClient | PrismaService = this.prisma,
+  ) {
     const [lines, order] = await Promise.all([
-      this.prisma.shopOrderLine.findMany({
+      db.shopOrderLine.findMany({
         where: { shopOrderId: orderId, lineStatus: 'ACTIVE' },
       }),
-      this.prisma.shopOrder.findUnique({
-        where: { id: orderId },
+      db.shopOrder.findFirst({
+        where: { id: orderId, shopId },
         select: { tableReserved: true, reservationFee: true },
       }),
     ]);
-    const linesTotal = lines.reduce((s, l) => s + l.quantity * l.unitPrice, 0);
+    const linesTotal = lines.reduce(
+      (s, l) =>
+        addMoney(s, lineTotal(l.quantity, toMoneyNumber(l.unitPrice))),
+      0,
+    );
     const reservation =
       order?.tableReserved && order.reservationFee != null
-        ? Math.max(0, order.reservationFee)
+        ? Math.max(0, toMoneyNumber(order.reservationFee))
         : 0;
-    const total = linesTotal + reservation;
-    return this.prisma.shopOrder.update({
-      where: { id: orderId },
+    const total = addMoney(linesTotal, reservation);
+    return db.shopOrder.update({
+      where: { id: orderId, shopId },
       data: { total },
       include: this.shopOrderInclude(),
     });
@@ -357,12 +450,13 @@ export class FinanceService {
       ];
     }
 
-    return this.prisma.shopOrder.findMany({
+    const orders = await this.prisma.shopOrder.findMany({
       where,
       orderBy: { createdAt: 'desc' },
       take,
       include: this.shopOrderInclude(),
     });
+    return orders.map((o) => this.serializeShopOrder(o));
   }
 
   async archiveShopOrders(actor: JwtAccessPayload, dto: BulkOrderIdsDto) {
@@ -415,13 +509,14 @@ export class FinanceService {
     this.assert(actor, 'transaction.read');
     const shopId = requireShopId(actor);
     await this.requireFeature(shopId, 'transaction');
-    return this.loadShopOrder(shopId, id);
+    return this.serializeShopOrder(await this.loadShopOrder(shopId, id));
   }
 
   async createShopOrder(actor: JwtAccessPayload, dto: CreateShopOrderDto) {
     this.assert(actor, 'transaction.write');
     const shopId = requireShopId(actor);
     await this.requireFeature(shopId, 'transaction');
+    const currency = await loadShopCurrency(this.prisma, shopId);
     const order = await this.prisma.shopOrder.create({
       data: {
         shopId,
@@ -434,6 +529,7 @@ export class FinanceService {
           dto.tableReserved && dto.reservationFee != null
             ? Math.max(0, dto.reservationFee)
             : null,
+        currency,
         createdById: actor.sub,
       },
       include: this.shopOrderInclude(),
@@ -445,7 +541,7 @@ export class FinanceService {
       meta: shopOrderAuditMeta(order),
     });
     await this.notifyShopOrderCreated(shopId, order);
-    return order;
+    return this.serializeShopOrder(order);
   }
 
   private async auditShopOrder(
@@ -484,20 +580,22 @@ export class FinanceService {
           'This order was canceled and cannot be edited.',
         );
       }
-      return order;
+      return this.serializeShopOrder(order);
     }
 
     if (dto.status && dto.status !== order.status) {
       if (dto.status === 'PENDING') {
         await this.prisma.shopOrder.update({
-          where: { id },
+          where: { id, shopId },
           data: {
             status: 'PENDING',
             completedAt: null,
             canceledAt: null,
           },
         });
-        return this.recalcShopOrderTotal(id);
+        return this.serializeShopOrder(
+          await this.recalcShopOrderTotal(id, shopId),
+        );
       }
       if (dto.status === 'COMPLETED') {
         if (order.status !== 'PENDING') {
@@ -514,14 +612,23 @@ export class FinanceService {
           );
         }
         await this.prisma.shopOrder.update({
-          where: { id },
+          where: { id, shopId },
           data: {
             status: 'COMPLETED',
             completedAt: new Date(),
             canceledAt: null,
           },
         });
-        const completed = await this.recalcShopOrderTotal(id);
+        const completed = await this.recalcShopOrderTotal(id, shopId);
+        const orderCurrency = await loadShopCurrency(this.prisma, shopId);
+        await postShopOrderCompleted(this.prisma, {
+          shopId,
+          orderId: completed.id,
+          total: completed.total,
+          currency: completed.currency ?? orderCurrency,
+          completedAt: completed.completedAt ?? new Date(),
+          createdById: actor.sub,
+        });
         await this.auditShopOrder(
           actor,
           'finance.shop_order.complete',
@@ -529,35 +636,51 @@ export class FinanceService {
           auditSummaryUpdate(completed, 'Handed to customer'),
         );
         await this.notifyShopOrderCompleted(shopId, completed);
-        return completed;
+        return this.serializeShopOrder(completed);
       }
       if (dto.status === 'CANCELED') {
-        for (const line of order.lines) {
-          if (line.menuItemId && line.lineStatus === 'ACTIVE') {
-            await this.adjustMenuStock(line.menuItemId, -line.quantity);
+        // Order claim + per-line ACTIVE→CANCELED claims, then restore (no double restore).
+        const canceled = await this.prisma.$transaction(async (db) => {
+          const claimedOrder = await db.shopOrder.updateMany({
+            where: { id, shopId, status: { not: 'CANCELED' } },
+            data: {
+              status: 'CANCELED',
+              canceledAt: new Date(),
+              completedAt: null,
+              total: 0,
+            },
+          });
+          if (claimedOrder.count !== 1) {
+            throw new BadRequestException(
+              'This order was canceled and cannot be edited.',
+            );
           }
-        }
-        await this.prisma.shopOrderLine.updateMany({
-          where: { shopOrderId: id },
-          data: { lineStatus: 'CANCELED' },
+
+          const fresh = await db.shopOrder.findFirstOrThrow({
+            where: { id, shopId },
+            include: this.shopOrderInclude(),
+          });
+
+          // Per-line ACTIVE claim before restore (shared with deleteShopOrder).
+          await claimActiveLinesAndRestoreStock(
+            db,
+            shopId,
+            id,
+            fresh.lines,
+          );
+
+          return db.shopOrder.findFirstOrThrow({
+            where: { id, shopId },
+            include: this.shopOrderInclude(),
+          });
         });
-        await this.prisma.shopOrder.update({
-          where: { id },
-          data: {
-            status: 'CANCELED',
-            canceledAt: new Date(),
-            completedAt: null,
-            total: 0,
-          },
-        });
-        const canceled = await this.loadShopOrder(shopId, id);
         await this.auditShopOrder(
           actor,
           'finance.shop_order.cancel',
           canceled,
           auditSummaryUpdate(canceled, 'Order canceled'),
         );
-        return canceled;
+        return this.serializeShopOrder(canceled);
       }
     }
 
@@ -592,20 +715,20 @@ export class FinanceService {
           dto.reservationFee == null ? null : Math.max(0, dto.reservationFee);
       }
       await this.prisma.shopOrder.update({
-        where: { id },
+        where: { id, shopId },
         data: metaData,
         include: this.shopOrderInclude(),
       });
-      const updated = await this.recalcShopOrderTotal(id);
+      const updated = await this.recalcShopOrderTotal(id, shopId);
       await this.auditShopOrder(
         actor,
         'finance.shop_order.update',
         updated,
         auditSummaryUpdate(updated, 'Updated order details'),
       );
-      return updated;
+      return this.serializeShopOrder(updated);
     }
-    return this.loadShopOrder(shopId, id);
+    return this.serializeShopOrder(await this.loadShopOrder(shopId, id));
   }
 
   async addShopOrderLine(
@@ -628,18 +751,51 @@ export class FinanceService {
         `${item.name} is out of stock (${item.stock} left).`,
       );
     }
-    await this.prisma.shopOrderLine.create({
-      data: {
-        shopOrderId: orderId,
-        menuItemId: item.id,
-        name: item.name,
-        quantity: qty,
-        unitPrice: item.price,
-        lineStatus: 'ACTIVE',
-      },
+    const { resolvedTimeZone } = await loadShopVenueTimeContext(
+      this.prisma,
+      shopId,
+    );
+    const today = venueDayKey(resolvedTimeZone);
+    const updated = await this.prisma.$transaction(async (db) => {
+      // Re-apply day reset inside the txn so adjust sees the same baseline.
+      await resetMenuItemStockForDay(db, item.id, today, shopId);
+      const ok = await adjustMenuItemStockBy(db, item.id, qty, shopId);
+      if (!ok) {
+        throw new BadRequestException(
+          `${item.name} is out of stock (${item.stock} left).`,
+        );
+      }
+      await db.shopOrderLine.create({
+        data: {
+          shopOrderId: orderId,
+          menuItemId: item.id,
+          name: item.name,
+          quantity: qty,
+          unitPrice: item.price,
+          lineStatus: 'ACTIVE',
+        },
+      });
+      const lines = await db.shopOrderLine.findMany({
+        where: { shopOrderId: orderId, lineStatus: 'ACTIVE' },
+      });
+      const fee =
+        order.tableReserved && order.reservationFee != null
+          ? toMoneyNumber(order.reservationFee)
+          : 0;
+      const total = addMoney(
+        lines.reduce(
+          (s, l) =>
+            addMoney(s, lineTotal(l.quantity, toMoneyNumber(l.unitPrice))),
+          0,
+        ),
+        fee,
+      );
+      return db.shopOrder.update({
+        where: { id: orderId, shopId },
+        data: { total },
+        include: this.shopOrderInclude(),
+      });
     });
-    await this.adjustMenuStock(item.id, qty);
-    const updated = await this.recalcShopOrderTotal(orderId);
     await this.auditShopOrder(
       actor,
       'finance.shop_order.line.add',
@@ -647,7 +803,7 @@ export class FinanceService {
       auditSummaryAddLine(updated, { name: item.name, quantity: qty }),
       { menuItemId: item.id },
     );
-    return updated;
+    return this.serializeShopOrder(updated);
   }
 
   async patchShopOrderLine(
@@ -664,54 +820,118 @@ export class FinanceService {
       throw new BadRequestException('Cannot edit a canceled order.');
     }
 
-    const line = order.lines.find((l) => l.id === lineId);
-    if (!line) throw new NotFoundException();
+    const prior = order.lines.find((l) => l.id === lineId);
+    if (!prior) throw new NotFoundException();
 
-    if (dto.lineStatus === 'CANCELED' && line.lineStatus === 'ACTIVE') {
-      if (line.menuItemId) {
-        await this.adjustMenuStock(line.menuItemId, -line.quantity);
-      }
-    }
-    if (dto.lineStatus === 'ACTIVE' && line.lineStatus === 'CANCELED') {
-      if (line.menuItemId) {
-        const item = await this.ensureMenuItemStock(shopId, line.menuItemId);
-        if (!canFulfillQty(item, line.quantity)) {
-          throw new BadRequestException(`${item.name} is out of stock.`);
-        }
-        await this.adjustMenuStock(line.menuItemId, line.quantity);
-      }
-    }
+    // Stock adjust + line mutate + total recalc in one txn (conditional claims).
+    const updated = await this.prisma.$transaction(async (db) => {
+      const line = await db.shopOrderLine.findFirst({
+        where: { id: lineId, shopOrderId: orderId },
+      });
+      if (!line) throw new NotFoundException();
 
-    if (
-      dto.quantity !== undefined &&
-      line.menuItemId &&
-      line.lineStatus === 'ACTIVE' &&
-      dto.lineStatus !== 'CANCELED'
-    ) {
-      const delta = dto.quantity - line.quantity;
-      if (delta > 0) {
-        const item = await this.ensureMenuItemStock(shopId, line.menuItemId);
-        if (!canFulfillQty(item, delta)) {
-          throw new BadRequestException(
-            `${item.name} is out of stock (${item.stock} left).`,
-          );
-        }
-        await this.adjustMenuStock(line.menuItemId, delta);
-      } else if (delta < 0) {
-        await this.adjustMenuStock(line.menuItemId, delta);
-      }
-    }
-
-    await this.prisma.shopOrderLine.update({
-      where: { id: lineId },
-      data: {
+      const patchData: Prisma.ShopOrderLineUpdateManyMutationInput = {
         ...(dto.quantity !== undefined ? { quantity: dto.quantity } : {}),
         ...(dto.unitPrice !== undefined ? { unitPrice: dto.unitPrice } : {}),
         ...(dto.lineStatus !== undefined ? { lineStatus: dto.lineStatus } : {}),
-      },
+      };
+
+      if (dto.lineStatus === 'CANCELED' && line.lineStatus === 'ACTIVE') {
+        // Claim ACTIVE→CANCELED first so concurrent cancels cannot double-restore.
+        const claimed = await db.shopOrderLine.updateMany({
+          where: { id: lineId, shopOrderId: orderId, lineStatus: 'ACTIVE' },
+          data: patchData,
+        });
+        if (claimed.count === 1 && line.menuItemId) {
+          await this.adjustMenuStock(
+            line.menuItemId,
+            -line.quantity,
+            shopId,
+            db,
+          );
+        }
+      } else if (dto.lineStatus === 'ACTIVE' && line.lineStatus === 'CANCELED') {
+        const qty = dto.quantity ?? line.quantity;
+        if (line.menuItemId) {
+          const ok = await adjustMenuItemStockBy(
+            db,
+            line.menuItemId,
+            qty,
+            shopId,
+          );
+          if (!ok) {
+            throw new BadRequestException('Not enough stock for this item.');
+          }
+        }
+        const claimed = await db.shopOrderLine.updateMany({
+          where: { id: lineId, shopOrderId: orderId, lineStatus: 'CANCELED' },
+          data: patchData,
+        });
+        if (claimed.count === 0 && line.menuItemId) {
+          // Concurrent restore won — reverse our decrement.
+          await this.adjustMenuStock(line.menuItemId, -qty, shopId, db);
+          throw new ConflictException(
+            'Line was restored concurrently. Retry.',
+          );
+        }
+      } else if (
+        dto.quantity !== undefined &&
+        line.lineStatus === 'ACTIVE' &&
+        dto.lineStatus !== 'CANCELED'
+      ) {
+        const delta = dto.quantity - line.quantity;
+        if (delta !== 0 && line.menuItemId) {
+          const ok = await adjustMenuItemStockBy(
+            db,
+            line.menuItemId,
+            delta,
+            shopId,
+          );
+          if (!ok) {
+            throw new BadRequestException(
+              'Not enough stock for this item.',
+            );
+          }
+        }
+        // Optimistic qty claim: only one concurrent patch on the same baseline wins.
+        const claimed = await db.shopOrderLine.updateMany({
+          where: {
+            id: lineId,
+            shopOrderId: orderId,
+            lineStatus: 'ACTIVE',
+            quantity: line.quantity,
+          },
+          data: {
+            quantity: dto.quantity,
+            ...(dto.unitPrice !== undefined
+              ? { unitPrice: dto.unitPrice }
+              : {}),
+          },
+        });
+        if (claimed.count === 0) {
+          if (delta !== 0 && line.menuItemId) {
+            await this.adjustMenuStock(line.menuItemId, -delta, shopId, db);
+          }
+          throw new ConflictException(
+            'Line was modified concurrently. Retry.',
+          );
+        }
+      } else {
+        await db.shopOrderLine.update({
+          where: { id: lineId, shopOrderId: orderId },
+          data: {
+            ...(dto.quantity !== undefined ? { quantity: dto.quantity } : {}),
+            ...(dto.unitPrice !== undefined ? { unitPrice: dto.unitPrice } : {}),
+            ...(dto.lineStatus !== undefined
+              ? { lineStatus: dto.lineStatus }
+              : {}),
+          },
+        });
+      }
+
+      return this.recalcShopOrderTotal(orderId, shopId, db);
     });
 
-    const updated = await this.recalcShopOrderTotal(orderId);
     const patchedLine = updated.lines.find((l) => l.id === lineId);
     await this.auditShopOrder(
       actor,
@@ -720,14 +940,14 @@ export class FinanceService {
       auditSummaryPatchLine(
         updated,
         {
-          name: patchedLine?.name ?? line.name,
-          quantity: patchedLine?.quantity ?? line.quantity,
+          name: patchedLine?.name ?? prior.name,
+          quantity: patchedLine?.quantity ?? prior.quantity,
         },
-        this.describeLinePatch(line, dto),
+        this.describeLinePatch(prior, dto),
       ),
       { lineId },
     );
-    return updated;
+    return this.serializeShopOrder(updated);
   }
 
   async deleteShopOrderLine(
@@ -742,24 +962,57 @@ export class FinanceService {
     if (order.status === 'CANCELED') {
       throw new BadRequestException('Cannot edit a canceled order.');
     }
-    const line = order.lines.find((l) => l.id === lineId);
-    if (!line) throw new NotFoundException();
-    if (line.menuItemId && line.lineStatus === 'ACTIVE') {
-      await this.adjustMenuStock(line.menuItemId, -line.quantity);
-    }
-    await this.prisma.shopOrderLine.delete({ where: { id: lineId } });
-    const updated = await this.recalcShopOrderTotal(orderId);
+    const prior = order.lines.find((l) => l.id === lineId);
+    if (!prior) throw new NotFoundException();
+
+    // Claim ACTIVE→gone + stock restore + total in one txn (no double restore).
+    const updated = await this.prisma.$transaction(async (db) => {
+      const line = await db.shopOrderLine.findFirst({
+        where: { id: lineId, shopOrderId: orderId },
+      });
+      if (!line) throw new NotFoundException();
+
+      if (line.menuItemId && line.lineStatus === 'ACTIVE') {
+        const claimed = await db.shopOrderLine.deleteMany({
+          where: {
+            id: lineId,
+            shopOrderId: orderId,
+            lineStatus: 'ACTIVE',
+          },
+        });
+        if (claimed.count === 1) {
+          await this.adjustMenuStock(
+            line.menuItemId,
+            -line.quantity,
+            shopId,
+            db,
+          );
+        } else {
+          throw new ConflictException(
+            'Line was modified concurrently. Retry.',
+          );
+        }
+      } else {
+        const deleted = await db.shopOrderLine.deleteMany({
+          where: { id: lineId, shopOrderId: orderId },
+        });
+        if (deleted.count === 0) throw new NotFoundException();
+      }
+
+      return this.recalcShopOrderTotal(orderId, shopId, db);
+    });
+
     await this.auditShopOrder(
       actor,
       'finance.shop_order.line.delete',
       updated,
       auditSummaryRemoveLine(updated, {
-        name: line.name,
-        quantity: line.quantity,
+        name: prior.name,
+        quantity: prior.quantity,
       }),
       { lineId },
     );
-    return updated;
+    return this.serializeShopOrder(updated);
   }
 
   async deleteShopOrder(actor: JwtAccessPayload, id: string) {
@@ -767,12 +1020,24 @@ export class FinanceService {
     const shopId = requireShopId(actor);
     await this.requireFeature(shopId, 'transaction');
     const order = await this.loadShopOrder(shopId, id);
-    for (const line of order.lines) {
-      if (line.menuItemId && line.lineStatus === 'ACTIVE') {
-        await this.adjustMenuStock(line.menuItemId, -line.quantity);
-      }
-    }
-    await this.prisma.shopOrder.delete({ where: { id } });
+
+    // Claim ACTIVE lines + restore BEFORE order delete — concurrent cancel
+    // cannot double-restore from a stale ACTIVE snapshot after cascade.
+    await this.prisma.$transaction(async (db) => {
+      const fresh = await db.shopOrder.findFirst({
+        where: { id, shopId },
+        include: this.shopOrderInclude(),
+      });
+      if (!fresh) throw new NotFoundException();
+
+      await claimActiveLinesAndRestoreStock(db, shopId, id, fresh.lines);
+
+      const deleted = await db.shopOrder.deleteMany({
+        where: { id, shopId },
+      });
+      if (deleted.count !== 1) throw new NotFoundException();
+    });
+
     await this.auditShopOrder(
       actor,
       'finance.shop_order.delete',
@@ -783,62 +1048,15 @@ export class FinanceService {
   }
 
   async listLosses(actor: JwtAccessPayload, take = 50) {
-    const shopId = requireShopId(actor);
-    await this.requireFeature(shopId, 'transaction');
-    return this.prisma.shopLoss.findMany({
-      where: { shopId },
-      orderBy: { occurredAt: 'desc' },
-      take,
-    });
+    return this.losses.listLosses(actor, take);
   }
 
   async createLoss(actor: JwtAccessPayload, dto: CreateLossDto) {
-    this.assert(actor, 'transaction.write');
-    const shopId = actor.shopId!;
-    await this.requireFeature(shopId, 'transaction');
-    const loss = await this.prisma.shopLoss.create({
-      data: {
-        shopId: actor.shopId!,
-        amount: dto.amount,
-        reason: dto.reason,
-        category: dto.category,
-        occurredAt: dto.occurredAt ? new Date(dto.occurredAt) : undefined,
-        createdById: actor.sub,
-      },
-    });
-    await this.audit.record(actor, {
-      section: 'finance',
-      action: 'finance.loss.create',
-      summary: `Recorded loss ${dto.amount} — ${dto.category}`,
-      meta: { lossId: loss.id, amount: dto.amount, reason: dto.reason },
-    });
-    if (dto.amount >= LARGE_LOSS_NOTIFY_THRESHOLD) {
-      await this.notifications.recordFinanceEvent(shopId, {
-        title: 'Large loss recorded',
-        body: `${dto.amount.toFixed(2)} — ${dto.category ?? 'uncategorized'}: ${dto.reason}`,
-        href: '/finance',
-        dedupeKey: `loss_large_${loss.id}`,
-      });
-    }
-    return loss;
+    return this.losses.createLoss(actor, dto);
   }
 
   async deleteLoss(actor: JwtAccessPayload, id: string) {
-    this.assert(actor, 'transaction.write');
-    const shopId = actor.shopId!;
-    await this.requireFeature(shopId, 'transaction');
-    const row = await this.prisma.shopLoss.findFirst({
-      where: { id, shopId: actor.shopId! },
-    });
-    if (!row) throw new NotFoundException();
-    await this.prisma.shopLoss.delete({ where: { id } });
-    await this.audit.record(actor, {
-      section: 'finance',
-      action: 'finance.loss.delete',
-      summary: `Deleted loss record ${row.amount} (${row.category})`,
-      meta: { lossId: id },
-    });
-    return { ok: true };
+    return this.losses.deleteLoss(actor, id);
   }
 
   private mapPlayBillingRow(
@@ -849,16 +1067,17 @@ export class FinanceService {
       startsAt: Date;
       endsAt: Date;
       status: string;
-      billedAmount: number | null;
+      billedAmount: MoneyInput;
       billedAt: Date | null;
       billingDiscountPercent: number;
-      billingBaseAmount?: number | null;
+      billingBaseAmount?: MoneyInput;
+      currency?: string | null;
       notes: string | null;
       resource: {
         id: string;
         name: string;
         type: string;
-        hourlyRate: number;
+        hourlyRate: MoneyInput;
         category: {
           id: string;
           name: string;
@@ -868,7 +1087,7 @@ export class FinanceService {
           rates: {
             label: string;
             durationMinutes: number | null;
-            price: number;
+            price: MoneyInput;
           }[];
         } | null;
       } | null;
@@ -876,6 +1095,11 @@ export class FinanceService {
     now: Date,
   ) {
     if (!row.resource) return null;
+    const categoryRates = (row.resource.category?.rates ?? []).map((r) => ({
+      label: r.label,
+      durationMinutes: r.durationMinutes,
+      price: toMoneyNumber(r.price),
+    }));
     const bucket = classifyPlayBillingRow(
       row.status,
       row.billedAt,
@@ -888,7 +1112,7 @@ export class FinanceService {
       bookingMode: row.resource.category?.bookingMode ?? 'TIME',
       notes: row.notes,
       offeringConfig: row.resource.category?.offeringConfig,
-      categoryRates: row.resource.category?.rates ?? [],
+      categoryRates,
       slotMinutes: row.resource.category?.slotMinutes ?? 60,
     };
     const party = effectiveBillingPartySize(
@@ -916,11 +1140,7 @@ export class FinanceService {
                 | null
                 | undefined,
               row.resource.category.bookingMode,
-              (row.resource.category.rates ?? []).map((r) => ({
-                label: r.label,
-                durationMinutes: r.durationMinutes,
-                price: r.price,
-              })),
+              categoryRates,
               row.resource.category.slotMinutes ?? 60,
             ),
             row.notes,
@@ -937,22 +1157,23 @@ export class FinanceService {
           startsAt: row.startsAt,
           endsAt: row.endsAt,
           partySize: party,
-          hourlyRate: row.resource.hourlyRate,
+          hourlyRate: toMoneyNumber(row.resource.hourlyRate),
           slotMinutes: row.resource.category?.slotMinutes ?? 60,
-          categoryRates: (row.resource.category?.rates ?? []).map((r) => ({
-            label: r.label,
-            durationMinutes: r.durationMinutes,
-            price: r.price,
-          })),
+          categoryRates,
           useElapsed: inProgress,
           now,
         });
     const discountPercent = row.billingDiscountPercent ?? 0;
     const rateAmount = computed.amount;
-    const baseAmount = row.billingBaseAmount ?? rateAmount;
+    const baseAmount =
+      row.billingBaseAmount != null
+        ? toMoneyNumber(row.billingBaseAmount)
+        : rateAmount;
     const amountDue =
       row.billedAt != null
-        ? (row.billedAmount ?? applyBillingDiscount(baseAmount, discountPercent))
+        ? (row.billedAmount != null
+            ? toMoneyNumber(row.billedAmount)
+            : applyBillingDiscount(baseAmount, discountPercent))
         : applyBillingDiscount(baseAmount, discountPercent);
     return {
       id: row.id,
@@ -962,8 +1183,9 @@ export class FinanceService {
       startsAt: row.startsAt.toISOString(),
       endsAt: row.endsAt.toISOString(),
       status: row.status,
-      billedAmount: row.billedAmount,
+      billedAmount: serializeMoneyOrNull(row.billedAmount),
       billedAt: row.billedAt?.toISOString() ?? null,
+      currency: row.currency ?? null,
       discountPercent,
       notes: row.notes,
       bucket,
@@ -975,9 +1197,9 @@ export class FinanceService {
         categoryName: row.resource.category?.name ?? null,
       },
       durationMinutes: computed.durationMinutes,
-      computedAmount: rateAmount,
-      baseAmount,
-      amountDue,
+      computedAmount: serializeMoney(rateAmount),
+      baseAmount: serializeMoney(baseAmount),
+      amountDue: serializeMoney(amountDue),
       rateLabel: computed.rateLabel,
       breakdown: computed.breakdown,
       collectsPartySize: bookingCollectsPartySize(
@@ -995,8 +1217,9 @@ export class FinanceService {
       startedAt: Date;
       endedAt: Date | null;
       durationMinutes: number | null;
-      amount: number;
+      amount: MoneyInput;
       billingDiscountPercent: number;
+      currency?: string | null;
       status: string;
       completedAt: Date | null;
       note: string | null;
@@ -1004,7 +1227,7 @@ export class FinanceService {
         id: string;
         name: string;
         type: string;
-        hourlyRate: number;
+        hourlyRate: MoneyInput;
         category: {
           name: string;
           bookingMode: BookingMode;
@@ -1013,7 +1236,7 @@ export class FinanceService {
           rates?: {
             label: string;
             durationMinutes: number | null;
-            price: number;
+            price: MoneyInput;
           }[];
         } | null;
       } | null;
@@ -1041,11 +1264,16 @@ export class FinanceService {
     );
     const discountPercent = row.billingDiscountPercent ?? 0;
     const isPaid = row.status === 'COMPLETED' || row.completedAt != null;
+    const categoryRates = (row.resource?.category?.rates ?? []).map((r) => ({
+      label: r.label,
+      durationMinutes: r.durationMinutes,
+      price: toMoneyNumber(r.price),
+    }));
     const billingOpts = {
       bookingMode: row.resource?.category?.bookingMode ?? 'TIME',
       notes: row.note,
       offeringConfig: row.resource?.category?.offeringConfig,
-      categoryRates: row.resource?.category?.rates ?? [],
+      categoryRates,
       slotMinutes: row.resource?.category?.slotMinutes ?? 60,
     };
     const collectsParty = row.resource
@@ -1061,9 +1289,9 @@ export class FinanceService {
           billingOpts,
         )
       : row.playerCount;
-    const baseAmount = row.amount;
+    const baseAmount = toMoneyNumber(row.amount);
     const amountDue = isPaid
-      ? row.amount
+      ? baseAmount
       : applyBillingDiscount(baseAmount, discountPercent);
     const bowlingMode =
       row.resource?.type === 'BOWLING' && row.resource.category
@@ -1074,11 +1302,7 @@ export class FinanceService {
                 | null
                 | undefined,
               row.resource.category.bookingMode,
-              (row.resource.category.rates ?? []).map((r) => ({
-                label: r.label,
-                durationMinutes: r.durationMinutes,
-                price: r.price,
-              })),
+              categoryRates,
               row.resource.category.slotMinutes ?? 60,
             ),
             row.note,
@@ -1105,8 +1329,9 @@ export class FinanceService {
       startsAt: row.startedAt.toISOString(),
       endsAt: effectiveEnd.toISOString(),
       status: row.status,
-      billedAmount: isPaid ? row.amount : null,
+      billedAmount: isPaid ? serializeMoney(row.amount) : null,
       billedAt: row.completedAt?.toISOString() ?? null,
+      currency: row.currency ?? null,
       discountPercent,
       notes: row.note,
       bucket,
@@ -1120,9 +1345,9 @@ export class FinanceService {
           }
         : null,
       durationMinutes,
-      computedAmount: baseAmount,
-      baseAmount,
-      amountDue,
+      computedAmount: serializeMoney(baseAmount),
+      baseAmount: serializeMoney(baseAmount),
+      amountDue: serializeMoney(amountDue),
       rateLabel: 'Walk-in',
       breakdown,
       collectsPartySize: collectsParty,
@@ -1227,21 +1452,34 @@ export class FinanceService {
       {
         day: string;
         items: typeof pageItems;
-        totalDue: number;
-        totalPaid: number;
+        totalDue: string;
+        totalPaid: string;
       }
     > = {};
+    const dueAcc: Record<string, number> = {};
+    const paidAcc: Record<string, number> = {};
     for (const item of pageItems) {
       const day = item.startsAt.slice(0, 10);
       if (!byDay[day]) {
-        byDay[day] = { day, items: [], totalDue: 0, totalPaid: 0 };
+        byDay[day] = {
+          day,
+          items: [],
+          totalDue: serializeMoney(0),
+          totalPaid: serializeMoney(0),
+        };
+        dueAcc[day] = 0;
+        paidAcc[day] = 0;
       }
       byDay[day].items.push(item);
       if (item.isPaid) {
-        byDay[day].totalPaid += item.amountDue;
+        paidAcc[day] = addMoney(paidAcc[day], item.amountDue);
       } else {
-        byDay[day].totalDue += item.amountDue;
+        dueAcc[day] = addMoney(dueAcc[day], item.amountDue);
       }
+    }
+    for (const day of Object.keys(byDay)) {
+      byDay[day].totalDue = serializeMoney(dueAcc[day] ?? 0);
+      byDay[day].totalPaid = serializeMoney(paidAcc[day] ?? 0);
     }
 
     const days = Object.values(byDay).sort((a, b) =>
@@ -1260,12 +1498,19 @@ export class FinanceService {
         awaitingPayment: items.filter((i) => i.bucket === 'awaiting_payment')
           .length,
         paid: items.filter((i) => i.bucket === 'paid').length,
-        unpaidTotal: filtered
-          .filter((i) => !i.isPaid)
-          .reduce((s, i) => s + i.amountDue, 0),
-        paidTotal: filtered
-          .filter((i) => i.isPaid)
-          .reduce((s, i) => s + (i.billedAmount ?? i.amountDue), 0),
+        unpaidTotal: serializeMoney(
+          filtered
+            .filter((i) => !i.isPaid)
+            .reduce((s, i) => addMoney(s, i.amountDue), 0),
+        ),
+        paidTotal: serializeMoney(
+          filtered
+            .filter((i) => i.isPaid)
+            .reduce(
+              (s, i) => addMoney(s, i.billedAmount ?? i.amountDue),
+              0,
+            ),
+        ),
       },
     };
   }
@@ -1278,47 +1523,70 @@ export class FinanceService {
     this.assert(actor, 'transaction.write');
     const shopId = requireShopId(actor);
     await this.requireFeature(shopId, 'transaction');
+    const currency = await loadShopCurrency(this.prisma, shopId);
     const now = new Date();
-    const row = await this.prisma.reservation.findFirst({
-      where: { id: reservationId, shopId, resourceId: { not: null } },
-      include: {
-        resource: {
-          include: {
-            category: { include: { rates: { orderBy: { sortOrder: 'asc' } } } },
-          },
+
+    const { updated, amount } = await this.prisma.$transaction(async (tx) => {
+      const row = await tx.reservation.findFirst({
+        where: { id: reservationId, shopId, resourceId: { not: null } },
+        include: this.playBillingInclude(),
+      });
+      if (!row?.resource) throw new NotFoundException('Booking not found.');
+
+      const mapped = this.mapPlayBillingRow(row, now);
+      if (!mapped) throw new BadRequestException('Not billable.');
+
+      const discountPercent =
+        dto.discountPercent ?? row.billingDiscountPercent ?? 0;
+      const payAmount =
+        dto.amountOverride != null
+          ? dto.amountOverride
+          : applyBillingDiscount(
+              toMoneyNumber(mapped.baseAmount),
+              discountPercent,
+            );
+
+      const sessionStillActive = row.endsAt > now;
+
+      // Conditional claim: unpaid → paid + amount stamp in one txn (walk-in pattern).
+      const claimed = await tx.reservation.updateMany({
+        where: {
+          id: reservationId,
+          shopId,
+          resourceId: { not: null },
+          billedAt: null,
+          status: { notIn: ['CANCELED', 'NO_SHOW'] },
         },
-      },
-    });
-    if (!row?.resource) throw new NotFoundException('Booking not found.');
-
-    const mapped = this.mapPlayBillingRow(row, now);
-    if (!mapped) throw new BadRequestException('Not billable.');
-
-    const discountPercent =
-      dto.discountPercent ?? row.billingDiscountPercent ?? 0;
-    const amount =
-      dto.amountOverride != null
-        ? dto.amountOverride
-        : applyBillingDiscount(mapped.baseAmount, discountPercent);
-
-    const sessionStillActive = row.endsAt > now;
-
-    const updated = await this.prisma.reservation.update({
-      where: { id: reservationId },
-      data: {
-        billedAmount: amount,
-        billedAt: now,
-        billingDiscountPercent: discountPercent,
-        billingPaymentMethod: dto.paymentMethod ?? 'CASH',
-        ...(sessionStillActive ? {} : { status: 'COMPLETED' }),
-      },
-      include: {
-        resource: {
-          include: {
-            category: { include: { rates: { orderBy: { sortOrder: 'asc' } } } },
-          },
+        data: {
+          billedAmount: payAmount,
+          billedAt: now,
+          currency,
+          billingDiscountPercent: discountPercent,
+          billingPaymentMethod: dto.paymentMethod ?? 'CASH',
+          ...(sessionStillActive ? {} : { status: 'COMPLETED' }),
         },
-      },
+      });
+      if (claimed.count !== 1) {
+        throw new ConflictException(
+          'Booking was updated by another request.',
+        );
+      }
+
+      const next = await tx.reservation.findFirst({
+        where: { id: reservationId, shopId },
+        include: this.playBillingInclude(),
+      });
+      if (!next?.resource) throw new NotFoundException('Booking not found.');
+      await postReservationBilled(tx, {
+        shopId,
+        reservationId,
+        billedAmount: payAmount,
+        currency: next.currency ?? currency,
+        billedAt: next.billedAt ?? now,
+        resourceId: next.resourceId,
+        createdById: actor.sub,
+      });
+      return { updated: next, amount: payAmount };
     });
 
     await this.audit.record(actor, {
@@ -1486,13 +1754,13 @@ export class FinanceService {
 
     if (!dto.clearPaid && existing.billedAt && remapped) {
       data.billedAmount = applyBillingDiscount(
-        remapped.baseAmount,
+        toMoneyNumber(remapped.baseAmount),
         dto.discountPercent ?? existing.billingDiscountPercent ?? 0,
       );
     }
 
     const updated = await this.prisma.reservation.update({
-      where: { id: reservationId },
+      where: { id: reservationId, shopId },
       data,
       include: this.playBillingInclude(),
     });
@@ -1532,7 +1800,7 @@ export class FinanceService {
         : ReservationStatus.NO_SHOW;
 
     const updated = await this.prisma.reservation.update({
-      where: { id: reservationId },
+      where: { id: reservationId, shopId },
       data: {
         status: reason,
         billedAt: null,
@@ -1543,7 +1811,7 @@ export class FinanceService {
 
     if (existing.resourceId) {
       await this.prisma.resource.update({
-        where: { id: existing.resourceId },
+        where: { id: existing.resourceId, shopId },
         data: { status: ResourceStatus.AVAILABLE },
       });
     }
@@ -1606,64 +1874,84 @@ export class FinanceService {
     if (opts.status && opts.status !== 'ALL') where.status = opts.status;
     if (opts.archived === 'only') where.archivedAt = { not: null };
     else where.archivedAt = null;
-    return this.prisma.playSession.findMany({
+    const rows = await this.prisma.playSession.findMany({
       where,
       orderBy: { createdAt: 'desc' },
       take: opts.take ?? 80,
       include: this.playSessionInclude(),
     });
+    return rows.map((s) => this.serializePlaySession(s));
   }
 
   async createPlaySession(actor: JwtAccessPayload, dto: CreatePlaySessionDto) {
     this.assert(actor, 'transaction.write');
     const shopId = requireShopId(actor);
     await this.requireFeature(shopId, 'transaction');
+    const currency = await loadShopCurrency(this.prisma, shopId);
     const durationMinutes = dto.durationMinutes ?? null;
     const startedAt = new Date();
+    const hoursEnd =
+      durationMinutes != null && durationMinutes > 0
+        ? new Date(startedAt.getTime() + durationMinutes * 60_000)
+        : startedAt;
+    await assertWithinOpeningHours(this.prisma, shopId, startedAt, hoursEnd);
 
+    const createRow = async (db: Prisma.TransactionClient | PrismaService) =>
+      db.playSession.create({
+        data: {
+          shopId,
+          resourceId: dto.resourceId ?? null,
+          reservationId: dto.reservationId ?? null,
+          playerCount: dto.playerCount ?? 1,
+          durationMinutes,
+          amount: dto.amount ?? 0,
+          currency,
+          billingDiscountPercent: dto.discountPercent ?? 0,
+          paymentMethod: dto.paymentMethod ?? 'CASH',
+          label: dto.label?.trim() || null,
+          note: dto.note?.trim() || null,
+          startedAt,
+          createdById: actor.sub,
+        },
+        include: this.playSessionInclude(),
+      });
+
+    let session;
     if (dto.resourceId) {
-      await assertResourceBookable(this.prisma, shopId, dto.resourceId);
-      const blockEnd =
-        durationMinutes != null && durationMinutes > 0
-          ? new Date(startedAt.getTime() + durationMinutes * 60_000)
-          : walkInEffectiveEnd({
-              startedAt,
-              endedAt: null,
-              durationMinutes: null,
-            });
-      await assertNoWalkInOverlap(
+      session = await withResourceBookingLock(
         this.prisma,
-        shopId,
         dto.resourceId,
-        startedAt,
-        blockEnd,
+        async (tx) => {
+          await assertResourceBookable(tx, shopId, dto.resourceId!);
+          const blockEnd =
+            durationMinutes != null && durationMinutes > 0
+              ? new Date(startedAt.getTime() + durationMinutes * 60_000)
+              : walkInEffectiveEnd({
+                  startedAt,
+                  endedAt: null,
+                  durationMinutes: null,
+                });
+          await assertNoWalkInOverlap(
+            tx,
+            shopId,
+            dto.resourceId!,
+            startedAt,
+            blockEnd,
+          );
+          await assertNoReservationOverlap(
+            tx,
+            shopId,
+            dto.resourceId!,
+            startedAt,
+            blockEnd,
+          );
+          return createRow(tx);
+        },
       );
-      await assertNoReservationOverlap(
-        this.prisma,
-        shopId,
-        dto.resourceId,
-        startedAt,
-        blockEnd,
-      );
+    } else {
+      session = await createRow(this.prisma);
     }
 
-    const session = await this.prisma.playSession.create({
-      data: {
-        shopId,
-        resourceId: dto.resourceId ?? null,
-        reservationId: dto.reservationId ?? null,
-        playerCount: dto.playerCount ?? 1,
-        durationMinutes,
-        amount: dto.amount ?? 0,
-        billingDiscountPercent: dto.discountPercent ?? 0,
-        paymentMethod: dto.paymentMethod ?? 'CASH',
-        label: dto.label?.trim() || null,
-        note: dto.note?.trim() || null,
-        startedAt,
-        createdById: actor.sub,
-      },
-      include: this.playSessionInclude(),
-    });
     await this.audit.record(actor, {
       section: 'finance',
       action: 'finance.play_session.create',
@@ -1675,7 +1963,7 @@ export class FinanceService {
         amount: session.amount,
       },
     });
-    return session;
+    return this.serializePlaySession(session);
   }
 
   async markPlaySessionPaid(
@@ -1686,46 +1974,77 @@ export class FinanceService {
     this.assert(actor, 'transaction.write');
     const shopId = requireShopId(actor);
     await this.requireFeature(shopId, 'transaction');
+    const currency = await loadShopCurrency(this.prisma, shopId);
     const now = new Date();
-    const row = await this.prisma.playSession.findFirst({
-      where: { id, shopId, reservationId: null },
-      include: { resource: { include: { category: true } } },
-    });
-    if (!row) throw new NotFoundException('Walk-in session not found.');
-    if (row.status === 'CANCELED') {
-      throw new BadRequestException('Canceled session cannot be paid.');
-    }
-    const mapped = this.mapWalkInBillingRow(row, now);
-    if (!mapped) throw new BadRequestException('Not billable.');
-    const discountPercent =
-      dto.discountPercent ?? row.billingDiscountPercent ?? 0;
-    const amount =
-      dto.amountOverride != null
-        ? dto.amountOverride
-        : applyBillingDiscount(row.amount, discountPercent);
 
-    const effectiveEnd =
-      row.endedAt ??
-      (row.durationMinutes != null && row.durationMinutes > 0
-        ? new Date(row.startedAt.getTime() + row.durationMinutes * 60_000)
-        : null);
-    const stillActive =
-      row.status === 'ACTIVE' && (!effectiveEnd || effectiveEnd > now);
+    const { updated, amount } = await this.prisma.$transaction(async (tx) => {
+      const row = await tx.playSession.findFirst({
+        where: { id, shopId, reservationId: null },
+        include: { resource: { include: { category: true } } },
+      });
+      if (!row) throw new NotFoundException('Walk-in session not found.');
+      if (row.status === 'CANCELED') {
+        throw new BadRequestException('Canceled session cannot be paid.');
+      }
+      const mapped = this.mapWalkInBillingRow(row, now);
+      if (!mapped) throw new BadRequestException('Not billable.');
+      const discountPercent =
+        dto.discountPercent ?? row.billingDiscountPercent ?? 0;
+      const payAmount =
+        dto.amountOverride != null
+          ? dto.amountOverride
+          : applyBillingDiscount(toMoneyNumber(row.amount), discountPercent);
 
-    const updated = await this.prisma.playSession.update({
-      where: { id },
-      data: {
-        amount,
-        billingDiscountPercent: discountPercent,
-        completedAt: now,
-        ...(stillActive
-          ? {}
-          : {
-              status: 'COMPLETED',
-              endedAt: row.endedAt ?? now,
-            }),
-      },
-      include: this.playSessionInclude(),
+      const effectiveEnd =
+        row.endedAt ??
+        (row.durationMinutes != null && row.durationMinutes > 0
+          ? new Date(row.startedAt.getTime() + row.durationMinutes * 60_000)
+          : null);
+      const stillActive =
+        row.status === 'ACTIVE' && (!effectiveEnd || effectiveEnd > now);
+
+      // Conditional claim: cancel racing in loses; money stamp is one txn.
+      const claimed = await tx.playSession.updateMany({
+        where: {
+          id,
+          shopId,
+          reservationId: null,
+          status: { not: 'CANCELED' },
+        },
+        data: {
+          amount: payAmount,
+          currency: row.currency ?? currency,
+          billingDiscountPercent: discountPercent,
+          completedAt: now,
+          ...(stillActive
+            ? {}
+            : {
+                status: 'COMPLETED',
+                endedAt: row.endedAt ?? now,
+              }),
+        },
+      });
+      if (claimed.count !== 1) {
+        throw new ConflictException(
+          'Walk-in session was updated by another request.',
+        );
+      }
+
+      const next = await tx.playSession.findFirst({
+        where: { id, shopId },
+        include: this.playSessionInclude(),
+      });
+      if (!next) throw new NotFoundException('Walk-in session not found.');
+      await postWalkInPlaySessionPaid(tx, {
+        shopId,
+        sessionId: id,
+        amount: payAmount,
+        currency: next.currency ?? currency,
+        completedAt: next.completedAt ?? now,
+        reservationId: next.reservationId,
+        createdById: actor.sub,
+      });
+      return { updated: next, amount: payAmount };
     });
 
     await this.audit.record(actor, {
@@ -1748,21 +2067,37 @@ export class FinanceService {
     this.assert(actor, 'transaction.write');
     const shopId = requireShopId(actor);
     await this.requireFeature(shopId, 'transaction');
-    const row = await this.prisma.playSession.findFirst({
-      where: { id, shopId },
-    });
-    if (!row) throw new NotFoundException();
-    if (row.status === 'COMPLETED') {
-      throw new BadRequestException('Paid sessions cannot be canceled.');
-    }
-    await this.prisma.playSession.update({
-      where: { id },
+
+    // Only unpaid ACTIVE — conditional so pay/complete cannot be undone by a race.
+    const claimed = await this.prisma.playSession.updateMany({
+      where: {
+        id,
+        shopId,
+        status: 'ACTIVE',
+        completedAt: null,
+      },
       data: { status: 'CANCELED', completedAt: null },
     });
+    if (claimed.count !== 1) {
+      const row = await this.prisma.playSession.findFirst({
+        where: { id, shopId },
+      });
+      if (!row) throw new NotFoundException();
+      if (row.status === 'COMPLETED' || row.completedAt != null) {
+        throw new BadRequestException('Paid sessions cannot be canceled.');
+      }
+      if (row.status === 'CANCELED') {
+        throw new BadRequestException('Session is already canceled.');
+      }
+      throw new ConflictException(
+        'Walk-in session was updated by another request.',
+      );
+    }
+
     await this.audit.record(actor, {
       section: 'finance',
       action: 'finance.play_session.cancel',
-      summary: `Canceled walk-in ${row.label ?? 'guest'}`,
+      summary: 'Canceled walk-in guest',
       meta: { sessionId: id },
     });
     return { ok: true as const, sessionId: id };
@@ -1784,6 +2119,99 @@ export class FinanceService {
       throw new BadRequestException('Canceled session cannot be edited.');
     }
 
+    if (dto.clearPaid) {
+      const clearPaidInner = async (
+        db: Prisma.TransactionClient | PrismaService,
+      ) => {
+        const claimed = await db.playSession.updateMany({
+          where: {
+            id,
+            shopId,
+            status: { not: 'CANCELED' },
+            OR: [{ status: 'COMPLETED' }, { completedAt: { not: null } }],
+          },
+          data: {
+            status: 'ACTIVE',
+            completedAt: null,
+          },
+        });
+        if (claimed.count !== 1) {
+          throw new BadRequestException('Session is not paid.');
+        }
+        const next = await db.playSession.findFirst({
+          where: { id, shopId },
+          include: this.playSessionInclude(),
+        });
+        if (!next) throw new NotFoundException();
+        return next;
+      };
+
+      if (row.resourceId) {
+        const reopened = await withResourceBookingLock(
+          this.prisma,
+          row.resourceId,
+          async (tx) => {
+            await assertResourceBookable(tx, shopId, row.resourceId!);
+            const blockEnd = walkInEffectiveEnd({
+              startedAt: row.startedAt,
+              endedAt: row.endedAt,
+              durationMinutes: row.durationMinutes,
+            });
+            await assertNoWalkInOverlap(
+              tx,
+              shopId,
+              row.resourceId!,
+              row.startedAt,
+              blockEnd,
+              id,
+            );
+            await assertNoReservationOverlap(
+              tx,
+              shopId,
+              row.resourceId!,
+              row.startedAt,
+              blockEnd,
+            );
+            return clearPaidInner(tx);
+          },
+        );
+        return this.serializePlaySession(reopened);
+      }
+      return this.serializePlaySession(await clearPaidInner(this.prisma));
+    }
+
+    if (dto.status === 'CANCELED') {
+      const claimed = await this.prisma.playSession.updateMany({
+        where: {
+          id,
+          shopId,
+          status: 'ACTIVE',
+          completedAt: null,
+        },
+        data: { status: 'CANCELED', completedAt: null },
+      });
+      if (claimed.count !== 1) {
+        if (row.status === 'COMPLETED' || row.completedAt != null) {
+          throw new BadRequestException('Paid sessions cannot be canceled.');
+        }
+        throw new ConflictException(
+          'Walk-in session was updated by another request.',
+        );
+      }
+      const canceled = await this.prisma.playSession.findFirst({
+        where: { id, shopId },
+        include: this.playSessionInclude(),
+      });
+      if (!canceled) throw new NotFoundException();
+      await this.audit.record(actor, {
+        section: 'finance',
+        action: 'finance.play_session.update',
+        summary: `Updated walk-in ${canceled.label ?? 'guest'} (status → CANCELED)`,
+        meta: { sessionId: id, endSession: false, status: 'CANCELED' },
+      });
+      return this.serializePlaySession(canceled);
+    }
+
     let completedAt = row.completedAt;
     let endedAt = row.endedAt;
     if (dto.endSession && row.status === 'ACTIVE') {
@@ -1793,42 +2221,121 @@ export class FinanceService {
       completedAt = new Date();
       endedAt = endedAt ?? completedAt;
     }
-    if (dto.clearPaid && row.status === 'COMPLETED') {
-      return this.prisma.playSession.update({
-        where: { id },
-        data: {
-          status: 'ACTIVE',
-          completedAt: null,
-        },
-        include: this.playSessionInclude(),
-      });
-    }
-    if (dto.status === 'CANCELED') {
-      completedAt = null;
-    }
 
     const discountPercent =
       dto.discountPercent !== undefined
         ? dto.discountPercent
         : row.billingDiscountPercent;
 
-    const updated = await this.prisma.playSession.update({
-      where: { id },
-      data: {
-        status: dto.status,
-        resourceId: dto.resourceId,
-        playerCount: dto.playerCount,
-        durationMinutes: dto.durationMinutes,
-        amount: dto.amount,
-        billingDiscountPercent: discountPercent,
-        paymentMethod: dto.paymentMethod,
-        label: dto.label === undefined ? undefined : dto.label?.trim() || null,
-        note: dto.note === undefined ? undefined : dto.note?.trim() || null,
-        completedAt,
-        endedAt,
-      },
-      include: this.playSessionInclude(),
-    });
+    const nextResourceId =
+      dto.resourceId !== undefined ? dto.resourceId : row.resourceId;
+    const nextDurationMinutes =
+      dto.durationMinutes !== undefined
+        ? dto.durationMinutes
+        : row.durationMinutes;
+    const nextStatus = dto.status ?? row.status;
+    const intervalAffecting =
+      dto.resourceId !== undefined ||
+      dto.durationMinutes !== undefined ||
+      (dto.endSession === true && row.status === 'ACTIVE');
+    const needsBookingLock =
+      Boolean(nextResourceId) &&
+      nextStatus === 'ACTIVE' &&
+      intervalAffecting;
+
+    const updateData = {
+      status: dto.status,
+      resourceId: dto.resourceId,
+      playerCount: dto.playerCount,
+      durationMinutes: dto.durationMinutes,
+      amount: dto.amount,
+      billingDiscountPercent: discountPercent,
+      paymentMethod: dto.paymentMethod,
+      label: dto.label === undefined ? undefined : dto.label?.trim() || null,
+      note: dto.note === undefined ? undefined : dto.note?.trim() || null,
+      completedAt,
+      endedAt,
+    };
+
+    const applyUpdate = async (
+      db: Prisma.TransactionClient | PrismaService,
+    ) => {
+      const completing =
+        dto.status === 'COMPLETED' && row.status !== 'COMPLETED';
+      const claimed = await db.playSession.updateMany({
+        where: completing
+          ? {
+              id,
+              shopId,
+              status: { notIn: ['CANCELED', 'COMPLETED'] },
+            }
+          : {
+              id,
+              shopId,
+              status: { not: 'CANCELED' },
+            },
+        data: updateData,
+      });
+      if (claimed.count !== 1) {
+        throw new ConflictException(
+          'Walk-in session was updated by another request.',
+        );
+      }
+      const next = await db.playSession.findFirst({
+        where: { id, shopId },
+        include: this.playSessionInclude(),
+      });
+      if (!next) throw new NotFoundException();
+      return next;
+    };
+
+    const updated = needsBookingLock
+      ? await withResourceBookingLock(
+          this.prisma,
+          nextResourceId!,
+          async (tx) => {
+            const fresh = await tx.playSession.findFirst({
+              where: { id, shopId },
+            });
+            if (!fresh) throw new NotFoundException();
+            if (fresh.status === 'CANCELED') {
+              throw new BadRequestException(
+                'Canceled session cannot be edited.',
+              );
+            }
+            let lockEndedAt = fresh.endedAt;
+            if (dto.endSession && fresh.status === 'ACTIVE') {
+              lockEndedAt = new Date();
+            }
+            const lockDuration =
+              dto.durationMinutes !== undefined
+                ? dto.durationMinutes
+                : fresh.durationMinutes;
+            await assertResourceBookable(tx, shopId, nextResourceId!);
+            const blockEnd = walkInEffectiveEnd({
+              startedAt: fresh.startedAt,
+              endedAt: lockEndedAt,
+              durationMinutes: lockDuration,
+            });
+            await assertNoWalkInOverlap(
+              tx,
+              shopId,
+              nextResourceId!,
+              fresh.startedAt,
+              blockEnd,
+              id,
+            );
+            await assertNoReservationOverlap(
+              tx,
+              shopId,
+              nextResourceId!,
+              fresh.startedAt,
+              blockEnd,
+            );
+            return applyUpdate(tx);
+          },
+        )
+      : await applyUpdate(this.prisma);
 
     const summaryParts: string[] = [];
     if (dto.endSession) summaryParts.push('ended session');
@@ -1854,6 +2361,23 @@ export class FinanceService {
       });
     }
 
-    return updated;
+    // Alternate pay path (status → COMPLETED without markPlaySessionPaid).
+    const becamePaid =
+      (dto.status === 'COMPLETED' && row.status !== 'COMPLETED') ||
+      (updated.completedAt != null && row.completedAt == null);
+    if (becamePaid && !updated.reservationId) {
+      const shopCurrency = await loadShopCurrency(this.prisma, shopId);
+      await postWalkInPlaySessionPaid(this.prisma, {
+        shopId,
+        sessionId: id,
+        amount: updated.amount,
+        currency: updated.currency ?? shopCurrency,
+        completedAt: updated.completedAt ?? new Date(),
+        reservationId: updated.reservationId,
+        createdById: actor.sub,
+      });
+    }
+
+    return this.serializePlaySession(updated);
   }
 }

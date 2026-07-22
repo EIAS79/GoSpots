@@ -1,5 +1,5 @@
 import { ForbiddenException } from '@nestjs/common';
-import { parseDashboardPath } from './dashboard-path';
+import { classifyVenuePath } from './dashboard-path';
 import type { JwtAccessPayload } from '../modules/auth/auth.service';
 import { PrismaService } from '../prisma/prisma.service';
 
@@ -17,13 +17,14 @@ export async function resolveVenueShopId(
     );
   }
 
-  const parsed = parseDashboardPath(venuePath.trim());
-  if (!parsed) {
+  const ref = classifyVenuePath(venuePath);
+  if (!ref) {
     throw new ForbiddenException('Invalid venue dashboard path.');
   }
 
+  // Phase 3: always slug-only (legacy slug--key strips to slug; key not verified).
   const shop = await prisma.shop.findFirst({
-    where: { slug: parsed.slug, dashboardKey: parsed.dashboardKey },
+    where: { slug: ref.slug },
     select: { id: true },
   });
   if (!shop) {

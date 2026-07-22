@@ -12,6 +12,10 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { ApiError } from "@/lib/api";
 import { cn } from "@/lib/cn";
 import {
+  useConnectivityOptional,
+  type ConnectivityMode,
+} from "@/lib/connectivity-context";
+import {
   clearGuestChatToken,
   createPublicGuestChat,
   deletePublicGuestChat,
@@ -23,28 +27,56 @@ import {
   writeGuestChatToken,
   type GuestChat,
 } from "@/lib/guest-chat-client";
+import {
+  isPublicCaptchaEnabled,
+  withCaptchaToken,
+} from "@/lib/public-captcha";
+import { usePublicPrefs } from "@/lib/public-prefs-context";
 import { useLiveData } from "@/lib/use-live-data";
+import { PublicCaptchaWidget } from "@/components/venues/public/public-captcha-widget";
+import { PrivacyConsentCheckbox } from "@/components/venues/public/privacy-consent-checkbox";
 
-function statusLabel(status: GuestChat["status"]) {
-  switch (status) {
-    case "WAITING":
-      return "Waiting for staff…";
-    case "OPEN":
-      return "Connected with staff";
-    case "PAUSED":
-      return "Chat paused";
-    case "ENDED":
-      return "Chat ended";
-    default:
-      return status;
+/** Modes A/B/C — fail-closed on guest chat writes (bible #32). Mode F keeps draft/send. */
+function isConnectivityOutage(mode: ConnectivityMode): boolean {
+  return (
+    mode === "offline" ||
+    mode === "api_unreachable" ||
+    mode === "api_unavailable"
+  );
+}
+
+function outageCopyKey(
+  mode: Extract<
+    ConnectivityMode,
+    "offline" | "api_unreachable" | "api_unavailable"
+  >,
+): string {
+  switch (mode) {
+    case "offline":
+      return "venuePage.guestChat.outageOffline";
+    case "api_unreachable":
+      return "venuePage.guestChat.outageUnreachable";
+    case "api_unavailable":
+      return "venuePage.guestChat.outageUnavailable";
   }
 }
 
-function formatTime(iso: string) {
-  return new Date(iso).toLocaleTimeString(undefined, {
-    hour: "numeric",
-    minute: "2-digit",
-  });
+function statusLabel(
+  status: GuestChat["status"],
+  t: (key: string, vars?: Record<string, string | number>) => string,
+) {
+  switch (status) {
+    case "WAITING":
+      return t("venuePage.guestChat.statusWaiting");
+    case "OPEN":
+      return t("venuePage.guestChat.statusOpen");
+    case "PAUSED":
+      return t("venuePage.guestChat.statusPaused");
+    case "ENDED":
+      return t("venuePage.guestChat.statusEnded");
+    default:
+      return status;
+  }
 }
 
 export function VenueGuestChatWidget({
@@ -54,6 +86,21 @@ export function VenueGuestChatWidget({
   slug: string;
   venueName: string;
 }) {
+  const { t, locale } = usePublicPrefs();
+  const connectivity = useConnectivityOptional();
+  const connectivityMode = connectivity?.mode ?? "ok";
+  const outage = isConnectivityOutage(connectivityMode);
+  const outageMessage = outage
+    ? t(
+        outageCopyKey(
+          connectivityMode as Extract<
+            ConnectivityMode,
+            "offline" | "api_unreachable" | "api_unavailable"
+          >,
+        ),
+      )
+    : null;
+
   const [open, setOpen] = useState(false);
   const [chat, setChat] = useState<GuestChat | null>(null);
   const [token, setToken] = useState<string | null>(null);
@@ -67,8 +114,20 @@ export function VenueGuestChatWidget({
   const [guestPhone, setGuestPhone] = useState("");
   const [firstMessage, setFirstMessage] = useState("");
   const [draft, setDraft] = useState("");
+  const [captchaToken, setCaptchaToken] = useState<string | null>(null);
+  const [captchaReset, setCaptchaReset] = useState(0);
+  const [privacyConsent, setPrivacyConsent] = useState(false);
 
   const scrollerRef = useRef<HTMLDivElement>(null);
+
+  const formatTime = useCallback(
+    (iso: string) =>
+      new Date(iso).toLocaleTimeString(locale, {
+        hour: "numeric",
+        minute: "2-digit",
+      }),
+    [locale],
+  );
 
   const scrollToBottom = useCallback(() => {
     const el = scrollerRef.current;
@@ -108,17 +167,20 @@ export function VenueGuestChatWidget({
   }, [slug]);
 
   const refresh = useCallback(async () => {
-    if (!token) return;
+    if (!token) return true;
     try {
       const data = await fetchPublicGuestChat(slug, token);
       setChat(data);
       setError(null);
+      return true;
     } catch (e) {
       if (e instanceof ApiError && e.status === 404) {
         clearGuestChatToken(slug);
         setToken(null);
         setChat(null);
+        return true;
       }
+      return false;
     }
   }, [slug, token]);
 
@@ -129,23 +191,45 @@ export function VenueGuestChatWidget({
 
   const startChat = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (outage) return;
+    if (!privacyConsent) {
+      setError(t("venuePage.privacyConsent.required"));
+      return;
+    }
+    if (isPublicCaptchaEnabled() && !captchaToken?.trim()) {
+      setError(t("venuePage.captcha.required"));
+      return;
+    }
     setBusy(true);
     setError(null);
     setNotice(null);
     try {
-      const res = await createPublicGuestChat(slug, {
-        guestName: guestName.trim(),
-        guestEmail: guestEmail.trim() || undefined,
-        guestPhone: guestPhone.trim() || undefined,
-        message: firstMessage.trim() || undefined,
-      });
+      const res = await createPublicGuestChat(
+        slug,
+        withCaptchaToken(
+          {
+            guestName: guestName.trim(),
+            guestEmail: guestEmail.trim() || undefined,
+            guestPhone: guestPhone.trim() || undefined,
+            message: firstMessage.trim() || undefined,
+            privacyConsentAccepted: true,
+          },
+          captchaToken,
+        ),
+      );
       writeGuestChatToken(slug, res.guestToken);
       setToken(res.guestToken);
       setChat(res.chat);
       setFirstMessage("");
+      setCaptchaToken(null);
+      setCaptchaReset((n) => n + 1);
       setNotice(res.message);
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Could not start chat.");
+      setError(
+        err instanceof Error ? err.message : t("venuePage.guestChat.errorStart"),
+      );
+      setCaptchaToken(null);
+      setCaptchaReset((n) => n + 1);
     } finally {
       setBusy(false);
     }
@@ -153,7 +237,7 @@ export function VenueGuestChatWidget({
 
   const sendMessage = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!token || !draft.trim()) return;
+    if (outage || !token || !draft.trim()) return;
     setBusy(true);
     setError(null);
     try {
@@ -166,14 +250,16 @@ export function VenueGuestChatWidget({
       );
       await refresh();
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Could not send.");
+      setError(
+        err instanceof Error ? err.message : t("venuePage.guestChat.errorSend"),
+      );
     } finally {
       setBusy(false);
     }
   };
 
   const pingStaff = async () => {
-    if (!token) return;
+    if (outage || !token) return;
     setBusy(true);
     setError(null);
     setNotice(null);
@@ -182,30 +268,34 @@ export function VenueGuestChatWidget({
       setNotice(res.message);
       await refresh();
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Could not notify staff.");
+      setError(
+        err instanceof Error ? err.message : t("venuePage.guestChat.errorPing"),
+      );
     } finally {
       setBusy(false);
     }
   };
 
   const endChat = async () => {
-    if (!token) return;
+    if (outage || !token) return;
     setBusy(true);
     setError(null);
     try {
       const data = await endPublicGuestChat(slug, token);
       setChat(data);
-      setNotice("You ended this chat.");
+      setNotice(t("venuePage.guestChat.endedNotice"));
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Could not end chat.");
+      setError(
+        err instanceof Error ? err.message : t("venuePage.guestChat.errorEnd"),
+      );
     } finally {
       setBusy(false);
     }
   };
 
   const removeChat = async () => {
-    if (!token) return;
-    if (!window.confirm("Delete this chat? You won’t be able to reopen it.")) {
+    if (outage || !token) return;
+    if (!window.confirm(t("venuePage.guestChat.deleteConfirm"))) {
       return;
     }
     setBusy(true);
@@ -217,7 +307,11 @@ export function VenueGuestChatWidget({
       setChat(null);
       setNotice(null);
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Could not delete chat.");
+      setError(
+        err instanceof Error
+          ? err.message
+          : t("venuePage.guestChat.errorDelete"),
+      );
     } finally {
       setBusy(false);
     }
@@ -241,7 +335,9 @@ export function VenueGuestChatWidget({
         aria-expanded={open}
       >
         <MessageCircle size={18} />
-        {hasActive ? "Continue chat" : "Chat with staff"}
+        {hasActive
+          ? t("venuePage.guestChat.continue")
+          : t("venuePage.guestChat.open")}
         {chat?.status === "WAITING" ? (
           <span className="size-2 animate-pulse rounded-full bg-amber-300" />
         ) : null}
@@ -256,21 +352,31 @@ export function VenueGuestChatWidget({
               </p>
               <p className="text-[11px] text-zinc-400">
                 {bootstrapping
-                  ? "Loading…"
+                  ? t("venuePage.guestChat.loading")
                   : chat
-                    ? statusLabel(chat.status)
-                    : "Private chat with venue staff"}
+                    ? statusLabel(chat.status, t)
+                    : t("venuePage.guestChat.privateSubtitle")}
               </p>
             </div>
             <button
               type="button"
               onClick={() => setOpen(false)}
               className="rounded-lg p-1 text-zinc-500 hover:bg-white/5 hover:text-zinc-200"
-              aria-label="Close chat"
+              aria-label={t("venuePage.guestChat.close")}
             >
               <X size={16} />
             </button>
           </header>
+
+          {outageMessage ? (
+            <p
+              role="status"
+              aria-live="polite"
+              className="border-b border-amber-400/25 bg-amber-950/50 px-3 py-2 text-xs leading-snug text-amber-100/95"
+            >
+              {outageMessage}
+            </p>
+          ) : null}
 
           <div ref={scrollerRef} className="flex-1 space-y-2 overflow-y-auto px-3 py-3">
             {bootstrapping ? (
@@ -280,12 +386,12 @@ export function VenueGuestChatWidget({
             ) : !chat ? (
               <form onSubmit={startChat} className="space-y-3">
                 <p className="text-xs leading-relaxed text-zinc-400">
-                  Start a private chat. Only you and venue staff can see it —
-                  it stays available after refresh until you or staff end or
-                  delete it.
+                  {t("venuePage.guestChat.intro")}
                 </p>
                 <label className="block space-y-1">
-                  <span className="text-[11px] text-zinc-500">Your name</span>
+                  <span className="text-[11px] text-zinc-500">
+                    {t("venuePage.guestChat.yourName")}
+                  </span>
                   <input
                     required
                     value={guestName}
@@ -296,7 +402,7 @@ export function VenueGuestChatWidget({
                 </label>
                 <label className="block space-y-1">
                   <span className="text-[11px] text-zinc-500">
-                    Email (optional)
+                    {t("venuePage.guestChat.emailOptional")}
                   </span>
                   <input
                     type="email"
@@ -308,7 +414,7 @@ export function VenueGuestChatWidget({
                 </label>
                 <label className="block space-y-1">
                   <span className="text-[11px] text-zinc-500">
-                    Phone (optional)
+                    {t("venuePage.guestChat.phoneOptional")}
                   </span>
                   <input
                     value={guestPhone}
@@ -319,7 +425,7 @@ export function VenueGuestChatWidget({
                 </label>
                 <label className="block space-y-1">
                   <span className="text-[11px] text-zinc-500">
-                    First message (optional)
+                    {t("venuePage.guestChat.firstMessageOptional")}
                   </span>
                   <textarea
                     value={firstMessage}
@@ -327,12 +433,22 @@ export function VenueGuestChatWidget({
                     rows={3}
                     className="w-full resize-none rounded-lg border border-white/10 bg-zinc-900 px-3 py-2 text-sm text-white outline-none focus:border-emerald-400/50"
                     maxLength={2000}
-                    placeholder="How can we help?"
+                    placeholder={t("venuePage.guestChat.firstMessagePlaceholder")}
                   />
                 </label>
+                <PublicCaptchaWidget
+                  onTokenChange={setCaptchaToken}
+                  resetKey={captchaReset}
+                />
+                <PrivacyConsentCheckbox
+                  checked={privacyConsent}
+                  onChange={setPrivacyConsent}
+                  label={t("venuePage.privacyConsent.label")}
+                  disabled={busy}
+                />
                 <button
                   type="submit"
-                  disabled={busy || !guestName.trim()}
+                  disabled={outage || busy || !guestName.trim()}
                   className="inline-flex w-full items-center justify-center gap-2 rounded-lg bg-emerald-600 px-3 py-2.5 text-sm font-semibold text-white hover:bg-emerald-500 disabled:opacity-50"
                 >
                   {busy ? (
@@ -340,19 +456,19 @@ export function VenueGuestChatWidget({
                   ) : (
                     <MessageCircle size={16} />
                   )}
-                  Start chat
+                  {t("venuePage.guestChat.start")}
                 </button>
               </form>
             ) : (
               <>
                 {chat.status === "WAITING" ? (
                   <div className="rounded-lg border border-amber-400/20 bg-amber-950/40 px-3 py-2 text-xs text-amber-100/90">
-                    You’re in the queue. A staff member will join shortly.
+                    {t("venuePage.guestChat.queueHint")}
                   </div>
                 ) : null}
                 {chat.status === "PAUSED" ? (
                   <div className="rounded-lg border border-amber-400/20 bg-amber-950/40 px-3 py-2 text-xs text-amber-100/90">
-                    Staff paused this chat. You can still message or notify them.
+                    {t("venuePage.guestChat.pausedHint")}
                   </div>
                 ) : null}
                 {chat.messages.map((m) => {
@@ -382,7 +498,10 @@ export function VenueGuestChatWidget({
                             mine ? "text-emerald-100/70" : "text-zinc-500",
                           )}
                         >
-                          {mine ? "You" : "Staff"} · {formatTime(m.createdAt)}
+                          {mine
+                            ? t("venuePage.guestChat.you")
+                            : t("venuePage.guestChat.staff")}{" "}
+                          · {formatTime(m.createdAt)}
                         </p>
                       </div>
                     </div>
@@ -390,7 +509,7 @@ export function VenueGuestChatWidget({
                 })}
                 {chat.messages.length === 0 ? (
                   <p className="py-6 text-center text-xs text-zinc-500">
-                    No messages yet — say hello when you’re ready.
+                    {t("venuePage.guestChat.noMessages")}
                   </p>
                 ) : null}
               </>
@@ -414,32 +533,32 @@ export function VenueGuestChatWidget({
                 {canPing ? (
                   <button
                     type="button"
-                    disabled={busy}
+                    disabled={outage || busy}
                     onClick={() => void pingStaff()}
                     className="inline-flex items-center gap-1 rounded-md border border-white/10 px-2 py-1 text-[11px] text-zinc-300 hover:border-amber-400/40 hover:text-amber-200 disabled:opacity-50"
                   >
                     <Bell size={12} />
-                    Notify staff
+                    {t("venuePage.guestChat.notifyStaff")}
                   </button>
                 ) : null}
                 {chat.status !== "ENDED" ? (
                   <button
                     type="button"
-                    disabled={busy}
+                    disabled={outage || busy}
                     onClick={() => void endChat()}
                     className="inline-flex items-center gap-1 rounded-md border border-white/10 px-2 py-1 text-[11px] text-zinc-300 hover:text-zinc-100 disabled:opacity-50"
                   >
-                    End chat
+                    {t("venuePage.guestChat.end")}
                   </button>
                 ) : null}
                 <button
                   type="button"
-                  disabled={busy}
+                  disabled={outage || busy}
                   onClick={() => void removeChat()}
                   className="inline-flex items-center gap-1 rounded-md border border-white/10 px-2 py-1 text-[11px] text-zinc-400 hover:border-rose-400/40 hover:text-rose-300 disabled:opacity-50"
                 >
                   <Trash2 size={12} />
-                  Delete
+                  {t("venuePage.guestChat.delete")}
                 </button>
               </div>
               {canType ? (
@@ -449,8 +568,8 @@ export function VenueGuestChatWidget({
                     onChange={(e) => setDraft(e.target.value)}
                     placeholder={
                       chat.status === "WAITING"
-                        ? "Message while you wait…"
-                        : "Type a message…"
+                        ? t("venuePage.guestChat.placeholderWaiting")
+                        : t("venuePage.guestChat.placeholderTyping")
                     }
                     className="min-w-0 flex-1 rounded-lg border border-white/10 bg-zinc-950 px-3 py-2 text-sm text-white outline-none focus:border-emerald-400/50"
                     maxLength={2000}
@@ -458,9 +577,9 @@ export function VenueGuestChatWidget({
                   />
                   <button
                     type="submit"
-                    disabled={busy || !draft.trim()}
+                    disabled={outage || busy || !draft.trim()}
                     className="inline-flex items-center justify-center rounded-lg bg-emerald-600 px-3 text-white hover:bg-emerald-500 disabled:opacity-50"
-                    aria-label="Send"
+                    aria-label={t("venuePage.guestChat.send")}
                   >
                     {busy ? (
                       <Loader2 className="h-4 w-4 animate-spin" />
@@ -471,8 +590,7 @@ export function VenueGuestChatWidget({
                 </form>
               ) : (
                 <p className="px-1 py-1 text-[11px] text-zinc-500">
-                  This chat has ended. Delete it to start a new one, or ask
-                  staff to reopen.
+                  {t("venuePage.guestChat.endedHint")}
                 </p>
               )}
             </div>

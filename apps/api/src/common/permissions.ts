@@ -73,6 +73,107 @@ export function hasPermission(csv: string, required: PermissionKey): boolean {
   return set.has('*') || set.has(required);
 }
 
+const KNOWN_PERMISSIONS = new Set<string>(Object.values(PERMISSIONS));
+
+/**
+ * Rows-primary permission resolve.
+ * When `permissionRows` is provided (including `[]`), join rows are SoT.
+ * CSV is only a fallback for callers that never loaded rows (tests / legacy).
+ */
+export function resolvePermissionSet(input: {
+  permissionsCsv?: string | null;
+  permissionRows?: { permission: string }[] | null;
+}): Set<string> {
+  if (input.permissionRows != null) {
+    const set = new Set<string>();
+    for (const row of input.permissionRows) {
+      const p = row.permission?.trim();
+      if (p) set.add(p);
+    }
+    return set;
+  }
+  return parsePermissions(input.permissionsCsv ?? '');
+}
+
+/** Effective CSV for JWT / legacy API callers (computed; not a DB column). */
+export function permissionsToEffectiveCsv(input: {
+  permissionsCsv?: string | null;
+  permissionRows?: { permission: string }[] | null;
+}): string {
+  const set = resolvePermissionSet(input);
+  if (set.has('*')) return '*';
+  return [...set].join(',');
+}
+
+export function hasPermissionFromSources(
+  input: {
+    permissionsCsv?: string | null;
+    permissionRows?: { permission: string }[] | null;
+  },
+  required: PermissionKey,
+): boolean {
+  const set = resolvePermissionSet(input);
+  return set.has('*') || set.has(required);
+}
+
+/** Reject unknown permission keys (typos). `*` allowed. */
+export function assertKnownPermissions(perms: string[]): string[] {
+  const out: string[] = [];
+  for (const raw of perms) {
+    const p = raw.trim();
+    if (!p) continue;
+    if (p === '*') {
+      out.push('*');
+      continue;
+    }
+    if (!KNOWN_PERMISSIONS.has(p)) {
+      throw new Error(`Unknown permission: ${p}`);
+    }
+    out.push(p);
+  }
+  return out;
+}
+
+/** Normalize CSV or token list into permission tokens for row writes. */
+export function permissionTokensFromInput(
+  permissions: string | string[] | null | undefined,
+): string[] {
+  if (permissions == null) return [];
+  if (Array.isArray(permissions)) {
+    return [...new Set(permissions.map((p) => p.trim()).filter(Boolean))];
+  }
+  return [...parsePermissions(permissions)];
+}
+
+/**
+ * Replace MembershipPermission rows (source of truth).
+ * Accepts CSV string or token array — CSV is parse-only, not persisted.
+ */
+export async function replaceMembershipPermissionRows(
+  db: {
+    membershipPermission: {
+      deleteMany: (args: { where: { membershipId: string } }) => Promise<unknown>;
+      createMany: (args: {
+        data: { membershipId: string; permission: string }[];
+        skipDuplicates?: boolean;
+      }) => Promise<unknown>;
+    };
+  },
+  membershipId: string,
+  permissions: string | string[] | null | undefined,
+): Promise<void> {
+  const tokens = permissionTokensFromInput(permissions);
+  await db.membershipPermission.deleteMany({ where: { membershipId } });
+  if (!tokens.length) return;
+  await db.membershipPermission.createMany({
+    data: tokens.map((permission) => ({ membershipId, permission })),
+    skipDuplicates: true,
+  });
+}
+
+/** @deprecated Prefer replaceMembershipPermissionRows — alias kept for call-site churn. */
+export const syncMembershipPermissionRows = replaceMembershipPermissionRows;
+
 export {
   FEATURE_MATRIX,
   tierHasFeature,

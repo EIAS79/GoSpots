@@ -1,6 +1,7 @@
 "use client";
 
 import { Plus, X } from "lucide-react";
+import { useMemo } from "react";
 import {
   FULL_DAY_DURATION_MINUTES,
   GAMING_PRICE_PRESETS,
@@ -12,6 +13,7 @@ import {
 } from "@/lib/bowling-modes";
 import type { BowlingChargeMode } from "@/lib/bowling-booking";
 import { useVenueSettingsOptional } from "@/lib/venue-settings-context";
+import { staffFloorT } from "@/lib/staff-floor-i18n";
 
 type RateRow = { label: string; durationMinutes: string; price: string };
 
@@ -93,7 +95,12 @@ export function BowlingModesEditor({
   onChange: (modes: BowlingModeDraft[]) => void;
   defaultSlotMinutes: number;
 }) {
-  const currency = useVenueSettingsOptional()?.currency ?? "EUR";
+  const vs = useVenueSettingsOptional();
+  const currency = vs?.currency ?? "EUR";
+  const t = useMemo(
+    () => vs?.t ?? staffFloorT(vs?.locale),
+    [vs?.t, vs?.locale],
+  );
   function updateMode(index: number, patch: Partial<BowlingModeDraft>) {
     const next = [...modes];
     next[index] = { ...next[index], ...patch };
@@ -108,10 +115,11 @@ export function BowlingModesEditor({
     <div className="space-y-3">
       <div className="flex flex-wrap items-center justify-between gap-2">
         <div>
-          <p className="text-xs font-medium text-zinc-300">Booking modes</p>
+          <p className="text-xs font-medium text-zinc-300">
+            {t("gamingSetup.bowling.title")}
+          </p>
           <p className="mt-0.5 text-[10px] leading-relaxed text-zinc-600">
-            Define each way guests can book or pay. Staff and guests pick the mode
-            when reserving or starting a walk-in — not here.
+            {t("gamingSetup.bowling.subtitle")}
           </p>
         </div>
         <div className="flex flex-wrap gap-1">
@@ -131,7 +139,7 @@ export function BowlingModesEditor({
 
       {modes.length === 0 ? (
         <p className="rounded-lg border border-dashed border-white/15 px-3 py-4 text-center text-xs text-zinc-500">
-          Add at least one booking mode.
+          {t("gamingSetup.bowling.emptyHint")}
         </p>
       ) : null}
 
@@ -143,7 +151,7 @@ export function BowlingModesEditor({
           <div className="flex items-start gap-2">
             <div className="min-w-0 flex-1 space-y-2">
               <label className="block text-[10px] text-zinc-500">
-                Mode name (shown when booking)
+                {t("gamingSetup.bowling.modeNameLabel")}
                 <input
                   value={mode.name}
                   onChange={(e) => updateMode(index, { name: e.target.value })}
@@ -152,7 +160,7 @@ export function BowlingModesEditor({
                 />
               </label>
               <label className="block text-[10px] text-zinc-500">
-                Pricing type
+                {t("gamingSetup.bowling.pricingTypeLabel")}
                 <select
                   value={mode.chargeType}
                   onChange={(e) =>
@@ -165,9 +173,15 @@ export function BowlingModesEditor({
                   }
                   className="mt-0.5 w-full rounded-lg border border-white/10 bg-zinc-900 px-2.5 py-1.5 text-sm text-white"
                 >
-                  <option value="TIME">Lane · time slot</option>
-                  <option value="PERSON">Per person</option>
-                  <option value="GAME">By game</option>
+                  <option value="TIME">
+                    {t("gamingSetup.bowling.chargeTypeTime")}
+                  </option>
+                  <option value="PERSON">
+                    {t("gamingSetup.bowling.chargeTypePerson")}
+                  </option>
+                  <option value="GAME">
+                    {t("gamingSetup.bowling.chargeTypeGame")}
+                  </option>
                 </select>
               </label>
             </div>
@@ -176,14 +190,14 @@ export function BowlingModesEditor({
               disabled={modes.length <= 1}
               onClick={() => onChange(modes.filter((_, i) => i !== index))}
               className="rounded p-1 text-zinc-500 hover:text-rose-300 disabled:opacity-30"
-              aria-label="Remove mode"
+              aria-label={t("gamingSetup.bowling.removeMode")}
             >
               <X size={14} />
             </button>
           </div>
 
           <label className="block text-[10px] text-zinc-500">
-            Default slot (minutes)
+            {t("gamingSetup.bowling.slotMinutesLabel")}
             <input
               type="number"
               min={15}
@@ -196,7 +210,7 @@ export function BowlingModesEditor({
           {mode.chargeType === "PERSON" ? (
             <div className="grid gap-2 sm:grid-cols-2">
               <label className="block text-[10px] text-zinc-500">
-                Price per person ({currency})
+                {t("gamingSetup.bowling.pricePerPerson", { currency })}
                 <input
                   value={mode.pricePerPerson}
                   onChange={(e) =>
@@ -207,7 +221,7 @@ export function BowlingModesEditor({
                 />
               </label>
               <label className="block text-[10px] text-zinc-500">
-                Min / max players
+                {t("gamingSetup.bowling.minMaxPlayers")}
                 <div className="mt-0.5 flex gap-2">
                   <input
                     type="number"
@@ -235,7 +249,7 @@ export function BowlingModesEditor({
           {mode.chargeType === "GAME" ? (
             <div className="grid gap-2 sm:grid-cols-2">
               <label className="block text-[10px] text-zinc-500">
-                Price per game ({currency})
+                {t("gamingSetup.bowling.pricePerGame", { currency })}
                 <input
                   value={mode.pricePerGame}
                   onChange={(e) =>
@@ -245,7 +259,7 @@ export function BowlingModesEditor({
                 />
               </label>
               <label className="block text-[10px] text-zinc-500">
-                Minutes per game
+                {t("gamingSetup.bowling.minutesPerGame")}
                 <input
                   type="number"
                   min={1}
@@ -261,7 +275,9 @@ export function BowlingModesEditor({
 
           {mode.chargeType === "TIME" ? (
             <div>
-              <p className="text-[10px] text-zinc-500">Lane rates for this mode</p>
+              <p className="text-[10px] text-zinc-500">
+                {t("gamingSetup.bowling.laneRatesLabel")}
+              </p>
               <div className="mt-1 flex flex-wrap gap-1">
                 {GAMING_PRICE_PRESETS.map((p) => (
                   <button
@@ -292,7 +308,7 @@ export function BowlingModesEditor({
                 {mode.rates.map((r, ri) => (
                   <li key={ri} className="flex flex-wrap items-center gap-1.5">
                     <input
-                      placeholder="Label"
+                      placeholder={t("gamingSetup.bowling.rateLabelPlaceholder")}
                       value={r.label}
                       onChange={(e) => {
                         const rates = [...mode.rates];
@@ -302,7 +318,7 @@ export function BowlingModesEditor({
                       className="min-w-0 flex-1 rounded border border-white/10 bg-zinc-900 px-2 py-1 text-xs text-white"
                     />
                     <input
-                      placeholder="Min"
+                      placeholder={t("gamingSetup.bowling.rateMinPlaceholder")}
                       value={r.durationMinutes}
                       onChange={(e) => {
                         const rates = [...mode.rates];
@@ -312,7 +328,9 @@ export function BowlingModesEditor({
                       className="w-14 rounded border border-white/10 bg-zinc-900 px-1 py-1 text-xs text-white"
                     />
                     <input
-                      placeholder={`Price (${currency})`}
+                      placeholder={t("gamingSetup.bowling.ratePricePlaceholder", {
+                        currency,
+                      })}
                       value={r.price}
                       onChange={(e) => {
                         const rates = [...mode.rates];
@@ -337,8 +355,9 @@ export function BowlingModesEditor({
                 ))}
               </ul>
               <p className="mt-1 text-[10px] text-zinc-600">
-                Full day = {FULL_DAY_DURATION_MINUTES} min. Guest count does not
-                affect lane-rental price.
+                {t("gamingSetup.bowling.fullDayHint", {
+                  min: FULL_DAY_DURATION_MINUTES,
+                })}
               </p>
             </div>
           ) : null}

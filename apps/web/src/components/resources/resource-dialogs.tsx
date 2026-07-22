@@ -2,7 +2,7 @@
 
 import { Loader2, Plus, Trash2, X } from "lucide-react";
 import Image from "next/image";
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import type { ResourceCategory, ResourceUnit } from "@/lib/resources-client";
 import {
   GAME_BOOKING_TYPE_OPTIONS,
@@ -10,26 +10,33 @@ import {
   getBookingUnitKind,
   getBookingUnitLabels,
 } from "@/lib/booking-unit-kind";
-import { type ResourceStatus, type ResourceType } from "@/lib/resource-types";
+import {
+  resourceStatusLabel,
+  type ResourceStatus,
+  type ResourceType,
+} from "@/lib/resource-types";
 import { resolveMediaUrl } from "@/lib/media-url";
 import { ModalPortal } from "@/components/ui/modal-portal";
 import { useVenueSettingsOptional } from "@/lib/venue-settings-context";
+import { staffFloorT, type StaffFloorTranslate } from "@/lib/staff-floor-i18n";
 
 function Shell({
   title,
   onClose,
   children,
+  closeLabel = "Close",
 }: {
   title: string;
   onClose: () => void;
   children: React.ReactNode;
+  closeLabel?: string;
 }) {
   return (
     <ModalPortal>
       <div className="fixed inset-0 z-[400] flex items-end justify-center sm:items-center sm:p-4">
         <button
           type="button"
-          aria-label="Close"
+          aria-label={closeLabel}
           className="absolute inset-0 bg-black/70 backdrop-blur-sm"
           onClick={onClose}
         />
@@ -71,7 +78,12 @@ export function CategoryDialog({
   onUploadImage?: (slot: "1" | "2", file: File) => Promise<void>;
   saving: boolean;
 }) {
-  const currency = useVenueSettingsOptional()?.currency ?? "EUR";
+  const vs = useVenueSettingsOptional();
+  const t: StaffFloorTranslate = useMemo(
+    () => vs?.t ?? staffFloorT(vs?.locale),
+    [vs?.t, vs?.locale],
+  );
+  const currency = vs?.currency ?? "EUR";
   const [type, setType] = useState<ResourceType>(category?.type ?? "PC");
   const [name, setName] = useState(category?.name ?? "");
   const [description, setDescription] = useState(category?.description ?? "");
@@ -90,7 +102,15 @@ export function CategoryDialog({
   const [uploading, setUploading] = useState<"1" | "2" | null>(null);
 
   return (
-    <Shell title={category ? "Edit game offering" : "New game offering"} onClose={onClose}>
+    <Shell
+      title={
+        category
+          ? t("gamingSetup.dialogs.editOffering")
+          : t("gamingSetup.dialogs.newOffering")
+      }
+      onClose={onClose}
+      closeLabel={t("gamingSetup.dialogs.closeAria")}
+    >
       <form
         className="space-y-4"
         onSubmit={(e) => {
@@ -114,20 +134,20 @@ export function CategoryDialog({
         }}
       >
         <label className="block text-xs text-zinc-500">
-          Game type
+          {t("gamingSetup.editor.gameTypeLabel")}
           <select
             value={type}
             onChange={(e) => setType(e.target.value as ResourceType)}
             className="mt-1 w-full rounded-lg border border-white/10 bg-zinc-900 px-3 py-2 text-sm text-white"
           >
-            <optgroup label="Featured">
+            <optgroup label={t("gamingSetup.dialogs.featuredGroup")}>
               {GAME_BOOKING_TYPE_OPTIONS.filter((o) => o.featured).map((o) => (
                 <option key={o.value} value={o.value}>
                   {o.label}
                 </option>
               ))}
             </optgroup>
-            <optgroup label="More (expand later)">
+            <optgroup label={t("gamingSetup.dialogs.moreGroup")}>
               {GAME_BOOKING_TYPE_OPTIONS.filter((o) => !o.featured).map((o) => (
                 <option key={o.value} value={o.value}>
                   {o.label}
@@ -138,7 +158,7 @@ export function CategoryDialog({
           <p className="mt-1 text-[11px] text-zinc-600">{unitLabels.layoutHint}</p>
         </label>
         <label className="block text-xs text-zinc-500">
-          Name
+          {t("gamingSetup.dialogs.nameLabel")}
           <input
             required
             value={name}
@@ -156,7 +176,7 @@ export function CategoryDialog({
           />
         </label>
         <label className="block text-xs text-zinc-500">
-          Description
+          {t("gamingSetup.dialogs.descriptionLabel")}
           <textarea
             value={description}
             onChange={(e) => setDescription(e.target.value)}
@@ -175,12 +195,14 @@ export function CategoryDialog({
               className="mt-1 w-full rounded-lg border border-white/10 bg-zinc-900 px-3 py-2 text-sm text-white"
             />
             <p className="mt-1 text-[11px] text-zinc-600">
-              Names start as &quot;{defaultUnitNamePrefix(type, name || "…")} 01&quot;, etc.
+              {t("gamingSetup.dialogs.namePreviewHint", {
+                prefix: defaultUnitNamePrefix(type, name || "…"),
+              })}
             </p>
           </label>
         ) : null}
         <label className="block text-xs text-zinc-500">
-          Default slot length (minutes)
+          {t("gamingSetup.dialogs.slotLengthLabel")}
           <input
             type="number"
             min={15}
@@ -191,13 +213,15 @@ export function CategoryDialog({
         </label>
 
         <div>
-          <p className="text-xs text-zinc-500">Pricing options</p>
+          <p className="text-xs text-zinc-500">
+            {t("gamingSetup.dialogs.pricingOptionsLabel")}
+          </p>
           <ul className="mt-2 space-y-2">
             {rates.map((r, i) => (
               <li key={i} className="flex items-center gap-2">
                 <div className="grid min-w-0 flex-1 grid-cols-1 gap-2 sm:grid-cols-3">
                   <input
-                    placeholder="Label"
+                    placeholder={t("gamingSetup.editor.rateLabelPlaceholder")}
                     value={r.label}
                     onChange={(e) => {
                       const next = [...rates];
@@ -208,7 +232,7 @@ export function CategoryDialog({
                   />
                   <div className="grid grid-cols-2 gap-2 sm:contents">
                   <input
-                    placeholder="Mins"
+                    placeholder={t("gamingSetup.dialogs.rateMinsPlaceholder")}
                     value={r.durationMinutes}
                     onChange={(e) => {
                       const next = [...rates];
@@ -218,7 +242,9 @@ export function CategoryDialog({
                     className="rounded-lg border border-white/10 bg-zinc-900 px-2 py-1.5 text-xs text-white"
                   />
                   <input
-                    placeholder={`Price (${currency})`}
+                    placeholder={t("gamingSetup.dialogs.ratePriceCurrencyPlaceholder", {
+                      currency,
+                    })}
                     value={r.price}
                     onChange={(e) => {
                       const next = [...rates];
@@ -231,7 +257,7 @@ export function CategoryDialog({
                 </div>
                 <button
                   type="button"
-                  aria-label="Remove price tier"
+                  aria-label={t("gamingSetup.dialogs.removePriceTier")}
                   disabled={rates.length <= 1}
                   onClick={() => setRates(rates.filter((_, idx) => idx !== i))}
                   className="shrink-0 rounded-lg p-2 text-zinc-500 hover:bg-rose-500/10 hover:text-rose-300 disabled:cursor-not-allowed disabled:opacity-30"
@@ -248,7 +274,7 @@ export function CategoryDialog({
             }
             className="mt-2 text-xs text-emerald-400"
           >
-            + Add price tier
+            {t("gamingSetup.dialogs.addPriceTier")}
           </button>
         </div>
 
@@ -260,7 +286,9 @@ export function CategoryDialog({
               );
               return (
                 <div key={slot}>
-                  <p className="text-[11px] text-zinc-500">Photo {slot}</p>
+                  <p className="text-[11px] text-zinc-500">
+                    {t("gamingSetup.dialogs.photoLabel", { slot })}
+                  </p>
                   <div className="mt-1 flex items-center gap-2">
                     <div className="relative h-14 w-14 overflow-hidden rounded border border-white/10 bg-zinc-800">
                       {url ? (
@@ -268,7 +296,7 @@ export function CategoryDialog({
                       ) : null}
                     </div>
                     <label className="cursor-pointer text-xs text-emerald-400">
-                      {uploading === slot ? "…" : "Upload"}
+                      {uploading === slot ? "…" : t("gamingSetup.dialogs.upload")}
                       <input
                         type="file"
                         accept="image/*"
@@ -295,7 +323,7 @@ export function CategoryDialog({
               onClick={() => void onDelete()}
               className="inline-flex items-center gap-1 rounded-lg border border-rose-400/30 px-3 py-2 text-sm text-rose-300"
             >
-              <Trash2 size={14} /> Delete
+              <Trash2 size={14} /> {t("gamingSetup.dialogs.deleteOffering")}
             </button>
           ) : null}
           <button
@@ -303,7 +331,8 @@ export function CategoryDialog({
             disabled={saving || !name.trim()}
             className="ml-auto rounded-lg bg-emerald-600 px-4 py-2 text-sm text-white disabled:opacity-50"
           >
-            {saving ? <Loader2 className="inline animate-spin" size={14} /> : null} Save
+            {saving ? <Loader2 className="inline animate-spin" size={14} /> : null}{" "}
+            {t("common.save")}
           </button>
         </div>
       </form>
@@ -324,13 +353,22 @@ export function AddUnitsDialog({
   onSave: (count: number, prefix: string) => Promise<void>;
   saving: boolean;
 }) {
+  const vs = useVenueSettingsOptional();
+  const t: StaffFloorTranslate = useMemo(
+    () => vs?.t ?? staffFloorT(vs?.locale),
+    [vs?.t, vs?.locale],
+  );
   const labels = getBookingUnitLabels(getBookingUnitKind(categoryType));
   const [count, setCount] = useState("2");
   const [prefix, setPrefix] = useState(
     defaultUnitNamePrefix(categoryType, categoryName),
   );
   return (
-    <Shell title={`Add ${labels.plural}`} onClose={onClose}>
+    <Shell
+      title={t("gamingSetup.dialogs.addUnitsTitle", { plural: labels.plural })}
+      onClose={onClose}
+      closeLabel={t("gamingSetup.dialogs.closeAria")}
+    >
       <form
         className="space-y-4"
         onSubmit={(e) => {
@@ -349,7 +387,7 @@ export function AddUnitsDialog({
           />
         </label>
         <label className="block text-xs text-zinc-500">
-          Name prefix ({labels.singular})
+          {t("gamingSetup.dialogs.namePrefixLabel", { singular: labels.singular })}
           <input
             value={prefix}
             onChange={(e) => setPrefix(e.target.value)}
@@ -361,7 +399,7 @@ export function AddUnitsDialog({
           disabled={saving}
           className="w-full rounded-lg bg-emerald-600 py-2 text-sm text-white"
         >
-          Add {labels.plural}
+          {t("gamingSetup.dialogs.addUnitsTitle", { plural: labels.plural })}
         </button>
       </form>
     </Shell>
@@ -385,12 +423,21 @@ export function UnitDialog({
   onDelete?: () => Promise<void>;
   saving: boolean;
 }) {
+  const vs = useVenueSettingsOptional();
+  const t: StaffFloorTranslate = useMemo(
+    () => vs?.t ?? staffFloorT(vs?.locale),
+    [vs?.t, vs?.locale],
+  );
   const [name, setName] = useState(unit.name);
   const [status, setStatus] = useState<ResourceStatus>(unit.status);
   const [description, setDescription] = useState(unit.description ?? "");
 
   return (
-    <Shell title="Edit unit" onClose={onClose}>
+    <Shell
+      title={t("gamingSetup.dialogs.editUnitTitle")}
+      onClose={onClose}
+      closeLabel={t("gamingSetup.dialogs.closeAria")}
+    >
       <form
         className="space-y-4"
         onSubmit={(e) => {
@@ -403,7 +450,7 @@ export function UnitDialog({
         }}
       >
         <label className="block text-xs text-zinc-500">
-          Unit name
+          {t("gamingSetup.dialogs.unitNameLabel")}
           <input
             value={name}
             onChange={(e) => setName(e.target.value)}
@@ -411,20 +458,20 @@ export function UnitDialog({
           />
         </label>
         <label className="block text-xs text-zinc-500">
-          Floor status
+          {t("gamingSetup.dialogs.floorStatusLabel")}
           <select
             value={status}
             onChange={(e) => setStatus(e.target.value as ResourceStatus)}
             className="mt-1 w-full rounded-lg border border-white/10 bg-zinc-900 px-3 py-2 text-sm text-white"
           >
-            <option value="AVAILABLE">Available</option>
-            <option value="RESERVED">Reserved</option>
-            <option value="BUSY">In use</option>
-            <option value="MAINTENANCE">Maintenance</option>
+            <option value="AVAILABLE">{resourceStatusLabel(t, "AVAILABLE")}</option>
+            <option value="RESERVED">{resourceStatusLabel(t, "RESERVED")}</option>
+            <option value="BUSY">{resourceStatusLabel(t, "BUSY")}</option>
+            <option value="MAINTENANCE">{resourceStatusLabel(t, "MAINTENANCE")}</option>
           </select>
         </label>
         <label className="block text-xs text-zinc-500">
-          Notes
+          {t("gamingSetup.dialogs.notesLabel")}
           <textarea
             value={description}
             onChange={(e) => setDescription(e.target.value)}
@@ -439,7 +486,7 @@ export function UnitDialog({
               onClick={() => void onDelete()}
               className="rounded-lg border border-rose-400/30 px-3 py-2 text-sm text-rose-300"
             >
-              Delete unit
+              {t("gamingSetup.dialogs.deleteUnit")}
             </button>
           ) : null}
           <button
@@ -447,7 +494,7 @@ export function UnitDialog({
             disabled={saving}
             className="ml-auto rounded-lg bg-emerald-600 px-4 py-2 text-sm text-white"
           >
-            Save
+            {t("common.save")}
           </button>
         </div>
       </form>

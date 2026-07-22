@@ -2,12 +2,19 @@
 
 import { Loader2, Star } from "lucide-react";
 import { useMemo, useState } from "react";
+import { PublicCaptchaWidget } from "@/components/venues/public/public-captcha-widget";
+import { PrivacyConsentCheckbox } from "@/components/venues/public/privacy-consent-checkbox";
 import { cn } from "@/lib/cn";
+import {
+  isPublicCaptchaEnabled,
+  withCaptchaToken,
+} from "@/lib/public-captcha";
 import {
   fetchPublicVenueReviews,
   submitPublicVenueReview,
   type PublicVenueReview,
 } from "@/lib/public-guest-client";
+import { usePublicPrefs } from "@/lib/public-prefs-context";
 
 function formatReviewDate(iso: string) {
   try {
@@ -55,6 +62,7 @@ export function StarRatingInput({
   value: number;
   onChange: (n: number) => void;
 }) {
+  const { t } = usePublicPrefs();
   const [hover, setHover] = useState(0);
   const active = hover || value;
   return (
@@ -69,7 +77,7 @@ export function StarRatingInput({
             onMouseLeave={() => setHover(0)}
             onClick={() => onChange(n)}
             className="rounded p-0.5 transition hover:scale-110"
-            aria-label={`Rate ${n} stars`}
+            aria-label={t("venuePage.reviews.rateStars", { n })}
           >
             <Star
               size={22}
@@ -108,6 +116,7 @@ export function VenueReviewsSection({
   hideList?: boolean;
   onSubmitted?: () => void;
 }) {
+  const { t } = usePublicPrefs();
   const [reviews, setReviews] = useState(
     showReviews ? (initialReviews ?? []) : [],
   );
@@ -121,42 +130,69 @@ export function VenueReviewsSection({
   const [error, setError] = useState<string | null>(null);
   const [showForm, setShowForm] = useState(false);
   const [thanks, setThanks] = useState<string | null>(null);
+  const [captchaToken, setCaptchaToken] = useState<string | null>(null);
+  const [captchaReset, setCaptchaReset] = useState(0);
+  const [privacyConsent, setPrivacyConsent] = useState(false);
 
   const allowSubmit = canSubmit && reviewsMode !== "DISABLED";
   const publicList = showReviews && reviewsMode === "ENABLED" && !hideList;
 
   const summaryLabel = useMemo(() => {
-    if (reviewsMode === "DISABLED") return "Reviews are turned off";
-    if (reviewsMode === "HIDDEN") return "Reviews are private for this venue";
+    if (reviewsMode === "DISABLED") return t("venuePage.reviews.turnedOff");
+    if (reviewsMode === "HIDDEN") return t("venuePage.reviews.privateVenue");
     if (!showReviews && hideList) {
-      return allowSubmit ? "Share your experience" : "Reviews unavailable";
+      return allowSubmit
+        ? t("venuePage.reviews.shareExperience")
+        : t("venuePage.reviews.unavailable");
     }
-    if (!count || avg == null) return "No reviews yet";
-    return `${avg.toFixed(1)} · ${count} review${count === 1 ? "" : "s"}`;
-  }, [avg, count, showReviews, reviewsMode, hideList, allowSubmit]);
+    if (!count || avg == null) return t("venuePage.reviews.noneYet");
+    return t(
+      count === 1
+        ? "venuePage.reviews.summaryAvgOne"
+        : "venuePage.reviews.summaryAvgMany",
+      { avg: avg.toFixed(1), count },
+    );
+  }, [avg, count, showReviews, reviewsMode, hideList, allowSubmit, t]);
 
   async function submit(e: React.FormEvent) {
     e.preventDefault();
     setError(null);
     setThanks(null);
     if (!guestName.trim()) {
-      setError("Your name is required.");
+      setError(t("venuePage.reviews.nameRequired"));
+      return;
+    }
+    if (!privacyConsent) {
+      setError(t("venuePage.privacyConsent.required"));
+      return;
+    }
+    if (isPublicCaptchaEnabled() && !captchaToken?.trim()) {
+      setError(t("venuePage.captcha.required"));
       return;
     }
     setBusy(true);
     try {
-      const res = await submitPublicVenueReview(slug, {
-        guestName: guestName.trim(),
-        guestEmail: guestEmail.trim() || undefined,
-        rating,
-        comment: comment.trim() || undefined,
-      });
+      const res = await submitPublicVenueReview(
+        slug,
+        withCaptchaToken(
+          {
+            guestName: guestName.trim(),
+            guestEmail: guestEmail.trim() || undefined,
+            rating,
+            comment: comment.trim() || undefined,
+            privacyConsentAccepted: true,
+          },
+          captchaToken,
+        ),
+      );
       setThanks(res.message);
       setShowForm(false);
       setGuestName("");
       setGuestEmail("");
       setComment("");
       setRating(5);
+      setCaptchaToken(null);
+      setCaptchaReset((n) => n + 1);
       if (publicList) {
         const next = await fetchPublicVenueReviews(slug, { take: 12 });
         setReviews(next.reviews);
@@ -165,7 +201,13 @@ export function VenueReviewsSection({
       }
       onSubmitted?.();
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Could not submit review.");
+      setError(
+        err instanceof Error
+          ? err.message
+          : t("venuePage.reviews.submitFailed"),
+      );
+      setCaptchaToken(null);
+      setCaptchaReset((n) => n + 1);
     } finally {
       setBusy(false);
     }
@@ -174,7 +216,7 @@ export function VenueReviewsSection({
   if (reviewsMode === "DISABLED") {
     return (
       <p className="rounded-xl border border-[var(--color-border)] bg-[var(--color-surface)] px-4 py-5 text-sm text-zinc-500">
-        This venue is not accepting reviews.
+        {t("venuePage.reviews.notAccepting")}
       </p>
     );
   }
@@ -193,9 +235,9 @@ export function VenueReviewsSection({
             <p className="text-xs text-zinc-500">
               {allowSubmit
                 ? reviewsMode === "HIDDEN"
-                  ? "You can still leave feedback — it won’t appear publicly"
-                  : "Share your experience after your visit"
-                : "Reviews are closed for guests"}
+                  ? t("venuePage.reviews.feedbackHidden")
+                  : t("venuePage.reviews.shareAfterVisit")
+                : t("venuePage.reviews.closedForGuests")}
             </p>
           </div>
         </div>
@@ -208,7 +250,9 @@ export function VenueReviewsSection({
             }}
             className="w-full rounded-lg border border-amber-500/30 bg-amber-500/10 px-4 py-2 text-sm font-medium text-amber-800 transition hover:bg-amber-500/20 dark:text-amber-200 sm:w-auto"
           >
-            {showForm ? "Cancel" : "Write a review"}
+            {showForm
+              ? t("venuePage.reviews.cancel")
+              : t("venuePage.reviews.write")}
           </button>
         ) : null}
       </div>
@@ -231,7 +275,7 @@ export function VenueReviewsSection({
           ) : null}
           <div className="grid gap-4 sm:grid-cols-2">
             <label className="block text-xs text-zinc-600 dark:text-zinc-400">
-              Your name
+              {t("venuePage.reviews.yourName")}
               <input
                 required
                 value={guestName}
@@ -240,7 +284,7 @@ export function VenueReviewsSection({
               />
             </label>
             <label className="block text-xs text-zinc-600 dark:text-zinc-400">
-              Email (optional)
+              {t("venuePage.reviews.emailOptional")}
               <input
                 type="email"
                 value={guestEmail}
@@ -249,21 +293,36 @@ export function VenueReviewsSection({
               />
             </label>
             <div className="sm:col-span-2">
-              <p className="text-xs text-zinc-600 dark:text-zinc-400">Your rating</p>
+              <p className="text-xs text-zinc-600 dark:text-zinc-400">
+                {t("venuePage.reviews.yourRating")}
+              </p>
               <div className="mt-1">
                 <StarRatingInput value={rating} onChange={setRating} />
               </div>
             </div>
             <label className="block text-xs text-zinc-600 dark:text-zinc-400 sm:col-span-2">
-              Comment (optional)
+              {t("venuePage.reviews.commentOptional")}
               <textarea
                 value={comment}
                 onChange={(e) => setComment(e.target.value)}
                 rows={3}
-                placeholder="Food, service, atmosphere, gaming setup…"
+                placeholder={t("venuePage.reviews.commentPlaceholder")}
                 className="mt-1 w-full rounded-lg border border-[var(--color-border)] bg-[var(--color-background)] px-3 py-2.5 text-sm text-[var(--color-foreground)] outline-none focus:border-amber-500/40"
               />
             </label>
+          </div>
+          <PublicCaptchaWidget
+            className="mt-4"
+            onTokenChange={setCaptchaToken}
+            resetKey={captchaReset}
+          />
+          <div className="mt-3">
+            <PrivacyConsentCheckbox
+              checked={privacyConsent}
+              onChange={setPrivacyConsent}
+              label={t("venuePage.privacyConsent.label")}
+              disabled={busy}
+            />
           </div>
           <button
             type="submit"
@@ -271,7 +330,7 @@ export function VenueReviewsSection({
             className="mt-4 inline-flex items-center gap-2 rounded-lg bg-amber-600 px-5 py-2.5 text-sm font-medium text-white hover:bg-amber-500 disabled:opacity-50"
           >
             {busy ? <Loader2 size={16} className="animate-spin" /> : null}
-            Post review
+            {t("venuePage.reviews.post")}
           </button>
         </form>
       ) : null}
@@ -301,7 +360,9 @@ export function VenueReviewsSection({
           ))}
         </ul>
       ) : publicList ? (
-        <p className="text-sm text-zinc-500">Be the first to review this venue.</p>
+        <p className="text-sm text-zinc-500">
+          {t("venuePage.reviews.beFirstList")}
+        </p>
       ) : null}
     </div>
   );

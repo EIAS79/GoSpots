@@ -4,19 +4,26 @@ import type { MenuItem, MenuSection } from "./menu-client";
 
 const WEEKDAY_LABELS = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
 
-export function formatWeekdays(csv: string) {
+export type MenuTimingTranslate = (
+  key: string,
+  vars?: Record<string, string | number>,
+) => string;
+
+export function formatWeekdays(csv: string, t?: MenuTimingTranslate) {
   const days = csv
     .split(",")
     .map((d) => parseInt(d.trim(), 10))
     .filter((n) => !Number.isNaN(n));
-  if (days.length === 7) return "Every day";
+  if (days.length === 7) return t ? t("menu.everyDay") : "Every day";
   if (
     days.length === 5 &&
     [1, 2, 3, 4, 5].every((d) => days.includes(d))
   ) {
-    return "Mon–Fri";
+    return t ? t("menu.monFri") : "Mon–Fri";
   }
-  return days.map((d) => WEEKDAY_LABELS[d] ?? d).join(", ");
+  return days
+    .map((d) => (t ? t(`menu.day${d}`) : WEEKDAY_LABELS[d]) ?? d)
+    .join(", ");
 }
 
 export function formatTimeRange(from: string | null, to: string | null) {
@@ -25,10 +32,22 @@ export function formatTimeRange(from: string | null, to: string | null) {
   return from ?? to;
 }
 
-export function sectionTimingLabel(section: MenuSection) {
-  const period = mealPeriodLabel(section.mealPeriod as MealPeriod | null);
+function mealLabel(
+  period: MealPeriod | null | undefined,
+  t?: MenuTimingTranslate,
+) {
+  if (!period) return null;
+  if (t) return t(`menu.meal${period}`);
+  return mealPeriodLabel(period);
+}
+
+export function sectionTimingLabel(
+  section: MenuSection,
+  t?: MenuTimingTranslate,
+) {
+  const period = mealLabel(section.mealPeriod as MealPeriod | null, t);
   const range = formatTimeRange(section.availableFrom, section.availableTo);
-  const days = formatWeekdays(section.availableDays);
+  const days = formatWeekdays(section.availableDays, t);
   const parts = [period, range, days].filter(Boolean);
   return parts.length ? parts.join(" · ") : null;
 }
@@ -36,15 +55,22 @@ export function sectionTimingLabel(section: MenuSection) {
 export function itemTimingLabel(
   item: MenuItem,
   section: MenuSection | undefined,
+  t?: MenuTimingTranslate,
 ) {
   if (item.useSectionTiming && section) {
-    const inherited = sectionTimingLabel(section);
-    return inherited ? `Section: ${inherited}` : "Same hours as section";
+    const inherited = sectionTimingLabel(section, t);
+    if (inherited) {
+      return t
+        ? t("menu.sectionTimingPrefix", { label: inherited })
+        : `Section: ${inherited}`;
+    }
+    return t ? t("menu.sameHoursAsSection") : "Same hours as section";
   }
   const range = formatTimeRange(item.availableFrom, item.availableTo);
-  const days = formatWeekdays(item.availableDays);
+  const days = formatWeekdays(item.availableDays, t);
   const parts = [range, days].filter(Boolean);
-  return parts.length ? parts.join(" · ") : "Always available";
+  if (parts.length) return parts.join(" · ");
+  return t ? t("menu.alwaysAvailable") : "Always available";
 }
 
 function parseDays(csv: string): number[] {
@@ -135,13 +161,22 @@ function resolveEffectiveTiming(
 export function publicMenuScheduleLabel(
   item: MenuTimingFields,
   section?: MenuSectionTimingFields | null,
+  t?: MenuTimingTranslate,
 ) {
   const timing = resolveEffectiveTiming(item, section);
-  const period = mealPeriodLabel(timing.mealPeriod as MealPeriod | null);
+  const period = timing.mealPeriod
+    ? t
+      ? t(`meal.${timing.mealPeriod}`)
+      : mealPeriodLabel(timing.mealPeriod as MealPeriod | null)
+    : null;
   const range = formatTimeRange(timing.availableFrom, timing.availableTo);
-  const days = formatWeekdays(timing.availableDays);
+  const days = formatWeekdays(timing.availableDays, t);
   const parts = [period, range, days].filter(Boolean);
-  return parts.length ? parts.join(" · ") : "Available all day, every day";
+  return parts.length
+    ? parts.join(" · ")
+    : t
+      ? t("menu.availableAllDay")
+      : "Available all day, every day";
 }
 
 export type PublicMenuAvailability = {
@@ -170,18 +205,50 @@ const FULL_WEEKDAY_LABELS = [
   "Saturday",
 ];
 
+function weekdayLabel(day: number, t?: MenuTimingTranslate) {
+  return t ? t(`menu.weekday${day}`) : FULL_WEEKDAY_LABELS[day];
+}
+
+function availableOnDayHeadline(
+  day: number,
+  today: number,
+  from: string | null,
+  t?: MenuTimingTranslate,
+): string {
+  const isTomorrow = day === (today + 1) % 7;
+  if (isTomorrow) {
+    if (from) {
+      return t
+        ? t("menu.availableTomorrowFrom", { time: from })
+        : `Available tomorrow from ${from}`;
+    }
+    return t ? t("menu.availableTomorrow") : "Available tomorrow";
+  }
+  const dayLabel = weekdayLabel(day, t);
+  if (from) {
+    return t
+      ? t("menu.availableWeekdayFrom", { day: dayLabel, time: from })
+      : `Available ${dayLabel} from ${from}`;
+  }
+  return t
+    ? t("menu.availableWeekday", { day: dayLabel })
+    : `Available ${dayLabel}`;
+}
+
 /** Live availability for public menu cards and item modal. */
 export function getPublicMenuItemAvailability(
   item: MenuTimingFields & { trackStock: boolean; inStock: boolean },
   section?: MenuSectionTimingFields | null,
-  now: Date = new Date(),
+  options?: { now?: Date; t?: MenuTimingTranslate },
 ): PublicMenuAvailability {
-  const schedule = publicMenuScheduleLabel(item, section);
+  const now = options?.now ?? new Date();
+  const t = options?.t;
+  const schedule = publicMenuScheduleLabel(item, section, t);
 
   if (item.trackStock && !item.inStock) {
     return {
       availableNow: false,
-      headline: "Sold out",
+      headline: t ? t("menu.soldOut") : "Sold out",
       schedule,
       tone: "sold-out",
     };
@@ -200,7 +267,7 @@ export function getPublicMenuItemAvailability(
   if (onAllowedDay && inWindow) {
     return {
       availableNow: true,
-      headline: "Available now",
+      headline: t ? t("menu.availableNow") : "Available now",
       schedule,
       tone: "available",
     };
@@ -213,7 +280,9 @@ export function getPublicMenuItemAvailability(
   if (onAllowedDay && start !== null && current < start && timing.availableFrom) {
     return {
       availableNow: false,
-      headline: `Opens at ${timing.availableFrom}`,
+      headline: t
+        ? t("menu.opensAt", { time: timing.availableFrom })
+        : `Opens at ${timing.availableFrom}`,
       schedule,
       tone: "later",
     };
@@ -222,14 +291,10 @@ export function getPublicMenuItemAvailability(
   if (!onAllowedDay) {
     const next = findNextWeekday(today, days);
     const headline =
-      next === (today + 1) % 7
-        ? timing.availableFrom
-          ? `Available tomorrow from ${timing.availableFrom}`
-          : "Available tomorrow"
-        : next !== null
-          ? timing.availableFrom
-            ? `Available ${FULL_WEEKDAY_LABELS[next]} from ${timing.availableFrom}`
-            : `Available ${FULL_WEEKDAY_LABELS[next]}`
+      next !== null
+        ? availableOnDayHeadline(next, today, timing.availableFrom, t)
+        : t
+          ? t("menu.notAvailableToday")
           : "Not available today";
     return {
       availableNow: false,
@@ -241,14 +306,21 @@ export function getPublicMenuItemAvailability(
 
   const next = findNextWeekday(today, days);
   if (end !== null && current > end) {
-    const headline =
-      next === (today + 1) % 7
-        ? timing.availableFrom
-          ? `Available tomorrow from ${timing.availableFrom}`
-          : "Available tomorrow"
-        : next !== null && timing.availableFrom
-          ? `Available ${FULL_WEEKDAY_LABELS[next]} from ${timing.availableFrom}`
-          : "Not available right now";
+    let headline: string;
+    if (next === (today + 1) % 7) {
+      headline = availableOnDayHeadline(next, today, timing.availableFrom, t);
+    } else if (next !== null && timing.availableFrom) {
+      headline = t
+        ? t("menu.availableWeekdayFrom", {
+            day: weekdayLabel(next, t),
+            time: timing.availableFrom,
+          })
+        : `Available ${FULL_WEEKDAY_LABELS[next]} from ${timing.availableFrom}`;
+    } else {
+      headline = t
+        ? t("menu.notAvailableNow")
+        : "Not available right now";
+    }
     return {
       availableNow: false,
       headline,
@@ -259,7 +331,7 @@ export function getPublicMenuItemAvailability(
 
   return {
     availableNow: false,
-    headline: "Not available right now",
+    headline: t ? t("menu.notAvailableNow") : "Not available right now",
     schedule,
     tone: "closed",
   };

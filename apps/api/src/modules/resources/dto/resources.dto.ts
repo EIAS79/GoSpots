@@ -2,11 +2,9 @@ import { BookingMode, ResourceStatus, ResourceType } from '@prisma/client';
 import {
   IsArray,
   IsBoolean,
-  IsIn,
   IsEnum,
   IsInt,
   IsNumber,
-  IsObject,
   IsOptional,
   IsString,
   Matches,
@@ -16,6 +14,9 @@ import {
   ValidateNested,
 } from 'class-validator';
 import { Type } from 'class-transformer';
+import { IsOfferingConfig } from '../../../common/offering-config.util';
+
+const FINITE_MONEY = { allowNaN: false, allowInfinity: false } as const;
 
 export class ResourceRateDto {
   @IsString()
@@ -27,7 +28,7 @@ export class ResourceRateDto {
   @Min(1)
   durationMinutes?: number;
 
-  @IsNumber()
+  @IsNumber(FINITE_MONEY)
   @Min(0)
   price!: number;
 
@@ -85,7 +86,7 @@ export class CreateCategoryDto {
   playstationGames?: string[];
 
   @IsOptional()
-  @IsObject()
+  @IsOfferingConfig()
   offeringConfig?: Record<string, unknown>;
 }
 
@@ -136,7 +137,7 @@ export class UpdateCategoryDto {
   playstationGames?: string[];
 
   @IsOptional()
-  @IsObject()
+  @IsOfferingConfig()
   offeringConfig?: Record<string, unknown>;
 }
 
@@ -163,7 +164,7 @@ export class UpdateResourceDto {
   description?: string | null;
 
   @IsOptional()
-  @IsNumber()
+  @IsNumber(FINITE_MONEY)
   @Min(0)
   hourlyRate?: number;
 

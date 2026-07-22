@@ -22,6 +22,7 @@ import {
 import type { ResourceCatalog } from "@/lib/resources-client";
 import { bookingCollectsPartySize } from "@/lib/booking-unit-kind";
 import type { ResourceType } from "@/lib/resource-types";
+import { coerceMoney } from "@/lib/money";
 import { useVenueSettings } from "@/lib/venue-settings-context";
 
 export function GameBillingEditDialog({
@@ -35,7 +36,7 @@ export function GameBillingEditDialog({
   onClose: () => void;
   onSaved: () => Promise<void>;
 }) {
-  const { formatMoney } = useVenueSettings();
+  const { formatMoney, t } = useVenueSettings();
   const isWalkIn = item.source === "walk_in";
 
   const units = useMemo(
@@ -116,7 +117,7 @@ export function GameBillingEditDialog({
 
   const usesRateAmount =
     !isWalkIn &&
-    Math.abs(parsedBase - item.computedAmount) < 0.005 &&
+    Math.abs(parsedBase - coerceMoney(item.computedAmount)) < 0.005 &&
     item.baseAmount == null;
 
   async function handleSave() {
@@ -131,7 +132,7 @@ export function GameBillingEditDialog({
     try {
       const baseNum = parsedBase;
       if (Number.isNaN(baseNum) || baseNum < 0) {
-        setFeedback("Enter a valid charge amount.");
+        setFeedback(t("finance.playValidCharge"));
         setSaving(false);
         return;
       }
@@ -154,7 +155,7 @@ export function GameBillingEditDialog({
         const startsAt = combineDateAndTime(date, startTime).toISOString();
         const endsAt = combineDateAndTime(date, endTime).toISOString();
         const revertToRates =
-          Math.abs(baseNum - item.computedAmount) < 0.005;
+          Math.abs(baseNum - coerceMoney(item.computedAmount)) < 0.005;
         await updatePlayBilling(item.id, {
           guestName: guestName.trim(),
           resourceId,
@@ -172,7 +173,7 @@ export function GameBillingEditDialog({
       await onSaved();
       onClose();
     } catch (e) {
-      setFeedback(e instanceof Error ? e.message : "Could not save changes.");
+      setFeedback(e instanceof Error ? e.message : t("finance.playSaveFailed"));
     } finally {
       setSaving(false);
     }
@@ -192,7 +193,9 @@ export function GameBillingEditDialog({
       await onSaved();
       onClose();
     } catch (e) {
-      setFeedback(e instanceof Error ? e.message : "Could not remove session.");
+      setFeedback(
+        e instanceof Error ? e.message : t("finance.playRemoveFailed"),
+      );
     } finally {
       setSaving(false);
       setConfirmCancel(false);
@@ -209,7 +212,7 @@ export function GameBillingEditDialog({
         <div className="fixed inset-0 z-[400] flex items-end justify-center p-0 sm:items-center sm:p-4">
           <button
             type="button"
-            aria-label="Close"
+            aria-label={t("finance.playClose")}
             className="absolute inset-0 bg-black/70 backdrop-blur-sm"
             onClick={onClose}
           />
@@ -217,10 +220,12 @@ export function GameBillingEditDialog({
             <div className="flex shrink-0 items-center justify-between border-b border-white/10 px-4 py-3">
               <div>
                 <h2 className="text-base font-semibold text-white">
-                  {isWalkIn ? "Edit walk-in" : "Edit charge"}
+                  {isWalkIn
+                    ? t("finance.playEditWalkIn")
+                    : t("finance.playEditCharge")}
                 </h2>
                 <p className="text-[10px] text-zinc-500">
-                  {item.resource?.name ?? "No unit"}
+                  {item.resource?.name ?? t("finance.playNoUnit")}
                   {item.resource?.categoryName
                     ? ` · ${item.resource.categoryName}`
                     : ""}
@@ -257,7 +262,7 @@ export function GameBillingEditDialog({
 
                 <div className={cn("grid gap-2", showPartyField ? "grid-cols-2" : "grid-cols-1")}>
                   <label className={labelClass}>
-                    Guest
+                    {t("finance.playGuest")}
                     <input
                       value={guestName}
                       onChange={(e) => setGuestName(e.target.value)}
@@ -267,7 +272,7 @@ export function GameBillingEditDialog({
                   </label>
                   {showPartyField ? (
                     <label className={labelClass}>
-                      Players
+                      {t("finance.playPlayers")}
                       <input
                         type="number"
                         min={1}
@@ -280,13 +285,13 @@ export function GameBillingEditDialog({
                 </div>
 
                 <label className={labelClass}>
-                  Game / unit
+                  {t("finance.playGameUnit")}
                   <select
                     value={resourceId}
                     onChange={(e) => setResourceId(e.target.value)}
                     className={inputClass}
                   >
-                    <option value="">— none —</option>
+                    <option value="">{t("finance.playNone")}</option>
                     {units.map((u) => (
                       <option key={u.id} value={u.id}>
                         {u.name} · {u.categoryName}
@@ -297,7 +302,7 @@ export function GameBillingEditDialog({
 
                 {isWalkIn ? (
                   <label className={labelClass}>
-                    Duration (min)
+                    {t("finance.playDuration")}
                     <input
                       type="number"
                       min={1}
@@ -309,7 +314,7 @@ export function GameBillingEditDialog({
                 ) : (
                   <div className="grid grid-cols-1 gap-2 md:grid-cols-3">
                     <label className={labelClass}>
-                      Date
+                      {t("finance.playDate")}
                       <input
                         type="date"
                         value={date}
@@ -319,7 +324,7 @@ export function GameBillingEditDialog({
                       />
                     </label>
                     <label className={labelClass}>
-                      Start
+                      {t("finance.playStart")}
                       <input
                         type="time"
                         value={startTime}
@@ -329,7 +334,7 @@ export function GameBillingEditDialog({
                       />
                     </label>
                     <label className={labelClass}>
-                      End
+                      {t("finance.playEndTime")}
                       <input
                         type="time"
                         value={endTime}
@@ -343,7 +348,7 @@ export function GameBillingEditDialog({
 
                 <div className="grid grid-cols-2 gap-2">
                   <label className={labelClass}>
-                    Discount %
+                    {t("finance.playDiscountPct")}
                     <input
                       type="number"
                       min={0}
@@ -355,7 +360,7 @@ export function GameBillingEditDialog({
                     />
                   </label>
                   <label className={labelClass}>
-                    Charge
+                    {t("finance.playCharge")}
                     <input
                       type="number"
                       min={0}
@@ -369,17 +374,21 @@ export function GameBillingEditDialog({
                 </div>
                 {!isWalkIn && item.computedAmount !== parsedBase ? (
                   <p className="text-[10px] text-zinc-600">
-                    From rates: {formatMoney(item.computedAmount)}
-                    {usesRateAmount ? " (using rates)" : " · you edited the charge"}
+                    {t("finance.playFromRates", {
+                      amount: formatMoney(item.computedAmount),
+                    })}
+                    {usesRateAmount
+                      ? t("finance.playUsingRates")
+                      : t("finance.playYouEdited")}
                   </p>
                 ) : null}
 
                 <label className={labelClass}>
-                  Notes
+                  {t("finance.playNotes")}
                   <input
                     value={notes}
                     onChange={(e) => setNotes(e.target.value)}
-                    placeholder="Optional"
+                    placeholder={t("finance.playNotesOptional")}
                     className={inputClass}
                   />
                 </label>
@@ -392,7 +401,7 @@ export function GameBillingEditDialog({
                       onChange={(e) => setClearPaid(e.target.checked)}
                       className="rounded border-white/20"
                     />
-                    Undo paid
+                    {t("finance.playUndoPaid")}
                   </label>
                 ) : null}
               </div>
@@ -400,11 +409,13 @@ export function GameBillingEditDialog({
               <div className="shrink-0 space-y-2 border-t border-white/10 bg-zinc-950/95 px-4 py-3 pb-[max(0.75rem,env(safe-area-inset-bottom))]">
                 <div className="flex items-center justify-between text-xs">
                   <span className="text-zinc-500">
-                    Base {formatMoney(parsedBase)}
+                    {t("finance.playBase", { amount: formatMoney(parsedBase) })}
                     {parsedDiscount > 0 ? ` · −${parsedDiscount}%` : ""}
                   </span>
                   <span className="font-semibold text-white">
-                    Total {formatMoney(previewAmount)}
+                    {t("finance.playTotal", {
+                      amount: formatMoney(previewAmount),
+                    })}
                   </span>
                 </div>
                 <div className="flex gap-2">
@@ -416,7 +427,7 @@ export function GameBillingEditDialog({
                     {saving ? (
                       <Loader2 size={16} className="mx-auto animate-spin" />
                     ) : (
-                      "Save"
+                      t("finance.playSave")
                     )}
                   </button>
                   {!item.isPaid ? (
@@ -429,12 +440,12 @@ export function GameBillingEditDialog({
                       {isWalkIn ? (
                         <>
                           <Trash2 size={14} />
-                          Delete
+                          {t("finance.playDelete")}
                         </>
                       ) : (
                         <>
                           <UserX size={14} />
-                          Cancel
+                          {t("finance.playCancel")}
                         </>
                       )}
                     </button>
@@ -448,13 +459,19 @@ export function GameBillingEditDialog({
 
       <ConfirmDialog
         open={confirmCancel}
-        title={isWalkIn ? "Delete walk-in?" : "Cancel booking charge?"}
+        title={
+          isWalkIn
+            ? t("finance.playDeleteWalkInTitle")
+            : t("finance.playCancelChargeTitle")
+        }
         description={
           isWalkIn
-            ? "Removes this walk-in session from billing."
-            : "Cancels the booking and removes it from billing."
+            ? t("finance.playDeleteWalkInDesc")
+            : t("finance.playCancelChargeDesc")
         }
-        confirmLabel={isWalkIn ? "Delete" : "Cancel booking"}
+        confirmLabel={
+          isWalkIn ? t("finance.playDelete") : t("finance.playCancelBooking")
+        }
         variant="danger"
         onConfirm={() => void handleCancel()}
         onCancel={() => setConfirmCancel(false)}

@@ -4,13 +4,17 @@ import { Bell, X } from "lucide-react";
 import Link from "next/link";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { cn } from "@/lib/cn";
+import { useConnectivityOptional } from "@/lib/connectivity-context";
 import {
   fetchRecentNotifications,
   markNotificationRead,
   type NotificationRow,
 } from "@/lib/notifications-client";
 import { publishLiveEvent } from "@/lib/live-events";
+import { notificationNavHref } from "@/lib/safe-app-href";
+import { livePollIntervalMs } from "@/lib/use-live-data";
 import { useVenueHref } from "@/lib/venue-context";
+import { useVenueSettingsOptional } from "@/lib/venue-settings-context";
 
 const POLL_MS = 15_000;
 const TOAST_MS = 8_000;
@@ -23,16 +27,30 @@ export function NotificationToasts({
   onUnreadChange?: (count: number) => void;
 }) {
   const hrefBase = useVenueHref("");
+  const tx = useVenueSettingsOptional()?.t ?? ((key: string) => key);
+  const connectivity = useConnectivityOptional();
+  const mode = connectivity?.mode ?? "ok";
+  const reportLivePollResult = connectivity?.reportLivePollResult;
   const [toasts, setToasts] = useState<Toast[]>([]);
   const sinceRef = useRef(new Date().toISOString());
   const seenRef = useRef(new Set<string>());
+  const failCountRef = useRef(0);
+  const modeRef = useRef(mode);
+  modeRef.current = mode;
+  const reportRef = useRef(reportLivePollResult);
+  reportRef.current = reportLivePollResult;
+  const onUnreadChangeRef = useRef(onUnreadChange);
+  onUnreadChangeRef.current = onUnreadChange;
 
-  const poll = useCallback(async () => {
+  const poll = useCallback(async (): Promise<boolean> => {
     try {
       const data = await fetchRecentNotifications(sinceRef.current);
-      onUnreadChange?.(data.unreadCount);
+      onUnreadChangeRef.current?.(data.unreadCount);
+      failCountRef.current = 0;
+      reportRef.current?.(true);
+
       const fresh = data.items.filter((n) => !seenRef.current.has(n.id));
-      if (fresh.length === 0) return;
+      if (fresh.length === 0) return true;
 
       for (const n of fresh) seenRef.current.add(n.id);
       sinceRef.current = new Date().toISOString();
@@ -46,17 +64,58 @@ export function NotificationToasts({
       setToasts((prev) =>
         [...fresh.map((n) => ({ ...n, visible: true })), ...prev].slice(0, 5),
       );
+      return true;
     } catch {
-      /* ignore when offline */
+      failCountRef.current += 1;
+      reportRef.current?.(false);
+      return false;
     }
-  }, [onUnreadChange]);
+  }, []);
+
+  // Background poll with visibility pause + connectivity / failure backoff
+  // (same schedule as useLiveData — bible #32 Phase 2).
+  useEffect(() => {
+    let timer: ReturnType<typeof setTimeout> | null = null;
+    let cancelled = false;
+
+    const clear = () => {
+      if (timer) {
+        clearTimeout(timer);
+        timer = null;
+      }
+    };
+
+    const scheduleNext = () => {
+      clear();
+      if (cancelled) return;
+      const delay = livePollIntervalMs(
+        POLL_MS,
+        failCountRef.current,
+        modeRef.current,
+      );
+      timer = setTimeout(() => {
+        void (async () => {
+          if (typeof document !== "undefined" && document.hidden) {
+            scheduleNext();
+            return;
+          }
+          await poll();
+          scheduleNext();
+        })();
+      }, delay);
+    };
+
+    void poll().then(() => {
+      if (!cancelled) scheduleNext();
+    });
+
+    return () => {
+      cancelled = true;
+      clear();
+    };
+  }, [poll, mode]);
 
   useEffect(() => {
-    void poll();
-    const id = setInterval(() => {
-      if (typeof document !== "undefined" && document.hidden) return;
-      void poll();
-    }, POLL_MS);
     const onFocus = () => void poll();
     const onVisible = () => {
       if (!document.hidden) void poll();
@@ -64,7 +123,6 @@ export function NotificationToasts({
     window.addEventListener("focus", onFocus);
     document.addEventListener("visibilitychange", onVisible);
     return () => {
-      clearInterval(id);
       window.removeEventListener("focus", onFocus);
       document.removeEventListener("visibilitychange", onVisible);
     };
@@ -102,7 +160,7 @@ export function NotificationToasts({
       aria-live="polite"
     >
       {toasts.map((t) => {
-        const target = t.href ? `${hrefBase}${t.href}` : null;
+        const target = notificationNavHref(hrefBase, t.href);
         const inner = (
           <>
             <span className="grid h-8 w-8 shrink-0 place-items-center rounded-lg bg-emerald-500/20 text-emerald-300">
@@ -120,7 +178,7 @@ export function NotificationToasts({
                 dismiss(t.id);
               }}
               className="pointer-events-auto absolute right-2 top-2 rounded p-1 text-zinc-500 hover:bg-white/10 hover:text-zinc-200"
-              aria-label="Dismiss"
+              aria-label={tx("notif.dismiss")}
             >
               <X size={14} />
             </button>

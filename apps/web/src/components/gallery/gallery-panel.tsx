@@ -24,7 +24,10 @@ import {
 } from "@/lib/gallery-client";
 import { validateImageUploadFile } from "@/lib/image-upload";
 import { resolveMediaUrl } from "@/lib/media-url";
+import { useVenueSettingsOptional } from "@/lib/venue-settings-context";
 import { VENUE_PLACEHOLDER_SRC } from "@/lib/venue-placeholder";
+
+type GalleryT = (key: string, vars?: Record<string, string | number>) => string;
 
 function Thumb({
   src,
@@ -46,6 +49,8 @@ function Thumb({
 }
 
 export function GalleryPanel({ canWrite }: { canWrite: boolean }) {
+  const vs = useVenueSettingsOptional();
+  const t: GalleryT = vs?.t ?? ((key) => key);
   const [coverImage, setCoverImage] = useState<string | null>(null);
   const [items, setItems] = useState<GalleryItem[]>([]);
   const [loading, setLoading] = useState(true);
@@ -63,11 +68,11 @@ export function GalleryPanel({ canWrite }: { canWrite: boolean }) {
       setCoverImage(data.coverImage);
       setItems(data.items);
     } catch (e) {
-      setError(e instanceof Error ? e.message : "Could not load gallery.");
+      setError(e instanceof Error ? e.message : t("galleryPanel.loadError"));
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [t]);
 
   useEffect(() => {
     void load();
@@ -86,7 +91,7 @@ export function GalleryPanel({ canWrite }: { canWrite: boolean }) {
       await uploadGalleryCover(file);
       await load();
     } catch (e) {
-      setError(e instanceof Error ? e.message : "Cover upload failed.");
+      setError(e instanceof Error ? e.message : t("galleryPanel.coverUploadFailed"));
     } finally {
       setBusy(false);
     }
@@ -105,20 +110,20 @@ export function GalleryPanel({ canWrite }: { canWrite: boolean }) {
       await uploadGalleryItem(file);
       await load();
     } catch (e) {
-      setError(e instanceof Error ? e.message : "Upload failed.");
+      setError(e instanceof Error ? e.message : t("galleryPanel.uploadFailed"));
     } finally {
       setBusy(false);
     }
   }
 
   async function onDelete(id: string) {
-    if (!canWrite || !confirm("Remove this photo?")) return;
+    if (!canWrite || !confirm(t("galleryPanel.removeConfirm"))) return;
     setBusy(true);
     try {
       await deleteGalleryItem(id);
       setItems((prev) => prev.filter((i) => i.id !== id));
     } catch (e) {
-      setError(e instanceof Error ? e.message : "Delete failed.");
+      setError(e instanceof Error ? e.message : t("galleryPanel.deleteFailed"));
     } finally {
       setBusy(false);
     }
@@ -131,7 +136,7 @@ export function GalleryPanel({ canWrite }: { canWrite: boolean }) {
       const res = await useGalleryItemAsCover(id);
       setCoverImage(res.coverImage);
     } catch (e) {
-      setError(e instanceof Error ? e.message : "Could not set cover.");
+      setError(e instanceof Error ? e.message : t("galleryPanel.setCoverFailed"));
     } finally {
       setBusy(false);
     }
@@ -149,7 +154,7 @@ export function GalleryPanel({ canWrite }: { canWrite: boolean }) {
       setEditingId(null);
       setCaptionDraft("");
     } catch (e) {
-      setError(e instanceof Error ? e.message : "Could not save caption.");
+      setError(e instanceof Error ? e.message : t("galleryPanel.saveCaptionFailed"));
     } finally {
       setBusy(false);
     }
@@ -170,7 +175,7 @@ export function GalleryPanel({ canWrite }: { canWrite: boolean }) {
       ]);
       await load();
     } catch (e) {
-      setError(e instanceof Error ? e.message : "Could not reorder gallery.");
+      setError(e instanceof Error ? e.message : t("galleryPanel.reorderFailed"));
     } finally {
       setBusy(false);
     }
@@ -198,10 +203,10 @@ export function GalleryPanel({ canWrite }: { canWrite: boolean }) {
         <div className="flex flex-col gap-4 sm:flex-row sm:items-start">
           <div className="shrink-0">
             <p className="text-[11px] font-medium uppercase tracking-wide text-zinc-500">
-              Marketing cover
+              {t("galleryPanel.marketingCover")}
             </p>
             <div className="mt-2 h-28 w-full max-w-xs overflow-hidden rounded-lg border border-white/10 bg-zinc-950 sm:h-32">
-              <Thumb src={coverUrl} alt="Cover" />
+              <Thumb src={coverUrl} alt={t("galleryPanel.marketingCover")} />
             </div>
             {canWrite ? (
               <>
@@ -227,15 +232,15 @@ export function GalleryPanel({ canWrite }: { canWrite: boolean }) {
                   ) : (
                     <Upload size={12} />
                   )}
-                  Replace cover
+                  {t("galleryPanel.replaceCover")}
                 </button>
               </>
             ) : null}
           </div>
           <p className="text-xs leading-relaxed text-zinc-500 sm:pt-5">
-            Used on the marketing homepage and as the hero on{" "}
-            <span className="text-zinc-400">/venue/your-slug</span>. Gallery
-            photos below are shown separately on your public page.
+            {t("galleryPanel.descBefore")}{" "}
+            <span className="text-zinc-400">/venue/your-slug</span>.{" "}
+            {t("galleryPanel.descAfter")}
           </p>
         </div>
       </div>
@@ -244,10 +249,12 @@ export function GalleryPanel({ canWrite }: { canWrite: boolean }) {
         <div className="mb-3 flex items-center justify-between gap-2">
           <div>
             <p className="text-[11px] font-medium uppercase tracking-wide text-zinc-500">
-              Public gallery
+              {t("galleryPanel.publicGallery")}
             </p>
             <p className="text-xs text-zinc-600">
-              {items.length} photo{items.length === 1 ? "" : "s"} · max 8 MB upload each
+              {items.length === 1
+                ? t("galleryPanel.photoCountOne", { count: items.length })
+                : t("galleryPanel.photoCountMany", { count: items.length })}
             </p>
           </div>
           {canWrite ? (
@@ -270,7 +277,7 @@ export function GalleryPanel({ canWrite }: { canWrite: boolean }) {
                 className="inline-flex shrink-0 items-center gap-1.5 rounded-md bg-emerald-600 px-2.5 py-1.5 text-[11px] font-medium text-white hover:bg-emerald-500 disabled:opacity-50"
               >
                 <ImagePlus size={12} />
-                Add
+                {t("common.add")}
               </button>
             </>
           ) : null}
@@ -278,7 +285,7 @@ export function GalleryPanel({ canWrite }: { canWrite: boolean }) {
 
         {items.length === 0 ? (
           <div className="rounded-lg border border-dashed border-white/10 py-8 text-center">
-            <p className="text-xs text-zinc-500">No gallery photos yet.</p>
+            <p className="text-xs text-zinc-500">{t("galleryPanel.emptyState")}</p>
           </div>
         ) : (
           <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 md:grid-cols-4">
@@ -291,13 +298,13 @@ export function GalleryPanel({ canWrite }: { canWrite: boolean }) {
                   className="rounded-lg border border-white/10 bg-zinc-950/70 p-2"
                 >
                   <div className="group relative aspect-square overflow-hidden rounded-md border border-white/10 bg-zinc-950">
-                    <Thumb src={url} alt={item.caption ?? "Gallery"} />
+                    <Thumb src={url} alt={item.caption ?? t("galleryPanel.publicGallery")} />
                     {canWrite ? (
                       <div className="absolute inset-x-0 bottom-0 flex flex-wrap items-center justify-between gap-0.5 bg-black/50 p-1 opacity-100 transition sm:opacity-0 sm:group-hover:opacity-100">
                         <div className="flex gap-1">
                           <button
                             type="button"
-                            title="Move up"
+                            title={t("galleryPanel.moveUp")}
                             disabled={busy || index === 0}
                             onClick={() => void onMove(item, -1)}
                             className="rounded bg-white/15 p-1 text-zinc-100 disabled:opacity-40"
@@ -306,7 +313,7 @@ export function GalleryPanel({ canWrite }: { canWrite: boolean }) {
                           </button>
                           <button
                             type="button"
-                            title="Move down"
+                            title={t("galleryPanel.moveDown")}
                             disabled={busy || index === items.length - 1}
                             onClick={() => void onMove(item, 1)}
                             className="rounded bg-white/15 p-1 text-zinc-100 disabled:opacity-40"
@@ -317,7 +324,7 @@ export function GalleryPanel({ canWrite }: { canWrite: boolean }) {
                         <div className="flex gap-1">
                           <button
                             type="button"
-                            title="Set as cover"
+                            title={t("galleryPanel.setAsCover")}
                             disabled={busy}
                             onClick={() => void onUseAsCover(item.id)}
                             className="rounded bg-white/15 p-1 text-amber-200"
@@ -326,7 +333,7 @@ export function GalleryPanel({ canWrite }: { canWrite: boolean }) {
                           </button>
                           <button
                             type="button"
-                            title="Edit caption"
+                            title={t("galleryPanel.editCaption")}
                             disabled={busy}
                             onClick={() => {
                               setEditingId(item.id);
@@ -338,7 +345,7 @@ export function GalleryPanel({ canWrite }: { canWrite: boolean }) {
                           </button>
                           <button
                             type="button"
-                            title="Delete"
+                            title={t("galleryPanel.deleteTitle")}
                             disabled={busy}
                             onClick={() => void onDelete(item.id)}
                             className="rounded bg-white/15 p-1 text-rose-200"
@@ -355,7 +362,7 @@ export function GalleryPanel({ canWrite }: { canWrite: boolean }) {
                         <input
                           value={captionDraft}
                           onChange={(e) => setCaptionDraft(e.target.value)}
-                          placeholder="Add a caption"
+                          placeholder={t("galleryPanel.captionPlaceholder")}
                           className="w-full rounded-md border border-white/10 bg-zinc-900 px-2.5 py-2 text-xs text-white"
                         />
                         <div className="flex gap-2">
@@ -366,7 +373,7 @@ export function GalleryPanel({ canWrite }: { canWrite: boolean }) {
                             className="inline-flex items-center gap-1 rounded-md bg-emerald-600 px-2 py-1 text-[11px] text-white disabled:opacity-50"
                           >
                             <Save size={11} />
-                            Save
+                            {t("common.save")}
                           </button>
                           <button
                             type="button"
@@ -376,7 +383,7 @@ export function GalleryPanel({ canWrite }: { canWrite: boolean }) {
                             }}
                             className="rounded-md border border-white/10 px-2 py-1 text-[11px] text-zinc-300"
                           >
-                            Cancel
+                            {t("common.cancel")}
                           </button>
                         </div>
                       </div>
@@ -396,7 +403,7 @@ export function GalleryPanel({ canWrite }: { canWrite: boolean }) {
                             : "text-zinc-500",
                         )}
                       >
-                        {item.caption?.trim() || "Add a caption"}
+                        {item.caption?.trim() || t("galleryPanel.captionPlaceholder")}
                       </button>
                     )}
                   </div>

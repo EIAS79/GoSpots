@@ -14,17 +14,17 @@ import { GamingUnitBlockDialog } from "@/components/venues/public/gaming-unit-bl
 import { GamingFloorMapControls } from "@/components/venues/public/gaming-floor-map-controls";
 import { OfferingPricingPanel } from "@/components/venues/public/offering-pricing-panel";
 import { cn } from "@/lib/cn";
-import { getBookingUnitKind } from "@/lib/booking-unit-kind";
+import {
+  getBookingUnitKind,
+  type BookingUnitKind,
+} from "@/lib/booking-unit-kind";
 import { listBowlingModes } from "@/lib/bowling-modes";
 import { validateBookingWindow } from "@/lib/booking-time";
 import {
   applyWindowToUnits,
   defaultCheckWindowTimes,
 } from "@/lib/gaming-window-availability";
-import {
-  getFloorMapVisualType,
-  layoutMapLabel,
-} from "@/lib/gaming-floor-visual";
+import { getFloorMapVisualType } from "@/lib/gaming-floor-visual";
 import { resolveMediaUrl } from "@/lib/media-url";
 import { fetchPublicGamingSchedule } from "@/lib/public-gaming-client";
 import type {
@@ -45,6 +45,19 @@ import { BilliardTableIcon } from "@/components/icons/billiard-table-icon";
 import { ArcadeCabinetIcon } from "@/components/icons/arcade-cabinet-icon";
 import { FoosballTableIcon } from "@/components/icons/foosball-table-icon";
 import { PingPongTableIcon } from "@/components/icons/ping-pong-table-icon";
+
+function publicMapLabel(
+  type: ResourceType,
+  unitKind: BookingUnitKind,
+  t: (key: string, vars?: Record<string, string | number>) => string,
+) {
+  if (type === "DINING") return t("venuePage.floor.mapLabelTables");
+  if (type === "BOWLING" || unitKind === "LANE") {
+    return t("venuePage.floor.mapLabelLanes");
+  }
+  if (unitKind === "TABLE") return t("venuePage.floor.mapLabelTables");
+  return t("venuePage.floor.mapLabelStations");
+}
 
 export function VenueGamingTab({
   venue,
@@ -106,18 +119,22 @@ export function VenueGamingTab({
           categoryId: selectedCategoryId,
         });
         setSchedule(data);
+        return true;
       } catch (e) {
         if (!opts.silent) {
           setSchedule(null);
           setError(
-            e instanceof Error ? e.message : "Could not load floor map.",
+            e instanceof Error
+              ? e.message
+              : t("venuePage.floor.loadFloorFailed"),
           );
         }
+        return false;
       } finally {
         if (!opts.silent) setLoading(false);
       }
     },
-    [slug, scheduleDate, selectedCategoryId],
+    [slug, scheduleDate, selectedCategoryId, t],
   );
 
   useEffect(() => {
@@ -153,9 +170,10 @@ export function VenueGamingTab({
   const totalCount = windowedUnits.length;
 
   const mapLabel = selectedOffering
-    ? layoutMapLabel(
+    ? publicMapLabel(
         selectedOffering.type as ResourceType,
         getBookingUnitKind(selectedOffering.type as ResourceType),
+        t,
       )
     : undefined;
 

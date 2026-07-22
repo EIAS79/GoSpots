@@ -2,8 +2,15 @@
 
 import { CheckCircle2, Loader2, Mail } from "lucide-react";
 import { useState } from "react";
+import { PublicCaptchaWidget } from "@/components/venues/public/public-captcha-widget";
+import { PrivacyConsentCheckbox } from "@/components/venues/public/privacy-consent-checkbox";
 import { cn } from "@/lib/cn";
+import {
+  isPublicCaptchaEnabled,
+  withCaptchaToken,
+} from "@/lib/public-captcha";
 import { submitPublicVenueContact } from "@/lib/public-guest-client";
+import { usePublicPrefs } from "@/lib/public-prefs-context";
 
 export function PublicContactForm({
   slug,
@@ -12,6 +19,7 @@ export function PublicContactForm({
   slug: string;
   className?: string;
 }) {
+  const { t } = usePublicPrefs();
   const [guestName, setGuestName] = useState("");
   const [guestEmail, setGuestEmail] = useState("");
   const [guestPhone, setGuestPhone] = useState("");
@@ -20,6 +28,9 @@ export function PublicContactForm({
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
+  const [captchaToken, setCaptchaToken] = useState<string | null>(null);
+  const [captchaReset, setCaptchaReset] = useState(0);
+  const [privacyConsent, setPrivacyConsent] = useState(false);
 
   async function submit(e: React.FormEvent) {
     e.preventDefault();
@@ -27,35 +38,57 @@ export function PublicContactForm({
     setSuccess(null);
 
     if (!guestName.trim()) {
-      setError("Your name is required.");
+      setError(t("venuePage.contact.nameRequired"));
       return;
     }
     if (!message.trim()) {
-      setError("Please write a message.");
+      setError(t("venuePage.contact.messageRequired"));
       return;
     }
     if (!guestEmail.trim() && !guestPhone.trim()) {
-      setError("Provide an email or phone so the venue can reply.");
+      setError(t("venuePage.contact.replyRequired"));
+      return;
+    }
+    if (!privacyConsent) {
+      setError(t("venuePage.privacyConsent.required"));
+      return;
+    }
+    if (isPublicCaptchaEnabled() && !captchaToken?.trim()) {
+      setError(t("venuePage.captcha.required"));
       return;
     }
 
     setBusy(true);
     try {
-      const res = await submitPublicVenueContact(slug, {
-        guestName: guestName.trim(),
-        guestEmail: guestEmail.trim() || undefined,
-        guestPhone: guestPhone.trim() || undefined,
-        subject: subject.trim() || undefined,
-        message: message.trim(),
-      });
+      const res = await submitPublicVenueContact(
+        slug,
+        withCaptchaToken(
+          {
+            guestName: guestName.trim(),
+            guestEmail: guestEmail.trim() || undefined,
+            guestPhone: guestPhone.trim() || undefined,
+            subject: subject.trim() || undefined,
+            message: message.trim(),
+            privacyConsentAccepted: true,
+          },
+          captchaToken,
+        ),
+      );
       setSuccess(res.message);
       setGuestName("");
       setGuestEmail("");
       setGuestPhone("");
       setSubject("");
       setMessage("");
+      setPrivacyConsent(false);
+      setCaptchaToken(null);
+      setCaptchaReset((n) => n + 1);
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Could not send message.");
+      setError(
+        err instanceof Error ? err.message : t("venuePage.contact.sendFailed"),
+      );
+      setCaptchaToken(null);
+      setCaptchaReset((n) => n + 1);
     } finally {
       setBusy(false);
     }
@@ -76,7 +109,7 @@ export function PublicContactForm({
           onClick={() => setSuccess(null)}
           className="mt-4 text-xs text-emerald-300 underline"
         >
-          Send another message
+          {t("venuePage.contact.sendAnother")}
         </button>
       </div>
     );
@@ -97,10 +130,10 @@ export function PublicContactForm({
         <Mail className="mt-0.5 shrink-0 text-sky-600 dark:text-sky-300" size={22} />
         <div>
           <h3 className="text-lg font-semibold text-[var(--color-foreground)]">
-            Contact the venue
+            {t("venuePage.contact.title")}
           </h3>
           <p className="mt-1 text-sm text-zinc-500">
-            Questions, group inquiries, or anything that is not a booking request.
+            {t("venuePage.contact.subtitle")}
           </p>
         </div>
       </div>
@@ -113,7 +146,7 @@ export function PublicContactForm({
 
       <div className="mt-5 grid gap-4 sm:grid-cols-2">
         <label className="block text-xs text-zinc-600 dark:text-zinc-400">
-          Your name
+          {t("venuePage.contact.yourName")}
           <input
             required
             value={guestName}
@@ -122,16 +155,16 @@ export function PublicContactForm({
           />
         </label>
         <label className="block text-xs text-zinc-600 dark:text-zinc-400">
-          Subject
+          {t("venuePage.contact.subject")}
           <input
             value={subject}
             onChange={(e) => setSubject(e.target.value)}
-            placeholder="Optional"
+            placeholder={t("venuePage.contact.optional")}
             className={fieldClass}
           />
         </label>
         <label className="block text-xs text-zinc-600 dark:text-zinc-400">
-          Phone
+          {t("venuePage.contact.phone")}
           <input
             type="tel"
             value={guestPhone}
@@ -140,7 +173,7 @@ export function PublicContactForm({
           />
         </label>
         <label className="block text-xs text-zinc-600 dark:text-zinc-400">
-          Email
+          {t("venuePage.contact.email")}
           <input
             type="email"
             value={guestEmail}
@@ -149,7 +182,7 @@ export function PublicContactForm({
           />
         </label>
         <label className="block text-xs text-zinc-600 dark:text-zinc-400 sm:col-span-2">
-          Message
+          {t("venuePage.contact.message")}
           <textarea
             required
             value={message}
@@ -160,13 +193,28 @@ export function PublicContactForm({
         </label>
       </div>
 
+      <PublicCaptchaWidget
+        className="mt-4"
+        onTokenChange={setCaptchaToken}
+        resetKey={captchaReset}
+      />
+
+      <div className="mt-3">
+        <PrivacyConsentCheckbox
+          checked={privacyConsent}
+          onChange={setPrivacyConsent}
+          label={t("venuePage.privacyConsent.label")}
+          disabled={busy}
+        />
+      </div>
+
       <button
         type="submit"
         disabled={busy}
         className="mt-5 inline-flex w-full items-center justify-center gap-2 rounded-lg bg-sky-600 py-2.5 text-sm font-medium text-white hover:bg-sky-500 disabled:opacity-50 sm:w-auto sm:px-6"
       >
         {busy ? <Loader2 size={16} className="animate-spin" /> : null}
-        Send message
+        {t("venuePage.contact.send")}
       </button>
     </form>
   );

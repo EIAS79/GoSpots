@@ -1,5 +1,6 @@
 import { SkipThrottle } from '@nestjs/throttler';
 import {
+  BadRequestException,
   Controller,
   Get,
   Headers,
@@ -10,6 +11,7 @@ import {
 import { ApiTags } from '@nestjs/swagger';
 import type { Request } from 'express';
 import { Public } from '../auth/decorators/public.decorator';
+import { SkipCsrf } from '../auth/decorators/skip-csrf.decorator';
 import { CurrentUser } from '../auth/decorators/current-user.decorator';
 import type { JwtAccessPayload } from '../auth/auth.service';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
@@ -39,6 +41,7 @@ export class BillingController {
   }
 
   @Public()
+  @SkipCsrf()
   @SkipThrottle()
   @Post('webhooks/lemon-squeezy')
   async lemonWebhook(
@@ -48,13 +51,27 @@ export class BillingController {
     const raw =
       req.rawBody ??
       Buffer.from(
-        typeof req.body === 'string' ? req.body : JSON.stringify(req.body),
+        typeof req.body === 'string' ? req.body : JSON.stringify(req.body ?? {}),
       );
+    // Signature first — never insert a receipt on auth failure (401).
     this.billing.verifySignature(raw, signature);
-    const payload =
-      typeof req.body === 'object' && req.body
-        ? req.body
-        : JSON.parse(raw.toString('utf8'));
-    return this.billing.handleWebhook(payload);
+
+    let payload: unknown;
+    try {
+      if (typeof req.body === 'object' && req.body !== null) {
+        payload = req.body;
+      } else if (typeof req.body === 'string') {
+        payload = JSON.parse(req.body);
+      } else {
+        payload = JSON.parse(raw.toString('utf8'));
+      }
+    } catch {
+      throw new BadRequestException('Malformed webhook JSON.');
+    }
+    if (!payload || typeof payload !== 'object') {
+      throw new BadRequestException('Malformed webhook JSON.');
+    }
+
+    return this.billing.handleWebhook(payload, raw);
   }
 }

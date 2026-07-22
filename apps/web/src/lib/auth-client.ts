@@ -27,14 +27,15 @@ export interface AuthUser {
     shop: {
       id: string;
       slug: string;
-      dashboardKey: string;
       name: string;
       subscription: {
         tier: SubscriptionTier;
         status: string;
         trialEndsAt: string | null;
         packId?: string | null;
-        addOns?: string | null;
+        /** Effective CSV from /me (dual-read); may also be a string[] from other APIs */
+        addOns?: string | string[] | null;
+        addOnRows?: { addOnId: string }[] | null;
       } | null;
     };
   }[];
@@ -42,15 +43,23 @@ export interface AuthUser {
 
 export type AuthSessionResponse = {
   user: Pick<AuthUser, "id" | "email" | "name" | "systemRole">;
-  dashboardPath: string | null;
+  /** Public venue slug for dashboard redirects (never `slug--key`). */
+  venuePath: string | null;
 };
+
+export type MfaLoginChallengeResponse = {
+  mfaRequired: true;
+  mfaToken: string;
+};
+
+export type LoginResponse = AuthSessionResponse | MfaLoginChallengeResponse;
 
 export function login(
   login: string,
   password: string,
   accountType?: UserAccountType,
 ) {
-  return api<AuthSessionResponse>("/auth/login", {
+  return api<LoginResponse>("/auth/login", {
     method: "POST",
     body: JSON.stringify({ login, password, accountType }),
   });
@@ -105,15 +114,15 @@ export function refresh() {
 }
 
 export function fetchMe() {
-  return api<AuthUser & { dashboardPath: string | null }>("/auth/me", {
+  return api<AuthUser & { venuePath: string | null }>("/auth/me", {
     method: "GET",
   });
 }
 
 export function createVenue(input: { shopName: string; shopSlug: string }) {
   return api<{
-    dashboardPath: string;
-    shop: { id: string; slug: string; name: string; dashboardKey: string };
+    venuePath: string;
+    shop: { id: string; slug: string; name: string };
   }>("/auth/venues", {
     method: "POST",
     body: JSON.stringify(input),
@@ -146,8 +155,8 @@ export function linkVenues(input: {
   shopIds: string[];
 }) {
   return api<{
-    linked: { id: string; name: string; dashboardPath: string }[];
-    dashboardPath: string | null;
+    linked: { id: string; name: string; venuePath: string }[];
+    venuePath: string | null;
   }>("/auth/venues/link", {
     method: "POST",
     body: JSON.stringify(input),

@@ -2,7 +2,7 @@
 
 import { Clock, X } from "lucide-react";
 import { ModalPortal } from "@/components/ui/modal-portal";
-import { formatTimeShort } from "@/lib/gaming-window-availability";
+import { usePublicPrefs } from "@/lib/public-prefs-context";
 import type { ScheduleBooking, ScheduleUnit } from "@/lib/reservations-client";
 
 export function GamingUnitBlockDialog({
@@ -14,6 +14,15 @@ export function GamingUnitBlockDialog({
   booking: ScheduleBooking;
   onClose: () => void;
 }) {
+  const { t, locale } = usePublicPrefs();
+
+  function formatTime(iso: string) {
+    return new Date(iso).toLocaleTimeString(locale, {
+      hour: "numeric",
+      minute: "2-digit",
+    });
+  }
+
   return (
     <ModalPortal>
       <div
@@ -32,35 +41,40 @@ export function GamingUnitBlockDialog({
               <Clock className="mt-0.5 shrink-0 text-rose-300" size={18} />
               <div>
                 <p className="text-sm font-semibold text-white">{unit.name}</p>
-                <p className="mt-1 text-xs text-rose-200">Reserved for this time</p>
+                <p className="mt-1 text-xs text-rose-200">
+                  {t("venuePage.floor.reservedTitle")}
+                </p>
               </div>
             </div>
             <button
               type="button"
               onClick={onClose}
               className="rounded-lg p-1.5 text-zinc-400 hover:bg-white/5"
-              aria-label="Close"
+              aria-label={t("venuePage.floor.close")}
             >
               <X size={16} />
             </button>
           </div>
           <div className="mt-4 rounded-lg border border-white/10 bg-zinc-900/60 px-4 py-3 text-sm text-zinc-300">
             <p>
-              <span className="text-zinc-500">From </span>
+              <span className="text-zinc-500">
+                {t("venuePage.floor.from")}{" "}
+              </span>
               <span className="font-medium text-zinc-100">
-                {formatTimeShort(booking.startsAt)}
+                {formatTime(booking.startsAt)}
               </span>
             </p>
             <p className="mt-1">
-              <span className="text-zinc-500">Until </span>
+              <span className="text-zinc-500">
+                {t("venuePage.floor.until")}{" "}
+              </span>
               <span className="font-medium text-zinc-100">
-                {formatTimeShort(booking.endsAt)}
+                {formatTime(booking.endsAt)}
               </span>
             </p>
           </div>
           <p className="mt-4 text-xs leading-relaxed text-zinc-500">
-            Choose a time before or after this reservation, or pick another
-            station. You can book the same seat at a non-overlapping time.
+            {t("venuePage.floor.blockHint")}
           </p>
         </div>
       </div>

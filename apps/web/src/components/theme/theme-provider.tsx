@@ -23,14 +23,16 @@ type ThemeContextValue = {
   isPublicTheme: boolean;
 };
 
-const STORAGE_KEY = "gospots-theme";
+const STORAGE_KEY = "locora-theme";
 
 const ThemeContext = createContext<ThemeContextValue | null>(null);
 
 function readStoredTheme(): Theme {
   if (typeof window === "undefined") return "dark";
   try {
-    const v = window.localStorage.getItem(STORAGE_KEY);
+    const v =
+      window.localStorage.getItem(STORAGE_KEY) ||
+      window.localStorage.getItem("gospots-theme");
     if (v === "light" || v === "dark") return v;
   } catch {
     /* ignore */

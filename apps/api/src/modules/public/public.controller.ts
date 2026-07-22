@@ -3,12 +3,25 @@ import {
   Controller,
   Delete,
   Get,
+  Headers,
   Param,
   Post,
   Query,
+  Req,
 } from '@nestjs/common';
 import { ApiTags } from '@nestjs/swagger';
 import { Throttle } from '@nestjs/throttler';
+import type { Request } from 'express';
+import { isCaptchaEscalated } from '../../common/captcha-escalation.util';
+import {
+  assertCaptchaOrThrow,
+  CAPTCHA_TOKEN_HEADER,
+  readCaptchaToken,
+} from '../../common/captcha.util';
+import {
+  publicThrottle,
+  type PublicThrottleKind,
+} from '../../common/throttle.config';
 import { Public } from '../auth/decorators/public.decorator';
 import {
   CreatePublicContactDto,
@@ -20,11 +33,17 @@ import { ContactMessagesService } from '../guest/contact.service';
 import { GuestChatService } from '../guest/guest-chat.service';
 import { VenueReviewsService } from '../guest/venue-reviews.service';
 import { CreatePublicEventRequestDto } from '../reservations/dto/event-requests.dto';
+import { ScheduleQueryDto } from '../reservations/dto/reservations.dto';
 import { EventRequestsService } from '../reservations/event-requests.service';
 import { ReservationsService } from '../reservations/reservations.service';
-import { CreatePublicGamingReservationDto } from '../guest/dto/public-gaming.dto';
+import {
+  CreatePublicDiningReservationDto,
+  CreatePublicGamingReservationDto,
+} from '../guest/dto/public-gaming.dto';
 import { CurrencyRatesService } from '../shop/currency-rates.service';
 import { ShopService } from '../shop/shop.service';
+import { GuestDsarDto } from '../gdpr/dto/gdpr.dto';
+import { GdprService } from '../gdpr/gdpr.service';
 
 @ApiTags('public')
 @Controller('public')
@@ -37,7 +56,27 @@ export class PublicController {
     private readonly reviews: VenueReviewsService,
     private readonly contact: ContactMessagesService,
     private readonly guestChats: GuestChatService,
+    private readonly gdpr: GdprService,
   ) {}
+
+  /**
+   * No-op when CAPTCHA_PROVIDER=off (default).
+   * With provider on + mode=after_throttle, requires token after public-create 429
+   * (in-memory escalation map via CaptchaAwareThrottlerGuard).
+   */
+  private async assertCreateCaptcha(
+    req: Request,
+    surface: PublicThrottleKind,
+    bodyToken: string | undefined,
+    headerToken?: string,
+  ) {
+    const ip = req.ip ?? '';
+    await assertCaptchaOrThrow({
+      token: readCaptchaToken({ bodyToken, headerToken }),
+      remoteIp: ip,
+      escalated: isCaptchaEscalated(ip, surface),
+    });
+  }
 
   @Public()
   @Get('currency/rate')
@@ -127,32 +166,41 @@ export class PublicController {
   }
 
   @Public()
-  @Throttle({ default: { limit: 10, ttl: 60_000 } })
+  @Throttle(publicThrottle('review'))
   @Post('venues/:slug/reviews')
-  submitReview(
+  async submitReview(
     @Param('slug') slug: string,
     @Body() dto: CreatePublicReviewDto,
+    @Req() req: Request,
+    @Headers(CAPTCHA_TOKEN_HEADER) captchaHeader?: string,
   ) {
+    await this.assertCreateCaptcha(req, 'review', dto.captchaToken, captchaHeader);
     return this.reviews.createFromPublic(slug, dto);
   }
 
   @Public()
-  @Throttle({ default: { limit: 10, ttl: 60_000 } })
+  @Throttle(publicThrottle('contact'))
   @Post('venues/:slug/contact')
-  submitContact(
+  async submitContact(
     @Param('slug') slug: string,
     @Body() dto: CreatePublicContactDto,
+    @Req() req: Request,
+    @Headers(CAPTCHA_TOKEN_HEADER) captchaHeader?: string,
   ) {
+    await this.assertCreateCaptcha(req, 'contact', dto.captchaToken, captchaHeader);
     return this.contact.createFromPublic(slug, dto);
   }
 
   @Public()
-  @Throttle({ default: { limit: 8, ttl: 60_000 } })
+  @Throttle(publicThrottle('chatOpen'))
   @Post('venues/:slug/chats')
-  createGuestChat(
+  async createGuestChat(
     @Param('slug') slug: string,
     @Body() dto: CreatePublicGuestChatDto,
+    @Req() req: Request,
+    @Headers(CAPTCHA_TOKEN_HEADER) captchaHeader?: string,
   ) {
+    await this.assertCreateCaptcha(req, 'chatOpen', dto.captchaToken, captchaHeader);
     return this.guestChats.createFromPublic(slug, dto);
   }
 
@@ -211,52 +259,61 @@ export class PublicController {
   }
 
   @Public()
-  @Throttle({ default: { limit: 15, ttl: 60_000 } })
+  @Throttle(publicThrottle('event'))
   @Post('venues/:slug/event-requests')
-  submitEventRequest(
+  async submitEventRequest(
     @Param('slug') slug: string,
     @Body() dto: CreatePublicEventRequestDto,
+    @Req() req: Request,
+    @Headers(CAPTCHA_TOKEN_HEADER) captchaHeader?: string,
   ) {
+    await this.assertCreateCaptcha(req, 'event', dto.captchaToken, captchaHeader);
     return this.eventRequests.createFromPublic(slug, dto);
   }
 
   @Public()
+  @Throttle({ default: { limit: 60, ttl: 60_000 } })
   @Get('venues/:slug/gaming/schedule')
   gamingSchedule(
     @Param('slug') slug: string,
-    @Query('date') date: string,
-    @Query('categoryId') categoryId?: string,
+    @Query() query: ScheduleQueryDto,
   ) {
-    return this.reservations.getPublicSchedule(slug, { date, categoryId }, 'gaming');
+    return this.reservations.getPublicSchedule(slug, query, 'gaming');
   }
 
   @Public()
-  @Throttle({ default: { limit: 15, ttl: 60_000 } })
+  @Throttle(publicThrottle('booking'))
   @Post('venues/:slug/dining/reservations')
-  submitDiningReservation(
+  async submitDiningReservation(
     @Param('slug') slug: string,
-    @Body() dto: CreatePublicGamingReservationDto,
+    @Body() dto: CreatePublicDiningReservationDto,
+    @Req() req: Request,
+    @Headers(CAPTCHA_TOKEN_HEADER) captchaHeader?: string,
   ) {
+    await this.assertCreateCaptcha(req, 'booking', dto.captchaToken, captchaHeader);
     return this.reservations.createPublicGamingBooking(slug, dto, 'dining');
   }
 
   @Public()
+  @Throttle({ default: { limit: 60, ttl: 60_000 } })
   @Get('venues/:slug/dining/schedule')
   diningSchedule(
     @Param('slug') slug: string,
-    @Query('date') date: string,
-    @Query('categoryId') categoryId?: string,
+    @Query() query: ScheduleQueryDto,
   ) {
-    return this.reservations.getPublicSchedule(slug, { date, categoryId }, 'dining');
+    return this.reservations.getPublicSchedule(slug, query, 'dining');
   }
 
   @Public()
-  @Throttle({ default: { limit: 15, ttl: 60_000 } })
+  @Throttle(publicThrottle('booking'))
   @Post('venues/:slug/gaming/reservations')
-  submitGamingReservation(
+  async submitGamingReservation(
     @Param('slug') slug: string,
     @Body() dto: CreatePublicGamingReservationDto,
+    @Req() req: Request,
+    @Headers(CAPTCHA_TOKEN_HEADER) captchaHeader?: string,
   ) {
+    await this.assertCreateCaptcha(req, 'booking', dto.captchaToken, captchaHeader);
     return this.reservations.createPublicGamingBooking(slug, dto, 'gaming');
   }
 
@@ -294,5 +351,24 @@ export class PublicController {
     @Param('token') token: string,
   ) {
     return this.reservations.cancelPublicGamingBooking(slug, token, 'dining');
+  }
+
+  /** Guest self-serve DSAR (access / erasure) for a published venue. */
+  @Public()
+  @Throttle(publicThrottle('contact'))
+  @Post('venues/:slug/gdpr/dsar')
+  async submitGuestDsar(
+    @Param('slug') slug: string,
+    @Body() dto: GuestDsarDto,
+    @Req() req: Request,
+    @Headers(CAPTCHA_TOKEN_HEADER) captchaHeader?: string,
+  ) {
+    await this.assertCreateCaptcha(
+      req,
+      'contact',
+      dto.captchaToken,
+      captchaHeader,
+    );
+    return this.gdpr.submitGuestDsar(slug, dto, req.ip);
   }
 }

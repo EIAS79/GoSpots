@@ -198,7 +198,8 @@ export const VENUE_ADD_ONS: Record<AddOnId, VenueAddOn> = {
       'Build food and drink menus, manage stock and sections, and process menu orders / kitchen tickets. Ideal for restaurants, bars, and cafés.',
     monthlyPrice: 15,
     currency: 'EUR',
-    modules: ['menu', 'transaction', 'reports'],
+    /** `bar` included so pack-only authz never shrinks STANDARD+ legacy access */
+    modules: ['menu', 'transaction', 'reports', 'bar'],
     recommendedFor: ['dining', 'bar', 'hotel_fb', 'mixed'],
   },
   dining_floor: {
@@ -218,7 +219,7 @@ export const VENUE_ADD_ONS: Record<AddOnId, VenueAddOn> = {
     name: 'Venue page & discovery',
     tagline: 'Public venue page plus directory placement.',
     details:
-      'Publish your venue on GoSpots with a dedicated public page, and unlock advertising / promoted placement in the venues directory so more guests can find you.',
+      'Publish your venue on Locora with a dedicated public page, and unlock advertising / promoted placement in the venues directory so more guests can find you.',
     monthlyPrice: 10,
     currency: 'EUR',
     modules: ['marketing'],
@@ -264,6 +265,116 @@ export function parseAddOns(raw: string | null | undefined): AddOnId[] {
 export function serializeAddOns(ids: AddOnId[]): string {
   return [...new Set(ids)].join(',');
 }
+
+/**
+ * Rows-primary add-on resolve.
+ * When `addOnRows` is provided (including `[]`), join rows are SoT.
+ * CSV / string[] is only a fallback when rows were never loaded.
+ * Unknown ids are dropped (validated against catalog).
+ */
+export function resolveAddOnIds(input: {
+  addOns?: string | string[] | null;
+  addOnRows?: { addOnId: string }[] | null;
+}): AddOnId[] {
+  if (input.addOnRows != null) {
+    return [
+      ...new Set(
+        (input.addOnRows ?? [])
+          .map((r) => r.addOnId.trim())
+          .filter((id): id is AddOnId => id in VENUE_ADD_ONS),
+      ),
+    ];
+  }
+  if (Array.isArray(input.addOns)) {
+    return [
+      ...new Set(
+        input.addOns
+          .map((s) => String(s).trim())
+          .filter((s): s is AddOnId => s in VENUE_ADD_ONS),
+      ),
+    ];
+  }
+  return parseAddOns(input.addOns);
+}
+
+export function resolveAddOnsCsv(input: {
+  addOns?: string | string[] | null;
+  addOnRows?: { addOnId: string }[] | null;
+}): string {
+  return serializeAddOns(resolveAddOnIds(input));
+}
+
+/**
+ * Map legacy SubscriptionTier → add-on set approximating FEATURE_MATRIX /
+ * legacyModulesFromTier. Used so pack+empty-addOns shops on STANDARD+ do not
+ * lose access during CSV→relational migration. Never used to shrink access.
+ */
+export function legacyAddOnsFromTier(tier: string): AddOnId[] {
+  if (tier === 'ENTERPRISE') return [...(Object.keys(VENUE_ADD_ONS) as AddOnId[])];
+  if (tier === 'PRO') {
+    return [
+      'ops_alerts',
+      'gaming_suite',
+      'menu_orders',
+      'dining_floor',
+      'guest_chat',
+      'team_accounts',
+    ];
+  }
+  if (tier === 'STANDARD') {
+    return ['ops_alerts', 'gaming_suite', 'menu_orders', 'dining_floor'];
+  }
+  if (tier === 'STARTER') {
+    return ['gaming_suite', 'menu_orders'];
+  }
+  return [];
+}
+
+/** Normalize CSV or id list into catalog add-on ids for row writes. */
+export function addOnIdsFromInput(
+  addOns: string | string[] | null | undefined,
+): AddOnId[] {
+  if (addOns == null) return [];
+  if (Array.isArray(addOns)) {
+    return [
+      ...new Set(
+        addOns
+          .map((s) => String(s).trim())
+          .filter((s): s is AddOnId => s in VENUE_ADD_ONS),
+      ),
+    ];
+  }
+  return parseAddOns(addOns);
+}
+
+/**
+ * Replace SubscriptionAddOn rows (source of truth).
+ * Accepts CSV string or id array — CSV is parse-only, not persisted.
+ */
+export async function replaceSubscriptionAddOnRows(
+  db: {
+    subscriptionAddOn: {
+      deleteMany: (args: { where: { subscriptionId: string } }) => Promise<unknown>;
+      createMany: (args: {
+        data: { subscriptionId: string; addOnId: string }[];
+        skipDuplicates?: boolean;
+      }) => Promise<unknown>;
+    };
+  },
+  subscriptionId: string,
+  addOns: string | string[] | null | undefined,
+): Promise<void> {
+  const ids = addOnIdsFromInput(addOns);
+  await db.subscriptionAddOn.deleteMany({ where: { subscriptionId } });
+  if (!ids.length) return;
+  await db.subscriptionAddOn.createMany({
+    data: ids.map((addOnId) => ({ subscriptionId, addOnId })),
+    skipDuplicates: true,
+  });
+}
+
+/** @deprecated Prefer replaceSubscriptionAddOnRows — alias kept for call-site churn. */
+export const syncSubscriptionAddOnRows = replaceSubscriptionAddOnRows;
 
 export function resolvePackId(
   packId: string | null | undefined,

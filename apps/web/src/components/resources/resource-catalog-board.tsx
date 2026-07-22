@@ -21,7 +21,7 @@ export function ResourceCatalogBoard({
   onEditUnit,
 }: {
   categories: ResourceCategory[];
-  formatPrice: (n: number) => string;
+  formatPrice: (n: import("@/lib/money").MoneyWire) => string;
   canWrite: boolean;
   onEditCategory: (c: ResourceCategory) => void;
   onAddUnits: (c: ResourceCategory) => void;
@@ -65,7 +65,7 @@ function CategoryCard({
   onEditUnit,
 }: {
   category: ResourceCategory;
-  formatPrice: (n: number) => string;
+  formatPrice: (n: import("@/lib/money").MoneyWire) => string;
   canWrite: boolean;
   onEdit: () => void;
   onAddUnits: () => void;

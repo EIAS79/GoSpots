@@ -26,10 +26,36 @@ export class UpdateShopSettingsDto {
   @IsIn([...LOCALE_CODES])
   locale?: string;
 
+  /**
+   * IANA timezone for venue-local calendar days (stock reset, finance day buckets).
+   * Example: `Europe/Warsaw`. Validated in ShopService.updateSettings.
+   */
+  @IsOptional()
+  @IsString()
+  @MaxLength(64)
+  timezone?: string;
+
   @IsOptional()
   @IsString()
   @IsIn([...CURRENCY_CODES])
   currency?: string;
+
+  /**
+   * Required `true` when `currency` changes the shop currency.
+   * Preview first via `POST /shop/currency/preview`; apply only with confirm.
+   */
+  @IsOptional()
+  @Transform(({ value }) => {
+    if (value === true || value === 'true' || value === 1 || value === '1') {
+      return true;
+    }
+    if (value === false || value === 'false' || value === 0 || value === '0') {
+      return false;
+    }
+    return value;
+  })
+  @IsBoolean()
+  confirm?: boolean;
 
   @IsOptional()
   @IsString()
@@ -133,6 +159,13 @@ export class SyncVenueCategoriesDto {
   custom?: CustomVenueCategoryDto[];
 }
 
+/** Preview catalog FX reprice without writing. */
+export class PreviewCurrencyChangeDto {
+  @IsString()
+  @IsIn([...CURRENCY_CODES])
+  currency!: string;
+}
+
 export class ConvertCurrencyDto {
   @IsNumber()
   @Min(0)
@@ -153,4 +186,16 @@ export class ConvertCurrencyDto {
   @IsArray()
   @IsString({ each: true })
   toCurrencies?: string[];
+}
+
+/** Owner-only dashboard capability key rotate (bible #19). */
+export class RotateDashboardKeyDto {
+  /**
+   * Owner password for forced reauth. Optional here when supplied via
+   * `X-Confirm-Password` header instead.
+   */
+  @IsOptional()
+  @IsString()
+  @MaxLength(128)
+  password?: string;
 }

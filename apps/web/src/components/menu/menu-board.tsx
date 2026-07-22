@@ -16,21 +16,27 @@ import { MediaImage } from "@/components/ui/media-image";
 import { cn } from "@/lib/cn";
 import type { MenuItem, MenuSection } from "@/lib/menu-client";
 import { itemTimingLabel, sectionTimingLabel } from "@/lib/menu-timing";
+import { useVenueSettingsOptional } from "@/lib/venue-settings-context";
 
 const ITEMS_PER_PAGE = 10;
 const UNCATEGORIZED_ID = "__none";
 
 type CatalogSection = MenuSection & { id: string };
+type MenuT = (
+  key: string,
+  vars?: Record<string, string | number>,
+) => string;
 
 function buildCatalogSections(
   sections: MenuSection[],
   uncategorized: MenuItem[],
+  otherLabel: string,
 ): CatalogSection[] {
   const list: CatalogSection[] = [...sections];
   if (uncategorized.length > 0) {
     list.push({
       id: UNCATEGORIZED_ID,
-      name: "Other items",
+      name: otherLabel,
       imageUrl: null,
       sortOrder: 999,
       mealPeriod: null,
@@ -78,7 +84,7 @@ export function MenuBoard({
   sections: MenuSection[];
   itemsBySection: Map<string, MenuItem[]>;
   uncategorized: MenuItem[];
-  formatPrice: (n: number) => string;
+  formatPrice: (n: import("@/lib/money").MoneyWire) => string;
   canWrite: boolean;
   onAddSection: () => void;
   onEditSection: (section: MenuSection) => void;
@@ -87,9 +93,11 @@ export function MenuBoard({
   onAddItem: (sectionId: string) => void;
   onDeleteItem: (item: MenuItem) => void;
 }) {
+  const t: MenuT =
+    useVenueSettingsOptional()?.t ?? ((key, vars) => key);
   const catalogSections = useMemo(
-    () => buildCatalogSections(sections, uncategorized),
-    [sections, uncategorized],
+    () => buildCatalogSections(sections, uncategorized, t("menu.otherItems")),
+    [sections, uncategorized, t],
   );
 
   const [activeId, setActiveId] = useState<string | null>(null);
@@ -181,11 +189,8 @@ export function MenuBoard({
   if (sections.length === 0 && uncategorized.length === 0) {
     return (
       <div className="mx-auto w-full max-w-lg rounded-xl border border-dashed border-white/15 bg-zinc-900/40 px-6 py-14 text-center">
-        <p className="text-lg font-medium text-zinc-100">Your menu is empty</p>
-        <p className="mt-2 text-sm text-zinc-500">
-          Start with a section — Drinks, Food, Desserts — then add dishes inside
-          it.
-        </p>
+        <p className="text-lg font-medium text-zinc-100">{t("menu.emptyTitle")}</p>
+        <p className="mt-2 text-sm text-zinc-500">{t("menu.emptyHint")}</p>
         {canWrite ? (
           <button
             type="button"
@@ -193,7 +198,7 @@ export function MenuBoard({
             className="mt-6 inline-flex items-center gap-2 rounded-lg bg-emerald-600 px-4 py-2.5 text-sm font-medium text-white hover:bg-emerald-500"
           >
             <Plus size={16} />
-            Add first section
+            {t("menu.addFirstSection")}
           </button>
         ) : null}
       </div>
@@ -215,7 +220,7 @@ export function MenuBoard({
         <aside className="flex flex-col border-b border-white/10 lg:border-b-0 lg:border-r lg:border-white/10">
           <div className="space-y-3 border-b border-white/10 p-3 sm:p-4">
             <div className="flex items-center justify-between gap-2">
-              <h2 className="text-sm font-medium text-zinc-200">Sections</h2>
+              <h2 className="text-sm font-medium text-zinc-200">{t("menu.sections")}</h2>
               {canWrite && !removeMode ? (
                 <button
                   type="button"
@@ -223,7 +228,7 @@ export function MenuBoard({
                   className="inline-flex items-center gap-1 rounded-lg border border-emerald-400/25 bg-emerald-500/10 px-2 py-1 text-[11px] text-emerald-200 hover:bg-emerald-500/20"
                 >
                   <Plus size={12} />
-                  Add
+                  {t("menu.add")}
                 </button>
               ) : null}
             </div>
@@ -236,13 +241,13 @@ export function MenuBoard({
                 type="search"
                 value={sectionSearch}
                 onChange={(e) => setSectionSearch(e.target.value)}
-                placeholder="Search sections…"
+                placeholder={t("menu.searchSections")}
                 className="w-full rounded-lg border border-white/10 bg-zinc-950 py-2 pl-8 pr-8 text-sm text-white outline-none placeholder:text-zinc-600 focus:border-emerald-400/40"
               />
               {sectionSearch ? (
                 <button
                   type="button"
-                  aria-label="Clear"
+                  aria-label={t("menu.clear")}
                   onClick={() => setSectionSearch("")}
                   className="absolute right-2 top-1/2 grid h-6 w-6 -translate-y-1/2 place-items-center rounded text-zinc-500 hover:bg-white/5"
                 >
@@ -344,7 +349,9 @@ export function MenuBoard({
                         {s.name}
                       </span>
                       <span className="text-[11px] text-zinc-500">
-                        {count} item{count === 1 ? "" : "s"}
+                        {count === 1
+                          ? t("menu.itemCountOne", { count })
+                          : t("menu.itemCountMany", { count })}
                       </span>
                     </span>
                   </button>
@@ -367,7 +374,7 @@ export function MenuBoard({
                     onClick={exitRemoveMode}
                     className="flex flex-1 items-center justify-center rounded-lg border border-white/10 py-2 text-xs text-zinc-400 hover:bg-white/5"
                   >
-                    Cancel
+                    {t("menu.cancel")}
                   </button>
                   <button
                     type="button"
@@ -376,7 +383,9 @@ export function MenuBoard({
                     className="flex flex-1 items-center justify-center gap-1 rounded-lg border border-rose-400/30 bg-rose-500/10 py-2 text-xs text-rose-200 disabled:opacity-40"
                   >
                     <Trash2 size={12} />
-                    Remove{selectedIds.size > 0 ? ` (${selectedIds.size})` : ""}
+                    {selectedIds.size > 0
+                      ? t("menu.removeN", { n: selectedIds.size })
+                      : t("menu.remove")}
                   </button>
                 </div>
               ) : (
@@ -388,7 +397,7 @@ export function MenuBoard({
                       className="flex flex-1 items-center justify-center gap-1 rounded-lg border border-white/10 py-2 text-xs text-zinc-300 hover:bg-white/5"
                     >
                       <Pencil size={12} />
-                      Edit
+                      {t("menu.edit")}
                     </button>
                   ) : null}
                   {sections.length > 0 ? (
@@ -401,7 +410,7 @@ export function MenuBoard({
                       )}
                     >
                       <Trash2 size={12} />
-                      Remove
+                      {t("menu.remove")}
                     </button>
                   ) : null}
                 </div>
@@ -417,6 +426,7 @@ export function MenuBoard({
               <SectionHero
                 section={activeSection}
                 canWrite={canWrite && !!activeIsReal && !removeMode}
+                t={t}
                 onEdit={
                   activeIsReal ? () => onEditSection(activeIsReal) : undefined
                 }
@@ -435,13 +445,13 @@ export function MenuBoard({
                     type="search"
                     value={itemSearch}
                     onChange={(e) => setItemSearch(e.target.value)}
-                    placeholder="Search items in this section…"
+                    placeholder={t("menu.searchItems")}
                     className="w-full rounded-lg border border-white/10 bg-zinc-950 py-2 pl-8 pr-8 text-sm text-white outline-none placeholder:text-zinc-600 focus:border-emerald-400/40"
                   />
                   {itemSearch ? (
                     <button
                       type="button"
-                      aria-label="Clear"
+                      aria-label={t("menu.clear")}
                       onClick={() => setItemSearch("")}
                       className="absolute right-2 top-1/2 grid h-6 w-6 -translate-y-1/2 place-items-center rounded text-zinc-500 hover:bg-white/5"
                     >
@@ -451,8 +461,11 @@ export function MenuBoard({
                 </label>
                 {itemQ && totalItemMatches > 0 ? (
                   <p className="mt-2 text-[11px] text-zinc-500">
-                    {totalItemMatches} match
-                    {totalItemMatches === 1 ? "" : "es"} across menu
+                    {totalItemMatches === 1
+                      ? t("menu.matchesAcrossOne", { count: totalItemMatches })
+                      : t("menu.matchesAcrossMany", {
+                          count: totalItemMatches,
+                        })}
                   </p>
                 ) : null}
               </div>
@@ -464,11 +477,15 @@ export function MenuBoard({
                     pageCount={pageCount}
                     total={filteredItems.length}
                     onPage={setPage}
+                    t={t}
                   />
                 ) : (
                   <p className="text-xs text-zinc-500">
-                    {filteredItems.length} item
-                    {filteredItems.length === 1 ? "" : "s"}
+                    {filteredItems.length === 1
+                      ? t("menu.itemCountOne", { count: filteredItems.length })
+                      : t("menu.itemCountMany", {
+                          count: filteredItems.length,
+                        })}
                   </p>
                 )}
                 {activeIsReal && canWrite && !removeMode ? (
@@ -478,7 +495,7 @@ export function MenuBoard({
                     className="ml-auto inline-flex shrink-0 items-center gap-1.5 rounded-lg bg-emerald-600 px-3 py-1.5 text-xs font-medium text-white hover:bg-emerald-500 sm:hidden"
                   >
                     <Plus size={14} />
-                    Add item
+                    {t("menu.addItem")}
                   </button>
                 ) : null}
               </div>
@@ -487,10 +504,10 @@ export function MenuBoard({
                 {pageItems.length === 0 ? (
                   <li className="px-4 py-12 text-center text-sm text-zinc-500">
                     {itemQ
-                      ? "No items match your search."
+                      ? t("menu.emptySearch")
                       : activeIsReal
-                        ? "No items yet — use Add item above."
-                        : "Items here have no section. Edit an item to assign one."}
+                        ? t("menu.emptySection")
+                        : t("menu.emptyUncategorized")}
                   </li>
                 ) : (
                   pageItems.map((item) => (
@@ -504,6 +521,7 @@ export function MenuBoard({
                       }
                       formatPrice={formatPrice}
                       canWrite={canWrite}
+                      t={t}
                       onEdit={() => onEditItem(item)}
                       onDelete={() => onDeleteItem(item)}
                     />
@@ -513,16 +531,14 @@ export function MenuBoard({
             </>
           ) : (
             <div className="grid flex-1 place-items-center p-8 text-sm text-zinc-500">
-              Select a section
+              {t("menu.selectSection")}
             </div>
           )}
         </section>
       </div>
 
       {canWrite ? (
-        <p className="text-center text-[11px] text-zinc-600">
-          Tap a dish to edit · remove with the trash icon
-        </p>
+        <p className="text-center text-[11px] text-zinc-600">{t("menu.tapHint")}</p>
       ) : null}
     </div>
   );
@@ -531,15 +547,17 @@ export function MenuBoard({
 function SectionHero({
   section,
   canWrite,
+  t,
   onEdit,
   onAddItem,
 }: {
   section: CatalogSection;
   canWrite: boolean;
+  t: MenuT;
   onEdit?: () => void;
   onAddItem?: () => void;
 }) {
-  const timing = sectionTimingLabel(section);
+  const timing = sectionTimingLabel(section, t);
 
   return (
     <div className="shrink-0 border-b border-white/10">
@@ -576,7 +594,7 @@ function SectionHero({
                   className="hidden items-center gap-1 rounded-lg border border-white/15 bg-zinc-950/70 px-2.5 py-1.5 text-[11px] text-zinc-200 backdrop-blur hover:bg-zinc-900 sm:inline-flex"
                 >
                   <Pencil size={12} />
-                  Edit section
+                  {t("menu.editSection")}
                 </button>
               ) : null}
               {onAddItem ? (
@@ -586,7 +604,7 @@ function SectionHero({
                   className="hidden items-center gap-1.5 rounded-lg bg-emerald-600 px-3 py-1.5 text-[11px] font-medium text-white hover:bg-emerald-500 sm:inline-flex"
                 >
                   <Plus size={12} />
-                  Add item
+                  {t("menu.addItem")}
                 </button>
               ) : null}
             </div>
@@ -602,18 +620,20 @@ function MenuItemRow({
   section,
   formatPrice,
   canWrite,
+  t,
   onEdit,
   onDelete,
 }: {
   item: MenuItem;
   section?: MenuSection;
-  formatPrice: (n: number) => string;
+  formatPrice: (n: import("@/lib/money").MoneyWire) => string;
   canWrite: boolean;
+  t: MenuT;
   onEdit: () => void;
   onDelete: () => void;
 }) {
   const imageSrc = item.imageUrl ?? item.imageUrl2;
-  const timing = itemTimingLabel(item, section);
+  const timing = itemTimingLabel(item, section, t);
   const outOfStock = item.trackStock && item.stock <= 0;
 
   return (
@@ -656,11 +676,15 @@ function MenuItemRow({
             </span>
           ) : null}
           <span className="mt-2 flex flex-wrap gap-1.5">
-            {!item.isAvailable ? <Badge tone="muted">Hidden</Badge> : null}
+            {!item.isAvailable ? (
+              <Badge tone="muted">{t("menu.hidden")}</Badge>
+            ) : null}
             {item.trackStock ? (
               <Badge tone={outOfStock ? "danger" : "ok"}>
                 <Package size={9} />
-                {outOfStock ? "Out of stock" : `${item.stock} left`}
+                {outOfStock
+                  ? t("menu.outOfStock")
+                  : t("menu.stockLeft", { n: item.stock })}
               </Badge>
             ) : null}
             {timing ? (
@@ -679,7 +703,7 @@ function MenuItemRow({
             e.stopPropagation();
             onDelete();
           }}
-          aria-label={`Remove ${item.name}`}
+          aria-label={t("menu.removeItemAria", { name: item.name })}
           className="mt-1 grid h-8 w-8 shrink-0 place-items-center rounded-lg border border-transparent text-zinc-600 transition hover:border-rose-400/20 hover:bg-rose-500/10 hover:text-rose-300"
         >
           <Trash2 size={14} />
@@ -715,11 +739,13 @@ function PaginationBar({
   pageCount,
   total,
   onPage,
+  t,
 }: {
   page: number;
   pageCount: number;
   total: number;
   onPage: (p: number) => void;
+  t: MenuT;
 }) {
   const from = page * ITEMS_PER_PAGE + 1;
   const to = Math.min(total, (page + 1) * ITEMS_PER_PAGE);
@@ -731,7 +757,7 @@ function PaginationBar({
           {page + 1}/{pageCount}
         </span>
         <span className="hidden sm:inline">
-          {from}–{to} of {total}
+          {t("menu.rangeOf", { from, to, total })}
         </span>
       </p>
       <div className="flex items-center gap-1">
@@ -740,7 +766,7 @@ function PaginationBar({
           disabled={page <= 0}
           onClick={() => onPage(page - 1)}
           className="grid h-8 w-8 place-items-center rounded-lg border border-white/10 text-zinc-400 disabled:opacity-40"
-          aria-label="Previous page"
+          aria-label={t("menu.prevPage")}
         >
           <ChevronLeft size={16} />
         </button>
@@ -764,7 +790,7 @@ function PaginationBar({
                     ? "w-4 bg-emerald-400"
                     : "w-1.5 bg-zinc-600 hover:bg-zinc-500",
                 )}
-                aria-label={`Page ${pageIndex + 1}`}
+                aria-label={t("menu.pageN", { n: pageIndex + 1 })}
               />
             );
           })}
@@ -774,7 +800,7 @@ function PaginationBar({
           disabled={page >= pageCount - 1}
           onClick={() => onPage(page + 1)}
           className="grid h-8 w-8 place-items-center rounded-lg border border-white/10 text-zinc-400 disabled:opacity-40"
-          aria-label="Next page"
+          aria-label={t("menu.nextPage")}
         >
           <ChevronRight size={16} />
         </button>

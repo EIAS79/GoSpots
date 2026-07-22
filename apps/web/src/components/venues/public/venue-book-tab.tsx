@@ -4,6 +4,8 @@ import { CalendarCheck, Mail, Phone } from "lucide-react";
 import Link from "next/link";
 import { PublicBookingRequestForm } from "@/components/reservations/public-booking-request-form";
 import { PublicContactForm } from "@/components/venues/public/public-contact-form";
+import { VenueGuestDsarForm } from "@/components/venues/public/venue-guest-dsar-form";
+import { usePublicPrefs } from "@/lib/public-prefs-context";
 import type { PublicVenueDetail } from "@/lib/shop-settings-client";
 
 export function VenueBookTab({
@@ -13,6 +15,7 @@ export function VenueBookTab({
   venue: PublicVenueDetail;
   slug: string;
 }) {
+  const { t } = usePublicPrefs();
   const hasDigitalDining = Boolean(venue.features?.hasDigitalDining);
   const hasLegacyTables =
     venue.features?.hasTableReservations && !hasDigitalDining;
@@ -39,42 +42,41 @@ export function VenueBookTab({
     <div className="space-y-12">
       <div className="rounded-xl border border-amber-500/20 bg-amber-500/[0.06] px-4 py-4">
         <p className="text-sm font-medium text-[var(--color-foreground)]">
-          Dining &amp; events
+          {t("venuePage.book.diningEvents")}
         </p>
         <p className="mt-1 text-sm text-zinc-600 dark:text-zinc-500">
           {hasDigitalDining ? (
             <>
-              Instant tables are on the{" "}
+              {t("venuePage.book.instantBefore")}{" "}
               <Link
                 href={`/venue/${slug}?tab=dining`}
                 className="font-medium text-amber-700 underline-offset-2 hover:underline dark:text-amber-200"
               >
-                Book a table
+                {t("venuePage.book.bookATable")}
               </Link>{" "}
-              tab. This page is for private event requests
+              {t("venuePage.book.instantMid")}
               {gamingOptions.length > 0 ? (
                 <>
-                  ; for gaming stations use{" "}
+                  {t("venuePage.book.instantGamingBefore")}{" "}
                   <Link
                     href={`/venue/${slug}?tab=activities`}
                     className="font-medium text-amber-700 underline-offset-2 hover:underline dark:text-amber-200"
                   >
-                    Gaming floor
+                    {t("venuePage.book.gamingFloor")}
                   </Link>
-                  .
+                  {t("venuePage.book.instantEnd")}
                 </>
               ) : (
-                "."
+                t("venuePage.book.instantEnd")
               )}
             </>
           ) : (
             <>
-              Request a table or private event. For gaming — PCs, consoles,
-              billiards — use the{" "}
+              {t("venuePage.book.legacyBefore")}{" "}
               <strong className="font-medium text-zinc-800 dark:text-zinc-300">
-                Gaming floor
+                {t("venuePage.book.gamingFloor")}
               </strong>{" "}
-              tab when available.
+              {t("venuePage.book.legacyAfter")}
             </>
           )}
         </p>
@@ -89,8 +91,10 @@ export function VenueBookTab({
             >
               <Phone size={16} className="shrink-0" />
               <span className="truncate">
-                <span className="sm:hidden">Call</span>
-                <span className="hidden sm:inline">Call {venue.phone}</span>
+                <span className="sm:hidden">{t("venuePage.book.call")}</span>
+                <span className="hidden sm:inline">
+                  {t("venuePage.book.callPhone", { phone: venue.phone })}
+                </span>
               </span>
             </a>
           ) : null}
@@ -99,7 +103,7 @@ export function VenueBookTab({
               href={`mailto:${venue.email}`}
               className="inline-flex items-center gap-2 rounded-lg border border-[var(--color-border)] bg-[var(--color-surface)] px-4 py-2.5 text-zinc-700 transition hover:border-amber-400/40 hover:text-amber-700 dark:text-zinc-300 dark:hover:text-amber-200"
             >
-              Email venue
+              {t("venuePage.book.emailVenue")}
             </a>
           ) : null}
         </div>
@@ -107,7 +111,10 @@ export function VenueBookTab({
 
       {hasLegacyTables ? (
         <section id="book-table">
-          <SectionLabel icon={CalendarCheck} label="Table reservation" />
+          <SectionLabel
+            icon={CalendarCheck}
+            label={t("venuePage.book.tableReservation")}
+          />
           <div className="max-w-xl">
             <PublicBookingRequestForm
               slug={slug}
@@ -119,7 +126,10 @@ export function VenueBookTab({
       ) : null}
 
       <section id="book-event">
-        <SectionLabel icon={CalendarCheck} label="Private events" />
+        <SectionLabel
+          icon={CalendarCheck}
+          label={t("venuePage.book.privateEvents")}
+        />
         <div className="max-w-xl">
           <PublicBookingRequestForm
             slug={slug}
@@ -128,7 +138,7 @@ export function VenueBookTab({
             gamingOptions={gamingOptions}
             description={
               hasDigitalDining
-                ? "Birthdays, meetings, and parties — choose the dining area (or activity) from this venue’s live setup. Staff review against the same floor data as the dashboard."
+                ? t("venuePage.book.eventDescDigital")
                 : undefined
             }
           />
@@ -136,9 +146,10 @@ export function VenueBookTab({
       </section>
 
       <section id="contact">
-        <SectionLabel icon={Mail} label="Contact" />
-        <div className="max-w-xl">
+        <SectionLabel icon={Mail} label={t("venuePage.book.contact")} />
+        <div className="max-w-xl space-y-6">
           <PublicContactForm slug={slug} />
+          <VenueGuestDsarForm slug={slug} />
         </div>
       </section>
     </div>

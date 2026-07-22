@@ -18,16 +18,24 @@ import { OrderStatusBadge } from "@/components/finance/order-status-badge";
 import type { FullMenu } from "@/lib/menu-client";
 import type { ShopOrder, ShopOrderLine } from "@/lib/finance-client";
 import { orderLinesSubtotal } from "@/lib/finance-client";
+import { coerceMoney } from "@/lib/money";
 import {
   getOrderDisplayLabel,
   getOrderShortRef,
   orderHasStaffLabel,
 } from "@/lib/order-display-label";
+import { useVenueSettingsOptional } from "@/lib/venue-settings-context";
+
+type OrdersT = (
+  key: string,
+  vars?: Record<string, string | number>,
+) => string;
 
 function OrderLineRow({
   line,
   canEdit,
   formatMoney,
+  t,
   onQtyChange,
   onPriceBlur,
   onRemoveLine,
@@ -35,14 +43,15 @@ function OrderLineRow({
 }: {
   line: ShopOrderLine;
   canEdit: boolean;
-  formatMoney: (n: number) => string;
+  formatMoney: (n: import("@/lib/money").MoneyWire) => string;
+  t: OrdersT;
   onQtyChange: (q: number) => void;
   onPriceBlur: (p: number) => void;
   onRemoveLine: () => void;
   onRestoreLine: () => void;
 }) {
   const active = line.lineStatus === "ACTIVE";
-  const lineTotal = active ? line.quantity * line.unitPrice : 0;
+  const lineTotal = active ? line.quantity * coerceMoney(line.unitPrice) : 0;
 
   return (
     <div
@@ -64,14 +73,14 @@ function OrderLineRow({
           <>
             <div className="flex items-center gap-1">
               <span className="mr-1 text-[10px] uppercase tracking-wide text-zinc-500">
-                Qty
+                {t("orders.qty")}
               </span>
               <button
                 type="button"
                 disabled={line.quantity <= 1}
                 onClick={() => onQtyChange(line.quantity - 1)}
                 className="grid h-9 w-9 place-items-center rounded-lg border border-white/10 bg-zinc-900 text-zinc-300 hover:bg-white/5 disabled:opacity-40"
-                aria-label="Decrease quantity"
+                aria-label={t("orders.decreaseQty")}
               >
                 <Minus size={16} />
               </button>
@@ -82,22 +91,23 @@ function OrderLineRow({
                 type="button"
                 onClick={() => onQtyChange(line.quantity + 1)}
                 className="grid h-9 w-9 place-items-center rounded-lg border border-white/10 bg-zinc-900 text-zinc-300 hover:bg-white/5"
-                aria-label="Increase quantity"
+                aria-label={t("orders.increaseQty")}
               >
                 <Plus size={16} />
               </button>
             </div>
             <label className="flex items-center gap-1.5 text-xs text-zinc-500">
-              Each
+              {t("orders.each")}
               <input
                 type="number"
                 min={0}
                 step="0.01"
-                defaultValue={line.unitPrice}
+                defaultValue={coerceMoney(line.unitPrice)}
                 key={`p-${line.id}-${line.unitPrice}`}
                 onBlur={(e) => {
                   const p = parseFloat(e.target.value);
-                  if (!Number.isNaN(p) && p !== line.unitPrice) onPriceBlur(p);
+                  if (!Number.isNaN(p) && p !== coerceMoney(line.unitPrice))
+                    onPriceBlur(p);
                 }}
                 className="w-16 rounded-lg border border-white/10 bg-zinc-900 px-2 py-1.5 text-sm text-white"
               />
@@ -110,7 +120,7 @@ function OrderLineRow({
         )}
         {!active ? (
           <span className="rounded bg-zinc-700/50 px-1.5 py-0.5 text-[10px] uppercase text-zinc-400">
-            Canceled
+            {t("orders.lineCanceled")}
           </span>
         ) : null}
       </div>
@@ -123,7 +133,7 @@ function OrderLineRow({
               className="inline-flex items-center gap-1 rounded-lg border border-rose-400/20 px-2.5 py-1.5 text-[11px] text-rose-300 hover:bg-rose-500/10"
             >
               <Trash2 size={12} />
-              Remove
+              {t("orders.remove")}
             </button>
           ) : (
             <button
@@ -131,7 +141,7 @@ function OrderLineRow({
               onClick={onRestoreLine}
               className="text-[11px] text-emerald-400"
             >
-              Restore
+              {t("orders.restore")}
             </button>
           )}
         </div>
@@ -189,7 +199,7 @@ export function OrderDetailPanel({
   setTableReservedDraft: (v: boolean) => void;
   reservationFeeDraft: string;
   setReservationFeeDraft: (v: string) => void;
-  formatMoney: (n: number) => string;
+  formatMoney: (n: import("@/lib/money").MoneyWire) => string;
   canHandToCustomer: boolean;
   metaAutosave?: "idle" | "pending" | "saving" | "saved";
   onBack?: () => void;
@@ -203,6 +213,8 @@ export function OrderDetailPanel({
   onRemoveLine: (lineId: string) => void;
   onRestoreLine: (lineId: string) => void;
 }) {
+  const t: OrdersT =
+    useVenueSettingsOptional()?.t ?? ((key) => key);
   const readOnly =
     tab === "ARCHIVED" ||
     Boolean(selected.archivedAt) ||
@@ -212,7 +224,7 @@ export function OrderDetailPanel({
   const menuSubtotal = orderLinesSubtotal(selected);
   const reservationCharge =
     selected.tableReserved && selected.reservationFee != null
-      ? selected.reservationFee
+      ? coerceMoney(selected.reservationFee)
       : 0;
   const takingOrder = canWrite && selected.status === "PENDING" && !readOnly;
   const [mobilePane, setMobilePane] = useState<"menu" | "ticket">("menu");
@@ -256,7 +268,7 @@ export function OrderDetailPanel({
                 className="mb-2 inline-flex items-center gap-1.5 text-xs font-medium text-zinc-400 hover:text-zinc-200 lg:hidden"
               >
                 <ArrowLeft size={14} />
-                All orders
+                {t("orders.allOrders")}
               </button>
             ) : null}
             <div className="flex flex-wrap items-center gap-2">
@@ -269,8 +281,10 @@ export function OrderDetailPanel({
               </span>
             </div>
             <p className="mt-1 text-xs text-zinc-500">
-              {selected.guestCount} guest{selected.guestCount === 1 ? "" : "s"} ·{" "}
-              {selected.paymentMethod}
+              {selected.guestCount === 1
+                ? t("orders.guestOne", { n: selected.guestCount })
+                : t("orders.guestMany", { n: selected.guestCount })}{" "}
+              · {selected.paymentMethod}
             </p>
           </div>
           <div className="text-right">
@@ -279,14 +293,18 @@ export function OrderDetailPanel({
             </p>
             {(menuSubtotal > 0 || reservationCharge > 0) && (
               <p className="mt-1 text-[10px] text-zinc-500">
-                Menu {formatMoney(menuSubtotal)}
+                {t("orders.menuAmount", {
+                  amount: formatMoney(menuSubtotal),
+                })}
                 {selected.tableReserved ? (
                   <>
                     {" "}
-                    · Reservation{" "}
+                    ·{" "}
                     {reservationCharge > 0
-                      ? formatMoney(reservationCharge)
-                      : "free"}
+                      ? t("orders.reservationAmount", {
+                          amount: formatMoney(reservationCharge),
+                        })
+                      : t("orders.reservationFree")}
                   </>
                 ) : null}
               </p>
@@ -299,7 +317,7 @@ export function OrderDetailPanel({
                 className="mt-1 inline-flex items-center gap-1 text-xs text-rose-400 hover:text-rose-300"
               >
                 <Trash2 size={12} />
-                Delete permanently
+                {t("orders.deletePermanently")}
               </button>
             ) : null}
           </div>
@@ -307,8 +325,9 @@ export function OrderDetailPanel({
 
         {selected.status === "PENDING" && canWrite ? (
           <p className="mt-3 hidden rounded-lg bg-amber-500/10 px-3 py-2 text-[11px] leading-relaxed text-amber-100/90 ring-1 ring-amber-500/20 sm:block">
-            Add items below, then mark{" "}
-            <strong>Handed to customer</strong> only after they receive the order.
+            {t("orders.pendingHintBefore")}{" "}
+            <strong>{t("orders.pendingHintStrong")}</strong>{" "}
+            {t("orders.pendingHintAfter")}
           </p>
         ) : null}
 
@@ -325,7 +344,7 @@ export function OrderDetailPanel({
               )}
             >
               <UtensilsCrossed size={14} />
-              Menu
+              {t("orders.menu")}
             </button>
             <button
               type="button"
@@ -337,7 +356,7 @@ export function OrderDetailPanel({
                   : "text-zinc-500",
               )}
             >
-              Ticket
+              {t("orders.ticket")}
               {activeLineCount > 0 ? (
                 <span className="rounded-full bg-emerald-500/30 px-1.5 text-[10px]">
                   {activeLineCount}
@@ -352,8 +371,8 @@ export function OrderDetailPanel({
         {readOnly && !canEditLines ? (
           <p className="mb-4 rounded-lg border border-white/10 bg-zinc-900/50 px-3 py-2 text-xs text-zinc-400">
             {tab === "ARCHIVED" || selected.archivedAt
-              ? "Archived — view only. Unarchive from the grid to edit."
-              : "Canceled — read-only."}
+              ? t("orders.archivedReadonly")
+              : t("orders.canceledReadonly")}
           </p>
         ) : null}
 
@@ -370,15 +389,15 @@ export function OrderDetailPanel({
               className="flex w-full items-center justify-between gap-2 px-3 py-3 text-left"
             >
               <span className="text-[11px] font-medium uppercase tracking-wide text-zinc-500">
-                Ticket details
+                {t("orders.ticketDetails")}
               </span>
               <span className="flex items-center gap-2">
                 {metaAutosave === "pending" ? (
-                  <span className="text-[10px] text-zinc-500">Will save…</span>
+                  <span className="text-[10px] text-zinc-500">{t("orders.willSave")}</span>
                 ) : metaAutosave === "saving" ? (
-                  <span className="text-[10px] text-amber-300/90">Saving…</span>
+                  <span className="text-[10px] text-amber-300/90">{t("orders.saving")}</span>
                 ) : metaAutosave === "saved" ? (
-                  <span className="text-[10px] text-emerald-400">Saved</span>
+                  <span className="text-[10px] text-emerald-400">{t("orders.saved")}</span>
                 ) : null}
                 <ChevronDown
                   size={16}
@@ -393,17 +412,17 @@ export function OrderDetailPanel({
               <div className="border-t border-white/5 px-3 pb-3 pt-1">
             <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
               <label className="text-xs text-zinc-500">
-                Table / guest name
+                {t("orders.tableGuestName")}
                 <input
                   value={labelDraft}
                   onChange={(e) => setLabelDraft(e.target.value)}
                   disabled={metaAutosave === "saving"}
-                  placeholder="e.g. Table 5, Ahmed"
+                  placeholder={t("orders.tableGuestPlaceholder")}
                   className="mt-1 w-full rounded-lg border border-white/10 bg-zinc-950 px-2.5 py-2 text-sm text-white placeholder:text-zinc-600"
                 />
               </label>
               <label className="text-xs text-zinc-500">
-                Guests
+                {t("orders.guests")}
                 <input
                   type="number"
                   min={1}
@@ -414,22 +433,22 @@ export function OrderDetailPanel({
                 />
               </label>
               <label className="text-xs text-zinc-500">
-                Payment
+                {t("orders.payment")}
                 <select
                   value={payDraft}
                   onChange={(e) => setPayDraft(e.target.value)}
                   disabled={metaAutosave === "saving"}
                   className="mt-1 w-full rounded-lg border border-white/10 bg-zinc-950 px-2.5 py-2 text-sm text-white"
                 >
-                  <option value="CASH">Cash</option>
-                  <option value="CARD">Card</option>
-                  <option value="ONLINE">Online</option>
-                  <option value="OTHER">Other</option>
+                  <option value="CASH">{t("orders.payCash")}</option>
+                  <option value="CARD">{t("orders.payCard")}</option>
+                  <option value="ONLINE">{t("orders.payOnline")}</option>
+                  <option value="OTHER">{t("orders.payOther")}</option>
                 </select>
               </label>
             </div>
             <label className="mt-2 block text-xs text-zinc-500">
-              Note
+              {t("orders.note")}
               <textarea
                 value={noteDraft}
                 onChange={(e) => setNoteDraft(e.target.value)}
@@ -454,16 +473,16 @@ export function OrderDetailPanel({
                 />
                 <span>
                   <span className="text-sm font-medium text-zinc-200">
-                    Table was reserved
+                    {t("orders.tableReserved")}
                   </span>
                   <span className="mt-0.5 block text-[11px] text-zinc-500">
-                    Optional — leave the fee empty if the reservation was free.
+                    {t("orders.tableReservedHint")}
                   </span>
                 </span>
               </label>
               {tableReservedDraft ? (
                 <label className="mt-3 block text-xs text-zinc-500">
-                  Reservation fee (optional)
+                  {t("orders.reservationFee")}
                   <input
                     type="number"
                     min={0}
@@ -471,7 +490,7 @@ export function OrderDetailPanel({
                     value={reservationFeeDraft}
                     onChange={(e) => setReservationFeeDraft(e.target.value)}
                     disabled={metaAutosave === "saving"}
-                    placeholder="0 = free reservation"
+                    placeholder={t("orders.reservationFeePlaceholder")}
                     className="mt-1 w-full max-w-[10rem] rounded-lg border border-white/10 bg-zinc-950 px-2.5 py-2 text-sm text-white placeholder:text-zinc-600"
                   />
                 </label>
@@ -484,10 +503,11 @@ export function OrderDetailPanel({
 
         {!readOnly && !canWrite && selected.tableReserved ? (
           <p className="mb-4 rounded-lg border border-violet-400/20 bg-violet-500/5 px-3 py-2 text-xs text-violet-200/90">
-            Table reserved
-            {selected.reservationFee != null && selected.reservationFee > 0
+            {t("orders.tableReservedReadonly")}
+            {selected.reservationFee != null &&
+            coerceMoney(selected.reservationFee) > 0
               ? ` · ${formatMoney(selected.reservationFee)}`
-              : " · no reservation charge"}
+              : ` · ${t("orders.noReservationCharge")}`}
           </p>
         ) : null}
 
@@ -503,7 +523,7 @@ export function OrderDetailPanel({
             className="flex w-full items-center justify-between gap-2 px-3 py-3 text-left"
           >
             <span className="text-[11px] font-medium uppercase tracking-wide text-zinc-500">
-              Line items ({selected.lines.length})
+              {t("orders.lineItems", { n: selected.lines.length })}
             </span>
             <span className="flex items-center gap-2">
               {selected.lines.length > 0 ? (
@@ -524,7 +544,7 @@ export function OrderDetailPanel({
             <div className="border-t border-white/5 px-3 pb-3 pt-1">
               {selected.lines.length === 0 ? (
                 <p className="rounded-lg border border-dashed border-white/15 py-6 text-center text-xs text-zinc-500">
-                  No items yet — add from the menu below.
+                  {t("orders.noItemsYet")}
                 </p>
               ) : (
                 <div className="grid gap-2 sm:grid-cols-2">
@@ -534,6 +554,7 @@ export function OrderDetailPanel({
                       line={line}
                       canEdit={canEditLines}
                       formatMoney={formatMoney}
+                      t={t}
                       onQtyChange={(q) => onLineQty(line.id, q)}
                       onPriceBlur={(p) => onLinePrice(line.id, p)}
                       onRemoveLine={() => onRemoveLine(line.id)}
@@ -554,7 +575,7 @@ export function OrderDetailPanel({
             )}
           >
             <p className="mb-3 shrink-0 text-sm font-semibold text-emerald-100/95">
-              Add to order
+              {t("orders.addToOrder")}
             </p>
             <div className="min-h-0 flex-1">
               <MenuItemPicker
@@ -581,7 +602,7 @@ export function OrderDetailPanel({
               className="inline-flex flex-1 items-center justify-center gap-2 rounded-xl bg-emerald-600 px-4 py-2.5 text-sm font-medium text-white hover:bg-emerald-500 disabled:cursor-not-allowed disabled:opacity-40 sm:flex-none"
             >
               <CheckCircle2 size={18} />
-              Handed to customer
+              {t("orders.handedToCustomer")}
             </button>
           ) : null}
           {selected.status === "COMPLETED" ? (
@@ -592,7 +613,7 @@ export function OrderDetailPanel({
               className="inline-flex items-center gap-2 rounded-xl border border-white/15 px-4 py-2.5 text-sm text-zinc-200 hover:bg-white/5"
             >
               <RotateCcw size={16} />
-              Back to preparing
+              {t("orders.backToPreparing")}
             </button>
           ) : null}
           <button
@@ -602,7 +623,7 @@ export function OrderDetailPanel({
             className="inline-flex items-center gap-2 rounded-xl border border-rose-400/30 px-4 py-2.5 text-sm text-rose-300 hover:bg-rose-500/10"
           >
             <XCircle size={16} />
-            Cancel order
+            {t("orders.cancelOrder")}
           </button>
         </footer>
       ) : null}

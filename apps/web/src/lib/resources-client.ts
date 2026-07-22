@@ -1,6 +1,6 @@
-import { API_BASE_URL, ApiError, api } from "./api";
-import { getVenuePathHeaders } from "./venue-api-headers";
+import { ApiError, api, credentialedFetch } from "./api";
 import type { ResourceStatus, ResourceType } from "./resource-types";
+import type { MoneyWire } from "./money";
 
 export type BookingMode = "TIME" | "GAME" | "PERSON" | "MIXED";
 
@@ -8,7 +8,7 @@ export type ResourceRate = {
   id: string;
   label: string;
   durationMinutes: number | null;
-  price: number;
+  price: MoneyWire;
   sortOrder: number;
 };
 
@@ -18,7 +18,7 @@ export type ResourceUnit = {
   type: ResourceType;
   description: string | null;
   imageUrl: string | null;
-  hourlyRate: number;
+  hourlyRate: MoneyWire;
   status: ResourceStatus;
   sortOrder: number;
   categoryId: string | null;
@@ -127,12 +127,10 @@ export async function uploadResourceCategoryImage(
 ): Promise<ResourceCategory> {
   const form = new FormData();
   form.append("file", file);
-  const res = await fetch(
-    `${API_BASE_URL}/resources/categories/${categoryId}/images/${slot}`,
+  const res = await credentialedFetch(
+    `/resources/categories/${categoryId}/images/${slot}`,
     {
       method: "POST",
-      credentials: "include",
-      headers: getVenuePathHeaders(),
       body: form,
     },
   );

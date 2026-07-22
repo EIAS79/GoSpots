@@ -4,11 +4,13 @@ import {
   parseBowlingChargeFromNotes,
   parseGamesFromNotes,
 } from "./bowling-booking";
+import { coerceMoney } from "./money";
+import type { MoneyWire } from "./money";
 
 export type BowlingModeRate = {
   label: string;
   durationMinutes: number | null;
-  price: number;
+  price: MoneyWire;
 };
 
 export type BowlingCategoryRate = BowlingModeRate;
@@ -75,7 +77,15 @@ function parseModeRate(raw: unknown): BowlingModeRate | null {
       ? o.durationMinutes
       : null;
   const price =
-    typeof o.price === "number" && Number.isFinite(o.price) ? o.price : 0;
+    typeof o.price === "number" || typeof o.price === "string"
+      ? (() => {
+          try {
+            return coerceMoney(o.price);
+          } catch {
+            return 0;
+          }
+        })()
+      : 0;
   return { label, durationMinutes, price };
 }
 
@@ -96,7 +106,12 @@ function parseStoredMode(
   };
   const price = (key: string) => {
     const v = o[key];
-    return typeof v === "number" && Number.isFinite(v) ? v : null;
+    if (typeof v !== "number" && typeof v !== "string") return null;
+    try {
+      return coerceMoney(v);
+    } catch {
+      return null;
+    }
   };
   const ratesRaw = Array.isArray(o.rates) ? o.rates : [];
   const rates = ratesRaw
@@ -141,13 +156,18 @@ export function listBowlingModes(
   };
   const price = (key: string) => {
     const v = legacy[key];
-    return typeof v === "number" && Number.isFinite(v) ? v : null;
+    if (typeof v !== "number" && typeof v !== "string") return null;
+    try {
+      return coerceMoney(v);
+    } catch {
+      return null;
+    }
   };
 
   const rates: BowlingModeRate[] = categoryRates.map((r) => ({
     label: r.label,
     durationMinutes: r.durationMinutes,
-    price: r.price,
+    price: coerceMoney(r.price),
   }));
 
   const mode = categoryBookingMode ?? "TIME";

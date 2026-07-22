@@ -17,7 +17,7 @@ import {
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { GoSpotsLogo } from "@/components/brand/gospots-logo";
+import { LocoraLogo } from "@/components/brand/locora-logo";
 import { LocaleCurrencySwitcher } from "@/components/public/locale-currency-switcher";
 import { ThemeToggle } from "@/components/theme/theme-toggle";
 import { VenueCoverImage } from "@/components/ui/venue-cover-image";
@@ -32,6 +32,10 @@ import {
   type PublicVenue,
   type VenueCategoryTag,
 } from "@/lib/shop-settings-client";
+import {
+  DEFAULT_PILOT_CITY,
+  pilotCityLandingHref,
+} from "@/lib/pilot-cities";
 import {
   buildVenueSearchQuery,
   parseVenueSearchParams,
@@ -151,7 +155,7 @@ export function VenuesDiscovery() {
 
       <header className="sticky top-0 z-40 border-b border-[var(--color-border)] bg-[color-mix(in_srgb,var(--color-background)_88%,transparent)] backdrop-blur-xl dark:border-white/5">
         <div className="mx-auto flex max-w-7xl items-center justify-between gap-3 px-4 py-3 sm:px-6 sm:py-4 md:px-8">
-          <GoSpotsLogo
+          <LocoraLogo
             href="/"
             size="md"
             showTagline
@@ -159,7 +163,7 @@ export function VenuesDiscovery() {
             tone="auto"
             className="hidden min-w-0 sm:inline-flex"
           />
-          <GoSpotsLogo
+          <LocoraLogo
             href="/"
             size="sm"
             tone="auto"
@@ -168,6 +172,12 @@ export function VenuesDiscovery() {
           <div className="flex shrink-0 items-center gap-2 sm:gap-3">
             <LocaleCurrencySwitcher tone="auto" compact />
             <ThemeToggle />
+            <Link
+              href="/for-venues"
+              className="hidden rounded-full border border-[var(--color-border)] bg-[var(--color-surface)]/70 px-3 py-2 text-xs font-medium text-zinc-700 transition hover:border-amber-400/40 hover:text-zinc-950 sm:inline-flex dark:border-white/15 dark:bg-white/[0.04] dark:text-zinc-200 dark:hover:border-white/30 dark:hover:text-white sm:text-sm"
+            >
+              {t("nav.iOwnVenue")}
+            </Link>
             <Link
               href="/register"
               className="shrink-0 rounded-full bg-amber-400 px-3 py-2 text-xs font-semibold text-zinc-950 transition hover:bg-amber-300 sm:px-4 sm:text-sm"
@@ -202,6 +212,15 @@ export function VenuesDiscovery() {
           </h1>
           <p className="mt-4 max-w-xl text-lg text-zinc-600 dark:text-zinc-400">
             {t("venues.subtitle")}
+          </p>
+          <p className="mt-3 max-w-xl text-sm text-zinc-500">
+            {t("venues.pilotHint", { city: DEFAULT_PILOT_CITY.name })}{" "}
+            <Link
+              href={pilotCityLandingHref()}
+              className="font-medium text-amber-700 underline-offset-2 hover:underline dark:text-amber-300"
+            >
+              {t("venues.pilotLink", { city: DEFAULT_PILOT_CITY.name })}
+            </Link>
           </p>
         </motion.div>
 
@@ -250,7 +269,7 @@ export function VenuesDiscovery() {
                   ? "bg-amber-500/20 text-amber-800 dark:text-amber-200"
                   : "text-zinc-500 hover:text-zinc-800 dark:hover:text-zinc-300",
               )}
-              aria-label="Grid view"
+              aria-label={t("venuesDiscovery.gridView")}
             >
               <LayoutGrid size={14} />
             </button>
@@ -263,7 +282,7 @@ export function VenuesDiscovery() {
                   ? "bg-amber-500/20 text-amber-800 dark:text-amber-200"
                   : "text-zinc-500 hover:text-zinc-800 dark:hover:text-zinc-300",
               )}
-              aria-label="List view"
+              aria-label={t("venuesDiscovery.listView")}
             >
               <List size={14} />
             </button>
@@ -284,13 +303,23 @@ export function VenuesDiscovery() {
             <p className="mt-4 text-lg font-medium text-zinc-800 dark:text-zinc-300">
               {t("venues.emptyTitle")}
             </p>
-            <p className="mt-2 text-sm text-zinc-500">{t("venues.emptyBody")}</p>
-            <Link
-              href="/register"
-              className="mt-6 inline-flex items-center gap-2 rounded-full bg-amber-400 px-5 py-2.5 text-sm font-semibold text-zinc-950"
-            >
-              {t("venues.getListed")} <ArrowRight size={16} />
-            </Link>
+            <p className="mt-2 text-sm text-zinc-500">
+              {t("venues.emptyBodyPilot", { city: DEFAULT_PILOT_CITY.name })}
+            </p>
+            <div className="mt-6 flex flex-col items-center justify-center gap-3 sm:flex-row">
+              <Link
+                href={pilotCityLandingHref()}
+                className="inline-flex items-center gap-2 rounded-full border border-[var(--color-border)] bg-[var(--color-surface)] px-5 py-2.5 text-sm font-medium text-zinc-800 dark:border-white/15 dark:bg-white/[0.04] dark:text-zinc-100"
+              >
+                {t("venues.pilotLink", { city: DEFAULT_PILOT_CITY.name })}
+              </Link>
+              <Link
+                href="/for-venues"
+                className="inline-flex items-center gap-2 rounded-full bg-amber-400 px-5 py-2.5 text-sm font-semibold text-zinc-950"
+              >
+                {t("venues.getListed")} <ArrowRight size={16} />
+              </Link>
+            </div>
           </motion.div>
         ) : (
           <LayoutGroup>
@@ -325,6 +354,7 @@ function VenueCard({
   index: number;
   variant: "grid" | "list";
 }) {
+  const { t } = usePublicPrefs();
   const title = venueMarketingName(venue);
   const location = formatVenueLocation(venue);
   const status = venueOpenStatus(venue.openingHours, venue.scheduleExceptions) as OpenStatus;
@@ -454,7 +484,7 @@ function VenueCard({
             </p>
           ) : (
             <p className="text-[11px] italic text-zinc-500">
-              No description yet.
+              {t("venuesDiscovery.noDescription")}
             </p>
           )}
 
@@ -507,15 +537,16 @@ function OpenStatusPill({
   /** Shorter label on narrow cards (e.g. "Open" instead of "Open · until 22:00") */
   compactLabel?: boolean;
 }) {
+  const { t } = usePublicPrefs();
   if (status.state === "unknown") return null;
   const open = status.state === "open";
   const later = status.state === "opens-later";
   const label = compactLabel
     ? open
-      ? "Open"
+      ? t("venuesDiscovery.statusOpen")
       : later
-        ? "Opens later"
-        : "Closed"
+        ? t("venuesDiscovery.statusOpensLater")
+        : t("venuesDiscovery.statusClosed")
     : status.label;
   return (
     <span

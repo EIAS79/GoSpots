@@ -1,10 +1,12 @@
 import { ConflictException } from '@nestjs/common';
-import { ResourceStatus, type PrismaClient } from '@prisma/client';
+import { ResourceStatus, type Prisma, type PrismaClient } from '@prisma/client';
 import { ACTIVE_RESERVATION } from './booking-floor-status';
 import { isWalkInBlockingAt, walkInEffectiveEnd } from './walk-in-block.util';
 
+type DbClient = PrismaClient | Prisma.TransactionClient;
+
 export async function assertResourceBookable(
-  prisma: PrismaClient,
+  prisma: DbClient,
   shopId: string,
   resourceId: string,
 ) {
@@ -22,8 +24,13 @@ export async function assertResourceBookable(
   return resource;
 }
 
+/**
+ * Half-open [startsAt, endsAt) — same as Postgres
+ * `tstzrange(..., '[)')` on Reservation_resource_tstzrange_excl.
+ * Active statuses = ACTIVE_RESERVATION (PENDING / CONFIRMED / CHECKED_IN).
+ */
 export async function assertNoReservationOverlap(
-  prisma: PrismaClient,
+  prisma: DbClient,
   shopId: string,
   resourceId: string,
   startsAt: Date,
@@ -36,6 +43,7 @@ export async function assertNoReservationOverlap(
       resourceId,
       ...(excludeReservationId ? { id: { not: excludeReservationId } } : {}),
       status: { in: ACTIVE_RESERVATION },
+      // Half-open: adjacent slots that only touch at an endpoint do not clash.
       startsAt: { lt: endsAt },
       endsAt: { gt: startsAt },
     },
@@ -48,7 +56,7 @@ export async function assertNoReservationOverlap(
 }
 
 export async function assertNoActiveWalkIn(
-  prisma: PrismaClient,
+  prisma: DbClient,
   shopId: string,
   resourceId: string,
   at: Date = new Date(),
@@ -69,7 +77,7 @@ export async function assertNoActiveWalkIn(
 }
 
 export async function assertNoWalkInOverlap(
-  prisma: PrismaClient,
+  prisma: DbClient,
   shopId: string,
   resourceId: string,
   startsAt: Date,
@@ -98,7 +106,7 @@ export async function assertNoWalkInOverlap(
 
 /** Full check before creating/updating a timed reservation. */
 export async function assertBookingSlotFree(
-  prisma: PrismaClient,
+  prisma: DbClient,
   shopId: string,
   resourceId: string,
   startsAt: Date,

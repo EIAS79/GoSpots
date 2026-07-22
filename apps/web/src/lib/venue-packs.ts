@@ -198,7 +198,8 @@ export const VENUE_ADD_ONS: Record<AddOnId, VenueAddOn> = {
       'Build food and drink menus, manage stock and sections, and process menu orders / kitchen tickets. Ideal for restaurants, bars, and cafés.',
     monthlyPrice: 15,
     currency: 'EUR',
-    modules: ['menu', 'transaction', 'reports'],
+    /** `bar` included so pack-only authz never shrinks STANDARD+ legacy access */
+    modules: ['menu', 'transaction', 'reports', 'bar'],
     recommendedFor: ['dining', 'bar', 'hotel_fb', 'mixed'],
   },
   dining_floor: {
@@ -218,7 +219,7 @@ export const VENUE_ADD_ONS: Record<AddOnId, VenueAddOn> = {
     name: 'Venue page & discovery',
     tagline: 'Public venue page plus directory placement.',
     details:
-      'Publish your venue on GoSpots with a dedicated public page, and unlock advertising / promoted placement in the venues directory so more guests can find you.',
+      'Publish your venue on Locora with a dedicated public page, and unlock advertising / promoted placement in the venues directory so more guests can find you.',
     monthlyPrice: 10,
     currency: 'EUR',
     modules: ['marketing'],
@@ -253,6 +254,76 @@ export const VENUE_ADD_ONS: Record<AddOnId, VenueAddOn> = {
 export const VENUE_PACK_LIST = Object.values(VENUE_PACKS);
 export const VENUE_ADD_ON_LIST = Object.values(VENUE_ADD_ONS);
 
+/**
+ * Self-serve signup / marketing catalog (bible #33 Phase A).
+ * `dining` / `bar` / `hotel_fb` stay in VENUE_PACKS for legacy + dashboard editors;
+ * they are not offered as equal self-serve tiles — restaurant/hotel → contact sales.
+ */
+export const SELF_SERVE_PACK_IDS = ["gaming", "mixed"] as const;
+export type SelfServePackId = (typeof SELF_SERVE_PACK_IDS)[number];
+
+export const SELF_SERVE_PACK_LIST: VenuePack[] = SELF_SERVE_PACK_IDS.map(
+  (id) => VENUE_PACKS[id],
+);
+
+export function isSelfServePackId(id: string): id is SelfServePackId {
+  return (SELF_SERVE_PACK_IDS as readonly string[]).includes(id);
+}
+
+/** Marketing calculator hides these until a later upsell flow (#33 Tier 2). */
+export const MARKETING_DEFERRED_ADD_ONS = [
+  "venue_presence",
+  "guest_chat",
+] as const satisfies readonly AddOnId[];
+
+export type MarketingBundleId = "ops_trust" | "gaming_floor" | "food_dining";
+
+export type MarketingBundle = {
+  id: MarketingBundleId;
+  /** Underlying Subscription.addOns ids — pricing still sums catalog prices */
+  addOnIds: readonly AddOnId[];
+};
+
+/** Three commercial bundles replace seven à la carte checkboxes on marketing. */
+export const MARKETING_BUNDLES: readonly MarketingBundle[] = [
+  { id: "ops_trust", addOnIds: ["ops_alerts"] },
+  { id: "gaming_floor", addOnIds: ["gaming_suite"] },
+  { id: "food_dining", addOnIds: ["menu_orders", "dining_floor"] },
+] as const;
+
+export function marketingBundleMonthlyPrice(bundle: MarketingBundle): number {
+  return bundle.addOnIds.reduce(
+    (sum, id) => sum + VENUE_ADD_ONS[id].monthlyPrice,
+    0,
+  );
+}
+
+/** Default bundles selected when a self-serve pack is chosen on pricing. */
+export function defaultMarketingBundlesForPack(
+  packId: SelfServePackId,
+): Set<MarketingBundleId> {
+  if (packId === "mixed") {
+    return new Set<MarketingBundleId>([
+      "ops_trust",
+      "gaming_floor",
+      "food_dining",
+    ]);
+  }
+  return new Set<MarketingBundleId>(["ops_trust", "gaming_floor"]);
+}
+
+export function addOnIdsFromMarketingBundles(
+  bundles: Iterable<MarketingBundleId>,
+): AddOnId[] {
+  const selected = new Set(bundles);
+  const ids: AddOnId[] = [];
+  for (const bundle of MARKETING_BUNDLES) {
+    if (!selected.has(bundle.id)) continue;
+    for (const id of bundle.addOnIds) ids.push(id);
+  }
+  return ids;
+}
+
 export function parseAddOns(raw: string | null | undefined): AddOnId[] {
   if (!raw?.trim()) return [];
   return raw
@@ -263,6 +334,44 @@ export function parseAddOns(raw: string | null | undefined): AddOnId[] {
 
 export function serializeAddOns(ids: AddOnId[]): string {
   return [...new Set(ids)].join(',');
+}
+
+/**
+ * Rows-primary add-on resolve.
+ * When `addOnRows` is provided (including `[]`), join rows are SoT.
+ * CSV / string[] is only a fallback when rows were never loaded.
+ * Unknown ids are dropped (validated against catalog).
+ */
+export function resolveAddOnIds(input: {
+  addOns?: string | string[] | null;
+  addOnRows?: { addOnId: string }[] | null;
+}): AddOnId[] {
+  if (input.addOnRows != null) {
+    return [
+      ...new Set(
+        (input.addOnRows ?? [])
+          .map((r) => r.addOnId.trim())
+          .filter((id): id is AddOnId => id in VENUE_ADD_ONS),
+      ),
+    ];
+  }
+  if (Array.isArray(input.addOns)) {
+    return [
+      ...new Set(
+        input.addOns
+          .map((s) => String(s).trim())
+          .filter((s): s is AddOnId => s in VENUE_ADD_ONS),
+      ),
+    ];
+  }
+  return parseAddOns(input.addOns);
+}
+
+export function resolveAddOnsCsv(input: {
+  addOns?: string | string[] | null;
+  addOnRows?: { addOnId: string }[] | null;
+}): string {
+  return serializeAddOns(resolveAddOnIds(input));
 }
 
 export function resolvePackId(
@@ -369,6 +478,34 @@ export function suggestPackFromCategory(
   if (slug.includes('bar') || slug.includes('club') || slug.includes('lounge'))
     return 'bar';
   return 'mixed';
+}
+
+/**
+ * Map legacy SubscriptionTier → add-on set approximating FEATURE_MATRIX /
+ * legacyModulesFromTier. Used so pack+empty-addOns shops on STANDARD+ do not
+ * lose access during CSV→relational migration. Never used to shrink access.
+ * Mirrors apps/api `legacyAddOnsFromTier`.
+ */
+export function legacyAddOnsFromTier(tier: string): AddOnId[] {
+  if (tier === "ENTERPRISE")
+    return [...(Object.keys(VENUE_ADD_ONS) as AddOnId[])];
+  if (tier === "PRO") {
+    return [
+      "ops_alerts",
+      "gaming_suite",
+      "menu_orders",
+      "dining_floor",
+      "guest_chat",
+      "team_accounts",
+    ];
+  }
+  if (tier === "STANDARD") {
+    return ["ops_alerts", "gaming_suite", "menu_orders", "dining_floor"];
+  }
+  if (tier === "STARTER") {
+    return ["gaming_suite", "menu_orders"];
+  }
+  return [];
 }
 
 /** Legacy: map old tier-only shops to a full mixed pack module set */

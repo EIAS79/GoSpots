@@ -12,7 +12,7 @@ import {
   UtensilsCrossed,
 } from "lucide-react";
 import type { ComponentType } from "react";
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import { BilliardTableIcon } from "@/components/icons/billiard-table-icon";
 import { BowlingLaneIcon } from "@/components/icons/bowling-lane-icon";
 import { ArcadeCabinetIcon } from "@/components/icons/arcade-cabinet-icon";
@@ -24,27 +24,34 @@ import { BowlingLaneFloorMap } from "@/components/reservations/bowling-lane-floo
 import { cn } from "@/lib/cn";
 import {
   getFloorMapVisualType,
-  layoutMapLabel,
   supportsGamingLayout,
 } from "@/lib/gaming-floor-visual";
 import type { ResourceType } from "@/lib/resource-types";
-import { RESOURCE_TYPE_LABELS } from "@/lib/resource-types";
+import { resourceTypeLabel } from "@/lib/resource-types";
 import {
   formatGamingRateDuration,
   type GamingMenuResponse,
   type GamingOffering,
 } from "@/lib/gaming-menu-client";
 import type { DaySchedule, ScheduleUnit } from "@/lib/reservations-client";
+import { useVenueSettingsOptional } from "@/lib/venue-settings-context";
+import {
+  staffBowlingChromeLabels,
+  staffFloorStatusLabels,
+  staffFloorT,
+  type StaffFloorTranslate,
+  staffLayoutMapLabel,
+} from "@/lib/staff-floor-i18n";
 
-const ADD_TYPE_LABELS: Partial<Record<ResourceType, string>> = {
-  PC: "Add PC arena",
-  PLAYSTATION: "Add PS5 arena",
-  BILLIARD: "Add billiard tables",
-  BOWLING: "Add bowling arena",
-  TABLE_TENNIS: "Add ping pong",
-  FOOSBALL: "Add baby foot",
-  ARCADE: "Add arcade",
-  DINING: "Set up restaurant dining",
+const ADD_TYPE_KEYS: Partial<Record<ResourceType, string>> = {
+  PC: "gamingSetup.addType.PC",
+  PLAYSTATION: "gamingSetup.addType.PLAYSTATION",
+  BILLIARD: "gamingSetup.addType.BILLIARD",
+  BOWLING: "gamingSetup.addType.BOWLING",
+  TABLE_TENNIS: "gamingSetup.addType.TABLE_TENNIS",
+  FOOSBALL: "gamingSetup.addType.FOOSBALL",
+  ARCADE: "gamingSetup.addType.ARCADE",
+  DINING: "gamingSetup.addType.DINING",
 };
 
 const TYPE_ICONS: Partial<
@@ -70,16 +77,19 @@ const TYPE_ICONS: Partial<
   DINING: UtensilsCrossed,
 };
 
-function formatBookingMode(mode: GamingOffering["bookingMode"]) {
+function formatBookingMode(
+  t: StaffFloorTranslate,
+  mode: GamingOffering["bookingMode"],
+) {
   switch (mode) {
     case "GAME":
-      return "By game";
+      return t("gamingSetup.bookingMode.game");
     case "PERSON":
-      return "Per person";
+      return t("gamingSetup.bookingMode.person");
     case "MIXED":
-      return "Mixed / flexible";
+      return t("gamingSetup.bookingMode.mixed");
     default:
-      return "By time";
+      return t("gamingSetup.bookingMode.time");
   }
 }
 
@@ -95,7 +105,7 @@ export function GamingMenuPanel({
 }: {
   menu: GamingMenuResponse;
   schedule?: DaySchedule | null;
-  formatPrice: (n: number) => string;
+  formatPrice: (n: import("@/lib/money").MoneyWire) => string;
   canWrite: boolean;
   variant?: "gaming" | "dining";
   onEdit: (offering: GamingOffering) => void;
@@ -104,12 +114,19 @@ export function GamingMenuPanel({
 }) {
   const { offerings, availableToAdd } = menu;
   const isDining = variant === "dining";
+  const vs = useVenueSettingsOptional();
+  const t = useMemo(
+    () => vs?.t ?? staffFloorT(vs?.locale),
+    [vs?.t, vs?.locale],
+  );
 
   return (
     <div className="space-y-4 md:space-y-6">
       {offerings.length === 0 && availableToAdd.length === 0 ? (
         <p className="text-sm text-zinc-500">
-          {isDining ? "No dining layout loaded." : "No gaming data loaded."}
+          {isDining
+            ? t("gamingSetup.panel.emptyDining")
+            : t("gamingSetup.panel.emptyGaming")}
         </p>
       ) : null}
 
@@ -133,12 +150,13 @@ export function GamingMenuPanel({
         <section className="rounded-xl border border-dashed border-white/15 p-3 md:p-4">
           <p className="mb-2 text-xs font-medium uppercase tracking-wide text-zinc-500 md:mb-3">
             {isDining
-              ? "Enable digital table booking"
-              : "Add a game your venue offers"}
+              ? t("gamingSetup.panel.addTitleDining")
+              : t("gamingSetup.panel.addTitleGaming")}
           </p>
           <div className="flex flex-wrap gap-2">
             {availableToAdd.map((type) => {
               const Icon = TYPE_ICONS[type] ?? Gamepad2;
+              const addTypeKey = ADD_TYPE_KEYS[type];
               return (
                 <button
                   key={type}
@@ -148,15 +166,15 @@ export function GamingMenuPanel({
                 >
                   <Icon size={14} />
                   <Plus size={12} className="opacity-70" />
-                  {ADD_TYPE_LABELS[type] ?? RESOURCE_TYPE_LABELS[type]}
+                  {addTypeKey ? t(addTypeKey) : resourceTypeLabel(t, type)}
                 </button>
               );
             })}
           </div>
           <p className="mt-2 text-[11px] text-zinc-600 md:mt-3">
             {isDining
-              ? "One dining layout per venue. Add zones and tables from Layout & zones on the card."
-              : "Each arena type appears once. Need extra VIP rooms or floors? Add them from Layout & zones on the arena card."}
+              ? t("gamingSetup.panel.addHintDining")
+              : t("gamingSetup.panel.addHintGaming")}
           </p>
         </section>
       ) : null}
@@ -164,8 +182,8 @@ export function GamingMenuPanel({
       {offerings.length === 0 && availableToAdd.length > 0 ? (
         <p className="text-center text-sm text-zinc-500">
           {isDining
-            ? "Set up your dining room to show a live table map on your public site."
-            : "Pick a game above to set up seats, pricing, and a photo."}
+            ? t("gamingSetup.panel.emptyHintDining")
+            : t("gamingSetup.panel.emptyHintGaming")}
         </p>
       ) : null}
     </div>
@@ -182,7 +200,7 @@ function OfferingCard({
 }: {
   offering: GamingOffering;
   schedule?: DaySchedule | null;
-  formatPrice: (n: number) => string;
+  formatPrice: (n: import("@/lib/money").MoneyWire) => string;
   canWrite: boolean;
   onEdit: () => void;
   onEditLayout?: () => void;
@@ -198,6 +216,14 @@ function OfferingCard({
   const layoutSections = liveCategory?.sections ?? o.sections ?? [];
   const gamesPreview = o.playstationGames.slice(0, 4);
   const [mapOpen, setMapOpen] = useState(false);
+  const vs = useVenueSettingsOptional();
+  const t = useMemo(
+    () => vs?.t ?? staffFloorT(vs?.locale),
+    [vs?.t, vs?.locale],
+  );
+  const floorStatusLabels = useMemo(() => staffFloorStatusLabels(t), [t]);
+  const bowlingChrome = useMemo(() => staffBowlingChromeLabels(t), [t]);
+  const mapLabel = staffLayoutMapLabel(t, o.type, o.unitKind);
 
   const availabilityPct =
     inventory.total > 0
@@ -220,7 +246,7 @@ function OfferingCard({
         )}
         <div className="min-w-0 flex-1">
           <p className="text-[9px] uppercase tracking-wide text-emerald-500/80 md:text-[10px]">
-            {RESOURCE_TYPE_LABELS[o.type]}
+            {resourceTypeLabel(t, o.type)}
           </p>
           <h3 className="text-base font-semibold text-white md:text-lg">
             {o.name}
@@ -231,7 +257,7 @@ function OfferingCard({
             </p>
           ) : (
             <p className="mt-0.5 text-[11px] italic text-zinc-600 md:text-xs">
-              No specs added yet
+              {t("gamingSetup.card.noSpecs")}
             </p>
           )}
           {o.type === "PLAYSTATION" && gamesPreview.length > 0 ? (
@@ -246,7 +272,9 @@ function OfferingCard({
               ))}
               {o.playstationGames.length > gamesPreview.length ? (
                 <span className="rounded-full border border-white/10 bg-white/[0.03] px-2 py-0.5 text-[9px] text-zinc-500">
-                  +{o.playstationGames.length - gamesPreview.length} more
+                  {t("gamingSetup.card.moreGames", {
+                    n: o.playstationGames.length - gamesPreview.length,
+                  })}
                 </span>
               ) : null}
             </div>
@@ -258,16 +286,19 @@ function OfferingCard({
       <div className="border-t border-white/5 bg-black/20 px-3 py-2.5 md:px-4 md:py-3">
         <div className="flex flex-wrap items-center gap-1.5 md:gap-2">
           <span className="rounded-full border border-emerald-400/25 bg-emerald-500/10 px-2 py-0.5 text-[10px] font-medium text-emerald-200 md:px-2.5 md:text-[11px]">
-            {inventory.availableNow}/{inventory.total} free
+            {t("gamingSetup.card.freeOfTotal", {
+              free: inventory.availableNow,
+              total: inventory.total,
+            })}
           </span>
           {inUse > 0 ? (
             <span className="rounded-full border border-amber-400/20 bg-amber-500/10 px-2 py-0.5 text-[10px] text-amber-200 md:text-[11px]">
-              {inUse} booked
+              {t("gamingSetup.card.booked", { n: inUse })}
             </span>
           ) : null}
           {inventory.maintenance > 0 ? (
             <span className="text-[10px] text-zinc-500 md:text-[11px]">
-              {inventory.maintenance} maint.
+              {t("gamingSetup.card.maint", { n: inventory.maintenance })}
             </span>
           ) : null}
         </div>
@@ -295,14 +326,16 @@ function OfferingCard({
                 className="rounded-full border border-white/10 bg-white/[0.03] px-2 py-0.5 text-[9px] text-zinc-500"
               >
                 {s.name}
-                {s.isVip ? " · VIP" : ""}
+                {s.isVip ? t("gamingSetup.card.vipSuffix") : ""}
               </span>
             ))}
           </div>
         ) : null}
         {isBowling ? (
           <p className="mt-2 text-[10px] text-zinc-500">
-            Bowling mode: {formatBookingMode(o.bookingMode)}
+            {t("gamingSetup.card.bowlingMode", {
+              mode: formatBookingMode(t, o.bookingMode),
+            })}
           </p>
         ) : null}
       </div>
@@ -332,7 +365,7 @@ function OfferingCard({
             aria-expanded={mapOpen}
           >
             <span className="text-[10px] font-medium uppercase tracking-wide text-zinc-500">
-              {layoutMapLabel(o.type, o.unitKind)}
+              {mapLabel}
             </span>
             <span className="text-zinc-500 md:hidden">
               {mapOpen ? <ChevronUp size={14} /> : <ChevronDown size={14} />}
@@ -341,7 +374,11 @@ function OfferingCard({
 
           <div className={cn(!mapOpen && "max-md:hidden")}>
             {isBowling ? (
-              <LaneMapPreview units={liveUnits} />
+              <LaneMapPreview
+                units={liveUnits}
+                chromeLabels={bowlingChrome}
+                statusLabels={floorStatusLabels}
+              />
             ) : (
               <SeatFloorMap
                 units={liveUnits}
@@ -351,6 +388,8 @@ function OfferingCard({
                 variant="compact"
                 pageSize={12}
                 visualType={floorVisualType}
+                guestStatusLabels={floorStatusLabels}
+                mainAreaLabel={t("floor.mainArea")}
               />
             )}
           </div>
@@ -366,7 +405,7 @@ function OfferingCard({
               className="inline-flex items-center justify-center gap-1.5 rounded-lg border border-emerald-400/25 bg-emerald-500/10 py-2 text-[11px] text-emerald-100 hover:bg-emerald-500/20 md:text-xs"
             >
               <Map size={13} />
-              Layout &amp; zones
+              {t("gamingSetup.card.layoutZones")}
             </button>
           ) : null}
           <button
@@ -377,7 +416,9 @@ function OfferingCard({
               supportsLayout && onEditLayout ? "" : "sm:col-span-2",
             )}
           >
-            Edit {unitLabels.plural}, pricing &amp; photo
+            {t("gamingSetup.card.editUnitsPricingPhoto", {
+              plural: unitLabels.plural,
+            })}
           </button>
         </div>
       ) : null}
@@ -385,13 +426,23 @@ function OfferingCard({
   );
 }
 
-function LaneMapPreview({ units }: { units: ScheduleUnit[] }) {
+function LaneMapPreview({
+  units,
+  chromeLabels,
+  statusLabels,
+}: {
+  units: ScheduleUnit[];
+  chromeLabels: ReturnType<typeof staffBowlingChromeLabels>;
+  statusLabels: ReturnType<typeof staffFloorStatusLabels>;
+}) {
   return (
     <BowlingLaneFloorMap
       units={units}
       displayOnly
       showLegend={false}
       lanesPerPage={6}
+      chromeLabels={chromeLabels}
+      guestStatusLabels={statusLabels}
     />
   );
 }

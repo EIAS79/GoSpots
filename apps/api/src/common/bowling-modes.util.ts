@@ -1,6 +1,20 @@
 import type { BookingMode, ResourceType } from '@prisma/client';
+import { toMoneyNumber } from './money.util';
 
 export type BowlingChargeMode = Exclude<BookingMode, 'MIXED'>;
+
+function coerceOfferingPrice(value: unknown): number | null {
+  if (value == null) return null;
+  if (typeof value === 'number' || typeof value === 'string') {
+    try {
+      const n = toMoneyNumber(value);
+      return Number.isFinite(n) ? n : null;
+    } catch {
+      return null;
+    }
+  }
+  return null;
+}
 
 export type BowlingModeRate = {
   label: string;
@@ -148,10 +162,7 @@ function parseStoredMode(
     const v = o[key];
     return typeof v === 'number' && Number.isFinite(v) ? v : fb;
   };
-  const price = (key: string) => {
-    const v = o[key];
-    return typeof v === 'number' && Number.isFinite(v) ? v : null;
-  };
+  const price = (key: string) => coerceOfferingPrice(o[key]);
   const ratesRaw = Array.isArray(o.rates) ? o.rates : [];
   const rates: BowlingModeRate[] = [];
   for (const r of ratesRaw) {
@@ -161,7 +172,7 @@ function parseStoredMode(
       label: typeof row.label === 'string' ? row.label : 'Rate',
       durationMinutes:
         typeof row.durationMinutes === 'number' ? row.durationMinutes : null,
-      price: typeof row.price === 'number' ? row.price : 0,
+      price: coerceOfferingPrice(row.price) ?? 0,
     });
   }
   return {
@@ -197,14 +208,11 @@ export function listBowlingModes(
     const v = legacy[key];
     return typeof v === 'number' && Number.isFinite(v) ? v : fb;
   };
-  const price = (key: string) => {
-    const v = legacy[key];
-    return typeof v === 'number' && Number.isFinite(v) ? v : null;
-  };
+  const price = (key: string) => coerceOfferingPrice(legacy[key]);
   const rates: BowlingModeRate[] = categoryRates.map((r) => ({
     label: r.label,
     durationMinutes: r.durationMinutes,
-    price: r.price,
+    price: toMoneyNumber(r.price),
   }));
   const mode = categoryBookingMode ?? 'TIME';
   return [

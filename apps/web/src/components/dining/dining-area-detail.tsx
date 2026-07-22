@@ -11,14 +11,13 @@ import {
   Upload,
 } from "lucide-react";
 import Image from "next/image";
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { DiningCollapsible } from "@/components/dining/dining-collapsible";
 import { FeedbackBanner } from "@/components/ui/feedback-banner";
 import { cn } from "@/lib/cn";
 import {
   DINING_TABLE_SIZES,
   diningTableGroupLabel,
-  diningZoneLabel,
   normalizeDiningTableSize,
 } from "@/lib/dining-layout";
 import {
@@ -36,7 +35,9 @@ import {
 } from "@/lib/image-upload";
 import { resolveMediaUrl } from "@/lib/media-url";
 import type { SeatingZone } from "@/lib/seating-zone";
-import { SEATING_ZONE_LABELS } from "@/lib/seating-zone";
+import { seatingZoneLabel } from "@/lib/seating-zone";
+import { useVenueSettingsOptional } from "@/lib/venue-settings-context";
+import { staffFloorT } from "@/lib/staff-floor-i18n";
 import "./dining-layout.css";
 
 type TableGroupDraft = {
@@ -54,6 +55,11 @@ const EMPTY_GROUP: TableGroupDraft = {
   tablesPerRow: "4",
   description: "",
 };
+
+type Translate = (
+  key: string,
+  vars?: Record<string, string | number>,
+) => string;
 
 function groupToDraft(group: DiningTableGroupDetail): TableGroupDraft {
   return {
@@ -76,6 +82,11 @@ export function DiningAreaDetail({
   onBack: () => void;
   onUpdated: (sections: GamingSectionDetail[]) => void;
 }) {
+  const vs = useVenueSettingsOptional();
+  const t = useMemo(
+    () => vs?.t ?? staffFloorT(vs?.locale),
+    [vs?.t, vs?.locale],
+  );
   const [areaName, setAreaName] = useState(section.name);
   const [areaFloor, setAreaFloor] = useState(String(section.floor));
   const [areaZone, setAreaZone] = useState<SeatingZone>(
@@ -93,7 +104,9 @@ export function DiningAreaDetail({
   const groups = section.tableGroups ?? [];
   const totalTables = section.seatCount;
   const floorLabel =
-    section.floor === 1 ? "Ground floor" : `Floor ${section.floor}`;
+    section.floor === 1
+      ? t("diningSetup.groundFloorOption")
+      : t("diningSetup.floorOption", { n: section.floor });
 
   useEffect(() => {
     setAreaName(section.name);
@@ -103,7 +116,7 @@ export function DiningAreaDetail({
 
   async function saveAreaSettings() {
     if (!areaName.trim()) {
-      setError("Area name is required.");
+      setError(t("diningSetup.nameRequired"));
       return;
     }
     setSaving(true);
@@ -116,7 +129,7 @@ export function DiningAreaDetail({
       });
       onUpdated(data.sections);
     } catch (e) {
-      setError(e instanceof Error ? e.message : "Could not save area.");
+      setError(e instanceof Error ? e.message : t("diningSetup.saveAreaError"));
     } finally {
       setSaving(false);
     }
@@ -125,7 +138,7 @@ export function DiningAreaDetail({
   async function handleAddGroup() {
     const count = parseInt(addDraft.tableCount, 10);
     if (!count || count < 1) {
-      setError("Add at least one table.");
+      setError(t("diningSetup.addAtLeastOneTable"));
       return;
     }
     setSaving(true);
@@ -152,7 +165,7 @@ export function DiningAreaDetail({
       setAddDraft(EMPTY_GROUP);
       setAddImage(null);
     } catch (e) {
-      setError(e instanceof Error ? e.message : "Could not add tables.");
+      setError(e instanceof Error ? e.message : t("diningSetup.addTablesError"));
     } finally {
       setSaving(false);
     }
@@ -161,7 +174,7 @@ export function DiningAreaDetail({
   async function handleUpdateGroup(groupId: string) {
     const count = parseInt(editDraft.tableCount, 10);
     if (Number.isNaN(count) || count < 0) {
-      setError("Invalid table count.");
+      setError(t("diningSetup.invalidTableCount"));
       return;
     }
     setSaving(true);
@@ -184,14 +197,16 @@ export function DiningAreaDetail({
       setEditingGroupId(null);
       setEditImage(null);
     } catch (e) {
-      setError(e instanceof Error ? e.message : "Could not update tables.");
+      setError(
+        e instanceof Error ? e.message : t("diningSetup.updateTablesError"),
+      );
     } finally {
       setSaving(false);
     }
   }
 
   async function handleDeleteGroup(groupId: string) {
-    if (!confirm("Remove this table type and all its tables?")) return;
+    if (!confirm(t("diningSetup.deleteTableTypeConfirm"))) return;
     setSaving(true);
     setError(null);
     try {
@@ -199,7 +214,9 @@ export function DiningAreaDetail({
       onUpdated(data.sections);
       if (editingGroupId === groupId) setEditingGroupId(null);
     } catch (e) {
-      setError(e instanceof Error ? e.message : "Could not delete table type.");
+      setError(
+        e instanceof Error ? e.message : t("diningSetup.deleteTableTypeError"),
+      );
     } finally {
       setSaving(false);
     }
@@ -214,14 +231,16 @@ export function DiningAreaDetail({
           className="mb-2 inline-flex min-h-[2.25rem] items-center gap-1 text-xs text-zinc-500 hover:text-zinc-300"
         >
           <ChevronLeft size={16} />
-          Back to all areas
+          {t("diningSetup.backToAreas")}
         </button>
         <h3 className="truncate text-base font-semibold text-white sm:text-lg">
           {section.name}
         </h3>
         <p className="mt-0.5 text-xs text-zinc-500">
-          {diningZoneLabel(section.zone)} · {floorLabel} · {totalTables} table
-          {totalTables === 1 ? "" : "s"}
+          {seatingZoneLabel(t, section.zone)} · {floorLabel} ·{" "}
+          {totalTables === 1
+            ? t("diningSetup.tableCountOne", { n: totalTables })
+            : t("diningSetup.tableCountMany", { n: totalTables })}
         </p>
       </div>
 
@@ -229,13 +248,17 @@ export function DiningAreaDetail({
         {error ? <FeedbackBanner variant="error" message={error} className="mb-4" /> : null}
 
         <DiningCollapsible
-          title="Area settings"
-          meta={`${areaName.trim() || section.name} · ${diningZoneLabel(areaZone)} · ${Number(areaFloor) === 1 ? "Ground" : `Floor ${areaFloor}`}`}
+          title={t("diningSetup.areaSettingsTitle")}
+          meta={`${areaName.trim() || section.name} · ${seatingZoneLabel(t, areaZone)} · ${
+            Number(areaFloor) === 1
+              ? t("diningSetup.ground")
+              : t("diningSetup.floorOption", { n: areaFloor })
+          }`}
           defaultOpen={false}
         >
           <div className="space-y-3">
             <label className="dining-field block">
-              <span>Area name</span>
+              <span>{t("diningSetup.areaNameLabel")}</span>
               <input
                 value={areaName}
                 onChange={(e) => setAreaName(e.target.value)}
@@ -243,21 +266,23 @@ export function DiningAreaDetail({
             </label>
             <div className="grid gap-3 sm:grid-cols-2">
               <label className="dining-field block">
-                <span>Floor</span>
+                <span>{t("diningSetup.floorField")}</span>
                 <select
                   value={areaFloor}
                   onChange={(e) => setAreaFloor(e.target.value)}
                 >
                   {floors.map((f) => (
                     <option key={f} value={f}>
-                      {f === 1 ? "Ground floor" : `Floor ${f}`}
+                      {f === 1
+                        ? t("diningSetup.groundFloorOption")
+                        : t("diningSetup.floorOption", { n: f })}
                     </option>
                   ))}
                 </select>
               </label>
               <div>
                 <span className="text-[10px] uppercase tracking-wide text-zinc-500">
-                  Location
+                  {t("diningSetup.locationLabel")}
                 </span>
                 <div className="dining-zone-toggle mt-1.5">
                   {(["INDOOR", "OUTDOOR"] as SeatingZone[]).map((zone) => (
@@ -273,7 +298,7 @@ export function DiningAreaDetail({
                       )}
                     >
                       {zone === "OUTDOOR" ? <Sun size={14} /> : <Building2 size={14} />}
-                      {SEATING_ZONE_LABELS[zone]}
+                      {seatingZoneLabel(t, zone)}
                     </button>
                   ))}
                 </div>
@@ -285,17 +310,25 @@ export function DiningAreaDetail({
               onClick={() => void saveAreaSettings()}
               className="min-h-[2.75rem] rounded-lg bg-zinc-800 px-4 text-sm text-zinc-200 hover:bg-zinc-700 disabled:opacity-50 sm:min-h-0 sm:px-3 sm:py-1.5 sm:text-xs"
             >
-              Save area settings
+              {t("diningSetup.saveAreaSettings")}
             </button>
           </div>
         </DiningCollapsible>
 
         <DiningCollapsible
-          title="Table types"
+          title={t("diningSetup.tableTypesTitle")}
           meta={
             groups.length === 0
-              ? "Mix 1–8 seat tables in this area"
-              : `${groups.length} type${groups.length === 1 ? "" : "s"} · ${totalTables} tables`
+              ? t("diningSetup.tableTypesEmptyMeta")
+              : groups.length === 1
+                ? t("diningSetup.tableTypesMetaOne", {
+                    n: groups.length,
+                    total: totalTables,
+                  })
+                : t("diningSetup.tableTypesMetaMany", {
+                    n: groups.length,
+                    total: totalTables,
+                  })
           }
           badge={groups.length ? String(groups.length) : undefined}
           defaultOpen
@@ -312,19 +345,23 @@ export function DiningAreaDetail({
                 className="inline-flex min-h-[2rem] items-center gap-1 rounded-lg border border-amber-400/25 bg-amber-500/10 px-2.5 text-[11px] text-amber-200 hover:bg-amber-500/20"
               >
                 <Plus size={14} />
-                <span className="hidden sm:inline">Add</span>
+                <span className="hidden sm:inline">{t("common.add")}</span>
               </button>
             ) : null
           }
         >
           {groups.length === 0 && !showAddGroup ? (
             <p className="rounded-lg border border-dashed border-white/15 p-5 text-center text-sm text-zinc-500">
-              No tables yet. Tap Add to create your first table type.
+              {t("diningSetup.noTablesYet")}
             </p>
           ) : (
             <ul className="space-y-2">
               {groups.map((group) => {
-                const label = diningTableGroupLabel(group.name, group.capacity);
+                const label = diningTableGroupLabel(
+                  group.name,
+                  group.capacity,
+                  t,
+                );
                 const isEditing = editingGroupId === group.id;
 
                 if (isEditing) {
@@ -334,6 +371,7 @@ export function DiningAreaDetail({
                       className="rounded-lg border border-amber-400/25 bg-amber-500/5 p-3 sm:p-4"
                     >
                       <TableGroupForm
+                        t={t}
                         draft={editDraft}
                         imageFile={editImage}
                         existingImageUrl={group.imageUrl}
@@ -345,7 +383,7 @@ export function DiningAreaDetail({
                         }}
                         onSubmit={() => void handleUpdateGroup(group.id)}
                         saving={saving}
-                        submitLabel="Save table type"
+                        submitLabel={t("diningSetup.saveTableType")}
                       />
                     </li>
                   );
@@ -354,6 +392,7 @@ export function DiningAreaDetail({
                 return (
                   <li key={group.id}>
                     <TableGroupCollapsible
+                      t={t}
                       group={group}
                       label={label}
                       saving={saving}
@@ -374,9 +413,10 @@ export function DiningAreaDetail({
           {showAddGroup ? (
             <div className="mt-3 rounded-lg border border-amber-400/25 bg-amber-500/5 p-3 sm:p-4">
               <p className="mb-3 text-xs font-medium text-amber-200">
-                New table type
+                {t("diningSetup.newTableType")}
               </p>
               <TableGroupForm
+                t={t}
                 draft={addDraft}
                 imageFile={addImage}
                 onChange={setAddDraft}
@@ -387,7 +427,7 @@ export function DiningAreaDetail({
                 }}
                 onSubmit={() => void handleAddGroup()}
                 saving={saving}
-                submitLabel="Add tables"
+                submitLabel={t("diningSetup.addTables")}
               />
             </div>
           ) : groups.length > 0 ? (
@@ -401,7 +441,7 @@ export function DiningAreaDetail({
               className="mt-3 inline-flex w-full min-h-[2.75rem] items-center justify-center gap-2 rounded-lg border border-dashed border-white/15 text-sm text-zinc-400 hover:border-amber-400/30 hover:text-amber-200 md:hidden"
             >
               <Plus size={16} />
-              Add another table type
+              {t("diningSetup.addAnotherTableType")}
             </button>
           ) : null}
         </DiningCollapsible>
@@ -411,12 +451,14 @@ export function DiningAreaDetail({
 }
 
 function TableGroupCollapsible({
+  t,
   group,
   label,
   saving,
   onEdit,
   onDelete,
 }: {
+  t: Translate;
   group: DiningTableGroupDetail;
   label: string;
   saving: boolean;
@@ -424,13 +466,16 @@ function TableGroupCollapsible({
   onDelete: () => void;
 }) {
   const imageSrc = resolveMediaUrl(group.imageUrl);
-  const summary = `${group.tableCount}× ${group.capacity}-seat`;
+  const summary = t("diningSetup.tableSummary", {
+    count: group.tableCount,
+    capacity: group.capacity,
+  });
 
   return (
     <DiningCollapsible
       title={label}
       meta={group.description?.trim() || summary}
-      badge={`${group.capacity} seats`}
+      badge={t("diningSetup.seatsBadge", { n: group.capacity })}
       defaultOpen={false}
     >
       <div className="flex flex-col gap-3 sm:flex-row sm:items-start">
@@ -439,16 +484,23 @@ function TableGroupCollapsible({
             <Image src={imageSrc} alt="" fill className="object-cover" sizes="64px" />
           ) : (
             <div className="flex h-full items-center justify-center text-[9px] text-zinc-600">
-              No photo
+              {t("diningSetup.noPhoto")}
             </div>
           )}
         </div>
         <div className="min-w-0 flex-1 space-y-2">
           <p className="text-xs text-zinc-400">
-            <span className="text-zinc-300">{group.tableCount}</span> table
-            {group.tableCount === 1 ? "" : "s"} ·{" "}
-            <span className="text-zinc-300">{group.capacity}</span> seats each ·{" "}
-            {group.seatsPerRow} per row on map
+            {group.tableCount === 1
+              ? t("diningSetup.groupDetailOne", {
+                  count: group.tableCount,
+                  capacity: group.capacity,
+                  row: group.seatsPerRow,
+                })
+              : t("diningSetup.groupDetailMany", {
+                  count: group.tableCount,
+                  capacity: group.capacity,
+                  row: group.seatsPerRow,
+                })}
           </p>
           {group.description ? (
             <p className="text-sm leading-relaxed text-zinc-500">{group.description}</p>
@@ -460,7 +512,7 @@ function TableGroupCollapsible({
               className="inline-flex min-h-[2.5rem] items-center gap-1.5 rounded-lg border border-white/10 px-3 text-xs text-zinc-300 hover:bg-white/5 sm:min-h-0"
             >
               <Pencil size={13} />
-              Edit
+              {t("common.edit")}
             </button>
             <button
               type="button"
@@ -469,7 +521,7 @@ function TableGroupCollapsible({
               className="inline-flex min-h-[2.5rem] items-center gap-1.5 rounded-lg border border-rose-400/20 px-3 text-xs text-rose-300 hover:bg-rose-500/10 disabled:opacity-40 sm:min-h-0"
             >
               <Trash2 size={13} />
-              Remove
+              {t("common.remove")}
             </button>
           </div>
         </div>
@@ -479,6 +531,7 @@ function TableGroupCollapsible({
 }
 
 function TableGroupForm({
+  t,
   draft,
   imageFile,
   existingImageUrl,
@@ -489,6 +542,7 @@ function TableGroupForm({
   saving,
   submitLabel,
 }: {
+  t: Translate;
   draft: TableGroupDraft;
   imageFile?: File | null;
   existingImageUrl?: string | null;
@@ -506,17 +560,17 @@ function TableGroupForm({
   return (
     <div className="space-y-3">
       <label className="dining-field block">
-        <span>Label (optional)</span>
+        <span>{t("diningSetup.labelOptional")}</span>
         <input
           value={draft.name}
           onChange={(e) => onChange({ ...draft, name: e.target.value })}
-          placeholder="Window 2-top, Large booth…"
+          placeholder={t("diningSetup.labelPlaceholder")}
         />
       </label>
 
       <div>
         <span className="text-[10px] uppercase tracking-wide text-zinc-500">
-          Seats per table
+          {t("diningSetup.seatsPerTable")}
         </span>
         <div className="dining-seats mt-2">
           {DINING_TABLE_SIZES.map((size) => (
@@ -539,7 +593,7 @@ function TableGroupForm({
 
       <div className="grid gap-3 sm:grid-cols-2">
         <label className="dining-field block">
-          <span>How many tables</span>
+          <span>{t("diningSetup.howManyTables")}</span>
           <input
             type="number"
             min={1}
@@ -549,7 +603,7 @@ function TableGroupForm({
           />
         </label>
         <label className="dining-field block">
-          <span>Tables per row on map</span>
+          <span>{t("diningSetup.tablesPerRowMap")}</span>
           <input
             type="number"
             min={2}
@@ -561,18 +615,18 @@ function TableGroupForm({
       </div>
 
       <label className="dining-field block">
-        <span>Description (optional)</span>
+        <span>{t("diningSetup.descriptionOptional")}</span>
         <textarea
           value={draft.description}
           onChange={(e) => onChange({ ...draft, description: e.target.value })}
           rows={2}
-          placeholder="Quiet corner, booth with sofa, street view…"
+          placeholder={t("diningSetup.descriptionPlaceholder")}
         />
       </label>
 
       <div>
         <span className="text-[10px] uppercase tracking-wide text-zinc-500">
-          Photo (optional)
+          {t("diningSetup.photoOptional")}
         </span>
         <div className="mt-2 flex items-center gap-3">
           <div className="dining-table-thumb">
@@ -581,13 +635,13 @@ function TableGroupForm({
               <img src={preview} alt="" className="h-full w-full object-cover" />
             ) : (
               <div className="flex h-full items-center justify-center text-[9px] text-zinc-600">
-                No image
+                {t("diningSetup.noImage")}
               </div>
             )}
           </div>
           <label className="inline-flex min-h-[2.75rem] cursor-pointer items-center gap-1.5 rounded-lg border border-amber-400/25 bg-amber-500/10 px-3 text-sm text-amber-300 sm:min-h-0 sm:border-0 sm:bg-transparent sm:px-0 sm:text-xs sm:text-amber-400">
             <Upload size={16} />
-            Upload photo
+            {t("diningSetup.uploadPhoto")}
             <input
               type="file"
               accept={RESOURCE_IMAGE_ACCEPT}
@@ -612,7 +666,7 @@ function TableGroupForm({
           onClick={onCancel}
           className="min-h-[2.75rem] rounded-lg border border-white/10 px-4 text-sm text-zinc-400 sm:min-h-0 sm:px-3 sm:py-1.5 sm:text-xs"
         >
-          Cancel
+          {t("common.cancel")}
         </button>
         <button
           type="button"

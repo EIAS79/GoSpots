@@ -1,7 +1,11 @@
 import { SubscriptionStatus, SubscriptionTier } from '@prisma/client';
 import {
+  legacyAddOnsFromTier,
   legacyModulesFromTier,
   modulesForPackAndAddOns,
+  parseAddOns,
+  resolveAddOnsCsv,
+  serializeAddOns,
   TRIAL_DURATION_DAYS as PACK_TRIAL_DAYS,
   type ModuleKey,
   type VenuePackId,
@@ -107,6 +111,7 @@ type SeatSubRow = {
   trialEndsAt: Date | null;
   packId?: string | null;
   addOns?: string | null;
+  addOnRows?: { addOnId: string }[] | null;
   staffSeatQuantity?: number | null;
 } | null;
 
@@ -134,6 +139,7 @@ type SubRow = {
   trialEndsAt: Date | null;
   packId?: string | null;
   addOns?: string | null;
+  addOnRows?: { addOnId: string }[] | null;
 } | null;
 
 export type SubscriptionAccess = {
@@ -162,11 +168,52 @@ function syntheticTierFromModules(modules: Set<string>): SubscriptionTier {
   return SubscriptionTier.FREE;
 }
 
+/**
+ * Effective add-ons CSV: rows-primary (CSV fallback when rows omitted), then
+ * legacy tier→add-ons when pack shops still have empty add-ons but a paid
+ * legacy tier (STANDARD+). Never strips intentional empty STARTER/FREE selections.
+ */
+export function effectiveAddOnsForSubscription(
+  subscription: NonNullable<SubRow>,
+): string {
+  const merged = resolveAddOnsCsv({
+    addOns: subscription.addOns,
+    addOnRows: subscription.addOnRows,
+  });
+  if (parseAddOns(merged).length > 0) return merged;
+
+  const legacyPaid =
+    subscription.tier === SubscriptionTier.STANDARD ||
+    subscription.tier === SubscriptionTier.PRO ||
+    subscription.tier === SubscriptionTier.ENTERPRISE;
+  if (legacyPaid) {
+    return serializeAddOns(legacyAddOnsFromTier(subscription.tier));
+  }
+  return merged;
+}
+
+/**
+ * Pack-only when `packId` set: modules come from pack + effective add-ons
+ * (rows-primary, with runtime legacy STANDARD+ synthesis). No FEATURE_MATRIX /
+ * legacyModulesFromTier union.
+ *
+ * Catalog gap: no add-on yet grants `multi_shop` / `integrations`. Preserve
+ * those when billed tier is ENTERPRISE so legacy access never shrinks.
+ * Pack-less rows still use `legacyModulesFromTier` until every shop has a packId.
+ */
 function resolveModules(subscription: NonNullable<SubRow>): Set<ModuleKey> {
   const hasPack =
     !!subscription.packId && subscription.packId.trim().length > 0;
   if (hasPack) {
-    return modulesForPackAndAddOns(subscription.packId, subscription.addOns);
+    const modules = modulesForPackAndAddOns(
+      subscription.packId,
+      effectiveAddOnsForSubscription(subscription),
+    );
+    if (subscription.tier === SubscriptionTier.ENTERPRISE) {
+      modules.add('multi_shop');
+      modules.add('integrations');
+    }
+    return modules;
   }
   return legacyModulesFromTier(subscription.tier) as Set<ModuleKey>;
 }
@@ -226,7 +273,7 @@ export function resolveSubscriptionAccess(
       status === SubscriptionStatus.TRIAL && !!trialEndsAt && expired,
     trialDaysRemaining: daysRemaining,
     packId: (subscription.packId as VenuePackId) ?? null,
-    addOns: subscription.addOns ?? '',
+    addOns: locked ? '' : effectiveAddOnsForSubscription(subscription),
     enabledModules: modules,
   };
 }

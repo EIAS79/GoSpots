@@ -7,6 +7,7 @@ import { Prisma } from '@prisma/client';
 import type { AuditSection } from '../../common/audit.constants';
 import { hasPermission, PERMISSIONS } from '../../common/permissions';
 import { resolveVenueShopId } from '../../common/resolve-venue-shop';
+import { assertShopHasFeature } from '../../common/venue-entitlements';
 import type { JwtAccessPayload } from '../auth/auth.service';
 import { PrismaService } from '../../prisma/prisma.service';
 
@@ -132,6 +133,7 @@ export class AuditService {
   async list(actor: JwtAccessPayload, q: AuditQuery) {
     this.assertRead(actor);
     const shopId = await resolveVenueShopId(this.prisma, actor, q.venuePath);
+    await assertShopHasFeature(this.prisma, shopId, 'audit');
     const take = Math.min(q.take ?? 100, 500);
     const skip = q.skip ?? 0;
     const where = this.buildWhere(shopId, q);
@@ -159,6 +161,7 @@ export class AuditService {
   async exportCsv(actor: JwtAccessPayload, q: AuditQuery) {
     this.assertRead(actor);
     const shopId = await resolveVenueShopId(this.prisma, actor, q.venuePath);
+    await assertShopHasFeature(this.prisma, shopId, 'audit');
     const where = this.buildWhere(shopId, q);
     const rows = await this.prisma.auditLog.findMany({
       where,
@@ -211,7 +214,7 @@ export class AuditService {
       where: { id, shopId },
     });
     if (!row) throw new NotFoundException('Audit entry not found.');
-    await this.prisma.auditLog.delete({ where: { id } });
+    await this.prisma.auditLog.delete({ where: { id, shopId } });
     return { ok: true };
   }
 

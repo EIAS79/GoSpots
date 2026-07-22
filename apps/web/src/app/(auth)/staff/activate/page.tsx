@@ -5,10 +5,14 @@ import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { Suspense, useState } from "react";
 import { AuthCard } from "@/components/auth/auth-card";
+import { ensureCsrf } from "@/lib/api";
+import { usePublicPrefs } from "@/lib/public-prefs-context";
 import { activateStaffAccount } from "@/lib/staff-client";
+import { dashboardBase } from "@/lib/venue-dashboard";
 
 function ActivateForm() {
   const router = useRouter();
+  const { t } = usePublicPrefs();
   const params = useSearchParams();
   const token = params.get("token") ?? "";
 
@@ -21,23 +25,26 @@ function ActivateForm() {
     e.preventDefault();
     setError(null);
     if (!token) {
-      setError("Missing setup link. Ask your manager for a new invite.");
+      setError(t("auth.activate.missingToken"));
       return;
     }
     if (password !== confirm) {
-      setError("Passwords do not match.");
+      setError(t("auth.activate.passwordMismatch"));
       return;
     }
     setLoading(true);
     try {
+      await ensureCsrf();
       const res = await activateStaffAccount(token, password);
-      if (res.dashboardPath) {
-        router.replace(`/dashboard/${res.dashboardPath}`);
+      if (res.venuePath) {
+        router.replace(dashboardBase(res.venuePath));
       } else {
         router.replace("/dashboard");
       }
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Activation failed.");
+      setError(
+        err instanceof Error ? err.message : t("auth.activate.failed"),
+      );
     } finally {
       setLoading(false);
     }
@@ -45,12 +52,18 @@ function ActivateForm() {
 
   if (!token) {
     return (
-      <AuthCard title="Invalid setup link" subtitle="This page needs a token from your manager.">
+      <AuthCard
+        title={t("auth.activate.invalidTitle")}
+        subtitle={t("auth.activate.invalidSubtitle")}
+      >
         <p className="text-sm text-zinc-400">
-          Open the personal setup link you received — do not share it with coworkers.
+          {t("auth.activate.invalidBody")}
         </p>
-        <Link href="/login" className="mt-4 inline-block text-sm text-emerald-400 hover:underline">
-          Go to sign in
+        <Link
+          href="/login"
+          className="mt-4 inline-block text-sm text-emerald-400 hover:underline"
+        >
+          {t("auth.activate.goToSignIn")}
         </Link>
       </AuthCard>
     );
@@ -58,12 +71,12 @@ function ActivateForm() {
 
   return (
     <AuthCard
-      title="Set up your employee login"
-      subtitle="Choose a password only you know — for a new account or after a password reset. Your manager never sees it."
+      title={t("auth.activate.title")}
+      subtitle={t("auth.activate.subtitle")}
     >
       <form onSubmit={onSubmit} className="space-y-4">
         <label className="block text-xs text-zinc-500">
-          New password (min 10 characters)
+          {t("auth.activate.newPassword")}
           <input
             type="password"
             required
@@ -74,7 +87,7 @@ function ActivateForm() {
           />
         </label>
         <label className="block text-xs text-zinc-500">
-          Confirm password
+          {t("auth.activate.confirmPassword")}
           <input
             type="password"
             required
@@ -96,15 +109,16 @@ function ActivateForm() {
         >
           {loading ? (
             <span className="inline-flex items-center justify-center gap-2">
-              <Loader2 size={16} className="animate-spin" /> Activating…
+              <Loader2 size={16} className="animate-spin" />{" "}
+              {t("auth.activate.activating")}
             </span>
           ) : (
-            "Activate & sign in"
+            t("auth.activate.submit")
           )}
         </button>
       </form>
       <p className="mt-4 text-center text-xs text-zinc-600">
-        One account = one person. Signing in elsewhere will end your other session.
+        {t("auth.activate.oneAccount")}
       </p>
     </AuthCard>
   );

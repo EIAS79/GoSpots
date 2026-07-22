@@ -7,16 +7,11 @@ import { Reveal } from "@/components/effects/reveal";
 import { Spotlight } from "@/components/effects/spotlight";
 import { ownerSteps } from "@/lib/mock-data";
 import { usePublicPrefs } from "@/lib/public-prefs-context";
-import { useMode } from "./mode-context";
 
 const EASE = [0.22, 1, 0.36, 1] as const;
 
-/**
- * Owner onboarding steps — rendered only in the "manage" view.
- * The play view gets its own player-focused sections instead.
- */
+/** Owner onboarding steps on the venue-owner landing. */
 export function Audience() {
-  const { setMode } = useMode();
   const { t } = usePublicPrefs();
 
   return (
@@ -85,14 +80,13 @@ export function Audience() {
               className="transition-transform group-hover:translate-x-1"
             />
           </Link>
-          <button
-            type="button"
-            onClick={() => setMode("play")}
+          <Link
+            href="/venues"
             className="inline-flex items-center gap-2 rounded-full px-5 py-2.5 text-sm text-zinc-600 transition hover:text-cyan-700 dark:text-zinc-400 dark:hover:text-cyan-300"
           >
             <Compass size={15} />
             {t("how.ctaSecondary")}
-          </button>
+          </Link>
         </Reveal>
       </div>
     </section>

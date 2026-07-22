@@ -1,19 +1,19 @@
-/** Calendar day key in venue locale (YYYY-MM-DD). */
-export function venueDayKey(locale: string, at = new Date()): string {
-  return at.toLocaleDateString('en-CA', { timeZone: localeToTz(locale) });
-}
+import {
+  calendarDayInTimeZone,
+  resolveVenueTimeZone,
+} from './venue-timezone.util';
 
-function localeToTz(locale: string): string {
-  const map: Record<string, string> = {
-    en: 'UTC',
-    'en-US': 'America/New_York',
-    'en-GB': 'Europe/London',
-    ar: 'Africa/Cairo',
-    'ar-EG': 'Africa/Cairo',
-    de: 'Europe/Berlin',
-    fr: 'Europe/Paris',
-  };
-  return map[locale] ?? 'UTC';
+/**
+ * Calendar day key in venue timezone (YYYY-MM-DD).
+ * Accepts either an IANA timezone (`Europe/Warsaw`) or a BCP-47 locale
+ * (`pl`, `en-US`) for backward compatibility with callers that still pass locale.
+ */
+export function venueDayKey(timezoneOrLocale: string, at = new Date()): string {
+  const timeZone = resolveVenueTimeZone({
+    timezone: timezoneOrLocale,
+    locale: timezoneOrLocale,
+  });
+  return calendarDayInTimeZone(timeZone, at);
 }
 
 export type MenuItemStockFields = {
@@ -27,11 +27,11 @@ export type MenuItemStockFields = {
 /** Reset tracked stock to daily baseline when the venue day rolls over. */
 export function applyDailyStockReset<T extends MenuItemStockFields>(
   item: T,
-  locale: string,
+  timezoneOrLocale: string,
   at = new Date(),
 ): T {
   if (!item.trackStock) return item;
-  const today = venueDayKey(locale, at);
+  const today = venueDayKey(timezoneOrLocale, at);
   if (item.stockResetOn === today) return item;
   return {
     ...item,

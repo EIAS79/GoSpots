@@ -8,10 +8,14 @@ import {
   Patch,
   Query,
   Res,
+  Sse,
   UseGuards,
 } from '@nestjs/common';
+import type { MessageEvent } from '@nestjs/common';
 import { ApiTags } from '@nestjs/swagger';
+import { SkipThrottle } from '@nestjs/throttler';
 import type { Response } from 'express';
+import type { Observable } from 'rxjs';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { CurrentUser } from '../auth/decorators/current-user.decorator';
 import type { JwtAccessPayload } from '../auth/auth.service';
@@ -26,6 +30,16 @@ import { NotificationsService } from './notifications.service';
 @UseGuards(JwtAuthGuard)
 export class NotificationsController {
   constructor(private readonly notifications: NotificationsService) {}
+
+  /**
+   * Staff SSE stream (cookie JWT). CSRF does not apply (safe GET).
+   * Events: `ready`, `heartbeat`, `notification` (in-process push only).
+   */
+  @Sse('stream')
+  @SkipThrottle()
+  stream(@CurrentUser() user: JwtAccessPayload): Observable<MessageEvent> {
+    return this.notifications.stream(user);
+  }
 
   @Get('sections')
   sections() {
@@ -63,7 +77,7 @@ export class NotificationsController {
     const stamp = new Date().toISOString().slice(0, 10);
     res.setHeader(
       'Content-Disposition',
-      `attachment; filename="gospots-notifications-${stamp}.csv"`,
+      `attachment; filename="Locora-notifications-${stamp}.csv"`,
     );
     res.send(csv);
   }

@@ -1,6 +1,7 @@
 "use client";
 
 import { cn } from "@/lib/cn";
+import { useVenueSettingsOptional } from "@/lib/venue-settings-context";
 
 export function ManagerAccessExtras({
   venueSettings,
@@ -16,20 +17,22 @@ export function ManagerAccessExtras({
   allowSubscriptionGrant?: boolean;
   disabled?: boolean;
 }) {
+  const vs = useVenueSettingsOptional();
+  const t = vs?.t ?? ((key: string) => key);
+
   return (
     <div className="space-y-3">
       <div className="rounded-xl border border-emerald-400/25 bg-emerald-500/5 px-4 py-3">
         <p className="text-sm font-medium text-emerald-100">
-          Full dashboard access
+          {t("team.fullAccessTitle")}
         </p>
         <p className="mt-1 text-xs leading-relaxed text-zinc-400">
-          Managers can view and edit every area, manage employee roles, and run
-          day-to-day ops. The audit log stays owner-only.
+          {t("team.fullAccessHint")}
         </p>
       </div>
 
       <p className="text-[10px] font-medium uppercase tracking-wider text-zinc-500">
-        Optional owner grants
+        {t("team.optionalGrants")}
       </p>
 
       <label
@@ -51,9 +54,11 @@ export function ManagerAccessExtras({
           }
         />
         <span>
-          <span className="block text-sm text-zinc-100">Venue settings</span>
+          <span className="block text-sm text-zinc-100">
+            {t("team.venueSettings")}
+          </span>
           <span className="mt-0.5 block text-[11px] text-zinc-500">
-            Edit profile, floors, publish, locale, and other venue data.
+            {t("team.venueSettingsHint")}
           </span>
         </span>
       </label>
@@ -80,11 +85,10 @@ export function ManagerAccessExtras({
         />
         <span>
           <span className="block text-sm text-zinc-100">
-            Subscription & billing
+            {t("team.subscriptionBilling")}
           </span>
           <span className="mt-0.5 block text-[11px] text-zinc-500">
-            Change features, seats, and open checkout. Keep this off unless you
-            fully trust them with money and plan changes.
+            {t("team.subscriptionBillingHint")}
           </span>
         </span>
       </label>

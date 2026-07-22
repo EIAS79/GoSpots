@@ -31,7 +31,7 @@ import { useCurrentMembership } from "@/lib/use-current-membership";
 import { useDashboardGuide } from "@/lib/use-dashboard-guide";
 import { useLiveData } from "@/lib/use-live-data";
 import { useVenueAccess } from "@/lib/use-venue-access";
-import { useVenueSettings } from "@/lib/venue-settings-context";
+import { useVenueSettings, useVenueSettingsOptional } from "@/lib/venue-settings-context";
 
 function notifyMenuChanged() {
   publishLiveEvent({ section: "menu" });
@@ -41,6 +41,7 @@ export default function MenuPage() {
   const guide = useDashboardGuide("menu");
   const { state } = useAuth();
   const { formatMoney } = useVenueSettings();
+  const t = useVenueSettingsOptional()?.t ?? ((k: string) => k);
   const access = useVenueAccess();
   const [menu, setMenu] = useState<FullMenu | null>(null);
   const [loading, setLoading] = useState(true);
@@ -93,21 +94,24 @@ export default function MenuPage() {
       if (!opts?.silent) setError(null);
       try {
         const data = await fetchMenu();
-        if (gen !== loadGen.current) return;
+        if (gen !== loadGen.current) return true;
         applyMenu(data);
+        return true;
       } catch (e) {
-        if (gen !== loadGen.current) return;
-        if (opts?.silent && e instanceof ApiError && e.status === 401) return;
+        if (gen !== loadGen.current) return true;
+        // Session expiry is Mode D — do not feed Mode F.
+        if (opts?.silent && e instanceof ApiError && e.status === 401) return true;
         if (!opts?.silent) {
-          setError(e instanceof Error ? e.message : "Failed to load menu.");
+          setError(e instanceof Error ? e.message : t("menu.loadFailed"));
         }
+        return false;
       } finally {
         if (gen !== loadGen.current) return;
         if (!opts?.silent) setLoading(false);
         else setSyncing(false);
       }
     },
-    [applyMenu],
+    [applyMenu, t],
   );
 
   useEffect(() => {
@@ -178,7 +182,7 @@ export default function MenuPage() {
       }
       return saved;
     } catch (e) {
-      setError(e instanceof Error ? e.message : "Could not save section.");
+      setError(e instanceof Error ? e.message : t("menu.saveSectionFailed"));
       throw e;
     } finally {
       setSaving(false);
@@ -212,7 +216,7 @@ export default function MenuPage() {
       setMenu((m) => (m ? { ...m, items: [...m.items, created] } : m));
       return created;
     } catch (e) {
-      setError(e instanceof Error ? e.message : "Could not save item.");
+      setError(e instanceof Error ? e.message : t("menu.saveItemFailed"));
       throw e;
     } finally {
       setSaving(false);
@@ -258,7 +262,7 @@ export default function MenuPage() {
       notifyMenuChanged();
     } catch (e) {
       setError(
-        e instanceof Error ? e.message : "Could not upload section photo.",
+        e instanceof Error ? e.message : t("menu.uploadSectionFailed"),
       );
       throw e;
     }
@@ -295,7 +299,7 @@ export default function MenuPage() {
       setSectionToRemove(null);
       notifyMenuChanged();
     } catch (e) {
-      setError(e instanceof Error ? e.message : "Could not remove section.");
+      setError(e instanceof Error ? e.message : t("menu.removeSectionFailed"));
     } finally {
       setSaving(false);
     }
@@ -312,7 +316,7 @@ export default function MenuPage() {
       setItemToRemove(null);
       notifyMenuChanged();
     } catch (e) {
-      setError(e instanceof Error ? e.message : "Could not remove item.");
+      setError(e instanceof Error ? e.message : t("menu.removeItemFailed"));
     } finally {
       setSaving(false);
     }
@@ -331,7 +335,7 @@ export default function MenuPage() {
             {syncing ? (
               <span className="inline-flex items-center gap-1 text-[10px] text-emerald-400/80">
                 <Radio size={10} className="animate-pulse" />
-                Live
+                {t("menu.live")}
               </span>
             ) : null}
             {!hasSections ? (
@@ -341,7 +345,7 @@ export default function MenuPage() {
                 className="inline-flex items-center gap-1 rounded-lg border border-emerald-400/30 bg-emerald-500/10 px-3 py-1.5 text-xs text-emerald-200"
               >
                 <Plus size={14} />
-                Add section
+                {t("menu.addSection")}
               </button>
             ) : null}
           </div>
@@ -358,9 +362,7 @@ export default function MenuPage() {
         ) : (
           <>
             {!canWrite ? (
-              <p className="mb-4 text-xs text-zinc-500">
-                View-only — ask your venue admin for menu edit access.
-              </p>
+              <p className="mb-4 text-xs text-zinc-500">{t("menu.viewOnly")}</p>
             ) : null}
 
             <div className="flex justify-center">
@@ -429,17 +431,22 @@ export default function MenuPage() {
         open={sectionToRemove !== null}
         title={
           sectionToRemove && sectionToRemove.length > 1
-            ? "Remove sections?"
-            : "Remove section?"
+            ? t("menu.removeSectionsTitle")
+            : t("menu.removeSectionTitle")
         }
         description={
           sectionToRemove
             ? sectionToRemove.length === 1
-              ? `"${sectionToRemove[0]!.name}" will be removed. Items in this section become uncategorized. This cannot be undone.`
-              : `${sectionToRemove.length} sections will be removed (${sectionToRemove.map((s) => s.name).join(", ")}). Items in those sections become uncategorized. This cannot be undone.`
+              ? t("menu.removeSectionDesc", {
+                  name: sectionToRemove[0]!.name,
+                })
+              : t("menu.removeSectionsDesc", {
+                  count: sectionToRemove.length,
+                  names: sectionToRemove.map((s) => s.name).join(", "),
+                })
             : ""
         }
-        confirmLabel="Remove"
+        confirmLabel={t("menu.removeConfirm")}
         variant="danger"
         busy={saving}
         onCancel={() => setSectionToRemove(null)}
@@ -450,13 +457,13 @@ export default function MenuPage() {
 
       <ConfirmDialog
         open={itemToRemove !== null}
-        title="Remove item?"
+        title={t("menu.removeItemTitle")}
         description={
           itemToRemove
-            ? `"${itemToRemove.name}" will be removed from your menu. This cannot be undone.`
+            ? t("menu.removeItemDesc", { name: itemToRemove.name })
             : ""
         }
-        confirmLabel="Remove"
+        confirmLabel={t("menu.removeConfirm")}
         variant="danger"
         busy={saving}
         onCancel={() => setItemToRemove(null)}

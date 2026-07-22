@@ -31,14 +31,14 @@ export function VenueMenuItemModal({
   reviewsMode?: "ENABLED" | "DISABLED" | "HIDDEN";
   onClose: () => void;
 }) {
-  const { formatMoney } = usePublicPrefs();
+  const { formatMoney, t } = usePublicPrefs();
   const images = [item.imageUrl, item.imageUrl2]
     .map((url) => resolveMediaUrl(url))
     .filter((url): url is string => Boolean(url));
   const [activeImage, setActiveImage] = useState(0);
 
-  const availability = getPublicMenuItemAvailability(item, section);
-  const formatPrice = (n: number) => formatMoney(n, currency);
+  const availability = getPublicMenuItemAvailability(item, section, { t });
+  const formatPrice = (n: import("@/lib/money").MoneyWire) => formatMoney(n, currency);
 
   useEffect(() => {
     function onKey(e: KeyboardEvent) {
@@ -208,14 +208,7 @@ export function MenuAvailabilityPill({
   className?: string;
   variant?: "dark" | "light";
 }) {
-  const { t } = usePublicPrefs();
   const light = variant === "light";
-  const headline =
-    availability.tone === "available"
-      ? t("menu.availableNow")
-      : availability.tone === "sold-out"
-        ? t("menu.soldOut")
-        : availability.headline;
   return (
     <span
       className={cn(
@@ -256,7 +249,7 @@ export function MenuAvailabilityPill({
           availability.tone === "closed" && "bg-zinc-500",
         )}
       />
-      {headline}
+      {availability.headline}
     </span>
   );
 }

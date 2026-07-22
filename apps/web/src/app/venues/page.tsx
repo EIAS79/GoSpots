@@ -4,9 +4,9 @@ import { Loader2 } from "lucide-react";
 import { VenuesDiscovery } from "@/components/venues/venues-discovery";
 
 export const metadata: Metadata = {
-  title: "Find your next spot — GoSpots",
+  title: "Find venues — Locora",
   description:
-    "Discover gaming centers, lounges, bars, and entertainment venues worldwide on GoSpots.",
+    "Browse gaming centers, restaurants, and venues on Locora. Search by city and category, then reserve when hosts enable it.",
 };
 
 function VenuesLoading() {
@@ -17,6 +17,7 @@ function VenuesLoading() {
   );
 }
 
+/** Guest discovery directory — owner acquisition is `/for-venues`. */
 export default function VenuesPage() {
   return (
     <Suspense fallback={<VenuesLoading />}>

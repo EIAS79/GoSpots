@@ -13,8 +13,10 @@ import { VenueCoverImage } from "@/components/ui/venue-cover-image";
 import { fetchPublicVenues, type PublicVenue } from "@/lib/shop-settings-client";
 import { venuesSearchHref } from "@/lib/venue-search";
 import { venueMarketingName } from "@/lib/venue-display";
+import { usePublicPrefs } from "@/lib/public-prefs-context";
 
 export function VenueFinder() {
+  const { t } = usePublicPrefs();
   const router = useRouter();
   const [form, setForm] = useState<VenueSearchFormValues>({
     q: "",
@@ -54,21 +56,21 @@ export function VenueFinder() {
     <div className="relative w-full">
       <div className="absolute inset-x-0 -inset-y-10 -z-10 rounded-[40px] bg-gradient-to-br from-amber-400/20 via-orange-400/10 to-rose-400/15 blur-2xl sm:-inset-x-4 dark:from-cyan-500/15 dark:via-violet-500/10 dark:to-amber-400/15" />
 
-      <div className="relative overflow-hidden rounded-3xl border border-[var(--color-border)] bg-[var(--color-surface)]/95 shadow-2xl backdrop-blur-xl dark:border-white/10 dark:bg-zinc-950/95">
-        <div className="flex min-w-0 flex-wrap items-center justify-between gap-2 border-b border-[var(--color-border)] bg-[var(--color-surface-2)]/70 px-4 py-3 sm:px-5 dark:border-white/5 dark:bg-zinc-900/60">
+      <div className="relative overflow-hidden rounded-3xl border border-[var(--color-border)] bg-[var(--color-surface)]/95 shadow-2xl backdrop-blur-xl">
+        <div className="flex min-w-0 flex-wrap items-center justify-between gap-2 border-b border-[var(--color-border)] bg-[var(--color-surface-2)]/70 px-4 py-3 sm:px-5">
           <div className="flex min-w-0 items-center gap-2">
             <span className="h-2.5 w-2.5 shrink-0 rounded-full bg-rose-500/80" />
             <span className="h-2.5 w-2.5 shrink-0 rounded-full bg-amber-400/80" />
             <span className="h-2.5 w-2.5 shrink-0 rounded-full bg-emerald-400/80" />
             <span className="ml-2 truncate text-xs text-zinc-500 sm:ml-3">
-              gospots.app / venues
+              locora.app / venues
             </span>
           </div>
           <Link
             href="/venues"
             className="hidden shrink-0 text-xs font-medium text-amber-800 hover:text-amber-700 sm:inline dark:text-amber-400 dark:hover:text-amber-300"
           >
-            Open full directory
+            {t("finder.openDirectory")}
           </Link>
         </div>
 
@@ -86,13 +88,15 @@ export function VenueFinder() {
           <div className="mt-6 border-t border-[var(--color-border)] pt-5 dark:border-white/5">
             <div className="mb-3 flex items-center justify-between gap-2">
               <p className="text-xs font-medium uppercase tracking-wider text-zinc-500">
-                {preview.length > 0 ? "Published on GoSpots" : "Directory preview"}
+                {preview.length > 0
+                  ? t("finder.published")
+                  : t("finder.preview")}
               </p>
               <Link
                 href="/venues"
                 className="inline-flex items-center gap-1 text-xs text-amber-800 hover:text-amber-700 dark:text-amber-400 dark:hover:text-amber-300"
               >
-                See all <ArrowRight size={12} />
+                {t("finder.seeAll")} <ArrowRight size={12} />
               </Link>
             </div>
 
@@ -101,9 +105,8 @@ export function VenueFinder() {
                 <Loader2 className="size-6 animate-spin text-amber-600 dark:text-amber-500" />
               </div>
             ) : preview.length === 0 ? (
-              <p className="rounded-xl border border-dashed border-[var(--color-border)] bg-[var(--color-surface-2)]/60 px-4 py-6 text-center text-sm text-zinc-500 dark:border-white/10 dark:bg-zinc-900/40">
-                No published venues yet. Operators can list for free — search will
-                light up as they go live.
+              <p className="rounded-xl border border-dashed border-[var(--color-border)] bg-[var(--color-surface-2)]/60 px-4 py-6 text-center text-sm text-zinc-500">
+                {t("finder.empty")}
               </p>
             ) : (
               <ul className="grid gap-3 sm:grid-cols-3">
@@ -120,7 +123,7 @@ export function VenueFinder() {
                     >
                       <Link
                         href={`/venue/${v.slug}`}
-                        className="group block overflow-hidden rounded-xl border border-[var(--color-border)] bg-[var(--color-surface-2)]/70 transition hover:border-amber-500/40 dark:border-white/10 dark:bg-zinc-900/50 dark:hover:border-amber-400/40"
+                        className="group block overflow-hidden rounded-xl border border-[var(--color-border)] bg-[var(--color-surface-2)]/70 transition hover:border-amber-500/40"
                       >
                         <div className="relative h-24 w-full overflow-hidden">
                           <VenueCoverImage src={v.coverImage} sizes="200px" />

@@ -1,26 +1,37 @@
-import { Injectable, NotFoundException, ForbiddenException } from '@nestjs/common';
+import {
+  Injectable,
+  NotFoundException,
+  ForbiddenException,
+  type MessageEvent,
+} from '@nestjs/common';
 import {
   NotificationType,
   SubscriptionStatus,
   UserAccountType,
   type Prisma,
 } from '@prisma/client';
+import { interval, map, merge, Observable, of, startWith } from 'rxjs';
 import type { NotificationSection } from '../../common/notification.constants';
 import {
   classifyReservationNotificationTab,
+  sanitizeAppRelativeHref,
 } from '../../common/reservation-notification-href';
 import {
   resolveSubscriptionAccess,
   TRIAL_DURATION_DAYS,
 } from '../../common/subscription-tier';
-import { requireShopId } from '../../common/tenant';
+import { requireShopId, shopScopedWhere } from '../../common/tenant';
 import { hasPermission, PERMISSIONS } from '../../common/permissions';
+import { assertShopHasFeature } from '../../common/venue-entitlements';
 import type { JwtAccessPayload } from '../auth/auth.service';
 import { AuditService } from '../audit/audit.service';
 import { PrismaService } from '../../prisma/prisma.service';
 import type { ArchiveNotificationsDto } from './dto/archive-notifications.dto';
 import type { MarkReservationTabReadDto } from './dto/mark-reservation-tab-read.dto';
-import type { NotificationQueryDto } from './dto/notification-query.dto';
+import { NotificationsSseHub } from './notifications-sse.hub';
+
+/** Keep proxies / LBs from idle-closing the stream (~15–30s guidance). */
+const SSE_HEARTBEAT_MS = 25_000;
 
 export type NotificationQuery = {
   from?: string;
@@ -37,6 +48,7 @@ export class NotificationsService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly audit: AuditService,
+    private readonly sseHub: NotificationsSseHub,
   ) {}
 
   private assertRead(actor: JwtAccessPayload) {
@@ -64,6 +76,7 @@ export class NotificationsService {
   async list(actor: JwtAccessPayload, q: NotificationQuery = {}) {
     this.assertRead(actor);
     const shopId = requireShopId(actor);
+    await assertShopHasFeature(this.prisma, shopId, 'notifications');
     await this.syncTrialNotifications(shopId, actor.sub);
 
     const take = Math.min(q.take ?? 50, 200);
@@ -92,6 +105,56 @@ export class NotificationsService {
       sections: await this.sectionCounts(actor, q),
       canDelete: actor.shopRole === 'OWNER' || actor.sysRole === 'SUPER_ADMIN',
     };
+  }
+
+  /**
+   * EventSource-compatible SSE for the active shop.
+   * Heartbeats always; in-process push on create/upsert when this API instance
+   * handled the write. Multi-instance fan-out deferred (polling remains).
+   */
+  stream(actor: JwtAccessPayload): Observable<MessageEvent> {
+    this.assertRead(actor);
+    const shopId = requireShopId(actor);
+
+    const ready$ = of({
+      type: 'ready',
+      data: {
+        shopId,
+        mode: 'heartbeat+in-process',
+        multiInstancePush: false,
+        note: 'Full cross-instance push needs Redis/PG NOTIFY; keep polling fallback.',
+      },
+    } as MessageEvent);
+
+    const heartbeat$ = interval(SSE_HEARTBEAT_MS).pipe(
+      startWith(0),
+      map(
+        () =>
+          ({
+            type: 'heartbeat',
+            data: { ts: Date.now() },
+          }) as MessageEvent,
+      ),
+    );
+
+    const notifications$ = this.sseHub.forActor(shopId, actor.sub).pipe(
+      map(
+        (n) =>
+          ({
+            type: 'notification',
+            data: {
+              id: n.id,
+              section: n.section,
+              title: n.title,
+              body: n.body,
+              href: n.href,
+              createdAt: n.createdAt,
+            },
+          }) as MessageEvent,
+      ),
+    );
+
+    return merge(ready$, heartbeat$, notifications$);
   }
 
   async recent(actor: JwtAccessPayload, since?: string) {
@@ -176,8 +239,16 @@ export class NotificationsService {
 
     if (ids.length === 0) return { updated: 0 };
 
+    const shopId = requireShopId(actor);
     const result = await this.prisma.notification.updateMany({
-      where: { id: { in: ids } },
+      where: {
+        shopId,
+        id: { in: ids },
+        section: 'reservation',
+        readAt: null,
+        archivedAt: null,
+        OR: [{ userId: null }, { userId: actor.sub }],
+      },
       data: { readAt: new Date() },
     });
 
@@ -185,18 +256,20 @@ export class NotificationsService {
   }
 
   async markRead(actor: JwtAccessPayload, id: string) {
+    const shopId = requireShopId(actor);
     const row = await this.findAccessible(actor, id);
     const updated = await this.prisma.notification.update({
-      where: { id: row.id },
+      where: shopScopedWhere(row.id, shopId),
       data: { readAt: new Date() },
     });
     return this.serialize(updated);
   }
 
   async markUnread(actor: JwtAccessPayload, id: string) {
+    const shopId = requireShopId(actor);
     const row = await this.findAccessible(actor, id);
     const updated = await this.prisma.notification.update({
-      where: { id: row.id },
+      where: shopScopedWhere(row.id, shopId),
       data: { readAt: null },
     });
     return this.serialize(updated);
@@ -447,7 +520,10 @@ export class NotificationsService {
       userId: null,
       section: 'team',
       type: NotificationType.STAFF,
-      ...input,
+      title: input.title,
+      body: input.body,
+      href: input.href ?? '/staff',
+      dedupeKey: input.dedupeKey,
     });
   }
 
@@ -465,8 +541,10 @@ export class NotificationsService {
       userId: null,
       section: 'reservation',
       type: NotificationType.RESERVATION,
+      title: input.title,
+      body: input.body,
       href: input.href ?? '/sessions',
-      ...input,
+      dedupeKey: input.dedupeKey,
     });
   }
 
@@ -484,8 +562,10 @@ export class NotificationsService {
       userId: null,
       section: 'operations',
       type: NotificationType.OPERATIONS,
+      title: input.title,
+      body: input.body,
       href: input.href ?? '/resources',
-      ...input,
+      dedupeKey: input.dedupeKey,
     });
   }
 
@@ -504,8 +584,10 @@ export class NotificationsService {
       userId: null,
       section: 'operations',
       type: NotificationType.OPERATIONS,
+      title: input.title,
+      body: input.body,
       href: input.href ?? '/settings',
-      ...input,
+      dedupeKey: input.dedupeKey,
     });
   }
 
@@ -524,8 +606,10 @@ export class NotificationsService {
       userId: null,
       section: 'operations',
       type: NotificationType.OPERATIONS,
+      title: input.title,
+      body: input.body,
       href: input.href ?? '/finance',
-      ...input,
+      dedupeKey: input.dedupeKey,
     });
   }
 
@@ -540,7 +624,7 @@ export class NotificationsService {
       dedupeKey: 'welcome',
       section: 'system',
       type: NotificationType.SYSTEM,
-      title: `Welcome to GoSpots, ${shopName}`,
+      title: `Welcome to Locora, ${shopName}`,
       body: 'Your venue dashboard is ready. Set up your menu, tables, and hours to go live.',
       href: '/settings',
     });
@@ -714,10 +798,14 @@ export class NotificationsService {
     href?: string;
     dedupeKey?: string;
   }) {
-    if (data.dedupeKey) {
-      return this.upsert(data as Parameters<typeof this.upsert>[0]);
+    const safeHref = sanitizeAppRelativeHref(data.href, '/sessions');
+    const payload = { ...data, href: safeHref };
+    if (payload.dedupeKey) {
+      return this.upsert(payload as Parameters<typeof this.upsert>[0]);
     }
-    return this.prisma.notification.create({ data });
+    const row = await this.prisma.notification.create({ data: payload });
+    this.publishSse(row);
+    return row;
   }
 
   private async upsert(data: {
@@ -730,6 +818,7 @@ export class NotificationsService {
     body: string;
     href?: string;
   }) {
+    const safeHref = sanitizeAppRelativeHref(data.href, '/sessions');
     const existing = await this.prisma.notification.findFirst({
       where: {
         shopId: data.shopId,
@@ -738,19 +827,47 @@ export class NotificationsService {
       },
     });
     if (existing) {
-      return this.prisma.notification.update({
-        where: { id: existing.id },
+      const row = await this.prisma.notification.update({
+        where: shopScopedWhere(existing.id, data.shopId),
         data: {
           title: data.title,
           body: data.body,
-          href: data.href,
+          href: safeHref,
           section: data.section,
           type: data.type,
           archivedAt: null,
         },
       });
+      this.publishSse(row);
+      return row;
     }
-    return this.prisma.notification.create({ data });
+    const row = await this.prisma.notification.create({
+      data: { ...data, href: safeHref },
+    });
+    this.publishSse(row);
+    return row;
+  }
+
+  private publishSse(row: {
+    id: string;
+    shopId: string;
+    userId: string | null;
+    section: string;
+    title: string;
+    body: string;
+    href: string | null;
+    createdAt: Date;
+  }) {
+    this.sseHub.publish({
+      id: row.id,
+      shopId: row.shopId,
+      userId: row.userId,
+      section: row.section,
+      title: row.title,
+      body: row.body,
+      href: row.href ? sanitizeAppRelativeHref(row.href, '/sessions') : null,
+      createdAt: row.createdAt.toISOString(),
+    });
   }
 
   private serialize(row: {
@@ -770,7 +887,8 @@ export class NotificationsService {
       section: row.section,
       title: row.title,
       body: row.body,
-      href: row.href,
+      // Defense in depth: never emit absolute / protocol-relative hrefs to clients.
+      href: row.href ? sanitizeAppRelativeHref(row.href, '/sessions') : null,
       readAt: row.readAt?.toISOString() ?? null,
       archivedAt: row.archivedAt?.toISOString() ?? null,
       createdAt: row.createdAt.toISOString(),

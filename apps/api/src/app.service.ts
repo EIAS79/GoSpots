@@ -4,7 +4,7 @@ import { Injectable } from '@nestjs/common';
 export class AppService {
   getRoot() {
     return {
-      name: 'GoSpots API',
+      name: 'Locora API',
       version: '1.0.0',
       docs: '/docs',
     };

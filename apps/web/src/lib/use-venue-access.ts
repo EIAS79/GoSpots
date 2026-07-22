@@ -1,5 +1,10 @@
 "use client";
 
+/**
+ * Frontend entitlement call site (mirrors API `getVenueEntitlements`).
+ * Keep module resolution in sync with apps/api/src/common/venue-entitlements.ts
+ * and subscription-tier / venue-packs.
+ */
 import { resolveSubscriptionAccess } from "@/lib/plan";
 import type { SubscriptionTier } from "@/lib/plan";
 import { useCurrentMembership } from "@/lib/use-current-membership";
@@ -16,6 +21,7 @@ export function useVenueAccess() {
           trialEndsAt: sub.trialEndsAt,
           packId: sub.packId,
           addOns: sub.addOns,
+          addOnRows: sub.addOnRows,
         }
       : null,
   );

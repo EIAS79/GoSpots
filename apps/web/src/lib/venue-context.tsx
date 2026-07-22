@@ -6,21 +6,36 @@ import {
   useEffect,
   type ReactNode,
 } from "react";
-import { setStoredVenuePath } from "@/lib/venue-api-headers";
+import {
+  VENUE_PATH_STORAGE_KEY,
+  setStoredVenuePath,
+} from "@/lib/venue-api-headers";
+import { dashboardHref } from "@/lib/venue-dashboard";
 
 const VenueContext = createContext<string | null>(null);
 
 export function VenuePathProvider({
   venuePath,
+  apiVenuePath,
   children,
 }: {
+  /** Public slug for UI links (`/dashboard/{slug}/…`). */
   venuePath: string;
+  /** Slug for API `x-venue-path` (sessionStorage; membership-only bind). */
+  apiVenuePath?: string;
   children: ReactNode;
 }) {
   useEffect(() => {
-    setStoredVenuePath(venuePath);
-    return () => setStoredVenuePath(null);
-  }, [venuePath]);
+    const value = apiVenuePath ?? venuePath;
+    setStoredVenuePath(value);
+    return () => {
+      // Don't wipe a remount/newer venue (React Strict Mode + fast switches).
+      if (typeof window === "undefined") return;
+      if (sessionStorage.getItem(VENUE_PATH_STORAGE_KEY) === value) {
+        setStoredVenuePath(null);
+      }
+    };
+  }, [venuePath, apiVenuePath]);
 
   return (
     <VenueContext.Provider value={venuePath}>{children}</VenueContext.Provider>
@@ -37,7 +52,5 @@ export function useVenuePath(): string {
 
 export function useVenueHref(segment = ""): string {
   const venuePath = useVenuePath();
-  const base = `/dashboard/${venuePath}`;
-  if (!segment) return base;
-  return `${base}${segment.startsWith("/") ? segment : `/${segment}`}`;
+  return dashboardHref(venuePath, segment);
 }

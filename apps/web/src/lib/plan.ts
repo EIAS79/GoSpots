@@ -1,6 +1,17 @@
+/**
+ * Central plan / entitlement resolution for the web dashboard.
+ *
+ * Backend source of truth: apps/api/src/common/venue-entitlements.ts
+ * (`getVenueEntitlements` / `hasFeature` / seat limits).
+ * Frontend call site: useVenueAccess() → resolveSubscriptionAccess (this file).
+ */
 import {
+  legacyAddOnsFromTier,
   legacyModulesFromTier,
   modulesForPackAndAddOns,
+  parseAddOns,
+  resolveAddOnsCsv,
+  serializeAddOns,
   TRIAL_DURATION_DAYS as PACK_TRIAL_DAYS,
   type ModuleKey,
 } from "./venue-packs";
@@ -105,7 +116,10 @@ type SubInput = {
   status: SubscriptionStatus;
   trialEndsAt: string | null;
   packId?: string | null;
-  addOns?: string | null;
+  /** CSV string, API string[], or omit — merged with addOnRows via resolveAddOnsCsv */
+  addOns?: string | string[] | null;
+  addOnRows?: { addOnId: string }[] | null;
+  staffSeatQuantity?: number | null;
 } | null;
 
 function trialExpiredAt(trialEndsAt: string | null): boolean {
@@ -119,6 +133,45 @@ function syntheticTier(modules: Set<string>): SubscriptionTier {
   if (modules.has("reports")) return "STANDARD";
   if (modules.size > 0) return "STARTER";
   return "FREE";
+}
+
+function isLegacyPaidTier(tier: SubscriptionTier): boolean {
+  return tier === "STANDARD" || tier === "PRO" || tier === "ENTERPRISE";
+}
+
+/** Mirror API `effectiveAddOnsForSubscription` (subscription-tier.ts). */
+function effectiveAddOnsForSubscription(sub: NonNullable<SubInput>): string {
+  const merged = resolveAddOnsCsv({
+    addOns: sub.addOns,
+    addOnRows: sub.addOnRows,
+  });
+  if (parseAddOns(merged).length > 0) return merged;
+  if (isLegacyPaidTier(sub.tier)) {
+    return serializeAddOns(legacyAddOnsFromTier(sub.tier));
+  }
+  return merged;
+}
+
+/**
+ * Mirror API module resolution after pack-only Phase 1 (FFFFFF):
+ * pack + effectiveAddOns (with legacy add-on synthesis when stored empty).
+ * No FEATURE_MATRIX / legacyModulesFromTier union on pack path.
+ * Catalog gap: billed ENTERPRISE keeps multi_shop/integrations until add-ons grant them.
+ */
+function resolveModules(
+  sub: NonNullable<SubInput>,
+  effectiveAddOns: string,
+): Set<ModuleKey> {
+  const packId = sub.packId?.trim();
+  if (packId) {
+    const modules = modulesForPackAndAddOns(packId, effectiveAddOns);
+    if (sub.tier === "ENTERPRISE") {
+      modules.add("multi_shop");
+      modules.add("integrations");
+    }
+    return modules;
+  }
+  return legacyModulesFromTier(sub.tier) as Set<ModuleKey>;
 }
 
 export function resolveSubscriptionAccess(sub: SubInput): SubscriptionAccess {
@@ -153,11 +206,10 @@ export function resolveSubscriptionAccess(sub: SubInput): SubscriptionAccess {
     sub.status === "PAST_DUE" ||
     (sub.status === "TRIAL" && !!sub.trialEndsAt && expired);
 
+  const effectiveAddOns = locked ? "" : effectiveAddOnsForSubscription(sub);
   const modules = locked
     ? new Set<ModuleKey>()
-    : sub.packId
-      ? modulesForPackAndAddOns(sub.packId, sub.addOns)
-      : (legacyModulesFromTier(sub.tier) as Set<ModuleKey>);
+    : resolveModules(sub, effectiveAddOns);
 
   return {
     billedTier: sub.tier,
@@ -168,7 +220,7 @@ export function resolveSubscriptionAccess(sub: SubInput): SubscriptionAccess {
     trialDaysRemaining: daysRemaining,
     enabledModules: modules,
     packId: sub.packId ?? null,
-    addOns: sub.addOns ?? "",
+    addOns: effectiveAddOns,
   };
 }
 
@@ -262,7 +314,7 @@ const MARKETING_UNLOCKED: Record<SubscriptionTier, Set<MarketingFeatureKey>> = {
 };
 
 export const MARKETING_LABELS: Record<MarketingFeatureKey, string> = {
-  public_listing: "Listed on GoSpots",
+  public_listing: "Listed on Locora",
   venue_profile: "Full public venue page",
   priority_listing: "Boosted search ranking",
   homepage_spotlight: "Homepage featured placement",
@@ -319,7 +371,7 @@ export const PLAN_CATEGORIES: PlanCategory[] = [
     id: "discovery",
     title: "Discovery & promotion",
     description:
-      "How players find you on GoSpots — separate from dashboard tools. Paid placement, not day-to-day ops.",
+      "How players find you on Locora — separate from dashboard tools. Paid placement, not day-to-day ops.",
     kind: "marketing",
     keys: [...MARKETING_FEATURES],
   },

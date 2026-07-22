@@ -4,6 +4,7 @@ import { Loader2 } from "lucide-react";
 import Link from "next/link";
 import { useEffect, useState } from "react";
 import { PublicVenueView } from "@/components/venues/public/public-venue-view";
+import { usePublicPrefs } from "@/lib/public-prefs-context";
 import {
   fetchPublicVenue,
   type PublicVenueDetail,
@@ -16,6 +17,7 @@ export function PublicVenueClient({
   slug: string;
   initialVenue?: PublicVenueDetail | null;
 }) {
+  const { t } = usePublicPrefs();
   const [venue, setVenue] = useState<PublicVenueDetail | null>(initialVenue);
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(!initialVenue);
@@ -36,7 +38,7 @@ export function PublicVenueClient({
       })
       .catch(() => {
         if (!cancelled) {
-          setError("This venue is not available or is not published.");
+          setError(t("venuePage.notAvailable"));
         }
       })
       .finally(() => {
@@ -46,7 +48,7 @@ export function PublicVenueClient({
     return () => {
       cancelled = true;
     };
-  }, [slug, initialVenue]);
+  }, [slug, initialVenue, t]);
 
   if (loading) {
     return (
@@ -60,13 +62,13 @@ export function PublicVenueClient({
     return (
       <div className="flex min-h-screen flex-col items-center justify-center gap-4 bg-[var(--color-background)] px-4 text-center text-[var(--color-foreground)]">
         <p className="text-zinc-600 dark:text-zinc-400">
-          {error ?? "Venue not found."}
+          {error ?? t("venuePage.notFound")}
         </p>
         <Link
           href="/venues"
           className="text-sm text-amber-700 hover:text-amber-600 dark:text-amber-400 dark:hover:text-amber-300"
         >
-          Browse venues
+          {t("venuePage.browseVenues")}
         </Link>
       </div>
     );

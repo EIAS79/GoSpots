@@ -21,16 +21,21 @@ import {
   isBookingInProgress,
   isLiveBooking,
   resolveSessionBookingPhase,
-  SESSION_BOOKING_PHASE_LABELS,
   type SessionBookingPhase,
 } from "@/lib/booking-time";
+import {
+  staffDayAgendaLabels,
+  staffFloorT,
+  type StaffDayAgendaLabels,
+} from "@/lib/staff-floor-i18n";
 import { useNowMs } from "@/lib/use-now-ms";
 import type { ScheduleAgendaItem } from "@/lib/reservations-client";
+import { useVenueSettingsOptional } from "@/lib/venue-settings-context";
 
 const PAGE_SIZE = 8;
 
-function formatTime(iso: string) {
-  return new Date(iso).toLocaleTimeString(undefined, {
+function formatTime(iso: string, locale?: string) {
+  return new Date(iso).toLocaleTimeString(locale || undefined, {
     hour: "2-digit",
     minute: "2-digit",
   });
@@ -72,6 +77,13 @@ export function BookingDayAgenda({
   const [page, setPage] = useState(0);
   const nowMs = useNowMs(10_000);
   const isDining = variant === "dining";
+  const vs = useVenueSettingsOptional();
+  const t = useMemo(
+    () => vs?.t ?? staffFloorT(vs?.locale),
+    [vs?.t, vs?.locale],
+  );
+  const labels = useMemo(() => staffDayAgendaLabels(t), [t]);
+  const locale = vs?.locale;
 
   const itemIsLive = (item: ScheduleAgendaItem) => isLiveBooking(item, nowMs);
 
@@ -120,13 +132,9 @@ export function BookingDayAgenda({
       <section className="rounded-xl border border-dashed border-white/15 bg-zinc-900/20 px-4 py-10 text-center">
         <Calendar className="mx-auto mb-2 size-8 text-zinc-600" />
         <p className="text-sm text-zinc-400">
-          {anyEverActive
-            ? "All bookings for this day have ended"
-            : "No bookings on this day"}
+          {anyEverActive ? labels.allEnded : labels.emptyDay}
         </p>
-        <p className="mt-1 text-xs text-zinc-600">
-          Use the floor map below to book a seat, table, or lane.
-        </p>
+        <p className="mt-1 text-xs text-zinc-600">{labels.emptyHint}</p>
       </section>
     );
   }
@@ -137,18 +145,15 @@ export function BookingDayAgenda({
         <div className="flex flex-col gap-2 sm:flex-row sm:flex-wrap sm:items-start sm:justify-between">
           <div className="min-w-0">
             <h3 className="text-sm font-semibold text-white">
-              Day schedule
+              {labels.title}
               <span className="ml-2 font-normal text-zinc-500">
                 {scheduleDate}
               </span>
             </h3>
-            <p className="mt-1 text-xs text-zinc-500">
-              Upcoming → waiting for guest → in use → paid → free when session ends.
-            </p>
+            <p className="mt-1 text-xs text-zinc-500">{labels.flowHint}</p>
           </div>
           <span className="shrink-0 self-start rounded-full border border-sky-400/25 bg-sky-500/10 px-2.5 py-1 text-[11px] font-medium text-sky-200">
-            {filtered.length} of {activeCount} booking
-            {activeCount === 1 ? "" : "s"}
+            {labels.bookingCount(filtered.length, activeCount)}
           </span>
         </div>
 
@@ -163,9 +168,7 @@ export function BookingDayAgenda({
               value={search}
               onChange={(e) => setSearch(e.target.value)}
               placeholder={
-                isDining
-                  ? "Search by guest or table…"
-                  : "Search by guest, seat, or game…"
+                isDining ? labels.searchDining : labels.searchGaming
               }
               className="w-full rounded-lg border border-white/10 bg-zinc-950/60 py-1.5 pl-7 pr-2 text-[11px] text-zinc-100 placeholder:text-zinc-600 focus:border-emerald-400/40 focus:outline-none"
             />
@@ -173,12 +176,12 @@ export function BookingDayAgenda({
           <div className="flex shrink-0 items-center gap-0.5 self-stretch overflow-x-auto rounded-lg border border-white/10 bg-zinc-950/60 p-0.5 text-[10px] sm:self-auto">
             {(
               [
-                { id: "active" as const, label: "Active" },
+                { id: "active" as const, label: labels.filterActive },
                 {
                   id: "in_use" as const,
-                  label: "Waiting / in use",
+                  label: labels.filterInUse,
                 },
-                { id: "all" as const, label: "All" },
+                { id: "all" as const, label: labels.filterAll },
               ]
             ).map((opt) => (
               <button
@@ -203,7 +206,7 @@ export function BookingDayAgenda({
                 <button
                   type="button"
                   onClick={onClearUnitFilter}
-                  aria-label="Clear seat filter"
+                  aria-label={labels.clearSeatFilter}
                   className="text-zinc-300 hover:text-white"
                 >
                   <X size={11} />
@@ -217,7 +220,7 @@ export function BookingDayAgenda({
       <ul className="divide-y divide-white/5">
         {visible.length === 0 ? (
           <li className="px-4 py-10 text-center text-sm text-zinc-500">
-            No bookings match your filters.
+            {labels.noMatch}
           </li>
         ) : (
           visible.map((item) => (
@@ -227,6 +230,8 @@ export function BookingDayAgenda({
               nowMs={nowMs}
               canWrite={canWrite}
               highlighted={item.resourceId === highlightUnitId}
+              labels={labels}
+              locale={locale}
               onEdit={onEdit}
               onCancel={onCancel}
               onRemove={onRemove}
@@ -241,9 +246,11 @@ export function BookingDayAgenda({
       {pageCount > 1 ? (
         <footer className="flex items-center justify-between gap-2 border-t border-white/5 px-4 py-2 text-[11px] text-zinc-500">
           <span>
-            Showing {safePage * PAGE_SIZE + 1}–
-            {Math.min((safePage + 1) * PAGE_SIZE, filtered.length)} of{" "}
-            {filtered.length}
+            {labels.showing(
+              safePage * PAGE_SIZE + 1,
+              Math.min((safePage + 1) * PAGE_SIZE, filtered.length),
+              filtered.length,
+            )}
           </span>
           <div className="flex items-center gap-1">
             <button
@@ -251,7 +258,7 @@ export function BookingDayAgenda({
               disabled={safePage <= 0}
               onClick={() => setPage((p) => Math.max(0, p - 1))}
               className="grid size-6 place-items-center rounded-md border border-white/10 text-zinc-400 hover:bg-white/5 disabled:opacity-30"
-              aria-label="Previous page"
+              aria-label={labels.prevPage}
             >
               <ChevronLeft size={14} />
             </button>
@@ -263,7 +270,7 @@ export function BookingDayAgenda({
               disabled={safePage >= pageCount - 1}
               onClick={() => setPage((p) => Math.min(pageCount - 1, p + 1))}
               className="grid size-6 place-items-center rounded-md border border-white/10 text-zinc-400 hover:bg-white/5 disabled:opacity-30"
-              aria-label="Next page"
+              aria-label={labels.nextPage}
             >
               <ChevronRight size={14} />
             </button>
@@ -296,6 +303,8 @@ function AgendaRow({
   nowMs,
   canWrite,
   highlighted,
+  labels,
+  locale,
   onEdit,
   onCancel,
   onRemove,
@@ -307,6 +316,8 @@ function AgendaRow({
   nowMs: number;
   canWrite: boolean;
   highlighted: boolean;
+  labels: StaffDayAgendaLabels;
+  locale?: string;
   onEdit: (item: ScheduleAgendaItem) => void;
   onCancel: (item: ScheduleAgendaItem) => void;
   onRemove: (item: ScheduleAgendaItem) => void;
@@ -320,7 +331,7 @@ function AgendaRow({
     item.endsAt,
     nowMs,
   );
-  const phaseLabel = SESSION_BOOKING_PHASE_LABELS[sessionPhase];
+  const phaseLabel = labels.phase[sessionPhase];
   const canceled =
     sessionPhase === "canceled" || sessionPhase === "no_show";
   const inProgress = sessionPhase === "in_use";
@@ -336,14 +347,14 @@ function AgendaRow({
       )}
     >
       <div className="min-w-[4.5rem] shrink-0 text-sm font-medium text-emerald-300/90">
-        {formatTime(item.startsAt)}
+        {formatTime(item.startsAt, locale)}
         {item.status === "CHECKED_IN" ? (
           <span className="block text-[10px] font-normal text-zinc-500">
-            open session
+            {labels.openSession}
           </span>
         ) : sessionPhase === "waiting" ? (
           <span className="block text-[10px] font-normal text-zinc-500">
-            until {formatTime(item.endsAt)}
+            {labels.until(formatTime(item.endsAt, locale))}
           </span>
         ) : null}
       </div>
@@ -352,16 +363,16 @@ function AgendaRow({
           <span className="font-medium text-white">{item.guestName}</span>
           {item.partySize > 1 ? (
             <span className="text-[10px] text-zinc-500">
-              · {item.partySize} guests
+              · {labels.guests(item.partySize)}
             </span>
           ) : null}
           {item.staffAlert ? (
             <span
               className="inline-flex items-center gap-0.5 rounded-full border border-amber-400/30 bg-amber-500/10 px-2 py-0.5 text-[10px] text-amber-200"
-              title="Team notified"
+              title={labels.alertTitle}
             >
               <Bell size={10} />
-              Alert
+              {labels.alert}
             </span>
           ) : null}
           <span
@@ -374,7 +385,7 @@ function AgendaRow({
           </span>
         </div>
         <p className="mt-0.5 text-xs text-zinc-500">
-          {item.unitName ?? "No unit"}
+          {item.unitName ?? labels.noUnit}
           {item.categoryName ? ` · ${item.categoryName}` : ""}
         </p>
       </div>
@@ -385,10 +396,10 @@ function AgendaRow({
               type="button"
               onClick={() => onCollectPayment(item)}
               className="inline-flex items-center gap-1 rounded-lg border border-amber-400/30 bg-amber-500/10 px-2.5 py-1.5 text-[11px] font-medium text-amber-200 hover:bg-amber-500/20"
-              title="Open billing to collect payment"
+              title={labels.collectPaymentTitle}
             >
               <CreditCard size={12} />
-              Collect payment
+              {labels.collectPayment}
             </button>
           ) : null}
           {waitingGuest && onCheckIn ? (
@@ -396,10 +407,10 @@ function AgendaRow({
               type="button"
               onClick={() => onCheckIn(item)}
               className="inline-flex items-center gap-1 rounded-lg border border-sky-400/30 bg-sky-500/10 px-2.5 py-1.5 text-[11px] font-medium text-sky-200 hover:bg-sky-500/20"
-              title="Guest arrived — start the table session"
+              title={labels.checkInTitle}
             >
               <LogIn size={12} />
-              Check in
+              {labels.checkIn}
             </button>
           ) : null}
           {inProgress && onGuestLeft ? (
@@ -407,17 +418,17 @@ function AgendaRow({
               type="button"
               onClick={() => onGuestLeft(item)}
               className="inline-flex items-center gap-1 rounded-lg border border-emerald-400/30 bg-emerald-500/10 px-2.5 py-1.5 text-[11px] font-medium text-emerald-200 hover:bg-emerald-500/20"
-              title="Guest left — free the unit"
+              title={labels.guestLeftTitle}
             >
               <PlayCircle size={12} />
-              Guest left
+              {labels.guestLeft}
             </button>
           ) : null}
           <button
             type="button"
             onClick={() => onEdit(item)}
             className="grid size-8 place-items-center rounded-lg border border-white/10 text-zinc-400 hover:bg-white/5 hover:text-white"
-            title="Edit"
+            title={labels.edit}
           >
             <Pencil size={14} />
           </button>
@@ -426,7 +437,7 @@ function AgendaRow({
               type="button"
               onClick={() => onCancel(item)}
               className="grid size-8 place-items-center rounded-lg border border-amber-400/20 text-amber-300 hover:bg-amber-500/10"
-              title="Cancel booking"
+              title={labels.cancelBooking}
             >
               <XCircle size={14} />
             </button>
@@ -435,7 +446,7 @@ function AgendaRow({
             type="button"
             onClick={() => onRemove(item)}
             className="grid size-8 place-items-center rounded-lg border border-rose-400/20 text-rose-300 hover:bg-rose-500/10"
-            title="Remove permanently"
+            title={labels.removePermanently}
           >
             <Trash2 size={14} />
           </button>

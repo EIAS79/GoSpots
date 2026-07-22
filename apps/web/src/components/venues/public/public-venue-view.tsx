@@ -5,7 +5,7 @@ import Link from "next/link";
 import { AnimatePresence, motion } from "framer-motion";
 import { useRouter, useSearchParams } from "next/navigation";
 import { useCallback, useMemo, useState } from "react";
-import { GoSpotsLogo } from "@/components/brand/gospots-logo";
+import { LocoraLogo } from "@/components/brand/locora-logo";
 import { LocaleCurrencySwitcher } from "@/components/public/locale-currency-switcher";
 import { ThemeToggle } from "@/components/theme/theme-toggle";
 import { VenueCoverImage } from "@/components/ui/venue-cover-image";
@@ -101,14 +101,14 @@ export function PublicVenueView({
     <div className="min-h-screen bg-[var(--color-background)] text-[var(--color-foreground)]">
       <header className="border-b border-[var(--color-border)] bg-[color-mix(in_srgb,var(--color-background)_88%,transparent)] backdrop-blur dark:border-white/10">
         <div className="mx-auto flex max-w-7xl items-center justify-between gap-2 px-4 py-3 sm:px-6 sm:py-4 md:px-6">
-          <GoSpotsLogo
+          <LocoraLogo
             href="/"
             size="sm"
             showTagline
             tone="auto"
             className="hidden min-w-0 sm:inline-flex"
           />
-          <GoSpotsLogo
+          <LocoraLogo
             href="/"
             size="sm"
             tone="auto"

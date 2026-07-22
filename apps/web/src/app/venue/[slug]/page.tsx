@@ -45,7 +45,7 @@ export async function generateMetadata({
     venue.description?.trim() ||
     (location
       ? `${name} — ${location}`
-      : `${name} on GoSpots`);
+      : `${name} on Locora`);
 
   return {
     title: name,

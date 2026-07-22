@@ -79,7 +79,7 @@ export function deleteStaff(membershipId: string) {
 export function activateStaffAccount(token: string, password: string) {
   return api<{
     user: { id: string; email: string; name: string | null; systemRole: string };
-    dashboardPath: string | null;
+    venuePath: string | null;
   }>("/auth/staff/activate", {
     method: "POST",
     body: JSON.stringify({ token, password }),

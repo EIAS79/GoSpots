@@ -1,4 +1,5 @@
 import { api } from "./api";
+import type { MoneyWire } from "./money";
 
 export type DashboardOverview = {
   shop: {
@@ -18,10 +19,10 @@ export type DashboardOverview = {
     addOns?: string;
   } | null;
   kpis: {
-    revenueToday: number;
-    revenueWeek: number;
-    lossesWeek: number;
-    profitWeek: number;
+    revenueToday: MoneyWire;
+    revenueWeek: MoneyWire;
+    lossesWeek: MoneyWire;
+    profitWeek: MoneyWire;
     ordersToday: number;
     completedOrdersWeek: number;
     customersWeek: number;
@@ -34,15 +35,15 @@ export type DashboardOverview = {
   };
   charts: {
     venueViewsByDay: { day: string; count: number }[];
-    revenueByDay: { day: string; total: number }[];
+    revenueByDay: { day: string; total: MoneyWire }[];
     ordersByDay: { day: string; count: number; customers: number }[];
-    lossesByDay: { day: string; amount: number }[];
+    lossesByDay: { day: string; amount: MoneyWire }[];
   };
   topMenuItems: {
     menuItemId: string | null;
     name: string;
     quantity: number;
-    revenue: number;
+    revenue: MoneyWire;
   }[];
   recentReservations: {
     id: string;

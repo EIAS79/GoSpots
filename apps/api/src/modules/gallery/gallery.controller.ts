@@ -11,12 +11,12 @@ import {
   UseInterceptors,
 } from '@nestjs/common';
 import { FileInterceptor } from '@nestjs/platform-express';
-import { memoryStorage } from 'multer';
 import { ApiTags } from '@nestjs/swagger';
 import { RequirePermissions } from '../auth/decorators/roles.decorator';
 import { CurrentUser } from '../auth/decorators/current-user.decorator';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import type { JwtAccessPayload } from '../auth/auth.service';
+import { imageUploadMulterOptions } from '../../common/image-media.util';
 import { PERMISSIONS } from '../../common/permissions';
 import { UpdateGalleryItemDto } from './dto/gallery.dto';
 import { GalleryService } from './gallery.service';
@@ -36,12 +36,7 @@ export class GalleryController {
 
   @Post('cover')
   @RequirePermissions(PERMISSIONS.GALLERY_WRITE)
-  @UseInterceptors(
-    FileInterceptor('file', {
-      storage: memoryStorage(),
-      limits: { fileSize: 8 * 1024 * 1024 },
-    }),
-  )
+  @UseInterceptors(FileInterceptor('file', imageUploadMulterOptions()))
   uploadCover(
     @CurrentUser() user: JwtAccessPayload,
     @UploadedFile() file: GalleryImageUpload,
@@ -51,12 +46,7 @@ export class GalleryController {
 
   @Post('items')
   @RequirePermissions(PERMISSIONS.GALLERY_WRITE)
-  @UseInterceptors(
-    FileInterceptor('file', {
-      storage: memoryStorage(),
-      limits: { fileSize: 8 * 1024 * 1024 },
-    }),
-  )
+  @UseInterceptors(FileInterceptor('file', imageUploadMulterOptions()))
   uploadItem(
     @CurrentUser() user: JwtAccessPayload,
     @UploadedFile() file: GalleryImageUpload,

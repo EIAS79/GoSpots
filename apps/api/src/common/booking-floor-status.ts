@@ -1,4 +1,5 @@
 import { ReservationStatus, ResourceStatus } from '@prisma/client';
+import { calendarDayInTimeZone } from './venue-timezone.util';
 
 export type UnitFloorStatus = 'AVAILABLE' | 'UNAVAILABLE' | 'NOT_WORKING';
 
@@ -8,6 +9,7 @@ export const ACTIVE_RESERVATION: ReservationStatus[] = [
   ReservationStatus.CHECKED_IN,
 ];
 
+/** @deprecated Prefer `dayBoundsInTimeZone` (shop IANA zone). Process-local only. */
 export function dayBoundsLocal(dateStr: string): {
   dayStart: Date;
   dayEnd: Date;
@@ -34,11 +36,19 @@ export function computeUnitFloorStatus(
   bookings: { status: ReservationStatus; startsAt: Date; endsAt: Date }[],
   at: Date,
   scheduleDate: string,
+  /** When set, "today" uses venue IANA zone instead of process local. */
+  timeZone?: string,
 ): UnitFloorStatus {
   if (unitDbStatus === ResourceStatus.MAINTENANCE) {
     return 'NOT_WORKING';
   }
-  if (!isSameLocalCalendarDay(at, scheduleDate)) {
+  const todayKey = timeZone
+    ? calendarDayInTimeZone(timeZone, at)
+    : (() => {
+        const pad = (n: number) => String(n).padStart(2, '0');
+        return `${at.getFullYear()}-${pad(at.getMonth() + 1)}-${pad(at.getDate())}`;
+      })();
+  if (todayKey !== scheduleDate) {
     return 'AVAILABLE';
   }
 

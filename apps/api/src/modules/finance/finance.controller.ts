@@ -3,6 +3,7 @@ import {
   Controller,
   Delete,
   Get,
+  Headers,
   Param,
   Patch,
   Post,
@@ -10,7 +11,15 @@ import {
   UseGuards,
 } from '@nestjs/common';
 import { ApiTags } from '@nestjs/swagger';
+import {
+  hashIdempotencyRequest,
+  IDEMPOTENCY_SCOPES,
+  isIdempotencyMoneyKeysRequired,
+  withClientIdempotency,
+} from '../../common/idempotency.util';
 import { PERMISSIONS } from '../../common/permissions';
+import { requireShopId } from '../../common/tenant';
+import { PrismaService } from '../../prisma/prisma.service';
 import { CurrentUser } from '../auth/decorators/current-user.decorator';
 import {
   RequirePermissions,
@@ -42,7 +51,10 @@ import { FinanceService } from './finance.service';
 @Controller('finance')
 @UseGuards(JwtAuthGuard)
 export class FinanceController {
-  constructor(private readonly finance: FinanceService) {}
+  constructor(
+    private readonly finance: FinanceService,
+    private readonly prisma: PrismaService,
+  ) {}
 
   @Get('transactions')
   @RequirePermissions(PERMISSIONS.TRANSACTION_READ)
@@ -59,8 +71,19 @@ export class FinanceController {
   createTransaction(
     @CurrentUser() user: JwtAccessPayload,
     @Body() dto: CreateTransactionDto,
+    @Headers('idempotency-key') idempotencyKey?: string,
   ) {
-    return this.finance.createTransaction(user, dto);
+    return withClientIdempotency(
+      this.prisma,
+      {
+        shopId: requireShopId(user),
+        scope: IDEMPOTENCY_SCOPES.FINANCE_TRANSACTION_CREATE,
+        key: idempotencyKey,
+        requireKey: isIdempotencyMoneyKeysRequired(),
+        requestHash: hashIdempotencyRequest(dto),
+      },
+      () => this.finance.createTransaction(user, dto),
+    );
   }
 
   @Get('sales-by-item')
@@ -84,15 +107,39 @@ export class FinanceController {
   createLoss(
     @CurrentUser() user: JwtAccessPayload,
     @Body() dto: CreateLossDto,
+    @Headers('idempotency-key') idempotencyKey?: string,
   ) {
-    return this.finance.createLoss(user, dto);
+    return withClientIdempotency(
+      this.prisma,
+      {
+        shopId: requireShopId(user),
+        scope: IDEMPOTENCY_SCOPES.FINANCE_LOSSES_CREATE,
+        key: idempotencyKey,
+        requireKey: isIdempotencyMoneyKeysRequired(),
+        requestHash: hashIdempotencyRequest(dto),
+      },
+      () => this.finance.createLoss(user, dto),
+    );
   }
 
   @Delete('losses/:id')
   @ShopRoles('OWNER', 'MANAGER')
   @RequirePermissions(PERMISSIONS.TRANSACTION_WRITE)
-  deleteLoss(@CurrentUser() user: JwtAccessPayload, @Param('id') id: string) {
-    return this.finance.deleteLoss(user, id);
+  deleteLoss(
+    @CurrentUser() user: JwtAccessPayload,
+    @Param('id') id: string,
+    @Headers('idempotency-key') idempotencyKey?: string,
+  ) {
+    return withClientIdempotency(
+      this.prisma,
+      {
+        shopId: requireShopId(user),
+        scope: IDEMPOTENCY_SCOPES.FINANCE_LOSSES_DELETE,
+        key: idempotencyKey,
+        requestHash: hashIdempotencyRequest({ id }),
+      },
+      () => this.finance.deleteLoss(user, id),
+    );
   }
 
   @Get('analytics')
@@ -172,8 +219,19 @@ export class FinanceController {
     @CurrentUser() user: JwtAccessPayload,
     @Param('reservationId') reservationId: string,
     @Body() dto: MarkPlayBillingPaidDto,
+    @Headers('idempotency-key') idempotencyKey?: string,
   ) {
-    return this.finance.markPlayBillingPaid(user, reservationId, dto);
+    return withClientIdempotency(
+      this.prisma,
+      {
+        shopId: requireShopId(user),
+        scope: IDEMPOTENCY_SCOPES.FINANCE_PLAY_BILLING_MARK_PAID,
+        key: idempotencyKey,
+        requireKey: isIdempotencyMoneyKeysRequired(),
+        requestHash: hashIdempotencyRequest({ reservationId, ...dto }),
+      },
+      () => this.finance.markPlayBillingPaid(user, reservationId, dto),
+    );
   }
 
   @Patch('play-billing/:reservationId')
@@ -183,8 +241,18 @@ export class FinanceController {
     @CurrentUser() user: JwtAccessPayload,
     @Param('reservationId') reservationId: string,
     @Body() dto: UpdatePlayBillingDto,
+    @Headers('idempotency-key') idempotencyKey?: string,
   ) {
-    return this.finance.updatePlayBilling(user, reservationId, dto);
+    return withClientIdempotency(
+      this.prisma,
+      {
+        shopId: requireShopId(user),
+        scope: IDEMPOTENCY_SCOPES.FINANCE_PLAY_BILLING_UPDATE,
+        key: idempotencyKey,
+        requestHash: hashIdempotencyRequest({ reservationId, ...dto }),
+      },
+      () => this.finance.updatePlayBilling(user, reservationId, dto),
+    );
   }
 
   @Patch('play-billing/:reservationId/cancel')
@@ -194,8 +262,19 @@ export class FinanceController {
     @CurrentUser() user: JwtAccessPayload,
     @Param('reservationId') reservationId: string,
     @Body() dto: CancelPlayBillingDto,
+    @Headers('idempotency-key') idempotencyKey?: string,
   ) {
-    return this.finance.cancelPlayBilling(user, reservationId, dto);
+    return withClientIdempotency(
+      this.prisma,
+      {
+        shopId: requireShopId(user),
+        scope: IDEMPOTENCY_SCOPES.FINANCE_PLAY_BILLING_CANCEL,
+        key: idempotencyKey,
+        requireKey: isIdempotencyMoneyKeysRequired(),
+        requestHash: hashIdempotencyRequest({ reservationId, ...dto }),
+      },
+      () => this.finance.cancelPlayBilling(user, reservationId, dto),
+    );
   }
 
   @Get('play-sessions')
@@ -226,8 +305,19 @@ export class FinanceController {
   createPlaySession(
     @CurrentUser() user: JwtAccessPayload,
     @Body() dto: CreatePlaySessionDto,
+    @Headers('idempotency-key') idempotencyKey?: string,
   ) {
-    return this.finance.createPlaySession(user, dto);
+    return withClientIdempotency(
+      this.prisma,
+      {
+        shopId: requireShopId(user),
+        scope: IDEMPOTENCY_SCOPES.FINANCE_PLAY_SESSIONS_CREATE,
+        key: idempotencyKey,
+        requireKey: isIdempotencyMoneyKeysRequired(),
+        requestHash: hashIdempotencyRequest(dto),
+      },
+      () => this.finance.createPlaySession(user, dto),
+    );
   }
 
   @Patch('play-sessions/:id')
@@ -237,8 +327,18 @@ export class FinanceController {
     @CurrentUser() user: JwtAccessPayload,
     @Param('id') id: string,
     @Body() dto: UpdatePlaySessionDto,
+    @Headers('idempotency-key') idempotencyKey?: string,
   ) {
-    return this.finance.updatePlaySession(user, id, dto);
+    return withClientIdempotency(
+      this.prisma,
+      {
+        shopId: requireShopId(user),
+        scope: IDEMPOTENCY_SCOPES.FINANCE_PLAY_SESSIONS_UPDATE,
+        key: idempotencyKey,
+        requestHash: hashIdempotencyRequest({ id, ...dto }),
+      },
+      () => this.finance.updatePlaySession(user, id, dto),
+    );
   }
 
   @Patch('play-sessions/:id/mark-paid')
@@ -248,8 +348,19 @@ export class FinanceController {
     @CurrentUser() user: JwtAccessPayload,
     @Param('id') id: string,
     @Body() dto: MarkPlayBillingPaidDto,
+    @Headers('idempotency-key') idempotencyKey?: string,
   ) {
-    return this.finance.markPlaySessionPaid(user, id, dto);
+    return withClientIdempotency(
+      this.prisma,
+      {
+        shopId: requireShopId(user),
+        scope: IDEMPOTENCY_SCOPES.FINANCE_PLAY_SESSION_MARK_PAID,
+        key: idempotencyKey,
+        requireKey: isIdempotencyMoneyKeysRequired(),
+        requestHash: hashIdempotencyRequest({ id, ...dto }),
+      },
+      () => this.finance.markPlaySessionPaid(user, id, dto),
+    );
   }
 
   @Patch('play-sessions/:id/cancel')
@@ -258,8 +369,19 @@ export class FinanceController {
   cancelPlaySession(
     @CurrentUser() user: JwtAccessPayload,
     @Param('id') id: string,
+    @Headers('idempotency-key') idempotencyKey?: string,
   ) {
-    return this.finance.cancelPlaySession(user, id);
+    return withClientIdempotency(
+      this.prisma,
+      {
+        shopId: requireShopId(user),
+        scope: IDEMPOTENCY_SCOPES.FINANCE_PLAY_SESSIONS_CANCEL,
+        key: idempotencyKey,
+        requireKey: isIdempotencyMoneyKeysRequired(),
+        requestHash: hashIdempotencyRequest({ id }),
+      },
+      () => this.finance.cancelPlaySession(user, id),
+    );
   }
 
   @Patch('orders/bulk/archive')
@@ -268,8 +390,20 @@ export class FinanceController {
   archiveOrders(
     @CurrentUser() user: JwtAccessPayload,
     @Body() dto: BulkOrderIdsDto,
+    @Headers('idempotency-key') idempotencyKey?: string,
   ) {
-    return this.finance.archiveShopOrders(user, dto);
+    return withClientIdempotency(
+      this.prisma,
+      {
+        shopId: requireShopId(user),
+        scope: IDEMPOTENCY_SCOPES.FINANCE_ORDERS_BULK_ARCHIVE,
+        key: idempotencyKey,
+        requestHash: hashIdempotencyRequest({
+          ids: [...dto.ids].sort(),
+        }),
+      },
+      () => this.finance.archiveShopOrders(user, dto),
+    );
   }
 
   @Patch('orders/bulk/unarchive')
@@ -278,8 +412,20 @@ export class FinanceController {
   unarchiveOrders(
     @CurrentUser() user: JwtAccessPayload,
     @Body() dto: BulkOrderIdsDto,
+    @Headers('idempotency-key') idempotencyKey?: string,
   ) {
-    return this.finance.unarchiveShopOrders(user, dto);
+    return withClientIdempotency(
+      this.prisma,
+      {
+        shopId: requireShopId(user),
+        scope: IDEMPOTENCY_SCOPES.FINANCE_ORDERS_BULK_UNARCHIVE,
+        key: idempotencyKey,
+        requestHash: hashIdempotencyRequest({
+          ids: [...dto.ids].sort(),
+        }),
+      },
+      () => this.finance.unarchiveShopOrders(user, dto),
+    );
   }
 
   @Post('orders')
@@ -288,8 +434,19 @@ export class FinanceController {
   createShopOrder(
     @CurrentUser() user: JwtAccessPayload,
     @Body() dto: CreateShopOrderDto,
+    @Headers('idempotency-key') idempotencyKey?: string,
   ) {
-    return this.finance.createShopOrder(user, dto);
+    return withClientIdempotency(
+      this.prisma,
+      {
+        shopId: requireShopId(user),
+        scope: IDEMPOTENCY_SCOPES.FINANCE_ORDERS_CREATE,
+        key: idempotencyKey,
+        requireKey: isIdempotencyMoneyKeysRequired(),
+        requestHash: hashIdempotencyRequest(dto),
+      },
+      () => this.finance.createShopOrder(user, dto),
+    );
   }
 
   @Get('orders/:id')
@@ -304,8 +461,18 @@ export class FinanceController {
   deleteShopOrder(
     @CurrentUser() user: JwtAccessPayload,
     @Param('id') id: string,
+    @Headers('idempotency-key') idempotencyKey?: string,
   ) {
-    return this.finance.deleteShopOrder(user, id);
+    return withClientIdempotency(
+      this.prisma,
+      {
+        shopId: requireShopId(user),
+        scope: IDEMPOTENCY_SCOPES.FINANCE_ORDERS_DELETE,
+        key: idempotencyKey,
+        requestHash: hashIdempotencyRequest({ orderId: id }),
+      },
+      () => this.finance.deleteShopOrder(user, id),
+    );
   }
 
   @Patch('orders/:id')
@@ -315,8 +482,18 @@ export class FinanceController {
     @CurrentUser() user: JwtAccessPayload,
     @Param('id') id: string,
     @Body() dto: UpdateShopOrderDto,
+    @Headers('idempotency-key') idempotencyKey?: string,
   ) {
-    return this.finance.updateShopOrder(user, id, dto);
+    return withClientIdempotency(
+      this.prisma,
+      {
+        shopId: requireShopId(user),
+        scope: IDEMPOTENCY_SCOPES.FINANCE_ORDERS_UPDATE,
+        key: idempotencyKey,
+        requestHash: hashIdempotencyRequest({ orderId: id, ...dto }),
+      },
+      () => this.finance.updateShopOrder(user, id, dto),
+    );
   }
 
   @Post('orders/:id/lines')
@@ -326,8 +503,19 @@ export class FinanceController {
     @CurrentUser() user: JwtAccessPayload,
     @Param('id') id: string,
     @Body() dto: AddShopOrderLineDto,
+    @Headers('idempotency-key') idempotencyKey?: string,
   ) {
-    return this.finance.addShopOrderLine(user, id, dto);
+    return withClientIdempotency(
+      this.prisma,
+      {
+        shopId: requireShopId(user),
+        scope: IDEMPOTENCY_SCOPES.FINANCE_ORDERS_LINES_ADD,
+        key: idempotencyKey,
+        requireKey: isIdempotencyMoneyKeysRequired(),
+        requestHash: hashIdempotencyRequest({ orderId: id, ...dto }),
+      },
+      () => this.finance.addShopOrderLine(user, id, dto),
+    );
   }
 
   @Patch('orders/:id/lines/:lineId')
@@ -338,8 +526,18 @@ export class FinanceController {
     @Param('id') id: string,
     @Param('lineId') lineId: string,
     @Body() dto: PatchShopOrderLineDto,
+    @Headers('idempotency-key') idempotencyKey?: string,
   ) {
-    return this.finance.patchShopOrderLine(user, id, lineId, dto);
+    return withClientIdempotency(
+      this.prisma,
+      {
+        shopId: requireShopId(user),
+        scope: IDEMPOTENCY_SCOPES.FINANCE_ORDERS_LINES_PATCH,
+        key: idempotencyKey,
+        requestHash: hashIdempotencyRequest({ orderId: id, lineId, ...dto }),
+      },
+      () => this.finance.patchShopOrderLine(user, id, lineId, dto),
+    );
   }
 
   @Delete('orders/:id/lines/:lineId')
@@ -349,7 +547,17 @@ export class FinanceController {
     @CurrentUser() user: JwtAccessPayload,
     @Param('id') id: string,
     @Param('lineId') lineId: string,
+    @Headers('idempotency-key') idempotencyKey?: string,
   ) {
-    return this.finance.deleteShopOrderLine(user, id, lineId);
+    return withClientIdempotency(
+      this.prisma,
+      {
+        shopId: requireShopId(user),
+        scope: IDEMPOTENCY_SCOPES.FINANCE_ORDERS_LINES_DELETE,
+        key: idempotencyKey,
+        requestHash: hashIdempotencyRequest({ orderId: id, lineId }),
+      },
+      () => this.finance.deleteShopOrderLine(user, id, lineId),
+    );
   }
 }

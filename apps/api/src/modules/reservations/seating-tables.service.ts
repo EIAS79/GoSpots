@@ -6,18 +6,14 @@ import {
 } from '@nestjs/common';
 
 import { PrismaService } from '../../prisma/prisma.service';
-
 import { requireShopId } from '../../common/tenant';
-
+import { assertShopHasFeature } from '../../common/venue-entitlements';
 import { AuditService } from '../audit/audit.service';
-
 import type { JwtAccessPayload } from '../auth/auth.service';
-
 import {
   CreateSeatingTableGroupDto,
   UpdateSeatingTableGroupDto,
 } from './dto/seating-tables.dto';
-
 function defaultLabel(capacity: number) {
   return `Table for ${capacity}`;
 }
@@ -102,6 +98,7 @@ export class SeatingTablesService {
 
   async list(actor: JwtAccessPayload) {
     const shopId = requireShopId(actor);
+    await assertShopHasFeature(this.prisma, shopId, 'reservation');
 
     const floorCount = await this.shopFloorCount(shopId);
 
@@ -174,6 +171,7 @@ export class SeatingTablesService {
     this.assertWrite(actor);
 
     const shopId = actor.shopId!;
+    await assertShopHasFeature(this.prisma, shopId, 'reservation');
 
     const maxFloors = await this.shopFloorCount(shopId);
 
@@ -184,6 +182,31 @@ export class SeatingTablesService {
     );
 
     const isCustom = dto.isCustom ?? false;
+
+    const sourceDiningTableGroupId = dto.sourceDiningTableGroupId?.trim() || null;
+    if (sourceDiningTableGroupId && isCustom) {
+      throw new BadRequestException(
+        'Custom event seating cannot link to a dining table group.',
+      );
+    }
+    if (sourceDiningTableGroupId) {
+      const diningGroup = await this.prisma.diningTableGroup.findFirst({
+        where: { id: sourceDiningTableGroupId, shopId },
+        select: { id: true },
+      });
+      if (!diningGroup) {
+        throw new BadRequestException('Dining table group not found.');
+      }
+      const already = await this.prisma.seatingTableGroup.findFirst({
+        where: { shopId, sourceDiningTableGroupId },
+        select: { id: true },
+      });
+      if (already) {
+        throw new BadRequestException(
+          'An advisory seating group is already linked to this dining table group.',
+        );
+      }
+    }
 
     const label =
       dto.label?.trim() ||
@@ -225,6 +248,8 @@ export class SeatingTablesService {
 
         eventEndsAt: isCustom ? eventRange.eventEndsAt : null,
 
+        sourceDiningTableGroupId,
+
         sortOrder: (maxSort._max.sortOrder ?? -1) + 1,
       },
     });
@@ -252,6 +277,7 @@ export class SeatingTablesService {
     this.assertWrite(actor);
 
     const shopId = actor.shopId!;
+    await assertShopHasFeature(this.prisma, shopId, 'reservation');
 
     const maxFloors = await this.shopFloorCount(shopId);
 
@@ -290,7 +316,7 @@ export class SeatingTablesService {
         : undefined;
 
     const row = await this.prisma.seatingTableGroup.update({
-      where: { id },
+      where: { id, shopId },
 
       data: {
         ...(dto.label != null && { label: dto.label.trim() || existing.label }),
@@ -338,10 +364,11 @@ export class SeatingTablesService {
     this.assertWrite(actor);
 
     const shopId = actor.shopId!;
+    await assertShopHasFeature(this.prisma, shopId, 'reservation');
 
     const existing = await this.ensureGroup(shopId, id);
 
-    await this.prisma.seatingTableGroup.delete({ where: { id } });
+    await this.prisma.seatingTableGroup.delete({ where: { id, shopId } });
 
     await this.audit.record(actor, {
       section: 'reservation',

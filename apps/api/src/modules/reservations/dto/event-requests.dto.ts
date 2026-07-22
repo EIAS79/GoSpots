@@ -6,8 +6,10 @@ import {
   IsInt,
   IsOptional,
   IsString,
+  Max,
   MaxLength,
   Min,
+  MinLength,
   ValidateIf,
 } from 'class-validator';
 import { SEATING_ZONE_VALUES } from './seating-tables.dto';
@@ -41,26 +43,36 @@ export class EventRequestQueryDto {
   status?: (typeof EVENT_REQUEST_STATUS_VALUES)[number];
 }
 
+/**
+ * Public guest event-request create.
+ * shopId is never accepted from the body — the published venue slug resolves it.
+ * Contact: email and/or phone required (enforced in service).
+ */
 export class CreatePublicEventRequestDto {
   @IsIn(EVENT_REQUEST_TYPE_VALUES)
   eventType!: (typeof EVENT_REQUEST_TYPE_VALUES)[number];
 
   @IsString()
+  @MinLength(1)
   @MaxLength(120)
   guestName!: string;
 
   @IsOptional()
+  @ValidateIf((_, v) => v != null && String(v).trim() !== '')
   @IsEmail()
   @MaxLength(200)
   guestEmail?: string;
 
   @IsOptional()
+  @ValidateIf((_, v) => v != null && String(v).trim() !== '')
   @IsString()
+  @MinLength(5)
   @MaxLength(40)
   guestPhone?: string;
 
   @IsInt()
   @Min(1)
+  @Max(100)
   partySize!: number;
 
   @IsDateString()
@@ -81,7 +93,20 @@ export class CreatePublicEventRequestDto {
 
   @IsOptional()
   @IsString()
+  @MinLength(1)
+  @MaxLength(64)
   resourceCategoryId?: string;
+
+  /** Required on public create; staff path may omit. */
+  @IsOptional()
+  @IsBoolean()
+  privacyConsentAccepted?: boolean;
+
+  /** Optional CAPTCHA token (Turnstile/hCaptcha). Required only when provider+mode enforce. */
+  @IsOptional()
+  @IsString()
+  @MaxLength(2048)
+  captchaToken?: string;
 }
 
 export class CreateStaffEventRequestDto extends CreatePublicEventRequestDto {

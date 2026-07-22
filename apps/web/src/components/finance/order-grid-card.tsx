@@ -4,6 +4,7 @@ import { CalendarCheck, Check, Users, UtensilsCrossed } from "lucide-react";
 import { cn } from "@/lib/cn";
 import { OrderStatusBadge } from "@/components/finance/order-status-badge";
 import type { ShopOrder } from "@/lib/finance-client";
+import { coerceMoney } from "@/lib/money";
 import {
   getOrderDisplayLabel,
   getOrderShortRef,
@@ -40,7 +41,7 @@ export function OrderGridCard({
   selectionMode: boolean;
   onSelect: () => void;
   onToggleCheck: () => void;
-  formatMoney: (n: number) => string;
+  formatMoney: (n: import("@/lib/money").MoneyWire) => string;
 }) {
   const lines = activeLineCount(order);
   const title = getOrderDisplayLabel(order);
@@ -101,7 +102,8 @@ export function OrderGridCard({
               <span className="inline-flex items-center gap-0.5 text-violet-400/90">
                 <CalendarCheck size={11} />
                 Reserved
-                {order.reservationFee != null && order.reservationFee > 0
+                {order.reservationFee != null &&
+                coerceMoney(order.reservationFee) > 0
                   ? ` ${formatMoney(order.reservationFee)}`
                   : " free"}
               </span>

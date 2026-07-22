@@ -13,6 +13,7 @@ import { TenantPage } from "@/components/layout/tenant-page";
 import { FeatureGate } from "@/components/subscription/feature-gate";
 import { cn } from "@/lib/cn";
 import {
+  actionGroupLabel,
   AUDIT_ACTION_GROUPS,
   AUDIT_SECTIONS,
   sectionLabel,
@@ -31,6 +32,7 @@ import { useAuth } from "@/lib/use-auth";
 import { useCurrentMembership } from "@/lib/use-current-membership";
 import { useDashboardGuide } from "@/lib/use-dashboard-guide";
 import { useVenueAccess } from "@/lib/use-venue-access";
+import { useVenueSettingsOptional } from "@/lib/venue-settings-context";
 
 function todayIso() {
   return new Date().toISOString().slice(0, 10);
@@ -68,7 +70,13 @@ function formatAuditValue(value: unknown): string {
   return JSON.stringify(value);
 }
 
-function AuditMetaDetails({ meta }: { meta: unknown }) {
+function AuditMetaDetails({
+  meta,
+  t,
+}: {
+  meta: unknown;
+  t: (key: string, vars?: Record<string, string | number>) => string;
+}) {
   if (meta == null) return null;
   if (typeof meta !== "object") {
     return (
@@ -79,22 +87,35 @@ function AuditMetaDetails({ meta }: { meta: unknown }) {
   const m = meta as Record<string, unknown>;
   const displayRows: { label: string; value: string }[] = [];
 
-  if (m.ticket) displayRows.push({ label: "Order", value: String(m.ticket) });
+  if (m.ticket)
+    displayRows.push({ label: t("auditPage.metaOrder"), value: String(m.ticket) });
   if (m.statusLabel)
-    displayRows.push({ label: "Status", value: String(m.statusLabel) });
+    displayRows.push({
+      label: t("auditPage.metaStatus"),
+      value: String(m.statusLabel),
+    });
   if (m.guestCount != null)
-    displayRows.push({ label: "Guests", value: String(m.guestCount) });
+    displayRows.push({
+      label: t("auditPage.metaGuests"),
+      value: String(m.guestCount),
+    });
   if (m.paymentMethod)
-    displayRows.push({ label: "Payment", value: String(m.paymentMethod) });
+    displayRows.push({
+      label: t("auditPage.metaPayment"),
+      value: String(m.paymentMethod),
+    });
   if (m.total != null)
-    displayRows.push({ label: "Total", value: String(m.total) });
+    displayRows.push({ label: t("auditPage.metaTotal"), value: String(m.total) });
   if (m.itemsSummary)
-    displayRows.push({ label: "Items", value: String(m.itemsSummary) });
+    displayRows.push({
+      label: t("auditPage.metaItems"),
+      value: String(m.itemsSummary),
+    });
   if (m.note && String(m.note).trim())
-    displayRows.push({ label: "Note", value: String(m.note) });
+    displayRows.push({ label: t("auditPage.metaNote"), value: String(m.note) });
   if (Array.isArray(m.activeLines) && m.activeLines.length > 0) {
     displayRows.push({
-      label: "Line items",
+      label: t("auditPage.metaLineItems"),
       value: formatAuditValue(m.activeLines),
     });
   }
@@ -130,7 +151,7 @@ function AuditMetaDetails({ meta }: { meta: unknown }) {
       {technicalKeys.length > 0 ? (
         <details className="text-xs">
           <summary className="cursor-pointer text-zinc-500 hover:text-zinc-400">
-            Technical details
+            {t("auditPage.technicalDetails")}
           </summary>
           <pre className="mt-2 max-h-40 overflow-auto rounded-lg bg-zinc-950/80 p-3 text-zinc-500">
             {JSON.stringify(m, null, 2)}
@@ -149,6 +170,7 @@ function AuditRow({
   onToggleSelect,
   canDelete,
   onDelete,
+  t,
 }: {
   row: AuditEntry;
   expanded: boolean;
@@ -157,9 +179,10 @@ function AuditRow({
   onToggleSelect: (id: string) => void;
   canDelete: boolean;
   onDelete: () => void;
+  t: (key: string, vars?: Record<string, string | number>) => string;
 }) {
   const actor =
-    row.actorName ?? row.actorEmail ?? row.actorRole ?? "Unknown user";
+    row.actorName ?? row.actorEmail ?? row.actorRole ?? t("auditPage.unknownUser");
 
   return (
     <li
@@ -175,7 +198,7 @@ function AuditRow({
             checked={selected}
             onChange={() => onToggleSelect(row.id)}
             className="mt-1 rounded border-white/20"
-            aria-label={`Select audit entry ${row.id}`}
+            aria-label={t("auditPage.selectEntryAria", { id: row.id })}
           />
         ) : null}
         <button
@@ -193,7 +216,7 @@ function AuditRow({
         >
           <div className="flex flex-wrap items-center gap-2">
             <span className="rounded-full bg-white/5 px-2 py-0.5 text-[10px] uppercase tracking-wide text-zinc-500">
-              {sectionLabel(row.section)}
+              {sectionLabel(row.section, t)}
             </span>
             <span className="text-xs text-zinc-600">{formatDate(row.createdAt)}</span>
           </div>
@@ -209,7 +232,7 @@ function AuditRow({
             type="button"
             onClick={onDelete}
             className="shrink-0 rounded-md p-1.5 text-zinc-600 transition hover:bg-rose-500/10 hover:text-rose-400"
-            title="Delete audit entry (owner only)"
+            title={t("auditPage.deleteEntryTitle")}
           >
             <Trash2 size={14} />
           </button>
@@ -219,23 +242,23 @@ function AuditRow({
         <div className="border-t border-white/5 px-4 pb-4 pl-10">
           <dl className="grid gap-2 text-xs sm:grid-cols-2">
             <div>
-              <dt className="text-zinc-600">Action</dt>
+              <dt className="text-zinc-600">{t("auditPage.actionFieldLabel")}</dt>
               <dd className="font-mono text-zinc-300">{row.action}</dd>
             </div>
             <div>
-              <dt className="text-zinc-600">Actor email</dt>
+              <dt className="text-zinc-600">{t("auditPage.actorEmail")}</dt>
               <dd className="text-zinc-300">{row.actorEmail ?? "—"}</dd>
             </div>
             <div>
-              <dt className="text-zinc-600">IP address</dt>
+              <dt className="text-zinc-600">{t("auditPage.ipAddress")}</dt>
               <dd className="text-zinc-300">{row.ipAddress ?? "—"}</dd>
             </div>
             <div>
-              <dt className="text-zinc-600">Entry ID</dt>
+              <dt className="text-zinc-600">{t("auditPage.entryId")}</dt>
               <dd className="font-mono text-zinc-500">{row.id}</dd>
             </div>
           </dl>
-          <AuditMetaDetails meta={row.metaParsed ?? row.meta} />
+          <AuditMetaDetails meta={row.metaParsed ?? row.meta} t={t} />
         </div>
       ) : null}
     </li>
@@ -243,6 +266,7 @@ function AuditRow({
 }
 
 export default function AuditPage() {
+  const t = useVenueSettingsOptional()?.t ?? ((k: string) => k);
   const guide = useDashboardGuide("audit");
   const { state } = useAuth();
   const membership = useCurrentMembership();
@@ -287,11 +311,13 @@ export default function AuditPage() {
       setData(result);
       setSelected(new Set());
     } catch (e) {
-      setError(e instanceof Error ? e.message : "Failed to load audit log.");
+      setError(
+        e instanceof Error ? e.message : t("auditPage.loadFailed"),
+      );
     } finally {
       setLoading(false);
     }
-  }, [from, to, section, action, search]);
+  }, [from, to, section, action, search, t]);
 
   useEffect(() => {
     void load();
@@ -314,9 +340,16 @@ export default function AuditPage() {
 
   const handleDeleteSelected = async () => {
     if (selected.size === 0) return;
+    const entryWord =
+      selected.size === 1
+        ? t("auditPage.entrySingular")
+        : t("auditPage.entryPlural");
     if (
       !confirm(
-        `Permanently delete ${selected.size} audit entr${selected.size === 1 ? "y" : "ies"}? This cannot be undone.`,
+        t("auditPage.deleteSelectedConfirm", {
+          n: selected.size,
+          entryWord,
+        }),
       )
     ) {
       return;
@@ -327,7 +360,7 @@ export default function AuditPage() {
       await deleteAuditEntries({ ids: [...selected] });
       await load();
     } catch (e) {
-      setError(e instanceof Error ? e.message : "Delete failed.");
+      setError(e instanceof Error ? e.message : t("auditPage.deleteFailed"));
     } finally {
       setDeleting(false);
     }
@@ -337,9 +370,7 @@ export default function AuditPage() {
     const total = data?.total ?? 0;
     if (total === 0) return;
     if (
-      !confirm(
-        `Permanently delete all ${total} audit entries matching your filters? This cannot be undone.`,
-      )
+      !confirm(t("auditPage.deleteAllMatchingConfirm", { n: total }))
     ) {
       return;
     }
@@ -356,7 +387,7 @@ export default function AuditPage() {
       });
       await load();
     } catch (e) {
-      setError(e instanceof Error ? e.message : "Delete failed.");
+      setError(e instanceof Error ? e.message : t("auditPage.deleteFailed"));
     } finally {
       setDeleting(false);
     }
@@ -366,7 +397,7 @@ export default function AuditPage() {
     return (
       <TenantPage title={guide.title} description={guide.description}>
         <p className="text-sm text-zinc-400">
-          You do not have permission to view the audit log.
+          {t("auditPage.noPermission")}
         </p>
       </TenantPage>
     );
@@ -385,7 +416,9 @@ export default function AuditPage() {
             setExporting(true);
             void downloadAuditCsv({ from, to, section, action, search })
               .catch((e) =>
-                setError(e instanceof Error ? e.message : "Export failed."),
+                setError(
+                  e instanceof Error ? e.message : t("auditPage.exportFailed"),
+                ),
               )
               .finally(() => setExporting(false));
           }}
@@ -396,25 +429,24 @@ export default function AuditPage() {
           ) : (
             <Download size={14} />
           )}
-          Download CSV
+          {t("auditPage.downloadCsv")}
         </button>
       }
     >
       <FeatureGate feature="audit" unlocked={unlocked}>
       {canDelete ? (
         <p className="mb-4 rounded-lg border border-rose-400/20 bg-rose-500/5 px-3 py-2 text-xs text-rose-200/90">
-          Owner mode: you can permanently delete audit entries. Prefer export +
-          archive operationally — deletes cannot be undone.
+          {t("auditPage.ownerDeleteNotice")}
         </p>
       ) : (
         <p className="mb-4 text-xs text-zinc-600">
-          You can view and export. Only the venue owner can delete audit entries.
+          {t("auditPage.viewOnlyNotice")}
         </p>
       )}
 
       <div className="mb-6 grid gap-3 rounded-xl border border-white/10 bg-white/[0.02] p-4 sm:grid-cols-2 lg:grid-cols-4">
         <label className="block text-xs text-zinc-500">
-          From date
+          {t("auditPage.fieldFromDate")}
           <input
             type="date"
             value={from}
@@ -423,7 +455,7 @@ export default function AuditPage() {
           />
         </label>
         <label className="block text-xs text-zinc-500">
-          To date
+          {t("auditPage.fieldToDate")}
           <input
             type="date"
             value={to}
@@ -432,7 +464,7 @@ export default function AuditPage() {
           />
         </label>
         <label className="block text-xs text-zinc-500">
-          Section
+          {t("auditPage.fieldSection")}
           <select
             value={section}
             onChange={(e) => setSection(e.target.value)}
@@ -440,13 +472,13 @@ export default function AuditPage() {
           >
             {AUDIT_SECTIONS.map((s) => (
               <option key={s.value} value={s.value}>
-                {s.label}
+                {sectionLabel(s.value, t)}
               </option>
             ))}
           </select>
         </label>
         <label className="block text-xs text-zinc-500">
-          Action type
+          {t("auditPage.fieldActionType")}
           <select
             value={action}
             onChange={(e) => setAction(e.target.value)}
@@ -454,13 +486,13 @@ export default function AuditPage() {
           >
             {AUDIT_ACTION_GROUPS.map((a) => (
               <option key={a.value} value={a.value}>
-                {a.label}
+                {actionGroupLabel(a.value, t)}
               </option>
             ))}
           </select>
         </label>
         <label className="block text-xs text-zinc-500 sm:col-span-2 lg:col-span-3">
-          Search
+          {t("auditPage.fieldSearch")}
           <div className="relative mt-1">
             <Search
               size={14}
@@ -472,7 +504,7 @@ export default function AuditPage() {
               onKeyDown={(e) => {
                 if (e.key === "Enter") setSearch(searchInput.trim());
               }}
-              placeholder="Summary, action, actor…"
+              placeholder={t("auditPage.searchPlaceholder")}
               className="w-full rounded-lg border border-white/10 bg-zinc-950 py-1.5 pl-8 pr-3 text-sm text-white"
             />
           </div>
@@ -483,7 +515,7 @@ export default function AuditPage() {
             onClick={() => setSearch(searchInput.trim())}
             className="rounded-lg bg-emerald-600 px-4 py-1.5 text-sm text-white hover:bg-emerald-500"
           >
-            Apply filters
+            {t("auditPage.applyFilters")}
           </button>
         </div>
       </div>
@@ -500,8 +532,13 @@ export default function AuditPage() {
         <>
           <div className="mb-3 flex flex-wrap items-center justify-between gap-3">
             <p className="text-xs text-zinc-500">
-              Showing {data?.items.length ?? 0} of {data?.total ?? 0} entries
-              {selected.size > 0 ? ` · ${selected.size} selected` : ""}
+              {t("auditPage.showingCount", {
+                shown: data?.items.length ?? 0,
+                total: data?.total ?? 0,
+              })}
+              {selected.size > 0
+                ? t("auditPage.selectedCount", { n: selected.size })
+                : ""}
             </p>
             {canDelete ? (
               <div className="flex flex-wrap gap-2">
@@ -511,7 +548,7 @@ export default function AuditPage() {
                   disabled={(data?.items.length ?? 0) === 0}
                   className="inline-flex items-center gap-2 rounded-lg border border-white/10 px-3 py-1.5 text-xs text-zinc-400 hover:text-zinc-200 disabled:opacity-50"
                 >
-                  Select all in view
+                  {t("auditPage.selectAllInView")}
                 </button>
                 {selected.size > 0 ? (
                   <button
@@ -519,7 +556,7 @@ export default function AuditPage() {
                     onClick={() => setSelected(new Set())}
                     className="inline-flex items-center gap-2 rounded-lg border border-white/10 px-3 py-1.5 text-xs text-zinc-400 hover:text-zinc-200"
                   >
-                    Clear selection
+                    {t("auditPage.clearSelection")}
                   </button>
                 ) : null}
                 {selected.size > 0 ? (
@@ -534,7 +571,7 @@ export default function AuditPage() {
                     ) : (
                       <Trash2 size={14} />
                     )}
-                    Delete selected ({selected.size})
+                    {t("auditPage.deleteSelected", { n: selected.size })}
                   </button>
                 ) : null}
                 <button
@@ -544,7 +581,7 @@ export default function AuditPage() {
                   className="inline-flex items-center gap-2 rounded-lg border border-rose-400/30 px-3 py-1.5 text-xs text-rose-300 hover:bg-rose-500/10 disabled:opacity-50"
                 >
                   <Trash2 size={14} />
-                  Delete all matching
+                  {t("auditPage.deleteAllMatching")}
                 </button>
               </div>
             ) : null}
@@ -561,18 +598,16 @@ export default function AuditPage() {
                 selected={selected.has(row.id)}
                 onToggleSelect={toggleSelect}
                 canDelete={canDelete}
+                t={t}
                 onDelete={() => {
-                  if (
-                    !confirm(
-                      "Permanently delete this audit entry? This cannot be undone.",
-                    )
-                  )
-                    return;
+                  if (!confirm(t("auditPage.deleteEntryConfirm"))) return;
                   void deleteAuditEntry(row.id)
                     .then(() => load())
                     .catch((e) =>
                       setError(
-                        e instanceof Error ? e.message : "Delete failed.",
+                        e instanceof Error
+                          ? e.message
+                          : t("auditPage.deleteFailed"),
                       ),
                     );
                 }}
@@ -581,7 +616,7 @@ export default function AuditPage() {
           </ul>
           {(data?.items.length ?? 0) === 0 ? (
             <p className="py-12 text-center text-sm text-zinc-500">
-              No audit entries match your filters.
+              {t("auditPage.noEntriesMatch")}
             </p>
           ) : null}
         </>

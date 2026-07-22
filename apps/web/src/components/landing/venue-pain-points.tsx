@@ -1,38 +1,58 @@
 "use client";
 
 import { motion } from "framer-motion";
+import {
+  CalendarCheck,
+  ChartColumn,
+  LayoutDashboard,
+  Receipt,
+  ShieldCheck,
+  Timer,
+  type LucideIcon,
+} from "lucide-react";
 import { Reveal } from "@/components/effects/reveal";
-import { venuePainPoints } from "@/lib/mock-data";
 import { cn } from "@/lib/cn";
+import { usePublicPrefs } from "@/lib/public-prefs-context";
 
 const EASE = [0.22, 1, 0.36, 1] as const;
+
+const PAIN_ICONS: LucideIcon[] = [
+  Timer,
+  CalendarCheck,
+  Receipt,
+  ShieldCheck,
+  LayoutDashboard,
+  ChartColumn,
+];
 
 /**
  * Even collage grid — 3×2 on desktop, no oversized empty cards.
  */
 export function VenuePainPoints() {
+  const { t } = usePublicPrefs();
+
   return (
     <section id="venue-problems" className="relative py-24">
       <div className="mx-auto max-w-7xl px-4 sm:px-6 md:px-8">
         <Reveal className="mx-auto max-w-2xl text-center">
           <span className="text-xs font-medium uppercase tracking-widest text-amber-700 dark:text-amber-300/90">
-            Product scenarios
+            {t("pain.eyebrow")}
           </span>
           <h2 className="mt-3 text-balance text-3xl font-bold md:text-5xl">
-            The messy nights{" "}
-            <span className="text-gradient">GoSpots is built for.</span>
+            {t("pain.title")}{" "}
+            <span className="text-gradient">{t("pain.titleAccent")}</span>
           </h2>
           <p className="mt-4 text-sm text-zinc-700 dark:text-zinc-500 md:text-base">
-            Illustrative problems operators describe — not quotes from customers.
+            {t("pain.subtitle")}
           </p>
         </Reveal>
 
         <div className="mt-12 grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
-          {venuePainPoints.map((item, i) => {
-            const Icon = item.icon;
+          {PAIN_ICONS.map((Icon, i) => {
+            const n = i + 1;
             return (
               <motion.article
-                key={item.title}
+                key={n}
                 initial={{ opacity: 0, y: 16 }}
                 whileInView={{ opacity: 1, y: 0 }}
                 viewport={{ once: true, margin: "-40px" }}
@@ -52,15 +72,15 @@ export function VenuePainPoints() {
                     </span>
                     <div className="min-w-0 flex-1">
                       <span className="font-mono text-[10px] uppercase tracking-widest text-amber-800/60 dark:text-zinc-600">
-                        0{i + 1}
+                        0{n}
                       </span>
                       <h3 className="mt-0.5 text-base font-semibold text-[var(--color-foreground)] md:text-lg">
-                        {item.title}
+                        {t(`pain.${n}.title`)}
                       </h3>
                     </div>
                   </div>
                   <p className="mt-4 text-sm leading-relaxed text-zinc-700 dark:text-zinc-400">
-                    {item.description}
+                    {t(`pain.${n}.body`)}
                   </p>
                 </div>
               </motion.article>

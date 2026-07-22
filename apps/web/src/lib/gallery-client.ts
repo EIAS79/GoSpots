@@ -1,5 +1,4 @@
-import { API_BASE_URL, ApiError } from "./api";
-import { getVenuePathHeaders } from "./venue-api-headers";
+import { ApiError, credentialedFetch } from "./api";
 
 export type GalleryItem = {
   id: string;
@@ -30,10 +29,8 @@ async function uploadMultipart(
       form.append(k, v);
     }
   }
-  const res = await fetch(`${API_BASE_URL}${path}`, {
+  const res = await credentialedFetch(path, {
     method: "POST",
-    credentials: "include",
-    headers: getVenuePathHeaders(),
     body: form,
   });
   if (!res.ok) {

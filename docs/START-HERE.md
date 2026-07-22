@@ -9,8 +9,8 @@ Neon (DB)  ◄──  Render (API)  ◄──  Vercel (site + /api/v1 proxy)
 | GitHub | Your repo (e.g. `EIAS79/VenueFlow` or renamed) |
 | API (Render) | **GoSpots** service URL from Render dashboard |
 | Website (Vercel) | **GoSpots** project URL from Vercel → Domains |
-| API health | `https://YOUR-RENDER-URL/api/v1/health` |
-| Proxy health | `https://YOUR-VERCEL-URL/api/v1/health` → same JSON |
+| API readiness | `https://YOUR-RENDER-URL/api/v1/ready` (DB). `/live` and `/health` are liveness-only. |
+| Proxy readiness | `https://YOUR-VERCEL-URL/api/v1/ready` → same JSON |
 
 **API is the same** — still `/api/v1/auth/register`, `/api/v1/auth/login`, etc. Only names and host URLs changed.
 
@@ -37,7 +37,8 @@ Neon (DB)  ◄──  Render (API)  ◄──  Vercel (site + /api/v1 proxy)
 | `COOKIE_SECURE` | `true` |
 | `COOKIE_SAME_SITE` | `lax` |
 | `WEB_ORIGIN` | Your **Vercel** URL |
-| `CORS_ORIGIN` | Same as `WEB_ORIGIN` |
+| `CORS_ORIGINS` | Same as `WEB_ORIGIN` (preferred; comma-separate previews) |
+| `CORS_ORIGIN` | Legacy alias; same as `WEB_ORIGIN` |
 | `WEB_APP_URL` | Same as `WEB_ORIGIN` |
 
 **Manual Deploy** on Render after changing `WEB_*` / `CORS_*`.
@@ -46,8 +47,8 @@ Neon (DB)  ◄──  Render (API)  ◄──  Vercel (site + /api/v1 proxy)
 
 ## Quick test
 
-1. `YOUR-RENDER-URL/api/v1/health` → `{"status":"ok",...}`
-2. `YOUR-VERCEL-URL/api/v1/health` → same (proxy works)
+1. `YOUR-RENDER-URL/api/v1/ready` → `database: up`
+2. `YOUR-VERCEL-URL/api/v1/ready` → same (proxy works)
 3. Register / login on Vercel URL
 4. Staff: `user@venue-slug.gospots` (old `@…venueflow` still works)
 

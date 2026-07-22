@@ -9,7 +9,7 @@ import {
   resolveVenuePathFromMemberships,
 } from "@/lib/venue-dashboard";
 
-/** Sends owners/staff to their venue dashboard (`/dashboard/{slug}--{key}`). */
+/** Sends owners/staff to their venue dashboard (`/dashboard/{slug}`). */
 export default function DashboardPage() {
   const router = useRouter();
   const { state } = useAuth();

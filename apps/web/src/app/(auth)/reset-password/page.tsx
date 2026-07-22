@@ -5,10 +5,13 @@ import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { Suspense, useState } from "react";
 import { AuthCard, Field } from "@/components/auth/auth-card";
+import { ensureCsrf } from "@/lib/api";
 import { resetOwnerPassword } from "@/lib/auth-client";
+import { usePublicPrefs } from "@/lib/public-prefs-context";
 
 function ResetForm() {
   const router = useRouter();
+  const { t } = usePublicPrefs();
   const params = useSearchParams();
   const token = params.get("token") ?? "";
 
@@ -21,19 +24,20 @@ function ResetForm() {
     e.preventDefault();
     setError(null);
     if (!token) {
-      setError("Missing reset token. Request a new link from owner sign in.");
+      setError(t("auth.reset.missingToken"));
       return;
     }
     if (password !== confirm) {
-      setError("Passwords do not match.");
+      setError(t("auth.reset.passwordMismatch"));
       return;
     }
     setLoading(true);
     try {
+      await ensureCsrf();
       await resetOwnerPassword(token, password);
       router.replace("/login");
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Reset failed.");
+      setError(err instanceof Error ? err.message : t("auth.reset.failed"));
     } finally {
       setLoading(false);
     }
@@ -42,14 +46,14 @@ function ResetForm() {
   if (!token) {
     return (
       <AuthCard
-        title="Invalid reset link"
-        subtitle="This page needs a token from your reset email."
+        title={t("auth.reset.invalidTitle")}
+        subtitle={t("auth.reset.invalidSubtitle")}
       >
         <Link
           href="/forgot-password"
           className="text-sm text-emerald-400 hover:underline"
         >
-          Request a new owner reset link
+          {t("auth.reset.requestNew")}
         </Link>
       </AuthCard>
     );
@@ -57,19 +61,19 @@ function ResetForm() {
 
   return (
     <AuthCard
-      title="Set a new password"
-      subtitle="Owner account only. Choose a new password for your venue login."
+      title={t("auth.reset.title")}
+      subtitle={t("auth.reset.subtitle")}
       footer={
         <Link
           href="/login"
           className="text-emerald-400 transition hover:text-emerald-300"
         >
-          Back to sign in
+          {t("auth.reset.backToSignIn")}
         </Link>
       }
     >
       <form onSubmit={onSubmit} className="flex flex-col gap-4" noValidate>
-        <Field label="New password">
+        <Field label={t("auth.reset.newPassword")}>
           <div className="relative">
             <Lock
               size={14}
@@ -87,7 +91,7 @@ function ResetForm() {
             />
           </div>
         </Field>
-        <Field label="Confirm password">
+        <Field label={t("auth.reset.confirmPassword")}>
           <div className="relative">
             <Lock
               size={14}
@@ -118,7 +122,7 @@ function ResetForm() {
           className="inline-flex items-center justify-center gap-2 rounded-lg bg-emerald-400 py-2.5 text-sm font-semibold text-zinc-950 transition hover:bg-emerald-300 disabled:opacity-60"
         >
           {loading ? <Loader2 size={14} className="animate-spin" /> : null}
-          {loading ? "Saving…" : "Update password"}
+          {loading ? t("auth.reset.saving") : t("auth.reset.update")}
         </button>
       </form>
     </AuthCard>

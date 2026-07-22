@@ -11,12 +11,7 @@ import {
   BellRing,
   Check,
   Gamepad2,
-  Hotel,
   Layers,
-  LayoutGrid,
-  Martini,
-  Megaphone,
-  MessagesSquare,
   Minus,
   Plus,
   Sparkles,
@@ -31,38 +26,31 @@ import { Reveal } from "@/components/effects/reveal";
 import { cn } from "@/lib/cn";
 import { usePublicPrefs } from "@/lib/public-prefs-context";
 import {
+  MARKETING_BUNDLES,
+  SELF_SERVE_PACK_LIST,
   TRIAL_DURATION_DAYS,
   VENUE_ADD_ONS,
   VENUE_PACKS,
-  VENUE_PACK_LIST,
-  type AddOnId,
-  type VenuePackId,
+  addOnIdsFromMarketingBundles,
+  defaultMarketingBundlesForPack,
+  marketingBundleMonthlyPrice,
+  type MarketingBundleId,
+  type SelfServePackId,
 } from "@/lib/venue-packs";
 
 const EASE = [0.22, 1, 0.36, 1] as const;
 
-const PACK_ICONS: Record<VenuePackId, LucideIcon> = {
+const PACK_ICONS: Record<SelfServePackId, LucideIcon> = {
   gaming: Gamepad2,
-  dining: UtensilsCrossed,
-  bar: Martini,
-  hotel_fb: Hotel,
   mixed: Layers,
 };
 
-const ADDON_ICONS: Record<AddOnId, LucideIcon> = {
-  ops_alerts: BellRing,
-  gaming_suite: Gamepad2,
-  menu_orders: UtensilsCrossed,
-  dining_floor: LayoutGrid,
-  venue_presence: Megaphone,
-  guest_chat: MessagesSquare,
-  team_accounts: Users,
+const BUNDLE_ICONS: Record<MarketingBundleId, LucideIcon> = {
+  ops_trust: BellRing,
+  gaming_floor: Gamepad2,
+  food_dining: UtensilsCrossed,
 };
 
-/** Flat-priced features shown as toggle cards (seats are handled separately). */
-const FLAT_ADDONS = Object.values(VENUE_ADD_ONS).filter(
-  (a) => !a.pricedPerSeat,
-);
 const SEAT_ADDON = VENUE_ADD_ONS.team_accounts;
 
 function AnimatedPrice({
@@ -85,15 +73,16 @@ function AnimatedPrice({
 
 export function Pricing() {
   const { t, formatMoney, convertAmount, currency, locale } = usePublicPrefs();
-  const [packId, setPackId] = useState<VenuePackId>("gaming");
-  const [selected, setSelected] = useState<Set<AddOnId>>(
-    () => new Set(VENUE_PACKS.gaming.recommendedFeatures),
+  const [packId, setPackId] = useState<SelfServePackId>("gaming");
+  const [bundles, setBundles] = useState<Set<MarketingBundleId>>(() =>
+    defaultMarketingBundlesForPack("gaming"),
   );
   const [seats, setSeats] = useState(0);
 
   const pack = VENUE_PACKS[packId];
   const freePrice = formatMoney(0);
-  const displayTotal = convertAmount(totalEur(selected, seats), "EUR");
+  const selectedAddOns = addOnIdsFromMarketingBundles(bundles);
+  const displayTotal = convertAmount(totalEur(selectedAddOns, seats), "EUR");
 
   const formatDisplay = useMemo(() => {
     return (n: number) => {
@@ -109,16 +98,13 @@ export function Pricing() {
     };
   }, [locale, currency]);
 
-  function choosePack(id: VenuePackId) {
+  function choosePack(id: SelfServePackId) {
     setPackId(id);
-    setSelected(new Set(VENUE_PACKS[id].recommendedFeatures));
-    if (VENUE_PACKS[id].recommendedFeatures.includes("team_accounts")) {
-      setSeats((s) => (s > 0 ? s : 2));
-    }
+    setBundles(defaultMarketingBundlesForPack(id));
   }
 
-  function toggleFeature(id: AddOnId) {
-    setSelected((prev) => {
+  function toggleBundle(id: MarketingBundleId) {
+    setBundles((prev) => {
       const next = new Set(prev);
       if (next.has(id)) next.delete(id);
       else next.add(id);
@@ -127,18 +113,10 @@ export function Pricing() {
   }
 
   function setSeatCount(n: number) {
-    const clamped = Math.max(0, Math.min(50, n));
-    setSeats(clamped);
-    setSelected((prev) => {
-      const next = new Set(prev);
-      if (clamped > 0) next.add("team_accounts");
-      else next.delete("team_accounts");
-      return next;
-    });
+    setSeats(Math.max(0, Math.min(50, n)));
   }
 
-  const featureCount =
-    [...selected].filter((id) => !VENUE_ADD_ONS[id].pricedPerSeat).length;
+  const bundleCount = bundles.size;
   const seatLabel =
     seats === 1 ? t("pricing.seat") : t("pricing.seatsWord");
   const seatsPart =
@@ -170,14 +148,14 @@ export function Pricing() {
             {t("pricing.step1", { price: freePrice })}
           </div>
           <div className="mt-5 flex flex-wrap justify-center gap-2.5">
-            {VENUE_PACK_LIST.map((p) => {
-              const Icon = PACK_ICONS[p.id];
+            {SELF_SERVE_PACK_LIST.map((p) => {
+              const Icon = PACK_ICONS[p.id as SelfServePackId];
               const active = packId === p.id;
               return (
                 <button
                   key={p.id}
                   type="button"
-                  onClick={() => choosePack(p.id)}
+                  onClick={() => choosePack(p.id as SelfServePackId)}
                   aria-pressed={active}
                   className={cn(
                     "group relative inline-flex items-center gap-2 rounded-full border px-4 py-2.5 text-sm font-medium backdrop-blur transition-colors",
@@ -219,6 +197,16 @@ export function Pricing() {
           <p className="mt-3 text-center text-xs text-zinc-500">
             {t(`pack.${pack.id}.tagline`)}
           </p>
+          <p className="mt-2 text-center text-xs text-zinc-500">
+            {t("pricing.contactSalesLead")}{" "}
+            <a
+              href="mailto:hello@locora.app"
+              className="text-emerald-700 underline-offset-2 hover:underline dark:text-emerald-400"
+            >
+              {t("pricing.contactSales")}
+            </a>
+            .
+          </p>
         </Reveal>
 
         <Reveal delay={0.08} className="mt-12">
@@ -231,15 +219,19 @@ export function Pricing() {
         </Reveal>
 
         <div className="mt-6 grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-          {FLAT_ADDONS.map((addOn, i) => {
-            const Icon = ADDON_ICONS[addOn.id];
-            const active = selected.has(addOn.id);
-            const suggested = pack.recommendedFeatures.includes(addOn.id);
+          {MARKETING_BUNDLES.map((bundle, i) => {
+            const Icon = BUNDLE_ICONS[bundle.id];
+            const active = bundles.has(bundle.id);
+            const price = marketingBundleMonthlyPrice(bundle);
+            const suggested =
+              packId === "gaming"
+                ? bundle.id === "ops_trust" || bundle.id === "gaming_floor"
+                : true;
             return (
               <motion.button
-                key={addOn.id}
+                key={bundle.id}
                 type="button"
-                onClick={() => toggleFeature(addOn.id)}
+                onClick={() => toggleBundle(bundle.id)}
                 aria-pressed={active}
                 initial={{ opacity: 0, y: 18 }}
                 whileInView={{ opacity: 1, y: 0 }}
@@ -284,7 +276,7 @@ export function Pricing() {
 
                 <div className="relative mt-4 flex items-baseline justify-between gap-2">
                   <h3 className="text-base font-semibold text-[var(--color-foreground)] dark:text-white">
-                    {t(`addon.${addOn.id}.name`)}
+                    {t(`bundle.${bundle.id}.name`)}
                   </h3>
                   {suggested && !active && (
                     <span className="inline-flex items-center gap-1 rounded-full border border-amber-400/30 bg-amber-500/10 px-2 py-0.5 text-[10px] font-medium text-amber-700 dark:text-amber-300">
@@ -293,7 +285,7 @@ export function Pricing() {
                   )}
                 </div>
                 <p className="relative mt-1.5 flex-1 text-sm leading-relaxed text-zinc-600 dark:text-zinc-400">
-                  {t(`addon.${addOn.id}.tagline`)}
+                  {t(`bundle.${bundle.id}.tagline`)}
                 </p>
                 <p className="relative mt-4 text-sm">
                   <span
@@ -304,7 +296,7 @@ export function Pricing() {
                         : "text-[var(--color-foreground)] dark:text-white",
                     )}
                   >
-                    {formatMoney(addOn.monthlyPrice)}
+                    {formatMoney(price)}
                   </span>
                   <span className="text-zinc-500"> {t("pricing.perMonth")}</span>
                 </p>
@@ -407,11 +399,11 @@ export function Pricing() {
                   {t("pricing.summary", {
                     pack: t(`pack.${pack.id}.name`),
                     price: freePrice,
-                    features: featureCount,
+                    features: bundleCount,
                     featureLabel:
-                      featureCount === 1
-                        ? t("pricing.feature")
-                        : t("pricing.features"),
+                      bundleCount === 1
+                        ? t("pricing.bundle")
+                        : t("pricing.bundles"),
                     seatsPart,
                   })}
                 </p>
@@ -446,11 +438,13 @@ export function Pricing() {
   );
 }
 
-function totalEur(selected: Set<AddOnId>, seats: number) {
+function totalEur(
+  selectedAddOns: ReturnType<typeof addOnIdsFromMarketingBundles>,
+  seats: number,
+) {
   let sum = 0;
-  for (const id of selected) {
-    const addOn = VENUE_ADD_ONS[id];
-    if (!addOn.pricedPerSeat) sum += addOn.monthlyPrice;
+  for (const id of selectedAddOns) {
+    sum += VENUE_ADD_ONS[id].monthlyPrice;
   }
   return sum + seats * SEAT_ADDON.monthlyPrice;
 }

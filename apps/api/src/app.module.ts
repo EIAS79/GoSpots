@@ -1,9 +1,9 @@
 import { Module } from '@nestjs/common';
 import { GuestModule } from './modules/guest/guest.module';
-import { ConfigModule } from '@nestjs/config';
-import { APP_GUARD, APP_INTERCEPTOR } from '@nestjs/core';
+import { ConfigModule, ConfigService } from '@nestjs/config';
+import { APP_FILTER, APP_GUARD, APP_INTERCEPTOR } from '@nestjs/core';
 import { ScheduleModule } from '@nestjs/schedule';
-import { ThrottlerGuard, ThrottlerModule } from '@nestjs/throttler';
+import { ThrottlerModule } from '@nestjs/throttler';
 import { AppController } from './app.controller';
 import { AppService } from './app.service';
 import { PrismaModule } from './prisma/prisma.module';
@@ -25,7 +25,18 @@ import { HoursModule } from './modules/hours/hours.module';
 import { GalleryModule } from './modules/gallery/gallery.module';
 import { MediaModule } from './modules/media/media.module';
 import { NotesModule } from './modules/notes/notes.module';
+import { GdprModule } from './modules/gdpr/gdpr.module';
+import { GuestCheckModule } from './modules/guest-check/guest-check.module';
 import { VenueContextInterceptor } from './common/venue-context.interceptor';
+import { TenantRlsInterceptor } from './common/tenant-rls.interceptor';
+import { RequestLoggingInterceptor } from './common/request-logging.interceptor';
+import { SentryExceptionFilter } from './common/sentry-exception.filter';
+import { CaptchaAwareThrottlerGuard } from './common/captcha-throttler.guard';
+import {
+  isThrottleDisabled,
+  parsePositiveInt,
+} from './common/throttle.config';
+import { CsrfGuard } from './modules/auth/guards/csrf.guard';
 import { JwtAuthGuard } from './modules/auth/guards/jwt-auth.guard';
 import { RolesGuard } from './modules/auth/guards/roles.guard';
 
@@ -35,7 +46,24 @@ import { RolesGuard } from './modules/auth/guards/roles.guard';
       isGlobal: true,
       envFilePath: ['.env.local', '.env'],
     }),
-    ThrottlerModule.forRoot([{ ttl: 60_000, limit: 100 }]),
+    ThrottlerModule.forRootAsync({
+      inject: [ConfigService],
+      useFactory: (config: ConfigService) => {
+        const ttl = parsePositiveInt(
+          config.get<string>('THROTTLE_TTL_MS'),
+          60_000,
+        );
+        const limit = parsePositiveInt(
+          config.get<string>('THROTTLE_GLOBAL_LIMIT'),
+          100,
+        );
+        return {
+          skipIf: () =>
+            isThrottleDisabled(config.get<string>('THROTTLE_DISABLED')),
+          throttlers: [{ name: 'default', ttl, limit }],
+        };
+      },
+    }),
     ScheduleModule.forRoot(),
     PrismaModule,
     MailModule,
@@ -56,15 +84,21 @@ import { RolesGuard } from './modules/auth/guards/roles.guard';
     HoursModule,
     GalleryModule,
     NotesModule,
+    GdprModule,
+    GuestCheckModule,
     HealthModule,
   ],
   controllers: [AppController],
   providers: [
     AppService,
-    { provide: APP_GUARD, useClass: ThrottlerGuard },
+    { provide: APP_FILTER, useClass: SentryExceptionFilter },
+    { provide: APP_GUARD, useClass: CaptchaAwareThrottlerGuard },
+    { provide: APP_GUARD, useClass: CsrfGuard },
     { provide: APP_GUARD, useClass: JwtAuthGuard },
     { provide: APP_GUARD, useClass: RolesGuard },
+    { provide: APP_INTERCEPTOR, useClass: RequestLoggingInterceptor },
     { provide: APP_INTERCEPTOR, useClass: VenueContextInterceptor },
+    { provide: APP_INTERCEPTOR, useClass: TenantRlsInterceptor },
   ],
 })
 export class AppModule {}

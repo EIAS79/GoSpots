@@ -15,7 +15,7 @@ services:
       cd apps/api &&
       npx prisma migrate deploy &&
       node dist/main.js
-    healthCheckPath: /api/v1/health
+    healthCheckPath: /api/v1/ready
     envVars:
       - key: NODE_ENV
         value: production
@@ -29,18 +29,24 @@ services:
         sync: false
       - key: WEB_APP_URL
         sync: false
-      - key: CORS_ORIGIN
+      # Prefer CORS_ORIGINS (comma-separated); CORS_ORIGIN/WEB_* above are merged
+      # into the same allowlist for backwards compatibility. No real values here.
+      - key: CORS_ORIGINS
         sync: false
       - key: COOKIE_SECURE
         value: "true"
       - key: COOKIE_SAME_SITE
         value: lax
+      # Double-submit CSRF for cookie-auth mutations. Keep true with SameSite=lax
+      # + Vercel `/api/v1` proxy.
+      - key: CSRF_PROTECTION
+        value: "true"
       - key: RESEND_API_KEY
         sync: false
       - key: MAIL_FROM
         sync: false
       - key: MAIL_FROM_NAME
-        value: GoSpots
+        value: Locora
       - key: LEMON_SQUEEZY_API_KEY
         sync: false
       - key: LEMON_SQUEEZY_STORE_ID

@@ -1,3 +1,5 @@
+import { applyDiscountPercent, roundMoney } from './money.util';
+
 export type PlayBillingRate = {
   label: string;
   durationMinutes: number | null;
@@ -23,17 +25,12 @@ export type PlayBillingComputeResult = {
   breakdown: string;
 };
 
-function roundMoney(n: number) {
-  return Math.round(n * 100) / 100;
-}
-
 /** Apply discount % to the base charge (not a flat override). */
 export function applyBillingDiscount(
   baseAmount: number,
   discountPercent: number,
 ): number {
-  const pct = Math.min(100, Math.max(0, discountPercent));
-  return roundMoney(baseAmount * (1 - pct / 100));
+  return applyDiscountPercent(baseAmount, discountPercent);
 }
 
 /**
@@ -76,7 +73,6 @@ export function computePlayBillingAmount(
     }
   }
 
-  const slot = Math.max(15, input.slotMinutes || 60);
   if (input.hourlyRate > 0) {
     const hours = durationMinutes / 60;
     const amount = roundMoney(input.hourlyRate * hours * party);

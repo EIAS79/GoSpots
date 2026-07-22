@@ -11,6 +11,7 @@ export type ShopProfileDraft = {
   email: string;
   isPublished: boolean;
   locale: string;
+  timezone: string;
   currency: string;
   floorCount: number;
 };
@@ -27,6 +28,7 @@ export function shopToProfileDraft(shop: ShopSettings): ShopProfileDraft {
     email: shop.email ?? "",
     isPublished: shop.isPublished ?? false,
     locale: shop.locale ?? "en",
+    timezone: shop.timezone?.trim() || "UTC",
     currency: shop.currency ?? "EUR",
     floorCount: shop.floorCount ?? 1,
   };
@@ -47,6 +49,7 @@ export function profileDraftMatches(
     (shop.email?.trim() || "") === draft.email.trim() &&
     shop.isPublished === draft.isPublished &&
     shop.locale === draft.locale &&
+    (shop.timezone?.trim() || "UTC") === draft.timezone.trim() &&
     shop.currency === draft.currency &&
     (shop.floorCount ?? 1) === draft.floorCount
   );
@@ -64,6 +67,7 @@ export function profileDraftToPayload(draft: ShopProfileDraft) {
     email: draft.email.trim() || null,
     isPublished: draft.isPublished,
     locale: draft.locale,
+    timezone: draft.timezone.trim(),
     currency: draft.currency,
     floorCount: draft.floorCount,
   };

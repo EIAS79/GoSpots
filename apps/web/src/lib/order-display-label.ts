@@ -1,3 +1,5 @@
+import { coerceMoneyOrNull, type MoneyWire } from "./money";
+
 /** Staff-facing ticket title — never a raw order id prefix. */
 export function getOrderDisplayLabel(order: {
   label?: string | null;
@@ -27,7 +29,7 @@ export function orderMetaDraftMatches(
     paymentMethod?: string;
     guestCount?: number;
     tableReserved?: boolean;
-    reservationFee?: number | null;
+    reservationFee?: MoneyWire | null;
   },
   labelDraft: string,
   noteDraft: string,
@@ -46,7 +48,7 @@ export function orderMetaDraftMatches(
       : Math.max(0, parseFloat(feeRaw) || 0);
   const orderFee =
     order.tableReserved && order.reservationFee != null
-      ? order.reservationFee
+      ? coerceMoneyOrNull(order.reservationFee)
       : null;
   return (
     (order.label?.trim() || null) === label &&

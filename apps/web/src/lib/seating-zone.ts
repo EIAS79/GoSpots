@@ -15,3 +15,12 @@ export const SEATING_ZONE_HINTS: Record<SeatingZone, string> = {
 export function normalizeSeatingZone(value: unknown): SeatingZone {
   return value === "OUTDOOR" ? "OUTDOOR" : "INDOOR";
 }
+
+/** Localized label for a seating zone — pass the venue-settings `t()`. */
+export function seatingZoneLabel(
+  t: (key: string, vars?: Record<string, string | number>) => string,
+  zone: SeatingZone | string | null | undefined,
+): string {
+  const normalized = normalizeSeatingZone(zone);
+  return t(`diningSetup.zone.${normalized}`);
+}

@@ -77,9 +77,9 @@ export function ReservationDialog({
   onDelete?: () => Promise<void>;
   saving: boolean;
 }) {
-  const { formatMoney } = useVenueSettingsOptional() ?? {
-    formatMoney: (n: number) => n.toFixed(2),
-  };
+  const vs = useVenueSettingsOptional();
+  const formatMoney = vs?.formatMoney ?? ((n: number) => n.toFixed(2));
+  const t = vs?.t ?? ((k: string) => k);
   const units = catalog.categories.flatMap((c) =>
     c.resources.map((r) => ({
       ...r,
@@ -263,8 +263,8 @@ export function ReservationDialog({
     );
     if (clash) {
       return isDining
-        ? "This table already has a reservation around that time."
-        : "This unit already has a booking around that time.";
+        ? t("reservationDialog.overlapTable")
+        : t("reservationDialog.overlapUnit");
     }
     return null;
   }, [
@@ -275,6 +275,7 @@ export function ReservationDialog({
     initial?.id,
     isDining,
     noShowMinutes,
+    t,
   ]);
 
   function applyStartTime(next: string) {
@@ -293,15 +294,19 @@ export function ReservationDialog({
     const players = parseInt(partySize, 10) || 0;
     if (chargeMode === "PERSON" && selectedBowlingMode) {
       if (players < selectedBowlingMode.minPlayers) {
-        return `Party size must be at least ${selectedBowlingMode.minPlayers}.`;
+        return t("reservationDialog.partySizeMin", {
+          min: selectedBowlingMode.minPlayers,
+        });
       }
       if (players > selectedBowlingMode.maxPlayers) {
-        return `Party size cannot exceed ${selectedBowlingMode.maxPlayers}.`;
+        return t("reservationDialog.partySizeMax", {
+          max: selectedBowlingMode.maxPlayers,
+        });
       }
     }
     if (chargeMode === "GAME") {
       const games = parseInt(gameCount, 10) || 0;
-      if (games < 1) return "Enter at least one game.";
+      if (games < 1) return t("reservationDialog.gamesMin");
     }
     return null;
   }
@@ -311,7 +316,7 @@ export function ReservationDialog({
       <div className="fixed inset-0 z-[400] flex items-end justify-center sm:items-center sm:p-4">
         <button
           type="button"
-          aria-label="Close"
+          aria-label={t("reservationDialog.close")}
           className="absolute inset-0 bg-black/70 backdrop-blur-sm"
           onClick={onClose}
         />
@@ -319,11 +324,15 @@ export function ReservationDialog({
           <div className="mb-0 flex shrink-0 items-center justify-between border-b border-white/5 px-5 py-4">
             <div>
               <h2 className="text-lg font-semibold text-white">
-                {initial ? "Edit booking" : "New booking"}
+                {initial
+                  ? t("reservationDialog.editBooking")
+                  : t("reservationDialog.newBooking")}
               </h2>
               {isBowling && selectedBowlingMode ? (
                 <p className="mt-0.5 text-[11px] text-zinc-500">
-                  Bowling · {selectedBowlingMode.name}
+                  {t("reservationDialog.bowlingSubtitle", {
+                    mode: selectedBowlingMode.name,
+                  })}
                 </p>
               ) : null}
             </div>
@@ -399,7 +408,9 @@ export function ReservationDialog({
                 setFeedback({
                   variant: "error",
                   message:
-                    err instanceof Error ? err.message : "Could not save booking.",
+                    err instanceof Error
+                      ? err.message
+                      : t("reservationDialog.saveFailed"),
                 });
               });
             }}
@@ -443,12 +454,12 @@ export function ReservationDialog({
                 modes={bowlingModes}
                 value={selectedBowlingModeId}
                 onChange={onBowlingModeChange}
-                label="How is this guest booking?"
+                label={t("reservationDialog.howBooking")}
               />
             ) : null}
 
             <label className="block text-xs text-zinc-500">
-              Date
+              {t("common.date")}
               <input
                 type="date"
                 required
@@ -460,7 +471,7 @@ export function ReservationDialog({
 
             {isBowling && chargeMode === "GAME" ? (
               <label className="block text-xs text-zinc-500">
-                Number of games
+                {t("reservationDialog.numberOfGames")}
                 <input
                   type="number"
                   min={1}
@@ -473,7 +484,9 @@ export function ReservationDialog({
             ) : null}
 
             <label className="block text-xs text-zinc-500">
-              {isDining ? "Arrival time" : "Start time"}
+              {isDining
+                ? t("reservationDialog.arrivalTime")
+                : t("reservationDialog.startTime")}
               <input
                 type="time"
                 required
@@ -483,17 +496,19 @@ export function ReservationDialog({
               />
             </label>
             <p className="text-[10px] text-zinc-600">
-              {`No fixed end time — unit held for ${noShowMinutes} min after start. If the guest does not show, it is freed automatically. Staff checks in on arrival and marks free when they leave.`}
+              {t("reservationDialog.holdHint", { minutes: noShowMinutes })}
             </p>
 
             {estimatedPrice != null ? (
               <p className="rounded-lg border border-emerald-400/20 bg-emerald-500/5 px-3 py-2 text-xs text-emerald-200">
-                Estimated charge: {formatMoney(estimatedPrice)}
+                {t("reservationDialog.estimatedCharge", {
+                  amount: formatMoney(estimatedPrice),
+                })}
               </p>
             ) : null}
 
             <label className="block text-xs text-zinc-500">
-              Guest name
+              {t("reservationDialog.guestName")}
               <input
                 required
                 value={guestName}
@@ -504,7 +519,10 @@ export function ReservationDialog({
 
             {showPartySize ? (
               <label className="block text-xs text-zinc-500">
-                {`Players (${selectedBowlingMode?.minPlayers ?? bowlingConfig.minPlayers}–${selectedBowlingMode?.maxPlayers ?? bowlingConfig.maxPlayers})`}
+                {t("reservationDialog.playersRange", {
+                  min: selectedBowlingMode?.minPlayers ?? bowlingConfig.minPlayers,
+                  max: selectedBowlingMode?.maxPlayers ?? bowlingConfig.maxPlayers,
+                })}
                 <input
                   type="number"
                   min={selectedBowlingMode?.minPlayers ?? bowlingConfig.minPlayers}
@@ -514,20 +532,20 @@ export function ReservationDialog({
                   className="mt-1 w-full rounded-lg border border-white/10 bg-zinc-900 px-3 py-2 text-sm text-white"
                 />
                 <span className="mt-1 block text-[10px] text-zinc-600">
-                  Per-person pricing — charge is multiplied by player count and
-                  by each {selectedBowlingMode?.slotMinutes ?? effectiveSlotMinutes}{" "}
-                  min block in the booking window.
+                  {t("reservationDialog.perPersonPricingHint", {
+                    minutes:
+                      selectedBowlingMode?.slotMinutes ?? effectiveSlotMinutes,
+                  })}
                 </span>
               </label>
             ) : isBowling && chargeMode === "TIME" ? (
               <p className="rounded-lg border border-white/10 bg-zinc-900/50 px-3 py-2 text-[11px] text-zinc-500">
-                Lane rental for a time slot — you are booking the lane itself;
-                guest count does not affect the price.
+                {t("reservationDialog.laneRentalHint")}
               </p>
             ) : null}
 
             <label className="block text-xs text-zinc-500">
-              Notes
+              {t("reservationDialog.notes")}
               <textarea
                 value={notes}
                 onChange={(e) => setNotes(e.target.value)}
@@ -545,11 +563,10 @@ export function ReservationDialog({
               />
               <span className="text-xs leading-snug text-zinc-300">
                 <span className="font-medium text-amber-100">
-                  Notify staff
+                  {t("reservationDialog.notifyStaff")}
                 </span>
                 <span className="block text-zinc-500">
-                  Sends an in-app alert to your team and logs this in audit when
-                  saved.
+                  {t("reservationDialog.notifyStaffHint")}
                 </span>
               </span>
             </label>
@@ -561,7 +578,7 @@ export function ReservationDialog({
                   onClick={() => void onCancelBooking()}
                   className="rounded-lg border border-amber-400/30 px-3 py-2 text-sm text-amber-200"
                 >
-                  Cancel booking
+                  {t("reservationDialog.cancelBooking")}
                 </button>
               ) : null}
               {initial && onDelete ? (
@@ -570,7 +587,7 @@ export function ReservationDialog({
                   onClick={() => void onDelete()}
                   className="rounded-lg border border-rose-400/30 px-3 py-2 text-sm text-rose-300"
                 >
-                  Remove
+                  {t("common.remove")}
                 </button>
               ) : null}
               <button
@@ -579,7 +596,7 @@ export function ReservationDialog({
                 className="ml-auto inline-flex items-center gap-2 rounded-lg bg-emerald-600 px-4 py-2 text-sm text-white disabled:opacity-50"
               >
                 {saving ? <Loader2 size={14} className="animate-spin" /> : null}
-                Save
+                {t("common.save")}
               </button>
             </div>
           </form>

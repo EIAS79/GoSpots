@@ -16,6 +16,7 @@ import {
   type Transaction,
 } from "@/lib/finance-client";
 import { fetchPlayBilling, type PlayBillingItem } from "@/lib/play-billing-client";
+import { coerceMoney, lineTotal } from "@/lib/money";
 import { useVenueSettings } from "@/lib/venue-settings-context";
 import { venueMarketingName } from "@/lib/venue-display";
 
@@ -57,7 +58,7 @@ function sameDay(iso: string, day: string) {
 }
 
 export function InvoicesPanel() {
-  const { shop, formatMoney } = useVenueSettings();
+  const { shop, formatMoney, t } = useVenueSettings();
   const [day, setDay] = useState(todayInputValue);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -90,7 +91,7 @@ export function InvoicesPanel() {
       setOrders(orderRows);
       setSales(
         txRows.filter(
-          (t) => t.kind === "SALE" && sameDay(t.createdAt, day),
+          (tx) => tx.kind === "SALE" && sameDay(tx.createdAt, day),
         ),
       );
       setPlay(
@@ -101,11 +102,11 @@ export function InvoicesPanel() {
       setSelected(new Set());
       setDraft(null);
     } catch (e) {
-      setError(e instanceof Error ? e.message : "Could not load day’s sales.");
+      setError(e instanceof Error ? e.message : t("finance.invLoadFailed"));
     } finally {
       setLoading(false);
     }
-  }, [day]);
+  }, [day, t]);
 
   useEffect(() => {
     void load();
@@ -119,27 +120,38 @@ export function InvoicesPanel() {
       const lines: InvoiceLineItem[] = activeLines.map((l) => ({
         id: l.id,
         description: l.name,
-        detail: order.label ? `Order · ${order.label}` : "Menu order",
+        detail: order.label
+          ? t("finance.invOrderDetail", { label: order.label })
+          : t("finance.invMenuOrder"),
         quantity: l.quantity,
-        unitPrice: l.unitPrice,
-        total: l.quantity * l.unitPrice,
+        unitPrice: coerceMoney(l.unitPrice),
+        total: lineTotal(l.quantity, l.unitPrice),
       }));
-      if (order.reservationFee && order.reservationFee > 0) {
+      if (order.reservationFee && coerceMoney(order.reservationFee) > 0) {
+        const fee = coerceMoney(order.reservationFee);
         lines.push({
           id: `${order.id}-fee`,
-          description: "Table reservation fee",
+          description: t("finance.invTableFee"),
           quantity: 1,
-          unitPrice: order.reservationFee,
-          total: order.reservationFee,
+          unitPrice: fee,
+          total: fee,
         });
       }
       const amount =
-        order.total > 0 ? order.total : orderLinesSubtotal(order) + (order.reservationFee ?? 0);
+        coerceMoney(order.total) > 0
+          ? coerceMoney(order.total)
+          : orderLinesSubtotal(order) +
+            (order.reservationFee != null
+              ? coerceMoney(order.reservationFee)
+              : 0);
       list.push({
         key: `order:${order.id}`,
         kind: "order",
-        label: order.label?.trim() || "Menu order",
-        detail: `${activeLines.length} item${activeLines.length === 1 ? "" : "s"}`,
+        label: order.label?.trim() || t("finance.invMenuOrder"),
+        detail:
+          activeLines.length === 1
+            ? t("finance.invItemsOne", { n: activeLines.length })
+            : t("finance.invItemsMany", { n: activeLines.length }),
         amount,
         paymentMethod: order.paymentMethod,
         lines,
@@ -151,32 +163,35 @@ export function InvoicesPanel() {
       list.push({
         key: `sale:${tx.id}`,
         kind: "sale",
-        label: tx.note?.trim() || "Quick sale",
-        detail: `${tx.lines.length} line${tx.lines.length === 1 ? "" : "s"}`,
-        amount: tx.amount,
+        label: tx.note?.trim() || t("finance.invQuickSale"),
+        detail:
+          tx.lines.length === 1
+            ? t("finance.invLinesOne", { n: tx.lines.length })
+            : t("finance.invLinesMany", { n: tx.lines.length }),
+        amount: coerceMoney(tx.amount),
         paymentMethod: tx.method,
         lines: tx.lines.map((l) => ({
           id: l.id,
           description: l.name,
-          detail: "Quick sale",
+          detail: t("finance.invQuickSale"),
           quantity: l.quantity,
-          unitPrice: l.unitPrice,
-          total: l.total,
+          unitPrice: coerceMoney(l.unitPrice),
+          total: coerceMoney(l.total),
         })),
         createdAt: tx.createdAt,
       });
     }
 
     for (const item of play) {
-      const amount = item.billedAmount ?? item.amountDue;
+      const amount = coerceMoney(item.billedAmount ?? item.amountDue);
       list.push({
         key: `play:${item.id}`,
         kind: "play",
-        label: item.guestName || "Play session",
+        label: item.guestName || t("finance.invPlaySession"),
         detail: [
           item.resource?.name,
           item.resource?.categoryName,
-          `${item.durationMinutes} min`,
+          t("finance.invDurationMin", { n: item.durationMinutes }),
         ]
           .filter(Boolean)
           .join(" · "),
@@ -186,8 +201,8 @@ export function InvoicesPanel() {
           {
             id: item.id,
             description: item.resource?.name
-              ? `${item.resource.name} session`
-              : "Play session",
+              ? t("finance.invSessionDesc", { name: item.resource.name })
+              : t("finance.invPlaySession"),
             detail: item.breakdown || undefined,
             quantity: 1,
             unitPrice: amount,
@@ -202,7 +217,7 @@ export function InvoicesPanel() {
       (a, b) =>
         new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime(),
     );
-  }, [orders, sales, play]);
+  }, [orders, sales, play, t]);
 
   function toggle(key: string) {
     setSelected((prev) => {
@@ -227,7 +242,7 @@ export function InvoicesPanel() {
   function buildInvoice() {
     const picked = rows.filter((r) => selected.has(r.key));
     if (picked.length === 0) {
-      setError("Select at least one order, sale, or session.");
+      setError(t("finance.invSelectOne"));
       return;
     }
     setError(null);
@@ -244,12 +259,15 @@ export function InvoicesPanel() {
     ];
     const venueName = shop
       ? venueMarketingName(shop)
-      : "Venue";
+      : t("finance.venueFallback");
 
     setDraft({
       invoiceNumber: invoiceNumberFor(day),
       issuedAt: new Date(),
-      title: picked.length === 1 ? "Receipt" : "Invoice",
+      title:
+        picked.length === 1
+          ? t("finance.invTitleReceipt")
+          : t("finance.invTitleInvoice"),
       venue: {
         name: venueName,
         address: shop?.address,
@@ -262,7 +280,7 @@ export function InvoicesPanel() {
       paymentMethod: methods.length === 1 ? methods[0] : methods.join(" / ") || null,
       note:
         picked.length > 1
-          ? `Combined ${picked.length} sales from ${day}`
+          ? t("finance.invCombinedNote", { n: picked.length, day })
           : null,
       lines,
       currencyLabel: formatMoney,
@@ -281,7 +299,7 @@ export function InvoicesPanel() {
     <div className="space-y-5">
       <div className="flex flex-wrap items-end justify-between gap-3 rounded-xl border border-white/10 bg-zinc-900/40 px-4 py-3">
         <label className="text-xs text-zinc-500">
-          Sales day
+          {t("finance.invSalesDay")}
           <input
             type="date"
             value={day}
@@ -296,7 +314,7 @@ export function InvoicesPanel() {
             className="inline-flex items-center gap-1.5 rounded-lg border border-white/10 px-3 py-2 text-xs text-zinc-300 hover:bg-white/5"
           >
             <RefreshCw size={13} />
-            Refresh
+            {t("finance.invRefresh")}
           </button>
           <button
             type="button"
@@ -304,7 +322,7 @@ export function InvoicesPanel() {
             disabled={rows.length === 0}
             className="rounded-lg border border-white/10 px-3 py-2 text-xs text-zinc-300 hover:bg-white/5 disabled:opacity-40"
           >
-            Select all
+            {t("finance.invSelectAll")}
           </button>
           <button
             type="button"
@@ -312,7 +330,7 @@ export function InvoicesPanel() {
             disabled={selected.size === 0}
             className="rounded-lg border border-white/10 px-3 py-2 text-xs text-zinc-300 hover:bg-white/5 disabled:opacity-40"
           >
-            Clear
+            {t("finance.invClear")}
           </button>
           <button
             type="button"
@@ -321,7 +339,7 @@ export function InvoicesPanel() {
             className="inline-flex items-center gap-1.5 rounded-lg bg-emerald-600 px-3 py-2 text-xs font-medium text-white hover:bg-emerald-500 disabled:opacity-40"
           >
             <Receipt size={13} />
-            Build invoice
+            {t("finance.invBuild")}
             {selected.size > 0 ? ` · ${formatMoney(selectedTotal)}` : ""}
           </button>
         </div>
@@ -339,7 +357,7 @@ export function InvoicesPanel() {
         </div>
       ) : rows.length === 0 ? (
         <p className="rounded-xl border border-dashed border-white/15 px-6 py-12 text-center text-sm text-zinc-500">
-          No completed orders, sales, or paid play sessions for this day.
+          {t("finance.invEmpty")}
         </p>
       ) : (
         <ul className="divide-y divide-white/[0.06] overflow-hidden rounded-xl border border-white/10 bg-zinc-950/50">
@@ -376,10 +394,10 @@ export function InvoicesPanel() {
                     )}
                   >
                     {row.kind === "order"
-                      ? "Order"
+                      ? t("finance.invKindOrder")
                       : row.kind === "play"
-                        ? "Play"
-                        : "Sale"}
+                        ? t("finance.invKindPlay")
+                        : t("finance.invKindSale")}
                   </span>
                   <span className="min-w-0 flex-1">
                     <span className="block truncate text-sm text-white">
@@ -403,7 +421,7 @@ export function InvoicesPanel() {
         <div className="space-y-3 print:space-y-0">
           <div className="flex flex-wrap items-center justify-between gap-2 print:hidden">
             <p className="text-sm text-zinc-400">
-              Preview · {draft.invoiceNumber}
+              {t("finance.invPreview", { number: draft.invoiceNumber })}
             </p>
             <button
               type="button"
@@ -411,7 +429,7 @@ export function InvoicesPanel() {
               className="inline-flex items-center gap-1.5 rounded-lg bg-white px-4 py-2 text-sm font-medium text-zinc-900 hover:bg-zinc-100"
             >
               <Printer size={15} />
-              Print / save PDF
+              {t("finance.invPrintPdf")}
             </button>
           </div>
           <div className="invoice-print-root mx-auto max-w-3xl">

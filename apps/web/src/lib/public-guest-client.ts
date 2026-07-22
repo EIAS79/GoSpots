@@ -1,5 +1,9 @@
 import { ApiError } from "./api";
 import { getApiBaseUrl } from "./api-base-url";
+import {
+  httpFailureMessage,
+  networkUnreachableMessage,
+} from "./api-error-message";
 
 export type PublicVenueReview = {
   id: string;
@@ -19,13 +23,20 @@ export type PublicVenueReviewsResponse = {
 };
 
 async function publicFetch<T>(path: string, init?: RequestInit): Promise<T> {
-  const res = await fetch(`${getApiBaseUrl()}${path}`, {
-    ...init,
-    headers: {
-      "Content-Type": "application/json",
-      ...init?.headers,
-    },
-  });
+  const base = getApiBaseUrl();
+  let res: Response;
+  try {
+    res = await fetch(`${base}${path}`, {
+      ...init,
+      credentials: "omit",
+      headers: {
+        "Content-Type": "application/json",
+        ...init?.headers,
+      },
+    });
+  } catch {
+    throw new ApiError(networkUnreachableMessage(base), 0);
+  }
   let payload: unknown = null;
   try {
     payload = await res.json();
@@ -33,12 +44,10 @@ async function publicFetch<T>(path: string, init?: RequestInit): Promise<T> {
     /* ignore */
   }
   if (!res.ok) {
-    const message =
-      (payload as { message?: string | string[] })?.message &&
-      (Array.isArray((payload as { message?: string[] }).message)
-        ? (payload as { message: string[] }).message.join(", ")
-        : (payload as { message: string }).message) ||
-      `Request failed: ${res.status}`;
+    const message = httpFailureMessage(
+      res.status,
+      (payload as { message?: string | string[] } | null)?.message,
+    );
     throw new ApiError(message, res.status, payload);
   }
   return payload as T;
@@ -68,6 +77,9 @@ export function submitPublicVenueReview(
     guestEmail?: string;
     rating: number;
     comment?: string;
+    privacyConsentAccepted: boolean;
+    /** Optional; required only when API CAPTCHA_PROVIDER is enforced. */
+    captchaToken?: string;
   },
 ) {
   return publicFetch<{ ok: boolean; message: string; id: string }>(
@@ -84,6 +96,9 @@ export function submitPublicVenueContact(
     guestPhone?: string;
     subject?: string;
     message: string;
+    privacyConsentAccepted: boolean;
+    /** Optional; required only when API CAPTCHA_PROVIDER is enforced. */
+    captchaToken?: string;
   },
 ) {
   return publicFetch<{ ok: boolean; message: string; id: string }>(

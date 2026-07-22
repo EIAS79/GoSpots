@@ -14,7 +14,6 @@ import { DiningCollapsible } from "@/components/dining/dining-collapsible";
 import { FeedbackBanner } from "@/components/ui/feedback-banner";
 import { ModalPortal } from "@/components/ui/modal-portal";
 import { cn } from "@/lib/cn";
-import { diningZoneLabel } from "@/lib/dining-layout";
 import {
   createGamingSection,
   deleteGamingSection,
@@ -23,7 +22,9 @@ import {
 } from "@/lib/gaming-layout-client";
 import type { GamingOffering } from "@/lib/gaming-menu-client";
 import type { SeatingZone } from "@/lib/seating-zone";
-import { SEATING_ZONE_LABELS } from "@/lib/seating-zone";
+import { seatingZoneLabel } from "@/lib/seating-zone";
+import { useVenueSettingsOptional } from "@/lib/venue-settings-context";
+import { staffFloorT } from "@/lib/staff-floor-i18n";
 import "./dining-layout.css";
 
 type AreaDraft = {
@@ -41,6 +42,11 @@ export function DiningLayoutEditor({
   onClose: () => void;
   onSaved: () => void | Promise<void>;
 }) {
+  const vs = useVenueSettingsOptional();
+  const t = useMemo(
+    () => vs?.t ?? staffFloorT(vs?.locale),
+    [vs?.t, vs?.locale],
+  );
   const [sections, setSections] = useState<GamingSectionDetail[]>([]);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -62,11 +68,11 @@ export function DiningLayoutEditor({
       const data = await fetchGamingSections(offering.id);
       setSections(data.sections);
     } catch (e) {
-      setError(e instanceof Error ? e.message : "Failed to load dining layout.");
+      setError(e instanceof Error ? e.message : t("diningSetup.loadError"));
     } finally {
       setLoading(false);
     }
-  }, [offering.id]);
+  }, [offering.id, t]);
 
   useEffect(() => {
     void load();
@@ -98,9 +104,21 @@ export function DiningLayoutEditor({
     setShowCreateArea(true);
   }
 
+  function floorPillLabel(floor: number) {
+    return floor === 1
+      ? t("diningSetup.ground")
+      : t("diningSetup.floorOption", { n: floor });
+  }
+
+  function floorSelectLabel(floor: number) {
+    return floor === 1
+      ? t("diningSetup.groundFloorOption")
+      : t("diningSetup.floorOption", { n: floor });
+  }
+
   async function handleCreateArea() {
     if (!createDraft.name.trim()) {
-      setError("Area name is required.");
+      setError(t("diningSetup.nameRequired"));
       return;
     }
     setSaving(true);
@@ -121,7 +139,7 @@ export function DiningLayoutEditor({
       if (created) setActiveSectionId(created.id);
       await onSaved();
     } catch (e) {
-      setError(e instanceof Error ? e.message : "Could not create area.");
+      setError(e instanceof Error ? e.message : t("diningSetup.createError"));
     } finally {
       setSaving(false);
     }
@@ -131,10 +149,10 @@ export function DiningLayoutEditor({
     const section = sections.find((s) => s.id === id);
     if (!section) return;
     if (section.seatCount > 0) {
-      setError("Remove all table types inside this area first.");
+      setError(t("diningSetup.removeTablesFirst"));
       return;
     }
-    if (!confirm(`Delete "${section.name}"?`)) return;
+    if (!confirm(t("diningSetup.deleteConfirm", { name: section.name }))) return;
     setSaving(true);
     setError(null);
     try {
@@ -143,7 +161,7 @@ export function DiningLayoutEditor({
       await load();
       await onSaved();
     } catch (e) {
-      setError(e instanceof Error ? e.message : "Could not delete area.");
+      setError(e instanceof Error ? e.message : t("diningSetup.deleteError"));
     } finally {
       setSaving(false);
     }
@@ -160,25 +178,25 @@ export function DiningLayoutEditor({
         className="fixed inset-0 z-50 flex items-end justify-center bg-black/75 p-0 sm:items-center sm:p-4"
         role="dialog"
         aria-modal="true"
-        aria-label={`Dining layout — ${offering.name}`}
+        aria-label={t("diningSetup.ariaLabel", { name: offering.name })}
       >
         <div className="dining-shell sm:max-w-2xl lg:max-w-3xl">
           <header className="dining-shell__header flex items-start justify-between gap-3">
             <div className="min-w-0 flex-1">
               <p className="text-[10px] font-semibold uppercase tracking-widest text-amber-500/90">
-                Dining layout
+                {t("diningSetup.headerLabel")}
               </p>
               <h2 className="truncate text-base font-semibold text-white sm:text-lg">
                 {offering.name}
               </h2>
               <p className="dining-shell__subtitle mt-1 text-xs text-zinc-500">
-                Create areas by floor, then add mixed table types inside each.
+                {t("diningSetup.subtitle")}
               </p>
             </div>
             <button
               type="button"
               onClick={onClose}
-              aria-label="Close"
+              aria-label={t("diningSetup.close")}
               className="grid size-9 shrink-0 place-items-center rounded-lg border border-white/10 text-zinc-400 hover:bg-white/5 sm:size-8"
             >
               <X size={18} />
@@ -205,9 +223,21 @@ export function DiningLayoutEditor({
               ) : (
                 <div className="space-y-4">
                   <DiningCollapsible
-                    title="Floors"
-                    meta={`Viewing ${activeFloor === 1 ? "ground floor" : `floor ${activeFloor}`}`}
-                    badge={`${filteredSections.length} area${filteredSections.length === 1 ? "" : "s"}`}
+                    title={t("diningSetup.floorsTitle")}
+                    meta={
+                      activeFloor === 1
+                        ? t("diningSetup.viewingGround")
+                        : t("diningSetup.viewingFloor", { n: activeFloor })
+                    }
+                    badge={
+                      filteredSections.length === 1
+                        ? t("diningSetup.areaCountOne", {
+                            n: filteredSections.length,
+                          })
+                        : t("diningSetup.areaCountMany", {
+                            n: filteredSections.length,
+                          })
+                    }
                     defaultOpen
                   >
                     <div className="dining-floors">
@@ -224,7 +254,7 @@ export function DiningLayoutEditor({
                           )}
                         >
                           <Building2 size={14} />
-                          {floor === 1 ? "Ground" : `Floor ${floor}`}
+                          {floorPillLabel(floor)}
                         </button>
                       ))}
                       {floors.length < 10 ? (
@@ -234,18 +264,20 @@ export function DiningLayoutEditor({
                           className="dining-floors__pill inline-flex items-center gap-1 border-dashed text-zinc-500 hover:border-amber-400/30 hover:text-amber-200"
                         >
                           <Plus size={14} />
-                          Add floor
+                          {t("diningSetup.addFloor")}
                         </button>
                       ) : null}
                     </div>
                   </DiningCollapsible>
 
                   <DiningCollapsible
-                    title="Dining areas"
+                    title={t("diningSetup.areasTitle")}
                     meta={
                       filteredSections.length === 0
-                        ? "No areas on this floor yet"
-                        : `${filteredSections.length} on this floor`
+                        ? t("diningSetup.noAreasFloor")
+                        : t("diningSetup.areasOnFloor", {
+                            n: filteredSections.length,
+                          })
                     }
                     defaultOpen
                   >
@@ -253,7 +285,7 @@ export function DiningLayoutEditor({
                       <div className="rounded-lg border border-dashed border-white/15 py-8 text-center">
                         <MapPin className="mx-auto text-zinc-600" size={28} />
                         <p className="mt-3 text-sm text-zinc-400">
-                          No dining areas on this floor yet.
+                          {t("diningSetup.noAreasFloorLong")}
                         </p>
                       </div>
                     ) : (
@@ -269,9 +301,14 @@ export function DiningLayoutEditor({
                                   {section.name}
                                 </h3>
                                 <p className="mt-1 text-xs leading-relaxed text-zinc-500">
-                                  {diningZoneLabel(section.zone)} ·{" "}
-                                  {section.seatCount} table
-                                  {section.seatCount === 1 ? "" : "s"}
+                                  {seatingZoneLabel(t, section.zone)} ·{" "}
+                                  {section.seatCount === 1
+                                    ? t("diningSetup.tableCountOne", {
+                                        n: section.seatCount,
+                                      })
+                                    : t("diningSetup.tableCountMany", {
+                                        n: section.seatCount,
+                                      })}
                                   {groupSummary ? ` · ${groupSummary}` : ""}
                                 </p>
                               </div>
@@ -281,7 +318,7 @@ export function DiningLayoutEditor({
                                   onClick={() => setActiveSectionId(section.id)}
                                   className="rounded-lg bg-amber-600 px-3 py-2 font-medium text-white hover:bg-amber-500 sm:py-1.5 sm:text-xs"
                                 >
-                                  Manage tables
+                                  {t("diningSetup.manageTables")}
                                 </button>
                                 <button
                                   type="button"
@@ -289,12 +326,12 @@ export function DiningLayoutEditor({
                                   onClick={() => void handleDeleteArea(section.id)}
                                   title={
                                     section.seatCount > 0
-                                      ? "Remove all tables first"
-                                      : "Delete area"
+                                      ? t("diningSetup.deleteAreaTooltipBlocked")
+                                      : t("diningSetup.deleteAreaTooltip")
                                   }
                                   className="rounded-lg border border-rose-400/20 px-3 py-2 text-rose-300 hover:bg-rose-500/10 disabled:opacity-40 sm:py-1.5 sm:text-xs"
                                 >
-                                  Delete
+                                  {t("diningSetup.delete")}
                                 </button>
                               </div>
                             </li>
@@ -306,24 +343,24 @@ export function DiningLayoutEditor({
 
                   {showCreateArea ? (
                     <DiningCollapsible
-                      title="New dining area"
-                      meta="Name, floor, indoors or outdoors"
+                      title={t("diningSetup.newAreaTitle")}
+                      meta={t("diningSetup.newAreaMeta")}
                       forceOpen
                     >
                       <div className="space-y-3">
                         <label className="dining-field block">
-                          <span>Area name</span>
+                          <span>{t("diningSetup.areaNameLabel")}</span>
                           <input
                             value={createDraft.name}
                             onChange={(e) =>
                               setCreateDraft({ ...createDraft, name: e.target.value })
                             }
-                            placeholder="Main area, Balcony, Terrace…"
+                            placeholder={t("diningSetup.areaNamePlaceholder")}
                           />
                         </label>
                         <div className="grid gap-3 sm:grid-cols-2">
                           <label className="dining-field block">
-                            <span>Floor</span>
+                            <span>{t("diningSetup.floorField")}</span>
                             <select
                               value={createDraft.floor}
                               onChange={(e) =>
@@ -335,14 +372,14 @@ export function DiningLayoutEditor({
                             >
                               {floors.map((f) => (
                                 <option key={f} value={f}>
-                                  {f === 1 ? "Ground floor" : `Floor ${f}`}
+                                  {floorSelectLabel(f)}
                                 </option>
                               ))}
                             </select>
                           </label>
                           <div>
                             <span className="text-[10px] uppercase tracking-wide text-zinc-500">
-                              Location
+                              {t("diningSetup.locationLabel")}
                             </span>
                             <div className="dining-zone-toggle mt-1.5">
                               {(["INDOOR", "OUTDOOR"] as SeatingZone[]).map(
@@ -365,7 +402,7 @@ export function DiningLayoutEditor({
                                     ) : (
                                       <Building2 size={14} />
                                     )}
-                                    {SEATING_ZONE_LABELS[zone]}
+                                    {seatingZoneLabel(t, zone)}
                                   </button>
                                 ),
                               )}
@@ -378,7 +415,7 @@ export function DiningLayoutEditor({
                             onClick={() => setShowCreateArea(false)}
                             className="min-h-[2.75rem] rounded-lg border border-white/10 px-4 text-sm text-zinc-400 sm:min-h-0 sm:px-3 sm:py-1.5 sm:text-xs"
                           >
-                            Cancel
+                            {t("common.cancel")}
                           </button>
                           <button
                             type="button"
@@ -389,7 +426,7 @@ export function DiningLayoutEditor({
                             {saving ? (
                               <Loader2 size={14} className="animate-spin" />
                             ) : null}
-                            Create area
+                            {t("diningSetup.createAreaSubmit")}
                           </button>
                         </div>
                       </div>
@@ -401,7 +438,7 @@ export function DiningLayoutEditor({
                       className="inline-flex w-full min-h-[3rem] items-center justify-center gap-2 rounded-xl border border-dashed border-white/15 text-sm text-zinc-400 hover:border-amber-400/30 hover:text-amber-200"
                     >
                       <Plus size={18} />
-                      Add dining area
+                      {t("diningSetup.addDiningArea")}
                     </button>
                   )}
                 </div>

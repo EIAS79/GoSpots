@@ -13,6 +13,7 @@ import {
 import Link from "next/link";
 import { useCallback, useEffect, useState } from "react";
 import { KpiCard } from "@/components/dashboard/kpi-card";
+import { coerceMoney } from "@/lib/money";
 import { fetchDashboardOverview } from "@/lib/dashboard-client";
 import { fetchFinanceAnalytics } from "@/lib/finance-client";
 import { useLiveData } from "@/lib/use-live-data";
@@ -20,7 +21,7 @@ import { useVenueHref } from "@/lib/venue-context";
 import { useVenueSettings } from "@/lib/venue-settings-context";
 
 export function FinanceOverviewPanel() {
-  const { formatMoney } = useVenueSettings();
+  const { formatMoney, t } = useVenueSettings();
   const financeReportsHref = useVenueHref("/finance?tab=reports");
   const financeTransactionsHref = useVenueHref("/finance?tab=transactions");
   const financeLossesHref = useVenueHref("/finance?tab=losses");
@@ -37,35 +38,44 @@ export function FinanceOverviewPanel() {
   const [playRevenueWeek, setPlayRevenueWeek] = useState(0);
   const [reservationRevenueWeek, setReservationRevenueWeek] = useState(0);
 
-  const load = useCallback(async (opts?: { silent?: boolean }) => {
-    if (!opts?.silent) setLoading(true);
-    setError(null);
-    try {
-      const overview = await fetchDashboardOverview();
-      setRevenueToday(overview.kpis.revenueToday);
-      setRevenueWeek(overview.kpis.revenueWeek);
-      setLossesWeek(overview.kpis.lossesWeek);
+  const load = useCallback(
+    async (opts?: { silent?: boolean }) => {
+      if (!opts?.silent) setLoading(true);
+      setError(null);
       try {
-        const analytics = await fetchFinanceAnalytics(7);
-        setMenuRevenueWeek(analytics.summary.revenueMenuOrders);
-        setPlayRevenueWeek(analytics.summary.revenuePlaySessions);
-        setReservationRevenueWeek(analytics.summary.revenueReservations);
+        const overview = await fetchDashboardOverview();
+        setRevenueToday(coerceMoney(overview.kpis.revenueToday));
+        setRevenueWeek(coerceMoney(overview.kpis.revenueWeek));
+        setLossesWeek(coerceMoney(overview.kpis.lossesWeek));
+        try {
+          const analytics = await fetchFinanceAnalytics(7);
+          setMenuRevenueWeek(coerceMoney(analytics.summary.revenueMenuOrders));
+          setPlayRevenueWeek(coerceMoney(analytics.summary.revenuePlaySessions));
+          setReservationRevenueWeek(
+            coerceMoney(analytics.summary.revenueReservations),
+          );
+        } catch (e) {
+          setMenuRevenueWeek(0);
+          setPlayRevenueWeek(0);
+          setReservationRevenueWeek(0);
+          setError(
+            e instanceof Error
+              ? e.message
+              : t("finance.overviewBreakdownFailed"),
+          );
+        }
+        return true;
       } catch (e) {
-        setMenuRevenueWeek(0);
-        setPlayRevenueWeek(0);
-        setReservationRevenueWeek(0);
         setError(
-          e instanceof Error
-            ? e.message
-            : "Could not load revenue breakdown. Check that reports are unlocked on your plan.",
+          e instanceof Error ? e.message : t("finance.overviewLoadFailed"),
         );
+        return false;
+      } finally {
+        if (!opts?.silent) setLoading(false);
       }
-    } catch (e) {
-      setError(e instanceof Error ? e.message : "Could not load finance overview.");
-    } finally {
-      if (!opts?.silent) setLoading(false);
-    }
-  }, []);
+    },
+    [t],
+  );
 
   useEffect(() => {
     void load();
@@ -95,27 +105,29 @@ export function FinanceOverviewPanel() {
       ) : null}
       <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
         <KpiCard
-          label="Revenue today"
+          label={t("finance.kpiRevenueToday")}
           value={formatMoney(revenueToday)}
           icon={TrendingUp}
           tone="emerald"
         />
         <KpiCard
-          label="Revenue (7 days)"
+          label={t("finance.kpiRevenue7d")}
           value={formatMoney(revenueWeek)}
-          hint={`Profit ${formatMoney(profitWeek)} after losses`}
+          hint={t("finance.kpiProfitAfterLosses", {
+            amount: formatMoney(profitWeek),
+          })}
           icon={TrendingUp}
           tone="sky"
         />
         <KpiCard
-          label="Menu sales (7d)"
+          label={t("finance.kpiMenuSales7d")}
           value={formatMoney(menuRevenueWeek)}
-          hint="From completed kitchen tickets"
+          hint={t("finance.kpiMenuSalesHint")}
           icon={ShoppingCart}
           tone="amber"
         />
         <KpiCard
-          label="Losses (7 days)"
+          label={t("finance.kpiLosses7d")}
           value={formatMoney(lossesWeek)}
           icon={TrendingDown}
           tone="rose"
@@ -124,52 +136,55 @@ export function FinanceOverviewPanel() {
 
       <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
         <RevenueSourceCard
-          label="Play & tables"
+          label={t("finance.sourcePlay")}
           amount={playRevenueWeek}
           formatMoney={formatMoney}
           href={playHref}
-          hint="Paid game sessions (Game billing)"
+          hint={t("finance.sourcePlayHint")}
+          suffix={t("finance.sourceSuffix7d")}
           icon={Gamepad2}
         />
         <RevenueSourceCard
-          label="Reservations"
+          label={t("finance.sourceReservations")}
           amount={reservationRevenueWeek}
           formatMoney={formatMoney}
           href={sessionsHref}
-          hint="Billed bookings on Reservations"
+          hint={t("finance.sourceReservationsHint")}
+          suffix={t("finance.sourceSuffix7d")}
           icon={CalendarRange}
         />
         <RevenueSourceCard
-          label="Menu orders"
+          label={t("finance.sourceMenu")}
           amount={menuRevenueWeek}
           formatMoney={formatMoney}
           href={ordersHref}
-          hint="Completed tickets on Menu orders"
+          hint={t("finance.sourceMenuHint")}
+          suffix={t("finance.sourceSuffix7d")}
           icon={ShoppingCart}
         />
       </div>
 
       <div>
         <h3 className="mb-2 text-xs font-medium uppercase tracking-wide text-zinc-500">
-          Finance tools
+          {t("finance.toolsHeading")}
         </h3>
         <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
           <FinanceLinkCard
             href={financeTransactionsHref}
-            label="Transactions"
-            hint="Quick counter sales ledger"
+            label={t("finance.toolTransactions")}
+            hint={t("finance.toolTransactionsHint")}
             icon={Wallet}
           />
           <FinanceLinkCard
             href={financeLossesHref}
-            label="Losses"
-            hint="Spoilage, waste, write-offs"
+            label={t("finance.toolLosses")}
+            hint={t("finance.toolLossesHint")}
             icon={TrendingDown}
           />
           <FinanceLinkCard
             href={financeReportsHref}
-            label="Reports"
-            hint="Charts, print, CSV export"
+            label={t("finance.toolReports")}
+            hint={t("finance.toolReportsHint")}
             icon={ChartColumn}
           />
         </div>
@@ -184,13 +199,15 @@ function RevenueSourceCard({
   formatMoney,
   href,
   hint,
+  suffix,
   icon: Icon,
 }: {
   label: string;
   amount: number;
-  formatMoney: (n: number) => string;
+  formatMoney: (n: import("@/lib/money").MoneyWire) => string;
   href: string;
   hint: string;
+  suffix: string;
   icon: typeof ShoppingCart;
 }) {
   return (
@@ -201,7 +218,7 @@ function RevenueSourceCard({
       <div className="flex items-start justify-between gap-2">
         <div>
           <p className="text-[11px] uppercase tracking-wide text-zinc-500">
-            {label} · 7d
+            {label} {suffix}
           </p>
           <p className="mt-1 text-lg font-semibold text-white">
             {formatMoney(amount)}

@@ -19,6 +19,7 @@ import {
   type PublicCurrency,
   type PublicLocale,
 } from "./public-prefs";
+import { coerceMoney, type MoneyWire } from "./money";
 
 type PublicPrefsContextValue = {
   locale: PublicLocale;
@@ -27,8 +28,8 @@ type PublicPrefsContextValue = {
   setCurrency: (currency: PublicCurrency) => void;
   t: (key: string, vars?: Record<string, string | number>) => string;
   /** Format an amount that is stored in `fromCurrency` into the visitor display currency. */
-  formatMoney: (amount: number, fromCurrency?: string) => string;
-  convertAmount: (amount: number, fromCurrency?: string) => number;
+  formatMoney: (amount: MoneyWire, fromCurrency?: string) => string;
+  convertAmount: (amount: MoneyWire, fromCurrency?: string) => number;
 };
 
 const PublicPrefsContext = createContext<PublicPrefsContextValue | null>(null);
@@ -166,23 +167,25 @@ export function PublicPrefsProvider({ children }: { children: ReactNode }) {
   );
 
   const convertAmount = useCallback(
-    (amount: number, fromCurrency = "EUR") => {
+    (amount: MoneyWire, fromCurrency = "EUR") => {
+      const n = coerceMoney(amount);
       const from = fromCurrency.toUpperCase();
-      if (from === currency) return roundMoney(amount);
+      if (from === currency) return roundMoney(n);
       const rate = ratesToDisplay[from];
-      if (rate == null || rate <= 0) return roundMoney(amount);
-      return roundMoney(amount * rate);
+      if (rate == null || rate <= 0) return roundMoney(n);
+      return roundMoney(n * rate);
     },
     [currency, ratesToDisplay],
   );
 
   const formatMoney = useCallback(
-    (amount: number, fromCurrency = "EUR") => {
+    (amount: MoneyWire, fromCurrency = "EUR") => {
+      const n = coerceMoney(amount);
       const from = fromCurrency.toUpperCase();
       const hasRate = from === currency || (ratesToDisplay[from] != null && ratesToDisplay[from]! > 0);
       // Until FX loads, keep the source currency so we don't label €8 as "8 zł".
       const displayCurrency = hasRate ? currency : from;
-      const converted = hasRate ? convertAmount(amount, from) : roundMoney(amount);
+      const converted = hasRate ? convertAmount(n, from) : roundMoney(n);
       try {
         return new Intl.NumberFormat(locale, {
           style: "currency",

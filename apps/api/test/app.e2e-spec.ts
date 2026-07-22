@@ -26,7 +26,7 @@ describe('AppController (e2e)', () => {
 
   it('/api/v1 (GET)', () => {
     return request(app.getHttpServer()).get('/api/v1').expect(200).expect({
-      name: 'GoSpots API',
+      name: 'Locora API',
       version: '1.0.0',
       docs: '/docs',
     });
@@ -38,7 +38,7 @@ describe('AppController (e2e)', () => {
       .expect(200)
       .expect((res) => {
         expect(res.body.status).toBe('ok');
-        expect(res.body.service).toBe('gospots-api');
+        expect(res.body.service).toBe('Locora-api');
       });
   });
 

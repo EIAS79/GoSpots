@@ -3,20 +3,37 @@
 import { CircleDot, MoreHorizontal } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import { cn } from "@/lib/cn";
+import { useVenueSettingsOptional } from "@/lib/venue-settings-context";
 
 export function UnitStaffMenu({
   unitName,
   isOutOfService,
   onToggleOutOfService,
   className,
+  /** Optional i18n overrides — falls back to the dashboard VenueSettingsProvider, then English. */
+  restoreLabel,
+  markOutLabel,
+  actionsAria,
 }: {
   unitName: string;
   isOutOfService: boolean;
   onToggleOutOfService: () => void;
   className?: string;
+  restoreLabel?: string;
+  markOutLabel?: string;
+  actionsAria?: string;
 }) {
   const [open, setOpen] = useState(false);
   const ref = useRef<HTMLDivElement>(null);
+  const vs = useVenueSettingsOptional();
+  const resolvedActionsAria =
+    actionsAria ??
+    vs?.t("floor.actionMoreFor", { name: unitName }) ??
+    `Station actions for ${unitName}`;
+  const resolvedRestoreLabel =
+    restoreLabel ?? vs?.t("floor.actionRestore") ?? "Restore to service";
+  const resolvedMarkOutLabel =
+    markOutLabel ?? vs?.t("floor.actionMarkOutOfService") ?? "Mark out of service";
 
   useEffect(() => {
     if (!open) return;
@@ -33,7 +50,7 @@ export function UnitStaffMenu({
     <div ref={ref} className={cn("absolute right-0 top-0 z-10", className)}>
       <button
         type="button"
-        aria-label={`Station actions for ${unitName}`}
+        aria-label={resolvedActionsAria}
         onClick={(e) => {
           e.stopPropagation();
           setOpen((v) => !v);
@@ -57,7 +74,7 @@ export function UnitStaffMenu({
             className="flex w-full items-center gap-2 rounded-md px-2.5 py-1.5 text-left text-zinc-300 hover:bg-white/5 hover:text-white"
           >
             <CircleDot size={12} aria-hidden />
-            {isOutOfService ? "Restore to service" : "Mark out of service"}
+            {isOutOfService ? resolvedRestoreLabel : resolvedMarkOutLabel}
           </button>
         </div>
       ) : null}

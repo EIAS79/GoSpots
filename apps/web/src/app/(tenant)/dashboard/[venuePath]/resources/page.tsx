@@ -36,7 +36,7 @@ function todayDateInput() {
 
 export default function ResourcesPage() {
   const { state } = useAuth();
-  const { formatMoney } = useVenueSettings();
+  const { formatMoney, t } = useVenueSettings();
   const guide = useDashboardGuide("resources");
   const access = useVenueAccess();
   const [menu, setMenu] = useState<GamingMenuResponse | null>(null);
@@ -71,14 +71,16 @@ export default function ResourcesPage() {
       ]);
       setMenu(menuData);
       setSchedule(scheduleData);
+      return true;
     } catch (e) {
       if (!opts.silent) {
-        setError(e instanceof Error ? e.message : "Failed to load gaming menu.");
+        setError(e instanceof Error ? e.message : t("gamingSetup.panel.loadError"));
       }
+      return false;
     } finally {
       if (!opts.silent) setLoading(false);
     }
-  }, []);
+  }, [t]);
 
   useEffect(() => {
     void load();
@@ -161,7 +163,7 @@ export default function ResourcesPage() {
               setEditor(null);
               await load();
             } catch (e) {
-              setError(e instanceof Error ? e.message : "Save failed.");
+              setError(e instanceof Error ? e.message : t("gamingSetup.editor.saveFailed"));
             } finally {
               setSaving(false);
             }
@@ -171,7 +173,10 @@ export default function ResourcesPage() {
               ? async () => {
                   if (
                     !confirm(
-                      `Remove ${editor.offering!.name} and all its ${editor.offering!.unitLabels.plural}?`,
+                      t("gamingSetup.panel.deleteOfferingConfirm", {
+                        name: editor.offering!.name,
+                        plural: editor.offering!.unitLabels.plural,
+                      }),
                     )
                   ) {
                     return;
@@ -220,7 +225,9 @@ export default function ResourcesPage() {
         <GamingLayoutEditor
           offering={layoutEditor}
           onClose={() => setLayoutEditor(null)}
-          onSaved={() => load({ silent: true })}
+          onSaved={() => {
+            void load({ silent: true });
+          }}
         />
       ) : null}
     </TenantPage>

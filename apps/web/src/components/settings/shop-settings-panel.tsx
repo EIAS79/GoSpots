@@ -3,22 +3,47 @@
 import {
   ArrowRightLeft,
   Building2,
+  Download,
+  Eraser,
   Globe,
+  KeyRound,
   Loader2,
   MapPin,
   Megaphone,
+  Shield,
 } from "lucide-react";
 import { useEffect, useState } from "react";
+import { CurrencyChangeConfirmDialog } from "@/components/settings/currency-change-confirm-dialog";
 import { VenueCategoriesSection } from "@/components/settings/venue-categories-section";
+import { ConfirmDialog } from "@/components/ui/confirm-dialog";
 import { VenueReloadOverlay } from "@/components/venue/venue-reload-overlay";
 import { cn } from "@/lib/cn";
+import { GdprOwnerExtras } from "@/components/settings/gdpr-owner-extras";
+import {
+  downloadGdprExportJson,
+  eraseGuest,
+  GDPR_ERASE_ENTITY_TYPES,
+  gdprEraseErrorMessage,
+  gdprExportErrorMessage,
+  type GdprEraseEntityType,
+} from "@/lib/gdpr-client";
+import {
+  isValidIanaTimeZone,
+  listIanaTimeZones,
+} from "@/lib/iana-timezone";
 import { SUPPORTED_CURRENCIES } from "@/lib/locale-currency";
 import { formatMoney as formatMoneyAmount } from "@/lib/format";
 import { isFeatureUnlocked } from "@/lib/plan";
 import {
   convertCurrency,
+  fetchCurrencyHistory,
   fetchShopSettings,
+  previewCurrencyChange,
+  rotateDashboardKey,
+  rotateDashboardKeyErrorMessage,
   updateShopSettings,
+  type CurrencyChangePreview,
+  type CurrencyHistoryItem,
 } from "@/lib/shop-settings-client";
 import {
   identityChanged,
@@ -27,15 +52,37 @@ import {
   shopToProfileDraft,
   type ShopProfileDraft,
 } from "@/lib/shop-profile-draft";
+import { useCurrentMembership } from "@/lib/use-current-membership";
 import { useVenueAccess } from "@/lib/use-venue-access";
+import { setStoredVenuePath } from "@/lib/venue-api-headers";
 import { venueMarketingName } from "@/lib/venue-display";
 import { useVenueSettings } from "@/lib/venue-settings-context";
 
 type SaveState = "idle" | "pending" | "saving" | "saved";
 
+function eraseEntityTypeLabel(
+  t: (key: string, vars?: Record<string, string | number>) => string,
+  entityType: GdprEraseEntityType,
+): string {
+  switch (entityType) {
+    case "reservation":
+      return t("settings.eraseEntityReservation");
+    case "eventRequest":
+      return t("settings.eraseEntityEventRequest");
+    case "guestChat":
+      return t("settings.eraseEntityGuestChat");
+    case "contactMessage":
+      return t("settings.eraseEntityContactMessage");
+    case "venueReview":
+      return t("settings.eraseEntityVenueReview");
+  }
+}
+
 export function ShopSettingsPanel({ canWrite = true }: { canWrite?: boolean }) {
   const { shop, refresh, formatMoney, t, locale } = useVenueSettings();
   const access = useVenueAccess();
+  const membership = useCurrentMembership();
+  const isOwner = membership?.role === "OWNER";
   const marketingUnlocked = isFeatureUnlocked(
     access.enabledModules,
     "marketing",
@@ -48,6 +95,21 @@ export function ShopSettingsPanel({ canWrite = true }: { canWrite?: boolean }) {
   const [saveState, setSaveState] = useState<SaveState>("idle");
   const [error, setError] = useState<string | null>(null);
   const [reloading, setReloading] = useState(false);
+  const [exporting, setExporting] = useState(false);
+  const [eraseEntityType, setEraseEntityType] =
+    useState<GdprEraseEntityType>("reservation");
+  const [eraseEntityId, setEraseEntityId] = useState("");
+  const [erasePassword, setErasePassword] = useState("");
+  const [eraseConfirmOpen, setEraseConfirmOpen] = useState(false);
+  const [erasing, setErasing] = useState(false);
+  const [eraseNote, setEraseNote] = useState<string | null>(null);
+  const [eraseError, setEraseError] = useState<string | null>(null);
+
+  const [rotatePassword, setRotatePassword] = useState("");
+  const [rotateConfirmOpen, setRotateConfirmOpen] = useState(false);
+  const [rotating, setRotating] = useState(false);
+  const [rotateNote, setRotateNote] = useState<string | null>(null);
+  const [rotateError, setRotateError] = useState<string | null>(null);
 
   const [convertAmount, setConvertAmount] = useState("100");
   const [convertFrom, setConvertFrom] = useState("EUR");
@@ -59,13 +121,46 @@ export function ShopSettingsPanel({ canWrite = true }: { canWrite?: boolean }) {
   > | null>(null);
   const [converting, setConverting] = useState(false);
   const [catalogFxNote, setCatalogFxNote] = useState<string | null>(null);
+  const [timezones] = useState(() => listIanaTimeZones());
+  const [currencyPreview, setCurrencyPreview] =
+    useState<CurrencyChangePreview | null>(null);
+  const [currencyPreviewLoading, setCurrencyPreviewLoading] = useState(false);
+  const [currencyApplying, setCurrencyApplying] = useState(false);
+  const [currencyHistory, setCurrencyHistory] = useState<
+    CurrencyHistoryItem[] | null
+  >(null);
+  const [currencyHistoryError, setCurrencyHistoryError] = useState<
+    string | null
+  >(null);
+  const [currencyHistoryLoading, setCurrencyHistoryLoading] = useState(false);
+
+  const reloadCurrencyHistory = () => {
+    setCurrencyHistoryLoading(true);
+    setCurrencyHistoryError(null);
+    fetchCurrencyHistory(20)
+      .then((d) => setCurrencyHistory(d.items))
+      .catch(() => {
+        setCurrencyHistory(null);
+        setCurrencyHistoryError(t("settings.currencyHistoryLoadError"));
+      })
+      .finally(() => setCurrencyHistoryLoading(false));
+  };
 
   useEffect(() => {
     if (!shop) return;
     setDraft(shopToProfileDraft(shop));
     setConvertFrom(shop.currency);
+    setCurrencyPreview(null);
+    setCurrencyPreviewLoading(false);
+    setCurrencyApplying(false);
     setSaveState("idle");
   }, [shop]);
+
+  useEffect(() => {
+    if (!shop) return;
+    reloadCurrencyHistory();
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- load once per shop bind
+  }, [shop?.id]);
 
   useEffect(() => {
     fetchShopSettings()
@@ -83,41 +178,28 @@ export function ShopSettingsPanel({ canWrite = true }: { canWrite?: boolean }) {
       return;
     }
 
+    // Currency apply only via preview → confirm modal (needs confirm:true).
+    if (draft.currency !== shop.currency) {
+      setSaveState(
+        currencyPreview || currencyPreviewLoading ? "pending" : "idle",
+      );
+      return;
+    }
+
     setSaveState("pending");
     const timer = window.setTimeout(() => {
-      const currencyChanging = draft.currency !== shop.currency;
-      if (currencyChanging) {
-        const ok = window.confirm(
-          t("settings.currencyConfirm", {
-            from: shop.currency,
-            to: draft.currency,
-          }),
-        );
-        if (!ok) {
-          setDraft((d) => (d ? { ...d, currency: shop.currency } : d));
-          setSaveState("idle");
-          return;
-        }
+      if (!isValidIanaTimeZone(draft.timezone)) {
+        setError(t("settings.timezoneInvalid"));
+        setSaveState("idle");
+        return;
       }
 
       setSaveState("saving");
+      setError(null);
       const before = shop;
       void updateShopSettings(profileDraftToPayload(draft))
         .then((data) => {
           const after = data.shop;
-          if (data.currencyConversion) {
-            const c = data.currencyConversion;
-            setCatalogFxNote(
-              t("settings.catalogConverted", {
-                from: c.from,
-                to: c.to,
-                rate: c.rate.toFixed(4),
-                menu: c.menuItems,
-                rates: c.resourceRates,
-                when: new Date(c.ratesAt).toLocaleString(locale),
-              }),
-            );
-          }
           if (identityChanged(before, after)) {
             setReloading(true);
             window.setTimeout(() => window.location.reload(), 400);
@@ -130,24 +212,117 @@ export function ShopSettingsPanel({ canWrite = true }: { canWrite?: boolean }) {
           }, 2000);
         })
         .catch((e) => {
-          setError(e instanceof Error ? e.message : "Could not save settings.");
+          setError(
+            e instanceof Error ? e.message : t("settings.saveFailed"),
+          );
           setSaveState("idle");
         });
     }, 2000);
 
     return () => window.clearTimeout(timer);
-  }, [draft, shop, refresh, canWrite, t, locale]);
+  }, [
+    draft,
+    shop,
+    refresh,
+    canWrite,
+    t,
+    currencyPreview,
+    currencyPreviewLoading,
+  ]);
 
   function patch(partial: Partial<ShopProfileDraft>) {
     setDraft((d) => (d ? { ...d, ...partial } : d));
   }
 
+  async function onCurrencySelect(next: string) {
+    if (!canWrite || !shop || !draft || currencyApplying) return;
+    patch({ currency: next });
+    setCurrencyPreview(null);
+    setCatalogFxNote(null);
+    if (next === shop.currency) {
+      setCurrencyPreviewLoading(false);
+      return;
+    }
+    setCurrencyPreviewLoading(true);
+    setError(null);
+    setSaveState("pending");
+    try {
+      const preview = await previewCurrencyChange(next);
+      setCurrencyPreview(preview);
+    } catch (e) {
+      setError(
+        e instanceof Error ? e.message : t("settings.conversionFailed"),
+      );
+      setDraft((d) => (d ? { ...d, currency: shop.currency } : d));
+      setCurrencyPreview(null);
+      setSaveState("idle");
+    } finally {
+      setCurrencyPreviewLoading(false);
+    }
+  }
+
+  function onCancelCurrencyChange() {
+    if (currencyApplying || !shop) return;
+    setCurrencyPreview(null);
+    setDraft((d) => (d ? { ...d, currency: shop.currency } : d));
+    setSaveState("idle");
+  }
+
+  async function onConfirmCurrencyChange() {
+    if (!canWrite || !shop || !draft || !currencyPreview || currencyApplying) {
+      return;
+    }
+    setCurrencyApplying(true);
+    setSaveState("saving");
+    setError(null);
+    const before = shop;
+    try {
+      const data = await updateShopSettings({
+        ...profileDraftToPayload(draft),
+        confirm: true,
+      });
+      setCurrencyPreview(null);
+      const after = data.shop;
+      if (data.currencyConversion) {
+        const c = data.currencyConversion;
+        setCatalogFxNote(
+          t("settings.catalogConverted", {
+            from: c.from,
+            to: c.to,
+            rate: c.rate.toFixed(4),
+            menu: c.menuItems,
+            rates: c.resourceRates,
+            when: new Date(c.ratesAt).toLocaleString(locale),
+          }),
+        );
+      }
+      if (identityChanged(before, after)) {
+        setReloading(true);
+        window.setTimeout(() => window.location.reload(), 400);
+        return;
+      }
+      void refresh();
+      reloadCurrencyHistory();
+      setSaveState("saved");
+      window.setTimeout(() => {
+        setSaveState((s) => (s === "saved" ? "idle" : s));
+      }, 2000);
+    } catch (e) {
+      setError(
+        e instanceof Error ? e.message : t("settings.saveFailed"),
+      );
+      setDraft((d) => (d ? { ...d, currency: shop.currency } : d));
+      setCurrencyPreview(null);
+      setSaveState("idle");
+    } finally {
+      setCurrencyApplying(false);
+    }
+  }
+
   async function onPublishToggle(isPublished: boolean) {
     if (!canWrite || !shop || !draft) return;
     if (isPublished && !marketingUnlocked) {
-      setError(
-        "Unlock Venue page & discovery to publish your public venue page.",
-      );
+      setError(t("settings.publishNeedMarketing"));
       return;
     }
     patch({ isPublished });
@@ -162,7 +337,9 @@ export function ShopSettingsPanel({ canWrite = true }: { canWrite?: boolean }) {
       }, 2000);
     } catch (e) {
       patch({ isPublished: shop.isPublished });
-      setError(e instanceof Error ? e.message : "Could not update visibility.");
+      setError(
+        e instanceof Error ? e.message : t("settings.visibilityUpdateFailed"),
+      );
       setSaveState("idle");
     }
   }
@@ -170,9 +347,7 @@ export function ShopSettingsPanel({ canWrite = true }: { canWrite?: boolean }) {
   async function onAdvertiseToggle(advertiseOnVenuesPage: boolean) {
     if (!canWrite || !shop) return;
     if (advertiseOnVenuesPage && !marketingUnlocked) {
-      setError(
-        "Unlock Venue page & discovery to list your venue on /venues.",
-      );
+      setError(t("settings.advertiseNeedMarketing"));
       return;
     }
     setSaveState("saving");
@@ -186,7 +361,7 @@ export function ShopSettingsPanel({ canWrite = true }: { canWrite?: boolean }) {
       }, 2000);
     } catch (e) {
       setError(
-        e instanceof Error ? e.message : "Could not update directory listing.",
+        e instanceof Error ? e.message : t("settings.directoryUpdateFailed"),
       );
       setSaveState("idle");
     }
@@ -206,7 +381,9 @@ export function ShopSettingsPanel({ canWrite = true }: { canWrite?: boolean }) {
         setSaveState((s) => (s === "saved" ? "idle" : s));
       }, 2000);
     } catch (e) {
-      setError(e instanceof Error ? e.message : "Could not update reviews.");
+      setError(
+        e instanceof Error ? e.message : t("settings.reviewsUpdateFailed"),
+      );
       setSaveState("idle");
     }
   }
@@ -218,7 +395,7 @@ export function ShopSettingsPanel({ canWrite = true }: { canWrite?: boolean }) {
     try {
       const amount = parseFloat(convertAmount);
       if (!Number.isFinite(amount) || amount < 0) {
-        setError("Enter a valid amount.");
+        setError(t("settings.invalidAmount"));
         return;
       }
       const result = await convertCurrency({
@@ -232,6 +409,110 @@ export function ShopSettingsPanel({ canWrite = true }: { canWrite?: boolean }) {
       setError(err instanceof Error ? err.message : t("settings.conversionFailed"));
     } finally {
       setConverting(false);
+    }
+  }
+
+  async function onDownloadExport() {
+    if (!isOwner || exporting) return;
+    setExporting(true);
+    setError(null);
+    try {
+      await downloadGdprExportJson();
+    } catch (err) {
+      setError(gdprExportErrorMessage(err) || t("settings.exportFailed"));
+    } finally {
+      setExporting(false);
+    }
+  }
+
+  function onRequestErase() {
+    if (!isOwner || erasing) return;
+    const id = eraseEntityId.trim();
+    if (!id) {
+      setEraseError(t("settings.eraseNeedId"));
+      setEraseNote(null);
+      return;
+    }
+    if (!erasePassword) {
+      setEraseError(t("settings.eraseNeedPassword"));
+      setEraseNote(null);
+      return;
+    }
+    setEraseError(null);
+    setEraseConfirmOpen(true);
+  }
+
+  function onRequestRotateKey() {
+    setRotateError(null);
+    setRotateNote(null);
+    if (!rotatePassword) {
+      setRotateError(t("settings.dashboardKeyNeedPassword"));
+      return;
+    }
+    setRotateConfirmOpen(true);
+  }
+
+  async function onConfirmRotateKey() {
+    if (!rotatePassword) {
+      setRotateError(t("settings.dashboardKeyNeedPassword"));
+      setRotateConfirmOpen(false);
+      return;
+    }
+    setRotating(true);
+    setRotateError(null);
+    setRotateNote(null);
+    try {
+      const result = await rotateDashboardKey({ password: rotatePassword });
+      setStoredVenuePath(result.slug);
+      setRotateNote(t("settings.dashboardKeySuccess"));
+      setRotatePassword("");
+      setRotateConfirmOpen(false);
+    } catch (err) {
+      setRotateError(
+        rotateDashboardKeyErrorMessage(err) || t("settings.dashboardKeyFailed"),
+      );
+      setRotateConfirmOpen(false);
+    } finally {
+      setRotating(false);
+    }
+  }
+
+  async function onConfirmErase() {
+    if (!isOwner || erasing) return;
+    const id = eraseEntityId.trim();
+    if (!id) {
+      setEraseError(t("settings.eraseNeedId"));
+      setEraseConfirmOpen(false);
+      return;
+    }
+    if (!erasePassword) {
+      setEraseError(t("settings.eraseNeedPassword"));
+      setEraseConfirmOpen(false);
+      return;
+    }
+    setErasing(true);
+    setEraseError(null);
+    setEraseNote(null);
+    try {
+      const result = await eraseGuest({
+        entityType: eraseEntityType,
+        entityId: id,
+        password: erasePassword,
+      });
+      setEraseNote(
+        t("settings.eraseSuccess", {
+          entityType: eraseEntityTypeLabel(t, result.entityType),
+          entityId: result.entityId,
+        }),
+      );
+      setEraseEntityId("");
+      setErasePassword("");
+      setEraseConfirmOpen(false);
+    } catch (err) {
+      setEraseError(gdprEraseErrorMessage(err) || t("settings.eraseFailed"));
+      setEraseConfirmOpen(false);
+    } finally {
+      setErasing(false);
     }
   }
 
@@ -528,11 +809,38 @@ export function ShopSettingsPanel({ canWrite = true }: { canWrite?: boolean }) {
               </select>
             </label>
             <label className="block text-xs text-zinc-500">
+              {t("settings.timezone")}
+              <select
+                value={
+                  timezones.includes(draft.timezone)
+                    ? draft.timezone
+                    : draft.timezone || "UTC"
+                }
+                onChange={(e) => {
+                  setError(null);
+                  patch({ timezone: e.target.value });
+                }}
+                disabled={fieldDisabled}
+                className="mt-1 w-full rounded-lg border border-white/10 bg-zinc-950 px-3 py-2.5 text-sm text-white"
+              >
+                {!timezones.includes(draft.timezone) && draft.timezone ? (
+                  <option value={draft.timezone}>{draft.timezone}</option>
+                ) : null}
+                {timezones.map((tz) => (
+                  <option key={tz} value={tz}>
+                    {tz}
+                  </option>
+                ))}
+              </select>
+            </label>
+            <label className="block text-xs text-zinc-500">
               {t("settings.currency")}
               <select
                 value={draft.currency}
-                onChange={(e) => patch({ currency: e.target.value })}
-                disabled={fieldDisabled}
+                onChange={(e) => void onCurrencySelect(e.target.value)}
+                disabled={
+                  fieldDisabled || currencyPreviewLoading || currencyApplying
+                }
                 className="mt-1 w-full rounded-lg border border-white/10 bg-zinc-950 px-3 py-2.5 text-sm text-white"
               >
                 {currencies.map((c) => (
@@ -542,7 +850,16 @@ export function ShopSettingsPanel({ canWrite = true }: { canWrite?: boolean }) {
                 ))}
               </select>
             </label>
+            {currencyPreviewLoading ? (
+              <p className="flex items-center gap-2 text-xs text-zinc-500 sm:col-span-2 lg:col-span-1 lg:pt-6">
+                <Loader2 size={14} className="animate-spin" />
+                {t("settings.currencyConfirmPreviewing")}
+              </p>
+            ) : null}
           </div>
+          <p className="mt-3 text-xs text-zinc-600">
+            {t("settings.timezoneHint")}
+          </p>
           <p className="mt-3 text-xs text-zinc-600">
             {t("settings.currencyHint", {
               currency: draft.currency,
@@ -557,6 +874,76 @@ export function ShopSettingsPanel({ canWrite = true }: { canWrite?: boolean }) {
               {catalogFxNote}
             </p>
           ) : null}
+          <div className="mt-4 rounded-xl border border-white/10 bg-zinc-950/40 p-4">
+            <h3 className="text-sm font-medium text-white">
+              {t("settings.currencyHistoryTitle")}
+            </h3>
+            <p className="mt-1 text-xs text-zinc-600">
+              {t("settings.currencyHistoryHint")}
+            </p>
+            {currencyHistoryLoading ? (
+              <p className="mt-3 flex items-center gap-2 text-xs text-zinc-500">
+                <Loader2 size={14} className="animate-spin" />
+                {t("common.loading")}
+              </p>
+            ) : currencyHistoryError ? (
+              <p className="mt-3 text-xs text-amber-300/90">
+                {currencyHistoryError}
+              </p>
+            ) : !currencyHistory?.length ? (
+              <p className="mt-3 text-xs text-zinc-600">
+                {t("settings.currencyHistoryEmpty")}
+              </p>
+            ) : (
+              <ul className="mt-3 space-y-2">
+                {currencyHistory.map((row) => (
+                  <li
+                    key={row.id}
+                    className="rounded-lg border border-white/5 bg-zinc-900/50 px-3 py-2 text-xs text-zinc-300"
+                  >
+                    <div className="flex flex-wrap items-baseline justify-between gap-2">
+                      <span className="font-medium text-white">
+                        {row.from} → {row.to}
+                      </span>
+                      <time
+                        className="text-zinc-500"
+                        dateTime={row.createdAt}
+                      >
+                        {new Date(row.createdAt).toLocaleString(locale)}
+                      </time>
+                    </div>
+                    {row.rate != null ? (
+                      <p className="mt-1 text-zinc-500">
+                        {t("settings.currencyHistoryRate", {
+                          rate: row.rate.toFixed(6),
+                        })}
+                      </p>
+                    ) : null}
+                    {row.menuItems != null ||
+                    row.resourceRates != null ||
+                    row.resources != null ||
+                    row.offerings != null ? (
+                      <p className="mt-0.5 text-zinc-600">
+                        {t("settings.currencyHistoryCatalog", {
+                          menu: row.menuItems ?? 0,
+                          rates: row.resourceRates ?? 0,
+                          resources: row.resources ?? 0,
+                          offerings: row.offerings ?? 0,
+                        })}
+                      </p>
+                    ) : null}
+                    {row.actorName || row.actorEmail ? (
+                      <p className="mt-0.5 text-zinc-600">
+                        {t("settings.currencyHistoryBy", {
+                          name: row.actorName || row.actorEmail || "",
+                        })}
+                      </p>
+                    ) : null}
+                  </li>
+                ))}
+              </ul>
+            )}
+          </div>
         </section>
 
         <form
@@ -668,7 +1055,211 @@ export function ShopSettingsPanel({ canWrite = true }: { canWrite?: boolean }) {
             </ul>
           ) : null}
         </form>
+
+        {isOwner ? (
+          <section className="rounded-2xl border border-white/10 bg-zinc-900/50 p-5">
+            <div className="mb-4 flex items-center gap-2 text-emerald-300">
+              <Shield size={18} />
+              <h2 className="font-semibold text-white">{t("settings.privacy")}</h2>
+            </div>
+            <p className="mb-4 text-sm text-zinc-500">
+              {t("settings.privacyHint")}
+            </p>
+            <button
+              type="button"
+              onClick={() => void onDownloadExport()}
+              disabled={exporting}
+              className="inline-flex items-center gap-2 rounded-lg border border-white/10 bg-zinc-950 px-4 py-2 text-sm text-zinc-200 hover:border-white/20 disabled:opacity-50"
+            >
+              {exporting ? (
+                <Loader2 size={16} className="animate-spin" />
+              ) : (
+                <Download size={16} />
+              )}
+              {t("settings.downloadExport")}
+            </button>
+
+            <div className="mt-6 border-t border-white/10 pt-5">
+              <div className="mb-2 flex items-center gap-2 text-amber-200/90">
+                <KeyRound size={16} />
+                <h3 className="text-sm font-semibold text-zinc-100">
+                  {t("settings.dashboardKey")}
+                </h3>
+              </div>
+              <p className="mb-4 text-sm text-zinc-500">
+                {t("settings.dashboardKeyHint")}
+              </p>
+              {rotateError ? (
+                <p className="mb-3 rounded-lg border border-rose-500/30 bg-rose-500/10 px-3 py-2 text-sm text-rose-200">
+                  {rotateError}
+                </p>
+              ) : null}
+              {rotateNote ? (
+                <p className="mb-3 rounded-lg border border-emerald-400/20 bg-emerald-500/10 px-3 py-2 text-[11px] text-emerald-200">
+                  {rotateNote}
+                </p>
+              ) : null}
+              <form
+                className="flex flex-col gap-3 sm:flex-row sm:flex-wrap sm:items-end"
+                onSubmit={(e) => {
+                  e.preventDefault();
+                  onRequestRotateKey();
+                }}
+              >
+                <label className="block min-w-[12rem] flex-[2] text-xs text-zinc-500">
+                  {t("settings.dashboardKeyPassword")}
+                  <input
+                    type="password"
+                    value={rotatePassword}
+                    onChange={(e) => setRotatePassword(e.target.value)}
+                    placeholder={t("settings.dashboardKeyPasswordPlaceholder")}
+                    disabled={rotating}
+                    autoComplete="current-password"
+                    className="mt-1 w-full rounded-lg border border-white/10 bg-zinc-950 px-3 py-2 text-sm text-zinc-100 placeholder:text-zinc-600 disabled:opacity-50"
+                  />
+                </label>
+                <button
+                  type="submit"
+                  disabled={rotating}
+                  className="inline-flex items-center justify-center gap-2 rounded-lg border border-amber-400/30 bg-amber-500/10 px-4 py-2 text-sm text-amber-100 hover:bg-amber-500/20 disabled:opacity-50"
+                >
+                  {rotating ? (
+                    <Loader2 size={16} className="animate-spin" />
+                  ) : (
+                    <KeyRound size={16} />
+                  )}
+                  {t("settings.dashboardKeyRotate")}
+                </button>
+              </form>
+            </div>
+
+            <div className="mt-6 border-t border-white/10 pt-5">
+              <div className="mb-2 flex items-center gap-2 text-rose-200/90">
+                <Eraser size={16} />
+                <h3 className="text-sm font-semibold text-zinc-100">
+                  {t("settings.eraseGuest")}
+                </h3>
+              </div>
+              <p className="mb-4 text-sm text-zinc-500">
+                {t("settings.eraseGuestHint")}
+              </p>
+              {eraseError ? (
+                <p className="mb-3 rounded-lg border border-rose-500/30 bg-rose-500/10 px-3 py-2 text-sm text-rose-200">
+                  {eraseError}
+                </p>
+              ) : null}
+              {eraseNote ? (
+                <p className="mb-3 rounded-lg border border-emerald-400/20 bg-emerald-500/10 px-3 py-2 text-[11px] text-emerald-200">
+                  {eraseNote}
+                </p>
+              ) : null}
+              <form
+                className="flex flex-col gap-3 sm:flex-row sm:flex-wrap sm:items-end"
+                onSubmit={(e) => {
+                  e.preventDefault();
+                  onRequestErase();
+                }}
+              >
+                <label className="block min-w-[10rem] flex-1 text-xs text-zinc-500">
+                  {t("settings.eraseEntityType")}
+                  <select
+                    value={eraseEntityType}
+                    onChange={(e) =>
+                      setEraseEntityType(e.target.value as GdprEraseEntityType)
+                    }
+                    disabled={erasing}
+                    className="mt-1 w-full rounded-lg border border-white/10 bg-zinc-950 px-3 py-2 text-sm text-zinc-100 disabled:opacity-50"
+                  >
+                    {GDPR_ERASE_ENTITY_TYPES.map((type) => (
+                      <option key={type} value={type}>
+                        {eraseEntityTypeLabel(t, type)}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+                <label className="block min-w-[12rem] flex-[2] text-xs text-zinc-500">
+                  {t("settings.eraseEntityId")}
+                  <input
+                    type="text"
+                    value={eraseEntityId}
+                    onChange={(e) => setEraseEntityId(e.target.value)}
+                    placeholder={t("settings.eraseEntityIdPlaceholder")}
+                    disabled={erasing}
+                    autoComplete="off"
+                    className="mt-1 w-full rounded-lg border border-white/10 bg-zinc-950 px-3 py-2 text-sm text-zinc-100 placeholder:text-zinc-600 disabled:opacity-50"
+                  />
+                </label>
+                <label className="block min-w-[12rem] flex-[2] text-xs text-zinc-500">
+                  {t("settings.erasePassword")}
+                  <input
+                    type="password"
+                    value={erasePassword}
+                    onChange={(e) => setErasePassword(e.target.value)}
+                    placeholder={t("settings.erasePasswordPlaceholder")}
+                    disabled={erasing}
+                    autoComplete="current-password"
+                    className="mt-1 w-full rounded-lg border border-white/10 bg-zinc-950 px-3 py-2 text-sm text-zinc-100 placeholder:text-zinc-600 disabled:opacity-50"
+                  />
+                </label>
+                <button
+                  type="submit"
+                  disabled={erasing}
+                  className="inline-flex items-center justify-center gap-2 rounded-lg border border-rose-400/30 bg-rose-500/10 px-4 py-2 text-sm text-rose-200 hover:bg-rose-500/20 disabled:opacity-50"
+                >
+                  {erasing ? (
+                    <Loader2 size={16} className="animate-spin" />
+                  ) : (
+                    <Eraser size={16} />
+                  )}
+                  {t("settings.eraseConfirm")}
+                </button>
+              </form>
+            </div>
+
+            <GdprOwnerExtras
+              t={t}
+              erasePassword={erasePassword}
+              onNeedPassword={() =>
+                setEraseError(t("settings.eraseNeedPassword"))
+              }
+            />
+          </section>
+        ) : null}
       </div>
+
+      <ConfirmDialog
+        open={eraseConfirmOpen}
+        title={t("settings.eraseConfirmTitle")}
+        description={t("settings.eraseConfirmDesc")}
+        confirmLabel={t("settings.eraseConfirm")}
+        cancelLabel={t("common.cancel")}
+        variant="danger"
+        busy={erasing}
+        onConfirm={() => void onConfirmErase()}
+        onCancel={() => !erasing && setEraseConfirmOpen(false)}
+      />
+
+      <ConfirmDialog
+        open={rotateConfirmOpen}
+        title={t("settings.dashboardKeyConfirmTitle")}
+        description={t("settings.dashboardKeyConfirmDesc")}
+        confirmLabel={t("settings.dashboardKeyRotate")}
+        cancelLabel={t("common.cancel")}
+        variant="danger"
+        busy={rotating}
+        onConfirm={() => void onConfirmRotateKey()}
+        onCancel={() => !rotating && setRotateConfirmOpen(false)}
+      />
+
+      <CurrencyChangeConfirmDialog
+        open={currencyPreview != null}
+        preview={currencyPreview}
+        locale={locale}
+        busy={currencyApplying}
+        t={t}
+        onConfirm={() => void onConfirmCurrencyChange()}
+        onCancel={onCancelCurrencyChange}
+      />
     </>
   );
 }

@@ -33,7 +33,7 @@ export type GuestChat = {
   canGuestPing?: boolean;
 };
 
-const TOKEN_KEY = (slug: string) => `gospots-guest-chat:${slug}`;
+const TOKEN_KEY = (slug: string) => `Locora-guest-chat:${slug}`;
 
 export function readGuestChatToken(slug: string): string | null {
   if (typeof window === "undefined") return null;
@@ -63,6 +63,7 @@ export function clearGuestChatToken(slug: string) {
 async function publicFetch<T>(path: string, init?: RequestInit): Promise<T> {
   const res = await fetch(`${getApiBaseUrl()}${path}`, {
     ...init,
+    credentials: "omit",
     headers: {
       "Content-Type": "application/json",
       ...init?.headers,
@@ -93,6 +94,9 @@ export function createPublicGuestChat(
     guestEmail?: string;
     guestPhone?: string;
     message?: string;
+    privacyConsentAccepted: boolean;
+    /** Optional; required only when API CAPTCHA_PROVIDER is enforced. */
+    captchaToken?: string;
   },
 ) {
   return publicFetch<{

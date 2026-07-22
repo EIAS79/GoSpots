@@ -2,44 +2,48 @@
 @import "@heroui/react/styles";
 
 /* Semantic theme tokens
- * Light: soft stone field ? brand yellow/orange/red only as accents (logo, CTAs)
- * Dark:  ocean charcoal + gold/cyan accents
+ * Shared family for both modes:
+ *   warm stone · amber gold · soft coral · cool teal accent
+ * Hierarchy: bg → surface → surface-2 (same roles, different values)
  */
 :root {
-  --app-bg: #e6e2dc;
+  --app-bg: #ebe6df;
   --app-fg: #1c1917;
-  --app-muted: #78716c;
-  --app-surface: #f0ece6;
-  --app-surface-2: #ddd7cf;
-  --app-border: rgba(28, 25, 23, 0.12);
+  --app-muted: #6f6860;
+  --app-surface: #f7f3ed;
+  --app-surface-2: #e4ddd4;
+  --app-border: rgba(28, 25, 23, 0.11);
   --app-accent: #e88c2b;
-  --app-accent-2: #f7b538;
-  --app-accent-3: #d72638;
-  --app-glow: 0 0 70px -14px rgba(232, 140, 43, 0.22);
-  --gradient-brand: linear-gradient(120deg, #fdd20e 0%, #e88c2b 42%, #d72638 100%);
-  --hero-scrim-mid: rgba(230, 226, 220, 0.82);
-  --hero-scrim-edge: rgba(230, 226, 220, 0.96);
+  --app-accent-2: #f0b429;
+  --app-accent-3: #d64545;
+  --app-cool: #2a9d9f;
+  --app-cool-soft: rgba(42, 157, 159, 0.22);
+  --app-warm-soft: rgba(232, 140, 43, 0.2);
+  --app-rose-soft: rgba(214, 69, 69, 0.16);
+  --app-glow: 0 0 70px -14px rgba(232, 140, 43, 0.24);
+  --gradient-brand: linear-gradient(120deg, #f0b429 0%, #e88c2b 45%, #d64545 100%);
+  --hero-scrim-mid: rgba(235, 230, 223, 0.84);
+  --hero-scrim-edge: rgba(235, 230, 223, 0.96);
 }
 
 html.dark {
-  --app-bg: #04121a;
-  --app-fg: #f0f9fc;
-  --app-muted: #90a5b1;
-  --app-surface: #08202b;
-  --app-surface-2: #0d2a38;
-  --app-border: rgba(199, 248, 254, 0.1);
-  --app-accent: #f7b538;
-  --app-accent-2: #faaa48;
-  --app-accent-3: #fdd20e;
-  --app-glow: 0 0 90px -10px rgba(247, 181, 56, 0.35);
-  --gradient-brand: linear-gradient(
-    125deg,
-    #50e8f4 0%,
-    #f7b538 52%,
-    #f59e71 100%
-  );
-  --hero-scrim-mid: rgba(4, 18, 26, 0.78);
-  --hero-scrim-edge: rgba(4, 18, 26, 0.94);
+  --app-bg: #151311;
+  --app-fg: #f5f1eb;
+  --app-muted: #a59e94;
+  --app-surface: #1f1b17;
+  --app-surface-2: #2a2520;
+  --app-border: rgba(245, 241, 235, 0.11);
+  --app-accent: #f0a53a;
+  --app-accent-2: #f5c04a;
+  --app-accent-3: #e86b5a;
+  --app-cool: #3db8ba;
+  --app-cool-soft: rgba(61, 184, 186, 0.16);
+  --app-warm-soft: rgba(240, 165, 58, 0.18);
+  --app-rose-soft: rgba(232, 107, 90, 0.14);
+  --app-glow: 0 0 85px -12px rgba(240, 165, 58, 0.32);
+  --gradient-brand: linear-gradient(120deg, #f5c04a 0%, #f0a53a 45%, #e86b5a 100%);
+  --hero-scrim-mid: rgba(21, 19, 17, 0.84);
+  --hero-scrim-edge: rgba(21, 19, 17, 0.96);
 }
 
 @theme {
@@ -48,6 +52,7 @@ html.dark {
   --color-accent: var(--app-accent);
   --color-accent-2: var(--app-accent-2);
   --color-accent-3: var(--app-accent-3);
+  --color-cool: var(--app-cool);
   --color-surface: var(--app-surface);
   --color-surface-2: var(--app-surface-2);
   --color-border: var(--app-border);
@@ -95,38 +100,35 @@ body {
   color: #fff;
 }
 
-/* Painted atmosphere
- * Light: quiet stone depth ? warm brand tint barely visible
- * Dark:  ocean charcoal / cyan / gold smears
- */
+/* Painted atmosphere — same color roles in both modes (warm / cool / rose) */
 .paint-canvas {
   background:
-    radial-gradient(ellipse 80% 60% at 15% 20%, rgba(120, 113, 108, 0.08) 0%, transparent 55%),
-    radial-gradient(ellipse 70% 55% at 85% 15%, rgba(232, 140, 43, 0.05) 0%, transparent 50%),
-    radial-gradient(ellipse 65% 70% at 75% 85%, rgba(28, 25, 23, 0.04) 0%, transparent 55%),
-    radial-gradient(ellipse 75% 55% at 10% 80%, rgba(215, 38, 56, 0.03) 0%, transparent 50%),
+    radial-gradient(ellipse 85% 65% at 12% 18%, var(--app-cool-soft) 0%, transparent 55%),
+    radial-gradient(ellipse 70% 55% at 88% 12%, var(--app-warm-soft) 0%, transparent 52%),
+    radial-gradient(ellipse 70% 60% at 78% 88%, var(--app-rose-soft) 0%, transparent 55%),
+    radial-gradient(ellipse 60% 50% at 8% 82%, var(--app-warm-soft) 0%, transparent 50%),
     linear-gradient(
       155deg,
-      #ddd8d1 0%,
-      #e6e2dc 35%,
-      #ebe7e1 65%,
-      #e0dbd4 100%
+      color-mix(in srgb, var(--app-bg) 88%, var(--app-cool) 12%) 0%,
+      var(--app-bg) 38%,
+      color-mix(in srgb, var(--app-bg) 92%, var(--app-accent) 8%) 68%,
+      color-mix(in srgb, var(--app-bg) 90%, #8b4513 10%) 100%
     );
 }
 
 html.dark .paint-canvas {
   background:
-    radial-gradient(ellipse 90% 70% at 10% 15%, #002b4c 0%, transparent 55%),
-    radial-gradient(ellipse 70% 55% at 92% 8%, rgba(232, 140, 43, 0.4) 0%, transparent 50%),
-    radial-gradient(ellipse 75% 70% at 85% 90%, rgba(215, 38, 56, 0.28) 0%, transparent 55%),
-    radial-gradient(ellipse 80% 60% at 5% 85%, rgba(120, 1, 22, 0.45) 0%, transparent 50%),
-    radial-gradient(ellipse 55% 45% at 48% 42%, rgba(247, 181, 56, 0.12) 0%, transparent 60%),
+    radial-gradient(ellipse 90% 70% at 10% 15%, var(--app-cool-soft) 0%, transparent 55%),
+    radial-gradient(ellipse 70% 55% at 92% 8%, var(--app-warm-soft) 0%, transparent 50%),
+    radial-gradient(ellipse 75% 70% at 85% 90%, var(--app-rose-soft) 0%, transparent 55%),
+    radial-gradient(ellipse 80% 60% at 5% 85%, var(--app-warm-soft) 0%, transparent 50%),
+    radial-gradient(ellipse 55% 45% at 48% 42%, rgba(245, 192, 74, 0.08) 0%, transparent 60%),
     linear-gradient(
       155deg,
-      #001619 0%,
-      #04121a 35%,
-      #062433 65%,
-      #001a28 100%
+      color-mix(in srgb, var(--app-bg) 82%, var(--app-cool) 18%) 0%,
+      var(--app-bg) 36%,
+      color-mix(in srgb, var(--app-bg) 88%, var(--app-accent) 12%) 66%,
+      color-mix(in srgb, var(--app-bg) 85%, #3a1a12 15%) 100%
     );
 }
 
@@ -134,32 +136,33 @@ html.dark .paint-canvas {
   background:
     conic-gradient(
       from 30deg at 40% 45%,
-      rgba(120, 113, 108, 0.12) 0deg,
-      rgba(232, 140, 43, 0.06) 90deg,
-      rgba(168, 162, 158, 0.1) 180deg,
-      rgba(215, 38, 56, 0.04) 270deg,
-      rgba(120, 113, 108, 0.12) 360deg
+      var(--app-cool-soft) 0deg,
+      var(--app-warm-soft) 90deg,
+      rgba(168, 162, 158, 0.12) 180deg,
+      var(--app-rose-soft) 270deg,
+      var(--app-cool-soft) 360deg
     );
-  filter: blur(80px) saturate(100%);
+  filter: blur(80px) saturate(115%);
   animation: paint-mesh-spin 55s linear infinite;
   will-change: transform;
   mix-blend-mode: multiply;
-  opacity: 0.35;
+  opacity: 0.7;
 }
 
 html.dark .paint-mesh {
   background:
     conic-gradient(
       from 20deg at 45% 50%,
-      rgba(0, 43, 76, 0.7) 0deg,
-      rgba(80, 232, 244, 0.2) 80deg,
-      rgba(247, 181, 56, 0.18) 150deg,
-      rgba(215, 38, 56, 0.22) 220deg,
-      rgba(120, 1, 22, 0.4) 290deg,
-      rgba(0, 43, 76, 0.7) 360deg
+      var(--app-cool-soft) 0deg,
+      rgba(61, 184, 186, 0.22) 80deg,
+      var(--app-warm-soft) 150deg,
+      var(--app-rose-soft) 220deg,
+      rgba(240, 165, 58, 0.12) 290deg,
+      var(--app-cool-soft) 360deg
     );
-  filter: blur(80px) saturate(150%);
+  filter: blur(80px) saturate(140%);
   mix-blend-mode: screen;
+  opacity: 0.7;
 }
 
 @keyframes paint-mesh-spin {
@@ -185,8 +188,8 @@ html.dark .paint-glow {
   max-height: 48rem;
   left: -18%;
   top: -20%;
-  background: radial-gradient(circle, rgba(168, 162, 158, 0.35) 0%, transparent 68%);
-  opacity: 0.35;
+  background: radial-gradient(circle, var(--app-cool-soft) 0%, transparent 68%);
+  opacity: 0.85;
   animation: paint-drift-a 22s ease-in-out infinite;
 }
 .paint-glow-b {
@@ -196,8 +199,8 @@ html.dark .paint-glow {
   max-height: 40rem;
   right: -12%;
   top: -8%;
-  background: radial-gradient(circle, rgba(232, 140, 43, 0.12) 0%, transparent 68%);
-  opacity: 0.3;
+  background: radial-gradient(circle, var(--app-warm-soft) 0%, transparent 68%);
+  opacity: 0.8;
   animation: paint-drift-b 28s ease-in-out infinite;
 }
 .paint-glow-c {
@@ -207,8 +210,8 @@ html.dark .paint-glow {
   max-height: 44rem;
   left: 20%;
   bottom: -25%;
-  background: radial-gradient(circle, rgba(28, 25, 23, 0.08) 0%, transparent 68%);
-  opacity: 0.3;
+  background: radial-gradient(circle, var(--app-rose-soft) 0%, transparent 68%);
+  opacity: 0.7;
   animation: paint-drift-c 26s ease-in-out infinite;
 }
 .paint-glow-d {
@@ -218,26 +221,26 @@ html.dark .paint-glow {
   max-height: 36rem;
   right: 5%;
   bottom: 5%;
-  background: radial-gradient(circle, rgba(215, 38, 56, 0.08) 0%, transparent 68%);
-  opacity: 0.25;
+  background: radial-gradient(circle, var(--app-warm-soft) 0%, transparent 68%);
+  opacity: 0.65;
   animation: paint-drift-d 32s ease-in-out infinite;
 }
 
 html.dark .paint-glow-a {
-  background: radial-gradient(circle, rgba(0, 43, 76, 0.95) 0%, transparent 68%);
-  opacity: 0.9;
+  background: radial-gradient(circle, color-mix(in srgb, var(--app-cool) 55%, transparent) 0%, transparent 68%);
+  opacity: 0.85;
 }
 html.dark .paint-glow-b {
-  background: radial-gradient(circle, rgba(232, 140, 43, 0.4) 0%, transparent 68%);
-  opacity: 0.7;
+  background: radial-gradient(circle, color-mix(in srgb, var(--app-accent) 45%, transparent) 0%, transparent 68%);
+  opacity: 0.75;
 }
 html.dark .paint-glow-c {
-  background: radial-gradient(circle, rgba(215, 38, 56, 0.3) 0%, transparent 68%);
-  opacity: 0.65;
+  background: radial-gradient(circle, color-mix(in srgb, var(--app-accent-3) 40%, transparent) 0%, transparent 68%);
+  opacity: 0.7;
 }
 html.dark .paint-glow-d {
-  background: radial-gradient(circle, rgba(247, 181, 56, 0.28) 0%, transparent 68%);
-  opacity: 0.6;
+  background: radial-gradient(circle, color-mix(in srgb, var(--app-accent-2) 38%, transparent) 0%, transparent 68%);
+  opacity: 0.65;
 }
 
 .paint-brush {
@@ -246,11 +249,11 @@ html.dark .paint-glow-d {
   filter: blur(48px);
   will-change: transform;
   mix-blend-mode: multiply;
-  opacity: 0.1;
+  opacity: 0.28;
 }
 html.dark .paint-brush {
   mix-blend-mode: screen;
-  opacity: 0.35;
+  opacity: 0.38;
 }
 
 .paint-brush-1 {
@@ -263,9 +266,9 @@ html.dark .paint-brush {
   background: linear-gradient(
     95deg,
     transparent 0%,
-    rgba(168, 162, 158, 0.45) 25%,
-    rgba(232, 140, 43, 0.2) 55%,
-    rgba(214, 211, 209, 0.35) 80%,
+    color-mix(in srgb, var(--app-cool) 42%, transparent) 25%,
+    color-mix(in srgb, var(--app-accent) 38%, transparent) 55%,
+    color-mix(in srgb, var(--app-cool) 28%, transparent) 80%,
     transparent 100%
   );
   transform: rotate(-12deg) skewX(-8deg);
@@ -281,14 +284,14 @@ html.dark .paint-brush {
   background: linear-gradient(
     100deg,
     transparent 0%,
-    rgba(120, 113, 108, 0.3) 20%,
-    rgba(215, 38, 56, 0.12) 50%,
-    rgba(168, 162, 158, 0.25) 78%,
+    color-mix(in srgb, var(--app-accent-3) 36%, transparent) 20%,
+    color-mix(in srgb, var(--app-accent) 30%, transparent) 50%,
+    color-mix(in srgb, var(--app-cool) 26%, transparent) 78%,
     transparent 100%
   );
   transform: rotate(8deg) skewX(6deg);
   animation: paint-smear-2 34s ease-in-out infinite;
-  opacity: 0.12;
+  opacity: 0.3;
 }
 .paint-brush-3 {
   width: 65vw;
@@ -300,14 +303,14 @@ html.dark .paint-brush {
   background: linear-gradient(
     88deg,
     transparent 0%,
-    rgba(214, 211, 209, 0.4) 22%,
-    rgba(232, 140, 43, 0.15) 48%,
-    rgba(68, 64, 60, 0.2) 72%,
+    color-mix(in srgb, var(--app-cool) 34%, transparent) 22%,
+    color-mix(in srgb, var(--app-accent-2) 32%, transparent) 48%,
+    color-mix(in srgb, var(--app-accent) 24%, transparent) 72%,
     transparent 100%
   );
   transform: rotate(-6deg) skewX(-4deg);
   animation: paint-smear-3 36s ease-in-out infinite;
-  opacity: 0.12;
+  opacity: 0.28;
 }
 .paint-brush-4 {
   width: 40vw;
@@ -316,12 +319,16 @@ html.dark .paint-brush {
   max-height: 28rem;
   left: 35%;
   top: 8%;
-  background: radial-gradient(ellipse at center, rgba(168, 162, 158, 0.35) 0%, transparent 70%);
+  background: radial-gradient(
+    ellipse at center,
+    color-mix(in srgb, var(--app-accent-2) 40%, transparent) 0%,
+    transparent 70%
+  );
   border-radius: 60% 40% 55% 45%;
   filter: blur(60px);
   transform: rotate(25deg);
   animation: paint-smear-4 24s ease-in-out infinite;
-  opacity: 0.15;
+  opacity: 0.32;
 }
 .paint-brush-5 {
   width: 35vw;
@@ -333,23 +340,23 @@ html.dark .paint-brush {
   background: linear-gradient(
     180deg,
     transparent 0%,
-    rgba(232, 140, 43, 0.14) 30%,
-    rgba(120, 113, 108, 0.2) 70%,
+    color-mix(in srgb, var(--app-cool) 30%, transparent) 30%,
+    color-mix(in srgb, var(--app-accent-3) 28%, transparent) 70%,
     transparent 100%
   );
   border-radius: 50% 50% 40% 60%;
   transform: rotate(18deg) skewY(-6deg);
   animation: paint-smear-5 38s ease-in-out infinite;
-  opacity: 0.12;
+  opacity: 0.28;
 }
 
 html.dark .paint-brush-1 {
   background: linear-gradient(
     95deg,
     transparent 0%,
-    rgba(80, 232, 244, 0.5) 25%,
-    rgba(0, 43, 76, 0.8) 55%,
-    rgba(247, 181, 56, 0.35) 80%,
+    color-mix(in srgb, var(--app-cool) 55%, transparent) 25%,
+    color-mix(in srgb, var(--app-accent) 48%, transparent) 55%,
+    color-mix(in srgb, var(--app-accent-2) 40%, transparent) 80%,
     transparent 100%
   );
 }
@@ -357,9 +364,9 @@ html.dark .paint-brush-2 {
   background: linear-gradient(
     100deg,
     transparent 0%,
-    rgba(215, 38, 56, 0.4) 20%,
-    rgba(120, 1, 22, 0.55) 50%,
-    rgba(80, 232, 244, 0.25) 78%,
+    color-mix(in srgb, var(--app-accent-3) 50%, transparent) 20%,
+    color-mix(in srgb, var(--app-accent) 42%, transparent) 50%,
+    color-mix(in srgb, var(--app-cool) 35%, transparent) 78%,
     transparent 100%
   );
 }
@@ -367,16 +374,16 @@ html.dark .paint-brush-3 {
   background: linear-gradient(
     88deg,
     transparent 0%,
-    rgba(0, 43, 76, 0.9) 22%,
-    rgba(80, 232, 244, 0.3) 48%,
-    rgba(253, 210, 14, 0.2) 72%,
+    color-mix(in srgb, var(--app-cool) 50%, transparent) 22%,
+    color-mix(in srgb, var(--app-accent-2) 38%, transparent) 48%,
+    color-mix(in srgb, var(--app-accent) 30%, transparent) 72%,
     transparent 100%
   );
 }
 html.dark .paint-brush-4 {
   background: radial-gradient(
     ellipse at center,
-    rgba(247, 181, 56, 0.35) 0%,
+    color-mix(in srgb, var(--app-accent-2) 42%, transparent) 0%,
     transparent 70%
   );
 }
@@ -384,8 +391,8 @@ html.dark .paint-brush-5 {
   background: linear-gradient(
     180deg,
     transparent 0%,
-    rgba(80, 232, 244, 0.25) 30%,
-    rgba(245, 158, 113, 0.3) 70%,
+    color-mix(in srgb, var(--app-cool) 38%, transparent) 30%,
+    color-mix(in srgb, var(--app-accent-3) 36%, transparent) 70%,
     transparent 100%
   );
 }
@@ -396,23 +403,23 @@ html.dark .paint-brush-5 {
   width: 140%;
   left: -20%;
   filter: blur(40px);
-  opacity: 0.08;
+  opacity: 0.22;
   mix-blend-mode: multiply;
   will-change: transform;
 }
 html.dark .paint-ribbon {
   mix-blend-mode: screen;
-  opacity: 0.25;
+  opacity: 0.28;
 }
 .paint-ribbon-a {
   top: 28%;
   background: linear-gradient(
     90deg,
     transparent 0%,
-    rgba(168, 162, 158, 0.4) 15%,
-    rgba(232, 140, 43, 0.18) 35%,
-    rgba(214, 211, 209, 0.35) 55%,
-    rgba(120, 113, 108, 0.25) 75%,
+    color-mix(in srgb, var(--app-cool) 38%, transparent) 15%,
+    color-mix(in srgb, var(--app-accent) 34%, transparent) 35%,
+    color-mix(in srgb, var(--app-accent-2) 30%, transparent) 55%,
+    color-mix(in srgb, var(--app-accent-3) 26%, transparent) 75%,
     transparent 100%
   );
   transform: rotate(-8deg);
@@ -423,10 +430,10 @@ html.dark .paint-ribbon {
   background: linear-gradient(
     90deg,
     transparent 0%,
-    rgba(120, 113, 108, 0.3) 18%,
-    rgba(215, 38, 56, 0.1) 40%,
-    rgba(232, 140, 43, 0.12) 65%,
-    rgba(168, 162, 158, 0.25) 85%,
+    color-mix(in srgb, var(--app-accent-3) 32%, transparent) 18%,
+    color-mix(in srgb, var(--app-cool) 28%, transparent) 40%,
+    color-mix(in srgb, var(--app-accent) 30%, transparent) 65%,
+    color-mix(in srgb, var(--app-accent-2) 24%, transparent) 85%,
     transparent 100%
   );
   transform: rotate(5deg);
@@ -436,10 +443,10 @@ html.dark .paint-ribbon-a {
   background: linear-gradient(
     90deg,
     transparent 0%,
-    rgba(80, 232, 244, 0.4) 15%,
-    rgba(0, 43, 76, 0.6) 40%,
-    rgba(247, 181, 56, 0.3) 65%,
-    rgba(215, 38, 56, 0.25) 80%,
+    color-mix(in srgb, var(--app-cool) 48%, transparent) 15%,
+    color-mix(in srgb, var(--app-accent) 42%, transparent) 40%,
+    color-mix(in srgb, var(--app-accent-2) 38%, transparent) 65%,
+    color-mix(in srgb, var(--app-accent-3) 32%, transparent) 80%,
     transparent 100%
   );
 }
@@ -447,9 +454,9 @@ html.dark .paint-ribbon-b {
   background: linear-gradient(
     90deg,
     transparent 0%,
-    rgba(120, 1, 22, 0.4) 20%,
-    rgba(80, 232, 244, 0.25) 50%,
-    rgba(253, 210, 14, 0.2) 75%,
+    color-mix(in srgb, var(--app-accent-3) 42%, transparent) 20%,
+    color-mix(in srgb, var(--app-cool) 36%, transparent) 50%,
+    color-mix(in srgb, var(--app-accent-2) 30%, transparent) 75%,
     transparent 100%
   );
 }
@@ -527,8 +534,8 @@ html.dark .paint-vignette {
 
 html.dark .aurora-grid {
   background-image:
-    linear-gradient(rgba(199, 248, 254, 0.07) 1px, transparent 1px),
-    linear-gradient(90deg, rgba(199, 248, 254, 0.07) 1px, transparent 1px);
+    linear-gradient(rgba(244, 241, 236, 0.06) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(244, 241, 236, 0.06) 1px, transparent 1px);
 }
 @keyframes aurora-grid-drift {
   to {
@@ -586,7 +593,7 @@ html.dark .bg-grid {
 
 html.dark .bg-noise {
   background-image: radial-gradient(
-    rgba(199, 248, 254, 0.05) 1px,
+    rgba(245, 241, 235, 0.05) 1px,
     transparent 1px
   );
 }
@@ -692,15 +699,19 @@ html.dashboard-route body {
 
 /* Tenant dashboard is always dark — ignore public marketing light theme. */
 html.dashboard-route {
-  --app-bg: #04121a;
-  --app-fg: #f0f9fc;
-  --app-muted: #90a5b1;
-  --app-surface: #08202b;
-  --app-surface-2: #0d2a38;
-  --app-border: rgba(199, 248, 254, 0.1);
-  --app-accent: #f7b538;
-  --app-accent-2: #faaa48;
-  --app-accent-3: #fdd20e;
+  --app-bg: #151311;
+  --app-fg: #f5f1eb;
+  --app-muted: #a59e94;
+  --app-surface: #1f1b17;
+  --app-surface-2: #2a2520;
+  --app-border: rgba(245, 241, 235, 0.11);
+  --app-accent: #f0a53a;
+  --app-accent-2: #f5c04a;
+  --app-accent-3: #e86b5a;
+  --app-cool: #3db8ba;
+  --app-cool-soft: rgba(61, 184, 186, 0.16);
+  --app-warm-soft: rgba(240, 165, 58, 0.18);
+  --app-rose-soft: rgba(232, 107, 90, 0.14);
   color-scheme: dark;
 }
 

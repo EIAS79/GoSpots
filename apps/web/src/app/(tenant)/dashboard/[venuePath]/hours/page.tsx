@@ -46,11 +46,11 @@ export default function HoursPage() {
     try {
       setSchedule(await fetchSchedule());
     } catch (e) {
-      setError(e instanceof Error ? e.message : "Could not load hours.");
+      setError(e instanceof Error ? e.message : t?.("hours.loadError") ?? "Could not load hours.");
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [t]);
 
   useEffect(() => {
     void load();
@@ -101,7 +101,9 @@ export default function HoursPage() {
                   setSchedule(next);
                 } catch (e) {
                   setError(
-                    e instanceof Error ? e.message : "Could not save hours.",
+                    e instanceof Error
+                      ? e.message
+                      : t?.("hours.saveError") ?? "Could not save hours.",
                   );
                 } finally {
                   setSaving(false);

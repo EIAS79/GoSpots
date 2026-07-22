@@ -5,6 +5,9 @@
   "author": "",
   "private": true,
   "license": "UNLICENSED",
+  "engines": {
+    "node": "20.x"
+  },
   "scripts": {
     "build": "nest build",
     "format": "prettier --write \"src/**/*.ts\" \"test/**/*.ts\"",
@@ -15,6 +18,14 @@
     "prisma:migrate": "prisma migrate dev",
     "prisma:studio": "prisma studio",
     "seed": "tsx prisma/seed.ts",
+    "detect:reservation-overlaps": "tsx scripts/detect-reservation-overlaps.ts",
+    "detect:resource-dining-drift": "tsx scripts/detect-resource-dining-drift.ts",
+    "clear:guest-plaintext": "tsx scripts/clear-guest-plaintext.ts",
+    "backfill:legacy-addon-tier": "tsx scripts/backfill-legacy-addon-tier.ts",
+    "inventory:legacy-uploads": "tsx scripts/inventory-legacy-uploads.ts",
+    "inventory:offering-config": "tsx scripts/inventory-offering-config.ts",
+    "migrate:legacy-uploads": "tsx scripts/migrate-legacy-uploads.ts",
+    "verify:migrations": "tsx scripts/verify-migrations.ts",
     "start:debug": "nest start --debug --watch",
     "start:prod": "node dist/main",
     "migrate:deploy": "prisma migrate deploy",
@@ -24,7 +35,8 @@
     "test:watch": "jest --watch",
     "test:cov": "jest --coverage",
     "test:debug": "node --inspect-brk -r tsconfig-paths/register -r ts-node/register node_modules/.bin/jest --runInBand",
-    "test:e2e": "jest --config ./test/jest-e2e.json"
+    "test:e2e": "jest --config ./test/jest-e2e.json",
+    "test:concurrency": "jest --config ./test/jest-concurrency.json --runInBand --passWithNoTests"
   },
   "dependencies": {
     "@nestjs/common": "^11.0.1",
@@ -37,6 +49,7 @@
     "@nestjs/swagger": "^11.4.3",
     "@nestjs/throttler": "^6.4.0",
     "@prisma/client": "^6.19.3",
+    "@sentry/node": "^10.67.0",
     "argon2": "^0.43.0",
     "class-transformer": "^0.5.1",
     "class-validator": "^0.15.1",
@@ -45,8 +58,8 @@
     "multer": "^2.1.1",
     "passport-jwt": "^4.0.1",
     "reflect-metadata": "^0.2.2",
-    "sharp": "^0.34.5",
-    "rxjs": "^7.8.1"
+    "rxjs": "^7.8.1",
+    "sharp": "^0.34.5"
   },
   "devDependencies": {
     "@eslint/eslintrc": "^3.2.0",

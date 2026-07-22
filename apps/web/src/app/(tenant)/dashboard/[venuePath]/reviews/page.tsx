@@ -26,9 +26,11 @@ import { useCurrentMembership } from "@/lib/use-current-membership";
 import { useDashboardGuide } from "@/lib/use-dashboard-guide";
 import { useLiveData } from "@/lib/use-live-data";
 import { useVenueAccess } from "@/lib/use-venue-access";
+import { useVenueSettingsOptional } from "@/lib/venue-settings-context";
 import { publishLiveEvent } from "@/lib/live-events";
 
 type Filter = "ALL" | VenueReviewStatus;
+type ReviewT = (key: string, vars?: Record<string, string | number>) => string;
 
 function Stars({ rating }: { rating: number }) {
   return (
@@ -48,6 +50,17 @@ function Stars({ rating }: { rating: number }) {
   );
 }
 
+function statusLabel(status: VenueReviewStatus, t: ReviewT) {
+  switch (status) {
+    case "PUBLISHED":
+      return t("reviewsStaff.filterPublished");
+    case "REJECTED":
+      return t("reviewsStaff.filterHidden");
+    default:
+      return t("reviewsStaff.filterPending");
+  }
+}
+
 function statusStyle(status: VenueReviewStatus) {
   switch (status) {
     case "PUBLISHED":
@@ -64,6 +77,8 @@ export default function ReviewsPage() {
   const { state } = useAuth();
   const membership = useCurrentMembership();
   const access = useVenueAccess();
+  const vs = useVenueSettingsOptional();
+  const t: ReviewT = vs?.t ?? ((key) => key);
   const unlocked = isFeatureUnlocked(access.enabledModules, "reviews");
 
   const perms = membership?.permissions ?? "";
@@ -98,15 +113,19 @@ export default function ReviewsPage() {
         setTotal(data.total);
         setAverageRating(data.averageRating);
         setPublishedCount(data.publishedCount);
+        return true;
       } catch (e) {
         if (!opts.silent) {
-          setError(e instanceof Error ? e.message : "Failed to load reviews.");
+          setError(
+            e instanceof Error ? e.message : t("reviewsStaff.loadError"),
+          );
         }
+        return false;
       } finally {
         if (!opts.silent) setLoading(false);
       }
     },
-    [canRead, filter, unlocked],
+    [canRead, filter, unlocked, t],
   );
 
   useEffect(() => {
@@ -130,7 +149,7 @@ export default function ReviewsPage() {
       await load({ silent: true });
       publishLiveEvent({ section: "venue" });
     } catch (e) {
-      setError(e instanceof Error ? e.message : "Could not update review.");
+      setError(e instanceof Error ? e.message : t("reviewsStaff.updateError"));
     } finally {
       setBusyId(null);
     }
@@ -138,14 +157,14 @@ export default function ReviewsPage() {
 
   async function remove(id: string, name: string) {
     if (!canWrite) return;
-    if (!confirm(`Permanently delete the review from ${name}?`)) return;
+    if (!confirm(t("reviewsStaff.deleteConfirm", { name }))) return;
     setBusyId(id);
     try {
       await deleteStaffReview(id);
       await load({ silent: true });
       publishLiveEvent({ section: "venue" });
     } catch (e) {
-      setError(e instanceof Error ? e.message : "Could not delete review.");
+      setError(e instanceof Error ? e.message : t("reviewsStaff.deleteError"));
     } finally {
       setBusyId(null);
     }
@@ -160,14 +179,14 @@ export default function ReviewsPage() {
       <FeatureGate feature="reviews" unlocked={unlocked}>
         {!canRead ? (
           <p className="rounded-xl border border-rose-500/30 bg-rose-500/10 px-4 py-6 text-sm text-rose-200">
-            You do not have permission to view reviews.
+            {t("reviewsStaff.noPermission")}
           </p>
         ) : (
           <>
             <div className="mb-6 flex flex-wrap items-center gap-3">
               <div className="rounded-xl border border-white/10 bg-zinc-900/50 px-4 py-3">
                 <p className="text-[10px] uppercase tracking-wide text-zinc-500">
-                  Public average
+                  {t("reviewsStaff.publicAverage")}
                 </p>
                 <p className="mt-0.5 flex items-center gap-2 text-lg font-semibold text-white">
                   {averageRating != null ? averageRating.toFixed(1) : "—"}
@@ -176,12 +195,12 @@ export default function ReviewsPage() {
                   ) : null}
                 </p>
                 <p className="text-[11px] text-zinc-500">
-                  {publishedCount} published
+                  {t("reviewsStaff.publishedCount", { count: publishedCount })}
                 </p>
               </div>
               <div className="rounded-xl border border-white/10 bg-zinc-900/50 px-4 py-3">
                 <p className="text-[10px] uppercase tracking-wide text-zinc-500">
-                  In this list
+                  {t("reviewsStaff.inThisList")}
                 </p>
                 <p className="mt-0.5 text-lg font-semibold text-white">{total}</p>
               </div>
@@ -190,10 +209,19 @@ export default function ReviewsPage() {
             <div className="mb-4 flex flex-wrap gap-1 rounded-lg border border-white/10 bg-zinc-950/80 p-1">
               {(
                 [
-                  { id: "ALL" as const, label: "All" },
-                  { id: "PUBLISHED" as const, label: "Published" },
-                  { id: "REJECTED" as const, label: "Hidden" },
-                  { id: "PENDING" as const, label: "Pending" },
+                  { id: "ALL" as const, label: t("reviewsStaff.filterAll") },
+                  {
+                    id: "PUBLISHED" as const,
+                    label: t("reviewsStaff.filterPublished"),
+                  },
+                  {
+                    id: "REJECTED" as const,
+                    label: t("reviewsStaff.filterHidden"),
+                  },
+                  {
+                    id: "PENDING" as const,
+                    label: t("reviewsStaff.filterPending"),
+                  },
                 ] as const
               ).map(({ id, label }) => (
                 <button
@@ -224,7 +252,7 @@ export default function ReviewsPage() {
               </div>
             ) : reviews.length === 0 ? (
               <p className="rounded-xl border border-dashed border-white/10 py-16 text-center text-sm text-zinc-500">
-                No reviews yet. Guests leave them on your public venue page.
+                {t("reviewsStaff.emptyState")}
               </p>
             ) : (
               <ul className="space-y-3">
@@ -244,11 +272,11 @@ export default function ReviewsPage() {
                               statusStyle(r.status),
                             )}
                           >
-                            {r.status === "REJECTED" ? "Hidden" : r.status}
+                            {statusLabel(r.status, t)}
                           </span>
                         </div>
                         <p className="mt-1 text-[11px] text-zinc-500">
-                          {formatDate(r.createdAt)}
+                          {formatDate(r.createdAt, vs?.locale ?? "en")}
                           {r.guestEmail ? ` · ${r.guestEmail}` : ""}
                         </p>
                       </div>
@@ -261,7 +289,7 @@ export default function ReviewsPage() {
                               onClick={() => void setStatus(r.id, "PUBLISHED")}
                               className="inline-flex items-center gap-1 rounded-lg border border-emerald-400/30 bg-emerald-500/10 px-2.5 py-1 text-[11px] text-emerald-200 hover:bg-emerald-500/20 disabled:opacity-50"
                             >
-                              <Eye size={12} /> Publish
+                              <Eye size={12} /> {t("reviewsStaff.publishButton")}
                             </button>
                           ) : (
                             <button
@@ -270,7 +298,7 @@ export default function ReviewsPage() {
                               onClick={() => void setStatus(r.id, "REJECTED")}
                               className="inline-flex items-center gap-1 rounded-lg border border-white/10 px-2.5 py-1 text-[11px] text-zinc-400 hover:bg-white/5 disabled:opacity-50"
                             >
-                              <EyeOff size={12} /> Hide
+                              <EyeOff size={12} /> {t("reviewsStaff.hideButton")}
                             </button>
                           )}
                           <button
@@ -279,7 +307,7 @@ export default function ReviewsPage() {
                             onClick={() => void remove(r.id, r.guestName)}
                             className="inline-flex items-center gap-1 rounded-lg border border-rose-400/30 bg-rose-500/10 px-2.5 py-1 text-[11px] text-rose-200 hover:bg-rose-500/20 disabled:opacity-50"
                           >
-                            <Trash2 size={12} /> Delete
+                            <Trash2 size={12} /> {t("reviewsStaff.deleteButton")}
                           </button>
                         </div>
                       ) : null}
@@ -290,7 +318,7 @@ export default function ReviewsPage() {
                       </p>
                     ) : (
                       <p className="mt-3 text-xs italic text-zinc-600">
-                        No written comment — rating only.
+                        {t("reviewsStaff.noComment")}
                       </p>
                     )}
                   </li>

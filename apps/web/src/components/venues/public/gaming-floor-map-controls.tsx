@@ -9,7 +9,7 @@ import {
 } from "lucide-react";
 import type { ReactNode } from "react";
 import { cn } from "@/lib/cn";
-import { formatWindowLabel } from "@/lib/gaming-window-availability";
+import { usePublicPrefs } from "@/lib/public-prefs-context";
 import { todayDateInput } from "@/lib/seating-event-datetime";
 
 function shiftDate(dateStr: string, delta: number) {
@@ -17,18 +17,6 @@ function shiftDate(dateStr: string, delta: number) {
   d.setDate(d.getDate() + delta);
   const pad = (n: number) => String(n).padStart(2, "0");
   return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
-}
-
-function formatScheduleDay(dateStr: string) {
-  const d = new Date(`${dateStr}T12:00:00`);
-  const today = todayDateInput();
-  const label = d.toLocaleDateString(undefined, {
-    weekday: "short",
-    month: "short",
-    day: "numeric",
-  });
-  if (dateStr === today) return `Today · ${label}`;
-  return label;
 }
 
 export function GamingFloorMapControls({
@@ -52,6 +40,32 @@ export function GamingFloorMapControls({
   windowError?: string | null;
   floorTabs?: ReactNode;
 }) {
+  const { t, locale } = usePublicPrefs();
+
+  function formatScheduleDay(dateStr: string) {
+    const d = new Date(`${dateStr}T12:00:00`);
+    const today = todayDateInput();
+    const label = d.toLocaleDateString(locale, {
+      weekday: "short",
+      month: "short",
+      day: "numeric",
+    });
+    if (dateStr === today) return t("venuePage.floor.today", { label });
+    return label;
+  }
+
+  function formatWindowSummary() {
+    const day = new Date(`${scheduleDate}T12:00:00`).toLocaleDateString(
+      locale,
+      {
+        weekday: "short",
+        month: "short",
+        day: "numeric",
+      },
+    );
+    return `${day} · ${windowStartTime} – ${windowEndTime}`;
+  }
+
   return (
     <div className="border-b border-[var(--color-border)] bg-[var(--color-background)]/70 px-3 py-2.5">
       {mapLabel ? (
@@ -69,7 +83,7 @@ export function GamingFloorMapControls({
           <div className="min-w-0 flex-1">
             <p className="mb-1.5 flex items-center gap-1 text-[9px] font-semibold uppercase tracking-widest text-zinc-600">
               <Layers size={10} className="text-emerald-400/70" />
-              Floor
+              {t("venuePage.floor.floor")}
             </p>
             {floorTabs}
           </div>
@@ -87,7 +101,7 @@ export function GamingFloorMapControls({
             <div className="min-w-0">
               <p className="mb-1.5 flex items-center gap-1 text-[9px] font-semibold uppercase tracking-widest text-zinc-600">
                 <CalendarDays size={10} className="text-amber-400/70" />
-                Date
+                {t("venuePage.floor.date")}
               </p>
               <div className="flex max-w-full items-center gap-0.5 rounded-lg border border-[var(--color-border)] bg-[var(--color-surface)] p-0.5">
                 <button
@@ -96,7 +110,7 @@ export function GamingFloorMapControls({
                     onScheduleDateChange(shiftDate(scheduleDate, -1))
                   }
                   className="rounded-md p-1.5 text-zinc-500 hover:bg-black/5 hover:text-[var(--color-foreground)] dark:hover:bg-white/5 dark:hover:text-white"
-                  aria-label="Previous day"
+                  aria-label={t("venuePage.floor.prevDay")}
                 >
                   <ChevronLeft size={14} />
                 </button>
@@ -114,7 +128,7 @@ export function GamingFloorMapControls({
                     onScheduleDateChange(shiftDate(scheduleDate, 1))
                   }
                   className="rounded-md p-1.5 text-zinc-500 hover:bg-black/5 hover:text-[var(--color-foreground)] dark:hover:bg-white/5 dark:hover:text-white"
-                  aria-label="Next day"
+                  aria-label={t("venuePage.floor.nextDay")}
                 >
                   <ChevronRight size={14} />
                 </button>
@@ -127,11 +141,11 @@ export function GamingFloorMapControls({
             <div className="min-w-0">
               <p className="mb-1.5 flex items-center gap-1 text-[9px] font-semibold uppercase tracking-widest text-zinc-600">
                 <Clock size={10} className="text-sky-400/70" />
-                Check availability
+                {t("venuePage.floor.checkAvailability")}
               </p>
               <div className="flex flex-wrap items-center gap-2">
                 <label className="flex min-w-0 items-center gap-1.5 text-[11px] text-zinc-600 dark:text-zinc-400">
-                  <span>From</span>
+                  <span>{t("venuePage.floor.from")}</span>
                   <input
                     type="time"
                     value={windowStartTime}
@@ -140,7 +154,7 @@ export function GamingFloorMapControls({
                   />
                 </label>
                 <label className="flex min-w-0 items-center gap-1.5 text-[11px] text-zinc-600 dark:text-zinc-400">
-                  <span>To</span>
+                  <span>{t("venuePage.floor.to")}</span>
                   <input
                     type="time"
                     value={windowEndTime}
@@ -153,11 +167,7 @@ export function GamingFloorMapControls({
                 <p className="mt-1.5 text-[10px] text-rose-300">{windowError}</p>
               ) : (
                 <p className="mt-1.5 text-[10px] text-zinc-600">
-                  {formatWindowLabel(
-                    scheduleDate,
-                    windowStartTime,
-                    windowEndTime,
-                  )}
+                  {formatWindowSummary()}
                 </p>
               )}
             </div>

@@ -72,7 +72,7 @@ export class AuditController {
     const stamp = new Date().toISOString().slice(0, 10);
     res.setHeader(
       'Content-Disposition',
-      `attachment; filename="gospots-audit-${stamp}.csv"`,
+      `attachment; filename="Locora-audit-${stamp}.csv"`,
     );
     res.send(csv);
   }

@@ -9,23 +9,29 @@ import {
 } from "lucide-react";
 import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
+import { PublicCaptchaWidget } from "@/components/venues/public/public-captcha-widget";
+import { PrivacyConsentCheckbox } from "@/components/venues/public/privacy-consent-checkbox";
 import { cn } from "@/lib/cn";
 import {
-  EVENT_REQUEST_TYPE_LABELS,
   PRIVATE_EVENT_REQUEST_TYPES,
   submitPublicEventRequest,
   type EventRequestType,
 } from "@/lib/event-requests-client";
+import {
+  isPublicCaptchaEnabled,
+  withCaptchaToken,
+} from "@/lib/public-captcha";
+import { usePublicPrefs } from "@/lib/public-prefs-context";
 import {
   combineLocalDateTime,
   defaultEventTimes,
   todayDateInput,
 } from "@/lib/seating-event-datetime";
 import {
-  SEATING_ZONE_LABELS,
   SEATING_ZONES,
   type SeatingZone,
 } from "@/lib/seating-zone";
+import { safeStatusPathHref } from "@/lib/safe-app-href";
 
 const { start: defaultStartTime, end: defaultEndTime } = defaultEventTimes();
 
@@ -52,28 +58,10 @@ type PublicBookingRequestFormProps = {
   className?: string;
 };
 
-const MODE_META: Record<
-  BookingFormMode,
-  { title: string; description: string; icon: typeof CalendarCheck }
-> = {
-  TABLE: {
-    title: "Request a table",
-    description:
-      "Pick a date, time, and party size. The venue confirms availability before your visit.",
-    icon: CalendarCheck,
-  },
-  GAMING: {
-    title: "Book an activity",
-    description:
-      "Reserve bowling, billiards, gaming stations, and more. Staff will confirm your slot.",
-    icon: Gamepad2,
-  },
-  EVENT: {
-    title: "Request a private event",
-    description:
-      "Birthdays, meetings, parties — tell us what you need. The venue reviews every request against their live floor.",
-    icon: PartyPopper,
-  },
+const MODE_ICONS: Record<BookingFormMode, typeof CalendarCheck> = {
+  TABLE: CalendarCheck,
+  GAMING: Gamepad2,
+  EVENT: PartyPopper,
 };
 
 export function PublicBookingRequestForm({
@@ -86,8 +74,20 @@ export function PublicBookingRequestForm({
   description,
   className,
 }: PublicBookingRequestFormProps) {
-  const meta = MODE_META[mode];
-  const Icon = meta.icon;
+  const { t } = usePublicPrefs();
+  const Icon = MODE_ICONS[mode];
+  const modeTitle =
+    mode === "TABLE"
+      ? t("publicBooking.modeTableTitle")
+      : mode === "GAMING"
+        ? t("publicBooking.modeGamingTitle")
+        : t("publicBooking.modeEventTitle");
+  const modeDesc =
+    mode === "TABLE"
+      ? t("publicBooking.modeTableDesc")
+      : mode === "GAMING"
+        ? t("publicBooking.modeGamingDesc")
+        : t("publicBooking.modeEventDesc");
 
   const areaOptions = useMemo(() => {
     if (mode === "GAMING") return gamingOptions;
@@ -113,6 +113,9 @@ export function PublicBookingRequestForm({
   const [message, setMessage] = useState("");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [captchaToken, setCaptchaToken] = useState<string | null>(null);
+  const [captchaReset, setCaptchaReset] = useState(0);
+  const [privacyConsent, setPrivacyConsent] = useState(false);
   const [success, setSuccess] = useState<{
     message: string;
     statusPath?: string;
@@ -140,31 +143,39 @@ export function PublicBookingRequestForm({
     const preferredEndsAt = combineLocalDateTime(eventDate, eventEndTime);
 
     if (!guestName.trim()) {
-      setError("Your name is required.");
+      setError(t("venuePage.booking.nameRequired"));
       return;
     }
     if (!guestEmail.trim() && !guestPhone.trim()) {
-      setError("Please provide an email or phone number so the venue can reply.");
+      setError(t("publicBooking.replyRequired"));
       return;
     }
     if (!preferredStartsAt) {
-      setError("Pick a date and start time.");
+      setError(t("publicBooking.pickDateStart"));
       return;
     }
     if (preferredEndsAt && preferredEndsAt <= preferredStartsAt) {
-      setError("End time must be after start time.");
+      setError(t("publicBooking.endAfterStart"));
       return;
     }
     if ((mode === "GAMING" || (mode === "EVENT" && useDigitalAreas)) && !resourceCategoryId) {
       setError(
         mode === "GAMING"
-          ? "Select an activity to book."
-          : "Select a dining area or activity for your event.",
+          ? t("publicBooking.selectActivity")
+          : t("publicBooking.selectAreaOrActivity"),
       );
       return;
     }
     if (mode === "TABLE" && useDigitalAreas && !resourceCategoryId) {
-      setError("Select a dining area.");
+      setError(t("publicBooking.selectDiningArea"));
+      return;
+    }
+    if (!privacyConsent) {
+      setError(t("venuePage.privacyConsent.required"));
+      return;
+    }
+    if (isPublicCaptchaEnabled() && !captchaToken?.trim()) {
+      setError(t("venuePage.captcha.required"));
       return;
     }
 
@@ -172,21 +183,28 @@ export function PublicBookingRequestForm({
     try {
       const resolvedType: EventRequestType =
         mode === "EVENT" ? eventType : mode === "TABLE" ? "TABLE" : "GAMING";
-      const res = await submitPublicEventRequest(slug, {
-        eventType: resolvedType,
-        guestName: guestName.trim(),
-        guestEmail: guestEmail.trim() || undefined,
-        guestPhone: guestPhone.trim() || undefined,
-        partySize,
-        preferredStartsAt,
-        preferredEndsAt,
-        zone: showLegacyZone ? zone : undefined,
-        message: message.trim() || undefined,
-        resourceCategoryId:
-          useDigitalAreas || mode === "GAMING"
-            ? resourceCategoryId || undefined
-            : undefined,
-      });
+      const res = await submitPublicEventRequest(
+        slug,
+        withCaptchaToken(
+          {
+            eventType: resolvedType,
+            guestName: guestName.trim(),
+            guestEmail: guestEmail.trim() || undefined,
+            guestPhone: guestPhone.trim() || undefined,
+            partySize,
+            preferredStartsAt,
+            preferredEndsAt,
+            zone: showLegacyZone ? zone : undefined,
+            message: message.trim() || undefined,
+            resourceCategoryId:
+              useDigitalAreas || mode === "GAMING"
+                ? resourceCategoryId || undefined
+                : undefined,
+            privacyConsentAccepted: true,
+          },
+          captchaToken,
+        ),
+      );
       setSuccess({
         message: res.message,
         statusPath: res.statusPath,
@@ -195,14 +213,19 @@ export function PublicBookingRequestForm({
       setGuestEmail("");
       setGuestPhone("");
       setMessage("");
+      setCaptchaToken(null);
+      setCaptchaReset((n) => n + 1);
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Could not send request.");
+      setError(err instanceof Error ? err.message : t("publicBooking.sendFailed"));
+      setCaptchaToken(null);
+      setCaptchaReset((n) => n + 1);
     } finally {
       setBusy(false);
     }
   }
 
   if (success) {
+    const trackHref = safeStatusPathHref(success.statusPath);
     return (
       <div
         className={cn(
@@ -212,31 +235,34 @@ export function PublicBookingRequestForm({
       >
         <CheckCircle2 className="mx-auto text-emerald-400" size={32} />
         <p className="mt-3 text-sm font-medium text-emerald-100">{success.message}</p>
-        {success.statusPath ? (
+        {trackHref ? (
           <Link
-            href={success.statusPath}
+            href={trackHref}
             className="mt-4 inline-block rounded-lg bg-emerald-600 px-4 py-2 text-sm font-medium text-white hover:bg-emerald-500"
           >
-            Track your request
+            {t("publicBooking.trackRequest")}
           </Link>
         ) : null}
         <p className="mt-3 text-xs text-emerald-200/70">
-          Save the status link — you can cancel from there while the request is
-          still pending or before the approved event starts.
+          {t("publicBooking.statusLinkHint")}
         </p>
         <button
           type="button"
           onClick={() => setSuccess(null)}
           className="mt-4 text-xs text-emerald-300 underline"
         >
-          Submit another request
+          {t("publicBooking.submitAnother")}
         </button>
       </div>
     );
   }
 
   const partyLabel =
-    mode === "GAMING" ? "Players" : mode === "TABLE" ? "Guests" : "Party size";
+    mode === "GAMING"
+      ? t("publicBooking.players")
+      : mode === "TABLE"
+        ? t("publicBooking.guests")
+        : t("publicBooking.partySize");
 
   return (
     <form
@@ -250,10 +276,10 @@ export function PublicBookingRequestForm({
         <Icon className="mt-0.5 shrink-0 text-amber-600 dark:text-amber-300" size={22} />
         <div>
           <h3 className="text-lg font-semibold text-[var(--color-foreground)]">
-            {title ?? meta.title}
+            {title ?? modeTitle}
           </h3>
           <p className="mt-1 text-sm text-zinc-500">
-            {description ?? meta.description}
+            {description ?? modeDesc}
           </p>
         </div>
       </div>
@@ -267,15 +293,15 @@ export function PublicBookingRequestForm({
       <div className="mt-5 grid gap-4 sm:grid-cols-2">
         {mode === "EVENT" ? (
           <label className="block text-xs text-zinc-600 dark:text-zinc-400 sm:col-span-2">
-            Event type
+            {t("publicBooking.eventType")}
             <select
               value={eventType}
               onChange={(e) => setEventType(e.target.value as EventRequestType)}
               className="mt-1 w-full rounded-lg border border-[var(--color-border)] bg-[var(--color-background)] px-3 py-2.5 text-base text-[var(--color-foreground)] outline-none focus:border-amber-500/40 sm:text-sm"
             >
-              {PRIVATE_EVENT_REQUEST_TYPES.map((t) => (
-                <option key={t} value={t}>
-                  {EVENT_REQUEST_TYPE_LABELS[t]}
+              {PRIVATE_EVENT_REQUEST_TYPES.map((type) => (
+                <option key={type} value={type}>
+                  {t(`guestStatus.event.type.${type}`)}
                 </option>
               ))}
             </select>
@@ -285,10 +311,10 @@ export function PublicBookingRequestForm({
         {useDigitalAreas ? (
           <label className="block text-xs text-zinc-600 dark:text-zinc-400 sm:col-span-2">
             {mode === "GAMING"
-              ? "Activity"
+              ? t("publicBooking.activity")
               : mode === "TABLE"
-                ? "Dining area"
-                : "Preferred dining area / activity"}
+                ? t("publicBooking.diningArea")
+                : t("publicBooking.preferredAreaActivity")}
             <select
               value={resourceCategoryId}
               onChange={(e) => setResourceCategoryId(e.target.value)}
@@ -297,7 +323,9 @@ export function PublicBookingRequestForm({
               {areaOptions.map((o) => (
                 <option key={o.id} value={o.id}>
                   {o.name}
-                  {o.unitCount != null ? ` · ${o.unitCount} units` : ""}
+                  {o.unitCount != null
+                    ? t("publicBooking.unitsSuffix", { n: o.unitCount })
+                    : ""}
                 </option>
               ))}
             </select>
@@ -305,7 +333,7 @@ export function PublicBookingRequestForm({
         ) : null}
 
         <label className="block text-xs text-zinc-600 dark:text-zinc-400">
-          Your name
+          {t("venuePage.booking.yourName")}
           <input
             required
             value={guestName}
@@ -324,7 +352,7 @@ export function PublicBookingRequestForm({
           />
         </label>
         <label className="block text-xs text-zinc-600 dark:text-zinc-400">
-          Phone
+          {t("venuePage.contact.phone")}
           <input
             type="tel"
             value={guestPhone}
@@ -333,7 +361,7 @@ export function PublicBookingRequestForm({
           />
         </label>
         <label className="block text-xs text-zinc-600 dark:text-zinc-400">
-          Email
+          {t("venuePage.booking.email")}
           <input
             type="email"
             value={guestEmail}
@@ -342,12 +370,12 @@ export function PublicBookingRequestForm({
           />
         </label>
         <p className="text-[11px] text-zinc-600 sm:col-span-2">
-          Provide at least one way to reach you.
+          {t("publicBooking.reachHint")}
         </p>
 
         {showLegacyZone ? (
           <label className="block text-xs text-zinc-600 dark:text-zinc-400 sm:col-span-2">
-            Preferred area
+            {t("publicBooking.preferredArea")}
             <div className="mt-1 flex gap-1 rounded-lg border border-[var(--color-border)] bg-[var(--color-background)] p-0.5">
               {SEATING_ZONES.map((z) => (
                 <button
@@ -361,7 +389,9 @@ export function PublicBookingRequestForm({
                       : "text-zinc-500 hover:text-zinc-800 dark:hover:text-zinc-300",
                   )}
                 >
-                  {SEATING_ZONE_LABELS[z]}
+                  {z === "OUTDOOR"
+                    ? t("publicBooking.zoneOutdoor")
+                    : t("publicBooking.zoneIndoor")}
                 </button>
               ))}
             </div>
@@ -369,7 +399,7 @@ export function PublicBookingRequestForm({
         ) : null}
 
         <label className="block text-xs text-zinc-600 dark:text-zinc-400 sm:col-span-2">
-          Preferred date
+          {t("publicBooking.preferredDate")}
           <input
             type="date"
             value={eventDate}
@@ -378,7 +408,7 @@ export function PublicBookingRequestForm({
           />
         </label>
         <label className="block text-xs text-zinc-600 dark:text-zinc-400">
-          Start time
+          {t("publicBooking.startTime")}
           <input
             type="time"
             value={eventStartTime}
@@ -387,7 +417,7 @@ export function PublicBookingRequestForm({
           />
         </label>
         <label className="block text-xs text-zinc-600 dark:text-zinc-400">
-          End time
+          {t("publicBooking.endTime")}
           <input
             type="time"
             value={eventEndTime}
@@ -397,24 +427,39 @@ export function PublicBookingRequestForm({
         </label>
         <label className="block text-xs text-zinc-600 dark:text-zinc-400 sm:col-span-2">
           {mode === "TABLE"
-            ? "Notes for the venue"
+            ? t("publicBooking.notesTable")
             : mode === "GAMING"
-              ? "Anything we should know?"
-              : "Tell us about your event"}
+              ? t("publicBooking.notesGaming")
+              : t("publicBooking.notesEvent")}
           <textarea
             value={message}
             onChange={(e) => setMessage(e.target.value)}
             rows={3}
             placeholder={
               mode === "TABLE"
-                ? "High chair, window seat, birthday setup…"
+                ? t("publicBooking.notesTablePlaceholder")
                 : mode === "GAMING"
-                  ? "Lane preference, game titles, skill level…"
-                  : "Birthday for 12, need projector, dietary needs…"
+                  ? t("publicBooking.notesGamingPlaceholder")
+                  : t("publicBooking.notesEventPlaceholder")
             }
             className="mt-1 w-full rounded-lg border border-[var(--color-border)] bg-[var(--color-background)] px-3 py-2.5 text-base text-[var(--color-foreground)] outline-none focus:border-amber-500/40 sm:text-sm"
           />
         </label>
+      </div>
+
+      <PublicCaptchaWidget
+        className="mt-4"
+        onTokenChange={setCaptchaToken}
+        resetKey={captchaReset}
+      />
+
+      <div className="mt-3">
+        <PrivacyConsentCheckbox
+          checked={privacyConsent}
+          onChange={setPrivacyConsent}
+          label={t("venuePage.privacyConsent.label")}
+          disabled={busy}
+        />
       </div>
 
       <button
@@ -423,7 +468,7 @@ export function PublicBookingRequestForm({
         className="mt-5 inline-flex w-full items-center justify-center gap-2 rounded-lg bg-amber-600 py-2.5 text-sm font-medium text-white hover:bg-amber-500 disabled:opacity-50 sm:w-auto sm:px-6"
       >
         {busy ? <Loader2 size={16} className="animate-spin" /> : null}
-        Send request
+        {t("publicBooking.sendRequest")}
       </button>
     </form>
   );

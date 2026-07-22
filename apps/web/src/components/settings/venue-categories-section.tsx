@@ -29,9 +29,9 @@ export function VenueCategoriesSection({ canWrite = true }: { canWrite?: boolean
         setSelected(d.venueCategories ?? []);
         setSelectedSlugs(new Set((d.venueCategories ?? []).map((t) => t.slug)));
       })
-      .catch(() => setError("Could not load categories."))
+      .catch(() => setError(t("settings.categoriesLoadFailed")))
       .finally(() => setLoading(false));
-  }, []);
+  }, [t]);
 
   async function persist(nextSlugs: Set<string>, customTags: VenueCategoryTag[]) {
     setSaving(true);
@@ -50,7 +50,9 @@ export function VenueCategoriesSection({ canWrite = true }: { canWrite?: boolean
       setSaved(true);
       window.setTimeout(() => setSaved(false), 2000);
     } catch (e) {
-      setError(e instanceof Error ? e.message : "Could not save categories.");
+      setError(
+        e instanceof Error ? e.message : t("settings.categoriesSaveFailed"),
+      );
     } finally {
       setSaving(false);
     }
