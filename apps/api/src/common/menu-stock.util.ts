@@ -1,3 +1,5 @@
+import { ApiDomainErrorCode } from './api-error.codes';
+import { apiConflictException } from './api-error.util';
 import {
   calendarDayInTimeZone,
   resolveVenueTimeZone,
@@ -47,4 +49,18 @@ export function isOutOfStock(item: MenuItemStockFields): boolean {
 export function canFulfillQty(item: MenuItemStockFields, qty: number): boolean {
   if (!item.trackStock) return true;
   return item.stock >= qty;
+}
+
+/** §36 — pre-check tracked stock before decrement (409 when insufficient). */
+export function assertMenuStockQty(
+  item: MenuItemStockFields,
+  qty: number,
+  message?: string,
+): void {
+  if (canFulfillQty(item, qty)) return;
+  throw apiConflictException(
+    ApiDomainErrorCode.MENU_STOCK_INSUFFICIENT,
+    message ?? `Not enough stock (${item.stock} left).`,
+    { menuItemId: item.id, requested: qty, available: item.stock },
+  );
 }

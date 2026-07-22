@@ -3,7 +3,7 @@
   "version": "0.1.0",
   "private": true,
   "engines": {
-    "node": "20.x"
+    "node": "24.x"
   },
   "scripts": {
     "dev": "next dev --webpack",
@@ -14,7 +14,8 @@
     "typecheck": "tsc --noEmit",
     "i18n:check": "node scripts/i18n-check.mjs",
     "test:e2e:smoke": "playwright test e2e/smoke.spec.ts",
-    "test:a11y:smoke": "playwright test e2e/a11y.spec.ts"
+    "test:a11y:smoke": "playwright test e2e/a11y.spec.ts",
+    "test:venue-tz": "tsx --test src/lib/venue-timezone.test.ts"
   },
   "dependencies": {
     "@heroui/react": "^3.0.5",
@@ -38,6 +39,7 @@
     "eslint": "^9",
     "eslint-config-next": "16.2.6",
     "tailwindcss": "^4",
+    "tsx": "^4.22.2",
     "typescript": "^5"
   }
 }

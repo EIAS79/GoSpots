@@ -1,8 +1,29 @@
-# Locora — Realtime / live updates
+# Locora — Realtime / live updates (Bible §23 / #28)
 
-**Date:** 2026-07-20 (design) / 2026-07-21 (notifications SSE + #28 DONE)  
-**Status:** **Bible #28 DONE** for single-instance ship bar — notifications SSE (Lane XX) + poll fallback. Redis/multi-instance and floor/chat SSE remain **scale residuals** (not code blockers for this wave).  
-**Audit:** P2 §2.20.
+**Date:** 2026-07-20 (design) / 2026-07-21 (notifications SSE + #28 DONE) / 2026-07-22 (residual docs lane **SSE23-residual-docs**)  
+**Status:** **Bible #28 / §23 PARTIAL** — single-instance ship bar **DONE** (in-process notifications SSE + poll fallback). Redis/PG NOTIFY multi-instance fan-out and floor/chat SSE are **explicitly deferred** — phased plan below. **No Redis dependency on disk today.**  
+**Audit:** P2 §2.20 / original prompt **§23**.
+
+---
+
+## Shipped vs residual (honest)
+
+| Item | State | Evidence |
+|------|--------|----------|
+| Staff notifications SSE (`GET /notifications/stream`) | **DONE** | Lane XX; Nest `@Sse`; cookie JWT + shop scope |
+| In-process `NotificationsSseHub` (same-instance emit) | **DONE** | jest sse hub **2** PASS |
+| Web `useNotificationsSse` → silent panel refetch | **DONE** | notifications panel hook |
+| Poll fallback (panel ~20s; toast ~15s poll-primary) | **DONE** (required) | multi-instance + reconnect safety net |
+| `@SkipThrottle` / heartbeat on stream route | **DONE** | long-lived connect not throttled |
+| Floor / sessions / guest-chat server push | **RESIDUAL** | poll-only (10–15s / 3.5–8s) |
+| Toast path SSE (replace 15s recent poll) | **RESIDUAL** | poll-primary by design until multi-instance-safe |
+| Redis / PG NOTIFY multi-instance fan-out | **RESIDUAL** | **no Redis dep / adapter on disk** — trigger ≥2 API instances |
+| `RealtimePublisher` shared bus | **RESIDUAL** | sketch only; hub is notifications-only |
+| WebSockets / Socket.IO | **RESIDUAL** (intentionally avoided) | SSE-first decision stands |
+
+**§23 classification:** **PARTIAL** — single-instance ship bar met; scale residuals documented here, not hidden.
+
+---
 
 ### Lane XX (notifications SSE — in-process only) — shipped
 
@@ -156,17 +177,81 @@ Reuse `LiveEventSection` union on the client so SSE payloads drop into today’s
 
 ---
 
-## Phased plan (post-submit only)
+## Residual phased plan (Redis SSE + scale)
 
-| Phase | Scope | Exit criteria |
-|-------|--------|----------------|
-| **0** | This doc | Team agrees SSE-first + defer |
-| **1** | Spike: staff SSE `/api/v1/realtime/stream` + notification creates emit | Toasts without 15s poll; cookie auth works behind proxy |
-| **2** | Floor/sessions subscribe + emit from reservation/session transitions | Poll interval can rise (e.g. 60s safety net) |
-| **3** | Guest chat SSE (token-scoped) + staff messaging | Drop 3.5s thread poll to heartbeat-only fallback |
-| **4** | Multi-instance Redis/NOTIFY adapter + heartbeats + load-test | Safe on ≥2 API instances |
+Phases ordered by deploy topology and ops value. **Do not add Redis until Gate 0 (≥2 API instances) is true** — poll fallback covers today’s single-instance Render deploy.
 
-Keep `useLiveData` as **fallback** forever (visibility resume, missed events, degraded mode).
+### Phase 0 — Single-instance notifications SSE (**DONE**)
+
+- [x] In-process `NotificationsSseHub` + `GET /notifications/stream`
+- [x] Web panel hook; poll fallback retained (panel + toast)
+- [x] Throttle skip + heartbeat (~25s)
+
+**Exit:** Staff notification inbox feels push on one API instance; poll covers missed events.
+
+### Phase 1 — Multi-instance fan-out (**RESIDUAL** — Redis or PG NOTIFY)
+
+**Trigger:** Render (or other host) runs **≥2** API instances **without** sticky sessions, **or** notification SSE misses are observed in prod.
+
+**Goal:** `notification.created` emitted on instance A reaches SSE clients connected to instance B.
+
+| Work | Notes |
+|------|--------|
+| Choose bus | **Redis pub/sub** (preferred if Redis already provisioned for throttle/captcha) **or** **Postgres `NOTIFY`** (no new infra; reuse Neon) |
+| `RealtimePublisher` thin wrapper | `publish({ shopId, section, resourceId?, meta? })` → bus; SSE controllers subscribe per instance |
+| Refactor `NotificationsSseHub` | Local emit + bus subscribe; keep in-process fast path when bus unavailable (dev) |
+| Env + ops | `REDIS_URL` (if Redis) or channel naming doc; health does not require Redis until flag on |
+| Load / soak | Two-instance smoke: create notification → both instances’ clients receive hint |
+
+**Non-goals:** floor/chat topics; toast SSE cutover; WebSockets.
+
+**Exit:** Notifications SSE correct under horizontal scale; poll fallback **still required** (degraded mode).
+
+### Phase 2 — Floor / sessions SSE (**RESIDUAL**)
+
+**Prerequisite:** Phase 1 bus live (floor hints must fan-out across instances).
+
+| Work | Notes |
+|------|--------|
+| Staff ops stream or shared `/realtime/stream` | Shop-scoped; venue bind same as REST |
+| Emit hooks | Reservation status, unit floor status, session start/end — ids + section only |
+| Web | Subscribe + `publishLiveEvent` → existing `useLiveData` refetch |
+| Poll interval | May rise to ~60s safety net once push proven |
+
+**Exit:** Two staff stations see floor changes without 10–15s blind poll lag.
+
+### Phase 3 — Guest chat SSE (**RESIDUAL**)
+
+**Prerequisite:** Phase 1 bus; token-scoped auth model documented in [Auth & cookie concerns](#auth--cookie-concerns).
+
+| Work | Notes |
+|------|--------|
+| Staff thread stream | Cookie + `messaging.*` perms |
+| Guest widget stream | Chat token in path/storage — **not** staff cookies on public origin |
+| Events | `chat.message`, `chat.status` scoped by `chatId` |
+| Poll | Drop 3.5–4s thread poll to heartbeat-only fallback |
+
+**Exit:** Chat feels sub-second; poll remains reconnect fallback.
+
+### Phase 4 — Ops polish + load test (**RESIDUAL**)
+
+- [ ] Proxy buffering verified (Render/Vercel): `text/event-stream`, `Cache-Control: no-cache`, no gzip buffer on stream path
+- [ ] Heartbeat + idle-close runbook in [`GO_SPOTS_OFFLINE.md`](./GO_SPOTS_OFFLINE.md) disconnect handling
+- [ ] Optional: toast path moves from poll-primary to SSE-hint (only after Phase 1 stable)
+
+**Exit:** Documented runbook; load test on ≥2 instances with SSE + poll fallback.
+
+Keep `useLiveData` as **fallback forever** (visibility resume, missed events, degraded mode).
+
+---
+
+## Legacy design phases (superseded by table above)
+
+| Old phase | Disposition |
+|-----------|-------------|
+| Design doc (2026-07-20) | **DONE** — this file |
+| Notification spike | **DONE** — Lane XX (Phase 0) |
+| Floor / chat / Redis | Remapped to Phases 1–4 above |
 
 ---
 

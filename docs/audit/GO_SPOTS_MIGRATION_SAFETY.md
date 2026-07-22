@@ -9,11 +9,11 @@
 
 | Doc | Role |
 |-----|------|
-| [`GO_SPOTS_MIGRATION_PLAN.md`](./GO_SPOTS_MIGRATION_PLAN.md) | *Which* candidate migrations (M1–M7) and expand→contract sketches |
-| [`MIGRATION_PREFLIGHT.md`](./MIGRATION_PREFLIGHT.md) | One-time pass/warn for the **current eight** pending folders |
-| [`DEPLOY_CHECKLIST.md`](./DEPLOY_CHECKLIST.md) | Friday operator apply + smoke |
+| This doc | *How* migrations are authored, reviewed, CI-checked, applied |
+| [`MIGRATION_PREFLIGHT.md`](./MIGRATION_PREFLIGHT.md) | Pass/warn for applied migrate wave |
+| [`DEPLOY_CHECKLIST.md`](./DEPLOY_CHECKLIST.md) | Operator apply + smoke |
+| [`docs/PRODUCTION_STATUS.md`](../PRODUCTION_STATUS.md) | Live operator status |
 | [`docs/operations/DISASTER_RECOVERY.md`](../operations/DISASTER_RECOVERY.md) | Neon PITR / branch restore (#24) |
-| This doc | *How* every future migration is authored, reviewed, CI-checked, applied, and rolled back |
 
 ---
 

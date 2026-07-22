@@ -1,9 +1,37 @@
-# Locora — Public abuse & CAPTCHA escalation
+# Locora — Public abuse & CAPTCHA escalation (Bible §28 / #26)
 
-**Date:** 2026-07-21  
-**Status:** Design + **verify util** (GGGGG) + **route wire** (IIIII) + **widget** (LLLLL) + **429 escalation map** (MMMMM). Rate limits **shipped** (BB).  
-**Bible:** P2 **#26** — public endpoints need stronger abuse controls. Parent stays **PARTIAL** (throttles + assert + optional widget + escalation; CAPTCHA vendor not live — keep `CAPTCHA_PROVIDER=off`).
-**Ship timing:** Keep `CAPTCHA_PROVIDER=off` for Friday. Env `PUBLIC_THROTTLE_*` + global/auth limits are the submit bar.
+**Date:** 2026-07-21 (lanes BB→RRRRR) / 2026-07-22 (residual docs lane **ABUSE28-residual-docs**)  
+**Status:** **Bible #26 / §28 PARTIAL** — throttles + verify util + route assert + optional widget + in-memory `after_throttle` 429 escalation = **DONE** ship bar (`CAPTCHA_PROVIDER=off` no-op). Live vendor enable, Redis multi-instance escalation store, and verify-fail metrics are **explicitly deferred** — operator Gates + phased plan below.  
+**Bible:** P2 **§28** / **#26** — public endpoints need stronger abuse controls.  
+**Ship timing:** Keep `CAPTCHA_PROVIDER=off` until operator Gates 1–3. Env `PUBLIC_THROTTLE_*` + global/auth limits are the Friday submit bar.
+
+---
+
+## Shipped vs residual (honest)
+
+| Item | State | Evidence |
+|------|--------|----------|
+| Per-IP `PUBLIC_THROTTLE_*` on six public creates | **DONE** | Lane **BB**; `publicThrottle()` + `@Throttle` on `public.controller.ts` |
+| Global + auth throttles | **DONE** | `THROTTLE_GLOBAL_LIMIT`; `AUTH_THROTTLE_*` |
+| Public schedule read throttles (429-only, no CAPTCHA) | **DONE** | hardcoded 60/min availability |
+| DTO validation on booking/event payloads | **DONE** | public create DTOs |
+| `@SkipThrottle` on billing webhooks | **DONE** | webhook routes |
+| `captcha.util.ts` verify + `assertCaptchaOrThrow` | **DONE** | Lane **GGGGG**; Turnstile + hCaptcha siteverify |
+| Assert on all six publicThrottle creates | **DONE** | Lane **IIIII**; body `captchaToken` or `X-Captcha-Token` |
+| Optional web `PublicCaptchaWidget` | **DONE** | Lane **LLLLL**; off unless `NEXT_PUBLIC_CAPTCHA_*` set |
+| In-memory `after_throttle` 429 escalation map | **DONE** | Lane **MMMMM**; `captcha-escalation.util.ts` |
+| `CaptchaAwareThrottlerGuard` notes public-create 429s | **DONE** | replaces default `ThrottlerGuard` in `app.module.ts` |
+| Cross-surface burst (≥2 kinds → all creates) | **DONE** | `notePublicThrottle429` + `isCaptchaEscalated` |
+| Default `CAPTCHA_PROVIDER=off` → assert no-op | **DONE** | limits-only prod behavior until operator enable |
+| jest captcha + captcha-escalation specs | **DONE** | **19** PASS (prior lanes) |
+| Live Turnstile/hCaptcha keys + provider flip | **RESIDUAL (operator)** | examples stay **off**; Gate 1–3 below |
+| Redis / shared escalation store (multi-instance) | **RESIDUAL** | **process-local Map only on disk** — v1 comment in util |
+| `captcha_verify_fail` metrics + provider error logs | **RESIDUAL** | sketch in “Remaining implementation” |
+| WAF / edge rate limit; honeypot fields | **RESIDUAL** | design only |
+| Deeper pattern detection (IP reputation, geo) | **RESIDUAL** | audit stretch goal |
+| `CAPTCHA_MODE=always` prod soak | **RESIDUAL (optional)** | env exists; default `after_throttle` |
+
+**§28 classification:** **PARTIAL** — code-complete progressive abuse stack shipped with provider off; operator enable + scale residuals documented here, not hidden.
 
 ---
 
@@ -100,12 +128,40 @@ Use a **progressive** model: cheap limits first, human proof only when abuse sig
 
 ---
 
+## Operator Gates 0–4 (enable CAPTCHA)
+
+Flip only after Render smoke unblocks ([`WHAT_TO_DO_NOW.md`](./WHAT_TO_DO_NOW.md)). **Never** set `THROTTLE_DISABLED=true` in production.
+
+| Gate | Action | Exit |
+|------|--------|------|
+| **0** | Confirm throttles only (default) | Public creates succeed without widget; 429 after limit burst |
+| **1** | Obtain Turnstile (recommended) or hCaptcha site + secret keys | Keys in password manager; DPA noted if required |
+| **2** | Set **both** API + web env together | `CAPTCHA_PROVIDER` + secret on Render; `NEXT_PUBLIC_CAPTCHA_PROVIDER` + site key on Vercel; redeploy both |
+| **3** | Smoke escalation path | Deliberate 429 on one surface → next create returns `CAPTCHA_REQUIRED` / widget visible; cross-surface burst requires token on all creates until TTL |
+| **4** (optional) | `CAPTCHA_MODE=always` after Gate 3 soak | All public writes require token even without prior 429 — higher friction; product decision |
+
+**Rollback:** set `CAPTCHA_PROVIDER=off` + clear web provider env → assert no-op; throttles unchanged.
+
+---
+
+## Residual phases (scale / future app)
+
+| Phase | When | Scope |
+|-------|------|--------|
+| **3** | ≥2 API instances | Redis (or shared) escalation store — today each instance has its own Map ([`captcha-escalation.util.ts`](../../apps/api/src/common/captcha-escalation.util.ts) header comment) |
+| **3b** | Ops polish | `captcha_verify_fail` counter + provider error logs (no token in logs) |
+| **4** | If abuse persists | WAF / edge rate limit; honeypot on public forms; optional `CAPTCHA_MODE=always` |
+
+**Not on disk today:** Redis escalation adapter; metrics counter; WAF rules.
+
+---
+
 ## Remaining implementation sketch
 
 1. **~~Web widget~~** — Lane **LLLLL** shipped (optional; off by default).
-2. **~~Escalation state~~** — Lane **MMMMM** v1 in-memory; v2 = Redis if multi-instance.
-3. **Observability:** Counter `captcha_verify_fail` + log provider errors (no token in logs).
-4. **Enable:** set `CAPTCHA_PROVIDER=turnstile` + secrets + `NEXT_PUBLIC_*` site key only when ready; optionally `CAPTCHA_MODE=always`.
+2. **~~Escalation state~~** — Lane **MMMMM** v1 in-memory; v2 = Redis if multi-instance (**residual Phase 3**).
+3. **Observability:** Counter `captcha_verify_fail` + log provider errors (no token in logs) — **residual Phase 3b**.
+4. **Enable:** operator Gates 1–3 — set `CAPTCHA_PROVIDER=turnstile` + secrets + `NEXT_PUBLIC_*` site key; optionally Gate 4 `CAPTCHA_MODE=always`.
 
 **Env (keep provider off until widget + secrets):**
 
@@ -150,7 +206,7 @@ Use a **progressive** model: cheap limits first, human proof only when abuse sig
 | Public create forms | booking / contact / review / event / chat open |
 | `apps/api/.env.example` / `.env.production.example` | `CAPTCHA_*` placeholders (keep off) |
 | `apps/web/.env.example` | `NEXT_PUBLIC_CAPTCHA_*` placeholders (keep off) |
-| `docs/audit/BIBLE_STATUS.md` | #26 stays **PARTIAL** |
+| `docs/audit/BIBLE_STATUS.md` | #26 stays **PARTIAL** — see [`GO_SPOTS_PUBLIC_ABUSE.md`](./GO_SPOTS_PUBLIC_ABUSE.md) §28 shipped vs residual |
 | `docs/audit/BIBLE_FINISHED.md` | Lanes KK / GGGGG / IIIII / LLLLL / MMMMM |
 | `docs/audit/AGENT_COORDINATION.md` | Lane MMMMM |
 

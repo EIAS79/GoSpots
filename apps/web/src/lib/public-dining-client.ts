@@ -1,7 +1,7 @@
 import { ApiError } from "./api";
 import { getApiBaseUrl } from "./api-base-url";
 import {
-  httpFailureMessage,
+  apiErrorFromResponse,
   networkUnreachableMessage,
 } from "./api-error-message";
 import type { DaySchedule } from "./reservations-client";
@@ -28,11 +28,8 @@ async function publicFetch<T>(path: string, init?: RequestInit): Promise<T> {
     /* ignore */
   }
   if (!res.ok) {
-    const message = httpFailureMessage(
-      res.status,
-      (payload as { message?: string | string[] } | null)?.message,
-    );
-    throw new ApiError(message, res.status, payload);
+    const { message, code } = apiErrorFromResponse(res.status, payload);
+    throw new ApiError(message, res.status, payload, code);
   }
   return payload as T;
 }
@@ -69,6 +66,7 @@ export function submitPublicDiningReservation(
     statusPath?: string;
     id: string;
     guestToken?: string;
+    emailSent?: boolean;
   }>(`/public/venues/${encodeURIComponent(slug)}/dining/reservations`, {
     method: "POST",
     body: JSON.stringify(body),

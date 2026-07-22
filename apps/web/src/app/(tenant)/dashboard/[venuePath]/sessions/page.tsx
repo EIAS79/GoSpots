@@ -8,6 +8,7 @@ import { BookingDayAgenda } from "@/components/reservations/booking-day-agenda";
 import { EventRequestsPanel } from "@/components/reservations/event-requests-panel";
 import { ReservationDialog } from "@/components/reservations/reservation-dialog";
 import { GameBookingSchedule } from "@/components/reservations/game-booking-schedule";
+import { SeatingAdvisoryPanel } from "@/components/seating/seating-advisory-panel";
 import { FeatureGate } from "@/components/subscription/feature-gate";
 import { TenantPage } from "@/components/layout/tenant-page";
 import { hasPermission } from "@/lib/auth-client";
@@ -42,6 +43,11 @@ import { useDashboardGuide } from "@/lib/use-dashboard-guide";
 import { useVenueAccess } from "@/lib/use-venue-access";
 import { useVenueHref } from "@/lib/venue-context";
 import { useVenueSettingsOptional } from "@/lib/venue-settings-context";
+import {
+  addVenueCalendarDays,
+  resolveVenueTimeZone,
+  venueDayKey,
+} from "@/lib/venue-timezone";
 import { useLiveData } from "@/lib/use-live-data";
 import { publishLiveEvent } from "@/lib/live-events";
 import {
@@ -52,10 +58,6 @@ import {
 
 type ReservationsView = "dining" | "events" | "schedule";
 type FloorBoardPanel = "agenda" | "floor" | "both";
-
-function dateOnly(d: Date) {
-  return d.toISOString().slice(0, 10);
-}
 
 function filterScheduleForView(
   schedule: DaySchedule,
@@ -103,7 +105,13 @@ function TabNotificationBadge({
 }
 
 export default function ReservationsPage() {
-  const t = useVenueSettingsOptional()?.t ?? ((k: string) => k);
+  const vs = useVenueSettingsOptional();
+  const t = vs?.t ?? ((k: string) => k);
+  const locale = vs?.locale ?? "en";
+  const venueTimeZone = resolveVenueTimeZone({
+    timezone: vs?.shop?.timezone,
+    locale: vs?.shop?.locale ?? vs?.locale,
+  });
   const searchParams = useSearchParams();
   const router = useRouter();
   const playBillingHref = useVenueHref("/play-billing");
@@ -113,7 +121,7 @@ export default function ReservationsPage() {
   const guide = useDashboardGuide("sessions");
   const [catalog, setCatalog] = useState<ResourceCatalog | null>(null);
   const [schedule, setSchedule] = useState<DaySchedule | null>(null);
-  const [day, setDay] = useState(dateOnly(new Date()));
+  const [day, setDay] = useState(() => venueDayKey(venueTimeZone));
   const [categoryFilter, setCategoryFilter] = useState("");
   const [floorPanel, setFloorPanel] = useState<FloorBoardPanel>("both");
   const [tabBadges, setTabBadges] = useState<ReservationNotificationBadges>({
@@ -342,9 +350,7 @@ export default function ReservationsPage() {
   }, [view, viewCatalogCategories, categoryFilter]);
 
   const shiftDay = (delta: number) => {
-    const d = new Date(`${day}T12:00:00`);
-    d.setDate(d.getDate() + delta);
-    setDay(dateOnly(d));
+    setDay((current) => addVenueCalendarDays(current, delta));
   };
 
   const showFloorBoard = view === "dining" || view === "schedule";
@@ -468,7 +474,7 @@ export default function ReservationsPage() {
                   ) : null}
                   <button
                     type="button"
-                    onClick={() => setDay(dateOnly(new Date()))}
+                    onClick={() => setDay(venueDayKey(venueTimeZone))}
                     className={cn(
                       "text-xs hover:underline",
                       isAmber ? "text-amber-400" : "text-emerald-400",
@@ -479,16 +485,19 @@ export default function ReservationsPage() {
                 </div>
 
                 {boardMode === "dining" ? (
-                  <p className="text-[11px] text-zinc-500">
-                    {t("sessionsPage.diningHintPrefix")}{" "}
-                    <Link
-                      href={diningLayoutHref}
-                      className="text-amber-300/90 hover:underline"
-                    >
-                      {t("nav.dining")}
-                    </Link>
-                    {t("sessionsPage.diningHintSuffix")}
-                  </p>
+                  <div className="space-y-2">
+                    <p className="text-[11px] text-zinc-500">
+                      {t("sessionsPage.diningHintPrefix")}{" "}
+                      <Link
+                        href={diningLayoutHref}
+                        className="text-amber-300/90 hover:underline"
+                      >
+                        {t("nav.dining")}
+                      </Link>
+                      {t("sessionsPage.diningHintSuffix")}
+                    </p>
+                    <SeatingAdvisoryPanel diningLayoutHref={diningLayoutHref} />
+                  </div>
                 ) : (
                   <p className="text-[11px] text-zinc-500">
                     {t("sessionsPage.gamingHint")}
@@ -797,6 +806,7 @@ export default function ReservationsPage() {
           defaultDate={day}
           existingBookings={dialog.unitBookings ?? []}
           saving={saving}
+          onServerOverlap={() => void load()}
           onClose={() => setDialog(null)}
           onSave={async (body) => {
             setSaving(true);

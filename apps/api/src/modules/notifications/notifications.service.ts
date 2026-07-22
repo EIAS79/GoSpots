@@ -13,7 +13,7 @@ import {
 import { interval, map, merge, Observable, of, startWith } from 'rxjs';
 import type { NotificationSection } from '../../common/notification.constants';
 import {
-  classifyReservationNotificationTab,
+  reservationNotificationTabWhere,
   sanitizeAppRelativeHref,
 } from '../../common/reservation-notification-href';
 import {
@@ -193,23 +193,28 @@ export class NotificationsService {
 
   async reservationBadges(actor: JwtAccessPayload) {
     this.assertReservationBadges(actor);
-    const rows = await this.prisma.notification.findMany({
-      where: {
-        ...this.buildWhere(actor, { status: 'unread' }),
-        section: 'reservation',
-      },
-      select: { href: true, title: true },
-    });
+    const base: Prisma.NotificationWhereInput = {
+      ...this.buildWhere(actor, { status: 'unread' }),
+      section: 'reservation',
+    };
 
-    let dining = 0;
-    let gaming = 0;
-    let events = 0;
-    for (const row of rows) {
-      const tab = classifyReservationNotificationTab(row);
-      if (tab === 'dining') dining += 1;
-      else if (tab === 'events') events += 1;
-      else if (tab === 'schedule') gaming += 1;
-    }
+    const [dining, gaming, events] = await Promise.all([
+      this.prisma.notification.count({
+        where: {
+          AND: [base, reservationNotificationTabWhere('dining')],
+        },
+      }),
+      this.prisma.notification.count({
+        where: {
+          AND: [base, reservationNotificationTabWhere('schedule')],
+        },
+      }),
+      this.prisma.notification.count({
+        where: {
+          AND: [base, reservationNotificationTabWhere('events')],
+        },
+      }),
+    ]);
 
     return {
       dining,
@@ -224,30 +229,17 @@ export class NotificationsService {
     dto: MarkReservationTabReadDto,
   ) {
     this.assertReservationBadges(actor);
-    const tab = dto.tab;
-    const rows = await this.prisma.notification.findMany({
-      where: {
-        ...this.buildWhere(actor, { status: 'unread' }),
-        section: 'reservation',
-      },
-      select: { id: true, href: true, title: true },
-    });
-
-    const ids = rows
-      .filter((row) => classifyReservationNotificationTab(row) === tab)
-      .map((row) => row.id);
-
-    if (ids.length === 0) return { updated: 0 };
-
     const shopId = requireShopId(actor);
     const result = await this.prisma.notification.updateMany({
       where: {
         shopId,
-        id: { in: ids },
         section: 'reservation',
         readAt: null,
         archivedAt: null,
-        OR: [{ userId: null }, { userId: actor.sub }],
+        AND: [
+          { OR: [{ userId: null }, { userId: actor.sub }] },
+          reservationNotificationTabWhere(dto.tab),
+        ],
       },
       data: { readAt: new Date() },
     });

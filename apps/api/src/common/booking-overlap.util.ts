@@ -1,5 +1,6 @@
-import { ConflictException } from '@nestjs/common';
 import { ResourceStatus, type Prisma, type PrismaClient } from '@prisma/client';
+import { ApiDomainErrorCode } from './api-error.codes';
+import { apiConflictException } from './api-error.util';
 import { ACTIVE_RESERVATION } from './booking-floor-status';
 import { isWalkInBlockingAt, walkInEffectiveEnd } from './walk-in-block.util';
 
@@ -14,10 +15,14 @@ export async function assertResourceBookable(
     where: { id: resourceId, shopId },
   });
   if (!resource) {
-    throw new ConflictException('Resource not found.');
+    throw apiConflictException(
+      ApiDomainErrorCode.RESOURCE_NOT_BOOKABLE,
+      'Resource not found.',
+    );
   }
   if (resource.status === ResourceStatus.MAINTENANCE) {
-    throw new ConflictException(
+    throw apiConflictException(
+      ApiDomainErrorCode.RESOURCE_MAINTENANCE,
       'This unit is out of service and cannot be booked.',
     );
   }
@@ -49,7 +54,8 @@ export async function assertNoReservationOverlap(
     },
   });
   if (clash) {
-    throw new ConflictException(
+    throw apiConflictException(
+      ApiDomainErrorCode.RESERVATION_OVERLAP,
       'This unit already has a booking that overlaps that time.',
     );
   }
@@ -70,7 +76,8 @@ export async function assertNoActiveWalkIn(
     },
   });
   if (active && isWalkInBlockingAt(active, at)) {
-    throw new ConflictException(
+    throw apiConflictException(
+      ApiDomainErrorCode.WALK_IN_ACTIVE,
       'This unit has an active walk-in session right now.',
     );
   }
@@ -97,7 +104,8 @@ export async function assertNoWalkInOverlap(
     const wStart = s.startedAt;
     const wEnd = walkInEffectiveEnd(s);
     if (wStart < endsAt && wEnd > startsAt) {
-      throw new ConflictException(
+      throw apiConflictException(
+        ApiDomainErrorCode.WALK_IN_OVERLAP,
         'This unit has a walk-in session that overlaps that time.',
       );
     }

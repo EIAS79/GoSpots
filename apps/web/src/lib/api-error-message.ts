@@ -36,6 +36,59 @@ export function networkUnreachableMessage(apiBaseUrl: string): string {
   return "Can’t reach Locora servers — try again shortly.";
 }
 
+/** Parsed API error envelope `{ code, message }` (bible §36). */
+export type ApiErrorEnvelope = {
+  code: string | null;
+  message: string | string[] | null;
+};
+
+/** Read stable `code` + human `message` from JSON error bodies; tolerates legacy shapes. */
+export function parseApiErrorEnvelope(body: unknown): ApiErrorEnvelope {
+  if (body == null || typeof body !== "object") {
+    return { code: null, message: null };
+  }
+  const record = body as Record<string, unknown>;
+  const rawCode = record.code;
+  const code =
+    typeof rawCode === "string" && rawCode.trim() ? rawCode.trim() : null;
+  const rawMessage = record.message;
+  const message =
+    rawMessage === undefined || rawMessage === null
+      ? null
+      : (rawMessage as string | string[]);
+  return { code, message };
+}
+
+/** User-facing copy after CSRF bootstrap retry still returns `CSRF_INVALID` (§36 W2). */
+export function csrfInvalidUserMessage(): string {
+  return "We couldn't verify this request — refresh the page and try again.";
+}
+
+/** User-facing copy when API returns `PERMISSION_DENIED` (§36 W2). */
+export function permissionDeniedUserMessage(): string {
+  return "You don't have permission to perform this action.";
+}
+
+/** User-facing copy when API returns `VENUE_ACCESS_DENIED` (§36 W2). */
+export function venueAccessDeniedUserMessage(): string {
+  return "You don't have access to this venue.";
+}
+
+/** User-facing copy when refresh returns `SESSION_REVOKED` (§36 W2). */
+export function sessionRevokedUserMessage(): string {
+  return "You were signed out — sign in again.";
+}
+
+/** Classified toast copy + optional domain code for dual-read UX. */
+export function apiErrorFromResponse(
+  status: number,
+  body: unknown,
+): { message: string; code?: string } {
+  const { code, message: bodyMessage } = parseApiErrorEnvelope(body);
+  const message = httpFailureMessage(status, bodyMessage);
+  return code ? { message, code } : { message };
+}
+
 function normalizeBodyMessage(
   message: string | string[] | undefined | null,
 ): string | null {

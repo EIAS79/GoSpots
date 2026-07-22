@@ -4,6 +4,7 @@ import { CheckCircle2, Loader2, X } from "lucide-react";
 import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
 import { ModalPortal } from "@/components/ui/modal-portal";
+import { FeedbackBanner } from "@/components/ui/feedback-banner";
 import { splitDateAndTime } from "@/lib/booking-time";
 import {
   holdEndFromLocal,
@@ -30,6 +31,7 @@ import {
 } from "@/lib/connectivity-context";
 import { PrivacyConsentCheckbox } from "@/components/venues/public/privacy-consent-checkbox";
 import { PublicCaptchaWidget } from "@/components/venues/public/public-captcha-widget";
+import { ApiError, resolveApiErrorDisplay } from "@/lib/api";
 import { submitPublicGamingReservation } from "@/lib/public-gaming-client";
 import { submitPublicDiningReservation } from "@/lib/public-dining-client";
 import {
@@ -38,10 +40,11 @@ import {
 } from "@/lib/public-captcha";
 import { safeStatusPathHref } from "@/lib/safe-app-href";
 import { usePublicPrefs } from "@/lib/public-prefs-context";
+import { combineLocalDateTime } from "@/lib/seating-event-datetime";
 import {
-  combineLocalDateTime,
-  todayDateInput,
-} from "@/lib/seating-event-datetime";
+  resolveVenueTimeZone,
+  venueDayKey,
+} from "@/lib/venue-timezone";
 import type { ScheduleCategory, ScheduleUnit } from "@/lib/reservations-client";
 
 /** Modes A/B/C — fail-closed on public booking writes (bible #32). Mode F keeps submit. */
@@ -87,6 +90,8 @@ export function PublicGamingBookingDialog({
   initialPartySize,
   offeringRates = [],
   currency,
+  timezone,
+  venueLocale,
   onClose,
   onBooked,
 }: {
@@ -104,11 +109,18 @@ export function PublicGamingBookingDialog({
     durationMinutes: number | null;
   }[];
   currency?: string;
-  locale?: string;
+  /** Venue IANA timezone from `PublicVenue.timezone`. */
+  timezone?: string;
+  /** Venue locale from `PublicVenue.locale` (fallback when IANA unset). */
+  venueLocale?: string;
   onClose: () => void;
   onBooked?: () => void;
 }) {
   const { formatMoney, t, locale } = usePublicPrefs();
+  const venueTimeZone = resolveVenueTimeZone({
+    timezone,
+    locale: venueLocale ?? locale,
+  });
   const connectivity = useConnectivityOptional();
   const connectivityMode = connectivity?.mode ?? "ok";
   const outage = isConnectivityOutage(connectivityMode);
@@ -194,9 +206,10 @@ export function PublicGamingBookingDialog({
   const [success, setSuccess] = useState<{
     message: string;
     statusPath?: string;
+    emailSent?: boolean;
   } | null>(null);
 
-  const date = scheduleDate || todayDateInput();
+  const date = scheduleDate || venueDayKey(venueTimeZone);
 
   useEffect(() => {
     if (bowlingModes.length > 0 && !selectedBowlingModeId) {
@@ -403,16 +416,30 @@ export function PublicGamingBookingDialog({
       const res = isDining
         ? await submitPublicDiningReservation(slug, payload)
         : await submitPublicGamingReservation(slug, payload);
-      setSuccess({ message: res.message, statusPath: res.statusPath });
+      setSuccess({
+        message: res.message,
+        statusPath: res.statusPath,
+        emailSent: res.emailSent,
+      });
       onBooked?.();
     } catch (err) {
       setError(
-        err instanceof Error
-          ? err.message
-          : t("venuePage.booking.submitFailed"),
+        resolveApiErrorDisplay(
+          err,
+          {
+            RESERVATION_OVERLAP: t("venuePage.booking.overlapServer"),
+            CAPTCHA_REQUIRED: t("venuePage.captcha.required"),
+            CAPTCHA_FAILED: t("venuePage.captcha.required"),
+          },
+          t("venuePage.booking.submitFailed"),
+        ),
       );
-      setCaptchaToken(null);
-      setCaptchaReset((n) => n + 1);
+      if (err instanceof ApiError && err.code === "RESERVATION_OVERLAP") {
+        onBooked?.();
+      } else {
+        setCaptchaToken(null);
+        setCaptchaReset((n) => n + 1);
+      }
     } finally {
       setBusy(false);
     }
@@ -466,6 +493,13 @@ export function PublicGamingBookingDialog({
               <p className="mt-3 text-sm font-medium text-emerald-100">
                 {success.message}
               </p>
+              {success.emailSent === false ? (
+                <FeedbackBanner
+                  variant="warning"
+                  message={t("venuePage.booking.emailDelayed")}
+                  className="mt-4 text-left"
+                />
+              ) : null}
               {successTrackHref ? (
                 <Link
                   href={successTrackHref}

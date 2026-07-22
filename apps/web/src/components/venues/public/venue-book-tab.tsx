@@ -120,6 +120,8 @@ export function VenueBookTab({
               slug={slug}
               mode="TABLE"
               diningOptions={diningOptions}
+              timezone={venue.timezone}
+              venueLocale={venue.locale}
             />
           </div>
         </section>
@@ -136,6 +138,8 @@ export function VenueBookTab({
             mode="EVENT"
             diningOptions={diningOptions}
             gamingOptions={gamingOptions}
+            timezone={venue.timezone}
+            venueLocale={venue.locale}
             description={
               hasDigitalDining
                 ? t("venuePage.book.eventDescDigital")

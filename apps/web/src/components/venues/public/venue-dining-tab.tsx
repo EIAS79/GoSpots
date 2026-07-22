@@ -28,7 +28,10 @@ import type {
   ScheduleUnit,
 } from "@/lib/reservations-client";
 import type { PublicVenueDetail } from "@/lib/shop-settings-client";
-import { todayDateInput } from "@/lib/seating-event-datetime";
+import {
+  resolveVenueTimeZone,
+  venueDayKey,
+} from "@/lib/venue-timezone";
 import { useLiveData } from "@/lib/use-live-data";
 import type { ResourceType } from "@/lib/resource-types";
 
@@ -55,6 +58,10 @@ export function VenueDiningTab({
   slug: string;
 }) {
   const { t } = usePublicPrefs();
+  const venueTzProps = {
+    timezone: venue.timezone,
+    venueLocale: venue.locale,
+  };
   const offerings = useMemo(
     () => (venue.diningOfferings ?? []).filter((o) => o.unitCount > 0),
     [venue.diningOfferings],
@@ -78,7 +85,14 @@ export function VenueDiningTab({
   const categoryId = selectedCategoryId;
 
   const [partySize, setPartySize] = useState(2);
-  const [scheduleDate, setScheduleDate] = useState(() => todayDateInput());
+  const [scheduleDate, setScheduleDate] = useState(() =>
+    venueDayKey(
+      resolveVenueTimeZone({
+        timezone: venue.timezone,
+        locale: venue.locale,
+      }),
+    ),
+  );
   const [windowStartTime, setWindowStartTime] = useState(
     () => defaultCheckWindowTimes(defaultSlot).start,
   );
@@ -351,6 +365,7 @@ export function VenueDiningTab({
               onWindowStartTimeChange={setWindowStartTime}
               onWindowEndTimeChange={setWindowEndTime}
               windowError={windowError}
+              {...venueTzProps}
             />
             <div className="flex flex-col items-center justify-center gap-3 py-24 text-zinc-500">
               <Loader2 size={28} className="animate-spin text-amber-400/80" />
@@ -368,6 +383,7 @@ export function VenueDiningTab({
               onWindowStartTimeChange={setWindowStartTime}
               onWindowEndTimeChange={setWindowEndTime}
               windowError={windowError}
+              {...venueTzProps}
             />
             <div className="px-6 py-16 text-center">
               <p className="text-sm text-rose-300">{error}</p>
@@ -391,6 +407,7 @@ export function VenueDiningTab({
             windowError={windowError}
             onWindowStartTimeChange={setWindowStartTime}
             onWindowEndTimeChange={setWindowEndTime}
+            {...venueTzProps}
             visualType={getFloorMapVisualType("DINING")}
             highlightedUnitId={highlightedUnitId}
             onBookUnit={(unit) => {
@@ -415,6 +432,7 @@ export function VenueDiningTab({
               onWindowStartTimeChange={setWindowStartTime}
               onWindowEndTimeChange={setWindowEndTime}
               windowError={windowError}
+              {...venueTzProps}
             />
             <div className="px-6 py-16 text-center text-sm text-zinc-500">
               {t("dining.couldNotLoad")}
@@ -434,7 +452,7 @@ export function VenueDiningTab({
           initialEndTime={windowEndTime}
           initialPartySize={partySize}
           currency={venue.currency}
-          locale={venue.locale}
+          {...venueTzProps}
           onClose={() => {
             setBookingUnit(null);
             setHighlightedUnitId(null);

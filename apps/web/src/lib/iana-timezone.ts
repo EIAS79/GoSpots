@@ -1,4 +1,4 @@
-/** Client-side IANA timezone helpers (mirrors API `venue-timezone.util`). */
+/** Client-side IANA validation + select list. Day keys: `@/lib/venue-timezone`. */
 
 const ianaCache = new Map<string, boolean>();
 

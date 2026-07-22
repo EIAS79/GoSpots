@@ -1,11 +1,9 @@
 import {
   BadRequestException,
-  ForbiddenException,
-  UnauthorizedException,
 } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { JwtService } from '@nestjs/jwt';
-import { UserAccountType } from '@prisma/client';
+import { UserAccountType, ShopRole } from '@prisma/client';
 import { hashPassword } from '../../common/security/password';
 import { hashToken } from '../../common/security/token';
 import {
@@ -18,10 +16,12 @@ import {
   hashRecoveryCode,
 } from '../../common/mfa-recovery.util';
 import { MFA_CHALLENGE_PURPOSE } from '../../common/mfa-challenge.util';
+import { ApiDomainErrorCode } from '../../common/api-error.codes';
 import { AuthService } from './auth.service';
 
 describe('AuthService owner MFA', () => {
   const keySource = { mfaTotpEncryptionKey: 'b'.repeat(64) };
+  const staffMfaPrev = process.env.STAFF_MFA_OPT_IN;
   const notifications = {
     recordSignIn: jest.fn(),
     recordTeamEvent: jest.fn(),
@@ -38,6 +38,7 @@ describe('AuthService owner MFA', () => {
     const config = {
       get: (key: string, fallback?: string) => {
         if (key === 'MFA_TOTP_ENCRYPTION_KEY') return keySource.mfaTotpEncryptionKey;
+        if (key === 'STAFF_MFA_OPT_IN') return process.env.STAFF_MFA_OPT_IN;
         if (key === 'JWT_ACCESS_TTL') return '900';
         if (key === 'JWT_REFRESH_TTL') return '604800';
         return fallback;
@@ -62,6 +63,12 @@ describe('AuthService owner MFA', () => {
 
   beforeEach(() => {
     jest.clearAllMocks();
+    delete process.env.STAFF_MFA_OPT_IN;
+  });
+
+  afterAll(() => {
+    if (staffMfaPrev === undefined) delete process.env.STAFF_MFA_OPT_IN;
+    else process.env.STAFF_MFA_OPT_IN = staffMfaPrev;
   });
 
   it('login with totpEnabled returns mfaToken and does not issue refresh', async () => {
@@ -136,7 +143,9 @@ describe('AuthService owner MFA', () => {
 
     await expect(
       svc.confirmMfaTotp('u1', { code: '000000' }),
-    ).rejects.toBeInstanceOf(UnauthorizedException);
+    ).rejects.toMatchObject({
+      response: { code: ApiDomainErrorCode.MFA_INVALID },
+    });
 
     const code = generateTotpCode(secret);
     const out = await svc.confirmMfaTotp('u1', { code });
@@ -176,7 +185,7 @@ describe('AuthService owner MFA', () => {
         }),
         update: jest.fn(),
       },
-      mfaRecoveryCode: { findMany, updateMany },
+      mfaRecoveryCode: { findMany, updateMany, count: jest.fn().mockResolvedValue(9) },
       membership: {
         findFirst: jest.fn().mockResolvedValue({ shopId: 's1', role: 'OWNER' }),
       },
@@ -240,10 +249,12 @@ describe('AuthService owner MFA', () => {
     });
     await expect(
       svc.verifyMfaLogin({ mfaToken: 'tok', recoveryCode: code }),
-    ).rejects.toBeInstanceOf(UnauthorizedException);
+    ).rejects.toMatchObject({
+      response: { code: ApiDomainErrorCode.MFA_INVALID },
+    });
   });
 
-  it('staff cannot enroll MFA', async () => {
+  it('staff cannot enroll MFA when flag is off', async () => {
     const prisma = {
       user: {
         findUnique: jest.fn().mockResolvedValue({
@@ -252,13 +263,114 @@ describe('AuthService owner MFA', () => {
           accountType: UserAccountType.VENUE_STAFF,
           totpEnabled: false,
           passwordHash: 'x',
+          name: 'Anna',
+          staffHandle: null,
+          memberships: [{ role: ShopRole.MANAGER, shopId: 's1' }],
         }),
       },
     };
     const { svc } = makeService(prisma);
     await expect(
       svc.beginMfaTotp('u_staff', { password: 'SecurePass1x' }),
-    ).rejects.toBeInstanceOf(ForbiddenException);
+    ).rejects.toThrow('Two-factor authentication is owner-only.');
+  });
+
+  it('plain staff role is forbidden when staff MFA flag is on', async () => {
+    process.env.STAFF_MFA_OPT_IN = 'on';
+    const prisma = {
+      user: {
+        findUnique: jest.fn().mockResolvedValue({
+          id: 'u_staff',
+          email: 'floor@shop.locora',
+          accountType: UserAccountType.VENUE_STAFF,
+          totpEnabled: false,
+          passwordHash: 'x',
+          name: 'Floor',
+          staffHandle: null,
+          memberships: [{ role: ShopRole.STAFF, shopId: 's1' }],
+        }),
+      },
+    };
+    const { svc } = makeService(prisma);
+    await expect(
+      svc.beginMfaTotp('u_staff', { password: 'SecurePass1x' }),
+    ).rejects.toThrow(
+      'Two-factor authentication is not available for your role.',
+    );
+  });
+
+  it('manager can enroll MFA when staff MFA flag is on', async () => {
+    process.env.STAFF_MFA_OPT_IN = 'on';
+    const password = 'SecurePass1x';
+    const passwordHash = await hashPassword(password);
+    const userUpdate = jest.fn();
+    const prisma = {
+      user: {
+        findUnique: jest.fn().mockResolvedValue({
+          id: 'u_mgr',
+          email: 'manager@shop.locora',
+          accountType: UserAccountType.VENUE_STAFF,
+          totpEnabled: false,
+          passwordHash,
+          name: 'Manager',
+          staffHandle: null,
+          memberships: [{ role: ShopRole.MANAGER, shopId: 's1' }],
+        }),
+        update: userUpdate,
+      },
+    };
+    const { svc } = makeService(prisma);
+    const out = await svc.beginMfaTotp('u_mgr', { password });
+    expect(out.secret).toMatch(/^[A-Z2-7]+=*$/);
+    expect(userUpdate).toHaveBeenCalled();
+  });
+
+  it('manager login with totpEnabled returns mfaToken when flag is on', async () => {
+    process.env.STAFF_MFA_OPT_IN = 'on';
+    const password = 'SecurePass1x';
+    const passwordHash = await hashPassword(password);
+    const user = {
+      id: 'u_mgr',
+      email: 'manager@shop.locora',
+      passwordHash,
+      accountType: UserAccountType.VENUE_STAFF,
+      lockedUntil: null,
+      failedLogins: 0,
+      totpEnabled: true,
+      passwordSetAt: new Date(),
+    };
+    const prisma = {
+      user: {
+        findUnique: jest.fn().mockResolvedValue(user),
+        update: jest.fn(),
+      },
+      membership: {
+        findFirst: jest.fn().mockResolvedValue({ shopId: 's1', role: ShopRole.MANAGER }),
+        findMany: jest.fn().mockResolvedValue([{ role: ShopRole.MANAGER }]),
+      },
+      authSession: { findMany: jest.fn(), create: jest.fn() },
+    };
+    const { svc, jwt } = makeService(prisma);
+
+    const result = await svc.login(
+      { login: user.email, password, accountType: 'VENUE_STAFF' },
+      '127.0.0.1',
+      'jest',
+    );
+
+    expect(result).toEqual({
+      mfaRequired: true,
+      mfaToken: 'mfa.challenge.jwt',
+    });
+    expect(jwt.signAsync).toHaveBeenCalledWith(
+      expect.objectContaining({
+        sub: 'u_mgr',
+        purpose: MFA_CHALLENGE_PURPOSE,
+        acct: UserAccountType.VENUE_STAFF,
+      }),
+      expect.any(Object),
+    );
+    expect(prisma.authSession.create).not.toHaveBeenCalled();
   });
 
   it('disable clears secret and recovery codes', async () => {
@@ -368,7 +480,10 @@ describe('AuthService owner MFA', () => {
         }),
         update: userUpdate,
       },
-      mfaRecoveryCode: { findMany: jest.fn().mockResolvedValue([]) },
+      mfaRecoveryCode: {
+        findMany: jest.fn().mockResolvedValue([]),
+        count: jest.fn().mockResolvedValue(10),
+      },
     };
     const { svc, jwt } = makeService(prisma);
     (jwt.verifyAsync as jest.Mock).mockResolvedValue({
@@ -378,7 +493,9 @@ describe('AuthService owner MFA', () => {
 
     await expect(
       svc.verifyMfaLogin({ mfaToken: 'tok', code: '000000' }),
-    ).rejects.toBeInstanceOf(UnauthorizedException);
+    ).rejects.toMatchObject({
+      response: { code: ApiDomainErrorCode.MFA_INVALID },
+    });
 
     expect(userUpdate).toHaveBeenCalledWith({
       where: { id: 'u1' },

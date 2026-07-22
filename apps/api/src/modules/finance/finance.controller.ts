@@ -11,6 +11,7 @@ import {
   UseGuards,
 } from '@nestjs/common';
 import { ApiTags } from '@nestjs/swagger';
+import { ApiStaffErrorResponses } from '../../common/dto/api-error-responses.decorator';
 import {
   hashIdempotencyRequest,
   IDEMPOTENCY_SCOPES,
@@ -66,6 +67,7 @@ export class FinanceController {
   }
 
   @Post('transactions')
+  @ApiStaffErrorResponses()
   @ShopRoles('OWNER', 'MANAGER', 'STAFF')
   @RequirePermissions(PERMISSIONS.TRANSACTION_WRITE)
   createTransaction(
@@ -102,6 +104,7 @@ export class FinanceController {
   }
 
   @Post('losses')
+  @ApiStaffErrorResponses()
   @ShopRoles('OWNER', 'MANAGER')
   @RequirePermissions(PERMISSIONS.TRANSACTION_WRITE)
   createLoss(
@@ -213,6 +216,7 @@ export class FinanceController {
   }
 
   @Patch('play-billing/:reservationId/mark-paid')
+  @ApiStaffErrorResponses()
   @ShopRoles('OWNER', 'MANAGER', 'STAFF')
   @RequirePermissions(PERMISSIONS.TRANSACTION_WRITE)
   markPlayBillingPaid(
@@ -300,6 +304,7 @@ export class FinanceController {
   }
 
   @Post('play-sessions')
+  @ApiStaffErrorResponses()
   @ShopRoles('OWNER', 'MANAGER', 'STAFF')
   @RequirePermissions(PERMISSIONS.TRANSACTION_WRITE)
   createPlaySession(
@@ -342,6 +347,7 @@ export class FinanceController {
   }
 
   @Patch('play-sessions/:id/mark-paid')
+  @ApiStaffErrorResponses()
   @ShopRoles('OWNER', 'MANAGER', 'STAFF')
   @RequirePermissions(PERMISSIONS.TRANSACTION_WRITE)
   markPlaySessionPaid(
@@ -429,6 +435,7 @@ export class FinanceController {
   }
 
   @Post('orders')
+  @ApiStaffErrorResponses()
   @ShopRoles('OWNER', 'MANAGER', 'STAFF')
   @RequirePermissions(PERMISSIONS.TRANSACTION_WRITE)
   createShopOrder(
@@ -476,6 +483,7 @@ export class FinanceController {
   }
 
   @Patch('orders/:id')
+  @ApiStaffErrorResponses()
   @ShopRoles('OWNER', 'MANAGER', 'STAFF')
   @RequirePermissions(PERMISSIONS.TRANSACTION_WRITE)
   updateShopOrder(
@@ -497,6 +505,7 @@ export class FinanceController {
   }
 
   @Post('orders/:id/lines')
+  @ApiStaffErrorResponses()
   @ShopRoles('OWNER', 'MANAGER', 'STAFF')
   @RequirePermissions(PERMISSIONS.TRANSACTION_WRITE)
   addShopOrderLine(

@@ -28,6 +28,10 @@ import {
   type GuestChat,
 } from "@/lib/guest-chat-client";
 import {
+  isGuestTokenApiError,
+  resolveGuestTokenApiErrorDisplay,
+} from "@/lib/guest-token-error-display";
+import {
   isPublicCaptchaEnabled,
   withCaptchaToken,
 } from "@/lib/public-captcha";
@@ -120,6 +124,20 @@ export function VenueGuestChatWidget({
 
   const scrollerRef = useRef<HTMLDivElement>(null);
 
+  const showGuestChatError = useCallback(
+    (err: unknown, fallbackKey: string) => {
+      setError(
+        resolveGuestTokenApiErrorDisplay(err, locale, t(fallbackKey)),
+      );
+      if (isGuestTokenApiError(err)) {
+        clearGuestChatToken(slug);
+        setToken(null);
+        setChat(null);
+      }
+    },
+    [locale, slug, t],
+  );
+
   const formatTime = useCallback(
     (iso: string) =>
       new Date(iso).toLocaleTimeString(locale, {
@@ -154,7 +172,12 @@ export function VenueGuestChatWidget({
         setChat(data);
       } catch (e) {
         if (cancelled) return;
-        if (e instanceof ApiError && (e.status === 404 || e.status === 400)) {
+        if (
+          e instanceof ApiError &&
+          (e.status === 404 ||
+            e.status === 400 ||
+            isGuestTokenApiError(e))
+        ) {
           clearGuestChatToken(slug);
         }
       } finally {
@@ -180,9 +203,22 @@ export function VenueGuestChatWidget({
         setChat(null);
         return true;
       }
+      if (isGuestTokenApiError(e)) {
+        clearGuestChatToken(slug);
+        setToken(null);
+        setChat(null);
+        setError(
+          resolveGuestTokenApiErrorDisplay(
+            e,
+            locale,
+            t("venuePage.guestChat.errorStart"),
+          ),
+        );
+        return true;
+      }
       return false;
     }
-  }, [slug, token]);
+  }, [slug, token, locale, t]);
 
   useLiveData(() => refresh(), [refresh], {
     enabled: open && !!token && chat?.status !== "ENDED",
@@ -225,9 +261,7 @@ export function VenueGuestChatWidget({
       setCaptchaReset((n) => n + 1);
       setNotice(res.message);
     } catch (err) {
-      setError(
-        err instanceof Error ? err.message : t("venuePage.guestChat.errorStart"),
-      );
+      showGuestChatError(err, "venuePage.guestChat.errorStart");
       setCaptchaToken(null);
       setCaptchaReset((n) => n + 1);
     } finally {
@@ -250,9 +284,7 @@ export function VenueGuestChatWidget({
       );
       await refresh();
     } catch (err) {
-      setError(
-        err instanceof Error ? err.message : t("venuePage.guestChat.errorSend"),
-      );
+      showGuestChatError(err, "venuePage.guestChat.errorSend");
     } finally {
       setBusy(false);
     }
@@ -268,9 +300,7 @@ export function VenueGuestChatWidget({
       setNotice(res.message);
       await refresh();
     } catch (err) {
-      setError(
-        err instanceof Error ? err.message : t("venuePage.guestChat.errorPing"),
-      );
+      showGuestChatError(err, "venuePage.guestChat.errorPing");
     } finally {
       setBusy(false);
     }
@@ -285,9 +315,7 @@ export function VenueGuestChatWidget({
       setChat(data);
       setNotice(t("venuePage.guestChat.endedNotice"));
     } catch (err) {
-      setError(
-        err instanceof Error ? err.message : t("venuePage.guestChat.errorEnd"),
-      );
+      showGuestChatError(err, "venuePage.guestChat.errorEnd");
     } finally {
       setBusy(false);
     }
@@ -307,11 +335,7 @@ export function VenueGuestChatWidget({
       setChat(null);
       setNotice(null);
     } catch (err) {
-      setError(
-        err instanceof Error
-          ? err.message
-          : t("venuePage.guestChat.errorDelete"),
-      );
+      showGuestChatError(err, "venuePage.guestChat.errorDelete");
     } finally {
       setBusy(false);
     }

@@ -24,6 +24,7 @@ import {
   cancelPublicGamingReservation,
   type PublicGamingReservationStatus,
 } from "@/lib/public-gaming-client";
+import { resolveGuestTokenApiErrorDisplay } from "@/lib/guest-token-error-display";
 import { usePublicPrefs } from "@/lib/public-prefs-context";
 import { useLiveData } from "@/lib/use-live-data";
 
@@ -106,7 +107,11 @@ export default function GamingReservationStatusPage() {
         if (!opts.silent) {
           setData(null);
           setError(
-            e instanceof Error ? e.message : t("guestStatus.gaming.loadError"),
+            resolveGuestTokenApiErrorDisplay(
+              e,
+              locale,
+              t("guestStatus.gaming.loadError"),
+            ),
           );
         }
         return false;
@@ -114,7 +119,7 @@ export default function GamingReservationStatusPage() {
         if (!opts.silent) setLoading(false);
       }
     },
-    [slug, token, t],
+    [slug, token, t, locale],
   );
 
   useEffect(() => {
@@ -160,7 +165,11 @@ export default function GamingReservationStatusPage() {
       await loadStatus({ silent: true });
     } catch (e) {
       setCancelError(
-        e instanceof Error ? e.message : t("guestStatus.gaming.cancelError"),
+        resolveGuestTokenApiErrorDisplay(
+          e,
+          locale,
+          t("guestStatus.gaming.cancelError"),
+        ),
       );
     } finally {
       setCancelBusy(false);

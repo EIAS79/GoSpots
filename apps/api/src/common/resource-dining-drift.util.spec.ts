@@ -2,6 +2,7 @@ import {
   BOOKABLE_DINING_MUTATION_SURFACES,
   RESOURCE_DINING_DUAL_WRITE_SURFACES,
   SEATING_COUNT_MUTATION_SURFACES,
+  SEATING_MANUAL_EDIT_GUARD_SURFACES,
   bucketKeyString,
   computeDriftRows,
   diningCountsFromRows,
@@ -32,6 +33,17 @@ describe('resource-dining-drift.util', () => {
       expect(SEATING_COUNT_MUTATION_SURFACES).toContain(
         'EventRequestsService.approve.createFloorBlock',
       );
+    });
+
+    it('documents Phase 3 manual-edit guard surfaces (staff seating CRUD)', () => {
+      expect(SEATING_MANUAL_EDIT_GUARD_SURFACES).toContain(
+        'SeatingTablesService.update.nonCustom.mirrorOrDiningLayout',
+      );
+      for (const s of SEATING_MANUAL_EDIT_GUARD_SURFACES) {
+        expect(RESOURCE_DINING_DUAL_WRITE_SURFACES.includes(s as never)).toBe(
+          false,
+        );
+      }
     });
 
     it('documents Phase 2 dual-write surfaces (dining → advisory mirror)', () => {

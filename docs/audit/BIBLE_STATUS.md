@@ -1,27 +1,27 @@
-# Bible status (items 1–35)
+﻿# Bible status (legacy items 1–35)
 
-**As of:** 2026-07-21  
-**Source bible:** user “Problems and Missing Work in Priority Order” (P0–P3).  
-**Reality cross-check:** [`BIBLE_PROGRESS.md`](./BIBLE_PROGRESS.md), [`OVERNIGHT_STATUS.md`](./OVERNIGHT_STATUS.md), [`REMAINING_P0_FRIDAY.md`](./REMAINING_P0_FRIDAY.md), [`AGENT_COORDINATION.md`](./AGENT_COORDINATION.md), [`GO_SPOTS_IMPLEMENTATION_REPORT.md`](./GO_SPOTS_IMPLEMENTATION_REPORT.md). **Newest design docs (2026-07-21):** [`GO_SPOTS_MIGRATION_SAFETY.md`](./GO_SPOTS_MIGRATION_SAFETY.md) (#9), [`GO_SPOTS_GUEST_TOKEN.md`](./GO_SPOTS_GUEST_TOKEN.md) (#17), [`GO_SPOTS_IDEMPOTENCY.md`](./GO_SPOTS_IDEMPOTENCY.md) (#7), [`GO_SPOTS_PACK_TIER.md`](./GO_SPOTS_PACK_TIER.md) (#12), [`GO_SPOTS_UPLOAD_SECURITY.md`](./GO_SPOTS_UPLOAD_SECURITY.md) (#27), [`GO_SPOTS_DASHBOARD_KEY.md`](./GO_SPOTS_DASHBOARD_KEY.md) (#19), [`GO_SPOTS_MONEY_WIRE.md`](./GO_SPOTS_MONEY_WIRE.md) (#1), [`GO_SPOTS_RLS.md`](./GO_SPOTS_RLS.md) (#3); full index per item below.
+> **Prefer the remade tracker:** [`ORIGINAL_AUDIT_BIBLE.md`](./ORIGINAL_AUDIT_BIBLE.md) maps the **original full-audit prompt §§1–40** with honest DONE/PARTIAL/NOT_DONE.  
+> This file remains the historical **#1–#35** ship-bar matrix. Crosswalk is in ORIGINAL_AUDIT_BIBLE.
 
-**Update rule:** When a bible item (or clear sub-slice) ships, flip status here **and** append a dated entry in [`BIBLE_FINISHED.md`](./BIBLE_FINISHED.md).
+**As of:** 2026-07-22  
+**Source bible (legacy):** compressed P0–P3 list used during Friday ship.  
+**Reality cross-check:** [`BIBLE_PROGRESS.md`](./BIBLE_PROGRESS.md), [`AGENT_COORDINATION.md`](./AGENT_COORDINATION.md), [`docs/PRODUCTION_STATUS.md`](../PRODUCTION_STATUS.md), design docs linked per item.
+
+**Update rule:** Prefer appending to [`BIBLE_FINISHED.md`](./BIBLE_FINISHED.md) and updating **ORIGINAL_AUDIT_BIBLE** when a slice ships.
 
 **Status legend:** `DONE` · `PARTIAL` · `DESIGN_ONLY` · `NOT_DONE` · `OPERATOR`
 
 ---
 
-## Summary
+## Summary (legacy 1–35 ship bars)
 
 | Status | Count | Items |
 |--------|------:|-------|
-| DONE | 35 | 1–35 |
-| PARTIAL | 0 | — |
-| DESIGN_ONLY | 0 | — |
-| OPERATOR | 0 | — |
-| NOT_DONE | 0 | — |
+| DONE | 35 | 1–35 (ship bars — **not** full mega-prompt depth) |
+| PARTIAL | 0 | — (residuals listed under each item / ORIGINAL_AUDIT_BIBLE) |
 | **Total** | **35** | |
 
-**Verify snapshot:** nest build PASS; web typecheck PASS; i18n en/pl **1989**+**1020**; resource-dining-drift+dual-write jest **20** PASS; pending migrations on disk through `20260721120000_seating_source_dining_table_group` (**18** Friday folders; Neon deploy still operator). **#10 DONE.** **#14 DONE** (Phase 0–2).
+**Important:** “35 DONE” means agreed **ship bars**, not “original §§1–40 complete.” See ORIGINAL_AUDIT_BIBLE for remaining PARTIAL/NOT_DONE sections.
 
 ---
 
@@ -30,7 +30,7 @@
 ### 1. Money is represented with floating-point numbers — DONE
 
 - **What exists**
-  - Core commercial columns `Decimal(19,4)` + `money.util` ([`GO_SPOTS_MONEY_DECISION.md`](./GO_SPOTS_MONEY_DECISION.md)).
+  - Core commercial columns `Decimal(19,4)` + `money.util` ([`GO_SPOTS_MONEY_WIRE.md`](./GO_SPOTS_MONEY_WIRE.md)).
   - **Lane XXXXX:** API money wire = **4dp decimal strings** via `serializeMoney` / `serializeMoneyOrNull` on finance DTOs, analytics/dashboard KPIs, menu/resources/shop public prices, play-billing, sales-by-item ([`GO_SPOTS_MONEY_WIRE.md`](./GO_SPOTS_MONEY_WIRE.md)).
   - `offeringConfig` price keys stored/emitted as 4dp strings (`normalizeOfferingConfigPrices`); validators accept number|string; bowling parsers coerce.
   - Web dual-read `coerceMoney` / `parseMoneyString` (`apps/web/src/lib/money.ts`); client types `MoneyWire`; formatters + critical arithmetic coerce.
@@ -62,7 +62,7 @@
   - Two-venue isolation unit matrix — menu/gallery/resources/staff/event-requests/media/reviews/guest-chat (+ hours/audit/finance/seating/notifications).
   - **Lane ZZZZZ:** Postgres RLS on disk — migration `20260721050000_tenant_rls_core` ENABLE+FORCE + `app_tenant_rls_ok("shopId")` policies on 28 Tier A tables; app `SET LOCAL` via `tenant-rls.util` + Prisma ALS proxy + `TenantRlsInterceptor` (after venue bind; skips SSE). Opt-in `TENANT_RLS` (default off; fail-open when `app.rls_mode` unset). Design: [`GO_SPOTS_RLS.md`](./GO_SPOTS_RLS.md).
 - **What’s still missing (operator / residual, not code ship bar)**
-  - Neon must apply `20260721050000_*`; then soak with `TENANT_RLS=on`.
+  - Neon must apply `20260721050000_*`; then operator soak **Gates 0–4** in [`GO_SPOTS_RLS.md`](./GO_SPOTS_RLS.md) (`TENANT_RLS=on`).
   - Split DB roles (`locora_app` / migrate BYPASS), Tier B child-table policies, `public_insert` guest wrap, live pooled isolation suite.
   - Public opaque `GET /media/:id` residual accepted (no signed/shop-scoped URLs).
 
@@ -71,7 +71,7 @@
 - **What exists**
   - Resource `SELECT … FOR UPDATE` booking locks on create/update/play-session hot paths; overlap detect script.
   - Walk-in pay/cancel/update conditional claims.
-  - Postgres exclusion on disk: migration `20260721060000_reservation_resource_exclusion` — GiST `EXCLUDE` on `(resourceId, tstzrange '[)')` for `PENDING`/`CONFIRMED`/`CHECKED_IN` (matches app half-open overlap). Design: [`GO_SPOTS_EXCLUSION_CONSTRAINT.md`](./GO_SPOTS_EXCLUSION_CONSTRAINT.md).
+  - Postgres exclusion on disk: migration `20260721060000_reservation_resource_exclusion` — GiST `EXCLUDE` on `(resourceId, tsrange '[)')` for `PENDING`/`CONFIRMED`/`CHECKED_IN` (matches app half-open overlap). SQL in migration folder + `reservation-overlap-detect.util.ts`.
   - `withResourceBookingLock` maps exclusion `23P01` → same 409 Conflict as `assertNoReservationOverlap`.
   - Concurrency suite scaffold + Neon-safe skip gate (`test:concurrency`; live bodies still opt-in local-only).
 - **What’s still missing (operator / residual, not code ship bar)**
@@ -98,8 +98,9 @@
   - **Phase 2 dual-write** (`LEDGER_DUAL_WRITE`, default off): idempotent posts from transaction create, shop-order complete, play billing paid, walk-in play paid, reservation billed, shop loss create. Design: [`GO_SPOTS_LEDGER.md`](./GO_SPOTS_LEDGER.md).
   - Verify: jest ledger+money pattern **136** PASS; nest build PASS.
 - **What’s still missing (residual)**
-  - **OPERATOR:** Neon migrate; flip `LEDGER_DUAL_WRITE=on` after soak.
-  - Phase 3 backfill script; Phase 4+ `LEDGER_READS` analytics cutover; staff cross-channel double-entry still ops-only.
+  - **OPERATOR:** Gates 0–7 in [`GO_SPOTS_LEDGER.md`](./GO_SPOTS_LEDGER.md) — Neon migrate; `LEDGER_DUAL_WRITE=on` soak; `pnpm run backfill:ledger -- --apply`; optional `LEDGER_READS=on`.
+  - Phase 5 ledger-primary freeze; staff cross-channel double-entry still ops-only.
+- **Phase 3–4 shipped:** historical backfill CLI; `LEDGER_READS` prefer ledger SALE-by-channel in `computeRevenueSince` / `buildFinanceAnalytics` (default off).
 
 ### 7. Payment and financial actions need idempotency — DONE
 
@@ -116,15 +117,18 @@
 
 - **What exists**
   - `BillingWebhookEvent` uniqueness migration + handler dedupe; sig-fail no receipt; duplicate no-op; prod webhook secret fail-fast.
-  - Specs covering edge cases.
-- **What’s still missing**
-  - Neon must still apply migration `20260720210000_*` (operator Friday) — code path is shipped.
+  - Edge hardening: unknown events receipt+ignore; malformed JSON 400; `@SkipCsrf()` + `@SkipThrottle()`; specs covering edge cases.
+- **What’s still missing (operator only — no code residual)**
+  - Neon `migrate deploy` includes `20260720210000_*` (folder #1 of 18 — [`WHAT_TO_DO_NOW.md`](./WHAT_TO_DO_NOW.md)).
+  - Lemon dashboard webhook URL + secret aligned with host env.
+  - Post-deploy smoke: duplicate Lemon delivery no-ops ([`PRODUCTION_STATUS.md`](../PRODUCTION_STATUS.md)).
+  - Canonical §9 detail: [`GO_SPOTS_WEBHOOK_IDEMPOTENCY.md`](./GO_SPOTS_WEBHOOK_IDEMPOTENCY.md) (Lane **WEBHOOK8-residual-docs**).
 
 ### 9. Database migrations need stronger safety procedures — DONE
 
 - **What exists**
   - Preflight doc **14 PASS / 4 WARN** on **18** pending folders ([`MIGRATION_PREFLIGHT.md`](./MIGRATION_PREFLIGHT.md)); deploy checklist; never-reset guidance.
-  - Candidate expand→contract playbook ([`GO_SPOTS_MIGRATION_PLAN.md`](./GO_SPOTS_MIGRATION_PLAN.md)).
+  - Candidate expand→contract playbook ([`GO_SPOTS_MIGRATION_SAFETY.md`](./GO_SPOTS_MIGRATION_SAFETY.md) + [`MIGRATION_PREFLIGHT.md`](./MIGRATION_PREFLIGHT.md)).
   - Durable safety process ([`GO_SPOTS_MIGRATION_SAFETY.md`](./GO_SPOTS_MIGRATION_SAFETY.md)).
   - **Phase 1 (KKKKK):** CI job `api-migrate` — ephemeral `postgres:16` + `migrate deploy` / `status` / `validate` (never Neon secrets).
   - **Phase 2 (CCCCCC):** durable copy-paste preflight template — [`MIGRATION_PREFLIGHT_TEMPLATE.md`](./MIGRATION_PREFLIGHT_TEMPLATE.md).
@@ -142,18 +146,25 @@
   - Design: [`GO_SPOTS_UNIFIED_TICKET.md`](./GO_SPOTS_UNIFIED_TICKET.md) — Phase 0 **Option A** (ops container) recorded.
   - **Lane NNNNNN (2026-07-21):** Phase 1–2 ship bar — `GuestCheck` + `guestCheckId` on `ShopOrder` / `PlaySession` / `Reservation`; migration `20260721110000_guest_check` on disk; attach/detach/list/void APIs; staff **Open tabs** UI with running total; anti-double-count util + specs (linked play excluded; `reservationFee` embedded).
 - **What’s still missing / residual**
-  - Phase 3 single-settle (`POST …/settle` + finance-contract rewrite) — Option B/C.
+  - Phase 3b Option B/C settle-as-revenue-root (finance-contract rewrite) — not required for ops close-out.
   - Phase 4–5 guest-token consolidation / contract drop.
-  - **OPERATOR:** Neon migrate `20260721110000_*`.
+  - **OPERATOR:** Neon migrate `20260721110000_*` (if not already applied).
+- **Phase 3a shipped (BIBLE10-guest-check-settle):** `POST …/settle` marks OPEN→SETTLED after children are COMPLETED/CANCELED/billed; staff Settle UI; **no second ledger/revenue post** (children already stamped via existing paths).
 
 ### 11. Oversized services contain too many responsibilities — DONE
 
 - **What exists**
   - Helpers extracted at edges (money, locks, stock, CSRF, entitlements).
   - Capability split design + characterization-test gate ([`GO_SPOTS_SERVICE_SPLIT.md`](./GO_SPOTS_SERVICE_SPLIT.md)).
-  - **Lane SPLIT11 (2026-07-21):** Phase 0+1 ship bar — `auth.types.ts` (`JwtAccessPayload` re-exported from `auth.service`); `FinanceReportsService` + `ShopLossService` extracted; `FinanceService` thin facade for reports/losses; `finance-guard.util`; characterization `finance.reports-losses.characterization.spec.ts`. Controllers unchanged.
-- **What’s still missing / residual**
-  - Phases 2–9: transactions/shop-orders/play-billing/play-sessions; auth capability extracts; reservations schedule/CRUD/public-guest extracts. Monolith still holds those methods until later lanes.
+  - **Phases 0–9 complete (SPLIT11 + SPLIT14):** finance all domain services + thin `FinanceService` facade (~223 lines); auth session/refresh/logout/password (owner+staff)/venue/MFA extracted; reservations public/schedule/staff + facade shell (~109 lines). Controllers unchanged.
+- **Shipped slices**
+  - **SPLIT11:** Phase 0 `auth.types.ts`; finance reports/losses/transactions/shop-orders/play-session/play-billing.
+  - **SPLIT14-auth-*:** `AuthSessionService`, `AuthRefreshService`, `AuthLogoutService`, `AuthPasswordService`, `AuthVenueService`, `AuthMfaService`.
+  - **SPLIT14-reservations-*:** `ReservationsPublicService`, `ReservationsScheduleService`, `ReservationsStaffService`.
+- **Residual (by design, not blockers)**
+  - `AuthService` still owns login/register/activate/me/shared `issueTokens` (~1 170 lines — credential + onboarding entry).
+  - `ReservationRemindersService` cron tick may remain outside reservations facade.
+  - Optional future auth slices (`AuthRegistrationService`, `AuthCredentialsService`, …) documented but out of §14 scope.
 
 ### 12. Legacy and current subscription systems coexist — DONE
 
@@ -200,9 +211,10 @@
 ### 16. Explicit CSRF protection was not clearly visible — DONE
 
 - **What exists**
-  - Double-submit CSRF guard + cookie/Helmet/prod Secure guidance; web CSRF headers; specs.
-- **What’s still missing**
-  - Full Playwright CSRF smoke optional; host must keep proxy+lax / `CSRF_PROTECTION` prod defaults.
+  - Double-submit CSRF guard + cookie/Helmet/prod Secure guidance; web CSRF headers; jest **9** guard specs; operator smoke steps in [`DEPLOY_CHECKLIST.md`](./DEPLOY_CHECKLIST.md).
+- **What's still missing (residual, not code ship bar)**
+  - Operator Gates 0–2: prod env + proxy + login+CSRF manual smoke (blocked while Render suspended).
+  - Optional Playwright CSRF e2e; CSRF bootstrap / auth outage classified copy — [`GO_SPOTS_CSRF.md`](./GO_SPOTS_CSRF.md) + [`GO_SPOTS_OFFLINE.md`](./GO_SPOTS_OFFLINE.md) Phases 5–6.
 
 ### 17. Guest-management tokens need explicit expiry and revocation — DONE
 
@@ -225,7 +237,7 @@
   - **Lane AAAAAA:** owner-only TOTP MFA — migration `20260721080000_user_mfa_totp` (User `totpEnabled` / `totpSecretEnc` / `totpVerifiedAt` + `MfaRecoveryCode`); enroll begin/confirm, disable, recovery regenerate; login returns `{ mfaRequired, mfaToken }` (no cookies) until `POST /auth/mfa/verify`; recovery codes single-use hashed; MFA failures share `failedLogins`/`lockedUntil`; password reset does not clear TOTP. Web: settings `AuthMfaPanel` + login challenge step. Helpers: `mfa-totp` / `mfa-recovery` / `mfa-challenge` utils. Design: [`GO_SPOTS_2FA.md`](./GO_SPOTS_2FA.md).
 - **What’s still missing (residual)**
   - Forced reauth not yet applied to other sensitive owner actions beyond guest erase / MFA mutations.
-  - Staff / manager MFA; WebAuthn; org “require MFA” policy — deferred.
+  - Staff / manager MFA; WebAuthn; org “require MFA” policy — deferred; phased plan [`GO_SPOTS_MFA.md`](./GO_SPOTS_MFA.md).
   - **OPERATOR:** Neon `migrate deploy` of MFA migration (never from workstation prod `.env`).
 
 ### 19. A secret-like dashboard key appears in the URL — DONE
@@ -239,24 +251,29 @@
 - **What’s still missing (operator / optional)**
   - **OPERATOR:** Neon `migrate deploy` of hash migration (never from workstation prod `.env`).
   - Optional later: DROP plaintext `Shop.dashboardKey` after soak; rotate grace-period columns (deferred).
-### 20. Currency changes may automatically mutate prices — DONE
+### 20. Currency changes may automatically mutate prices — PARTIAL (ship bar met)
 
 - **What exists**
   - Atomic all-or-nothing catalog FX reprice (Lane D); live rates / `convertMoney`.
   - Preview + confirm gate (Lane CC): `POST /shop/currency/preview` returns proposed price table; apply only via `PATCH /shop/settings` with `currency` + `confirm: true`. Settings UI previews then confirms.
-  - **Lane YYYYY:** M6 per-row ISO stamps on `Transaction` / `ShopOrder` / `PlaySession` / `ShopLoss` / `Reservation` — migration `20260721040000_currency_stamp_monetary_rows` on disk (expand + backfill); dual-write on finance creates / mark-paid; dual-read analytics (`sumRevenueChannelsByCurrency`, shop-currency KPIs, `summary.revenueByCurrency`); conversion history `GET /shop/currency/history` + settings UI (audit `venue.currency.change`). Design: [`GO_SPOTS_CURRENCY_STAMPS.md`](./GO_SPOTS_CURRENCY_STAMPS.md).
+  - **Lane YYYYY:** M6 per-row ISO stamps on `Transaction` / `ShopOrder` / `PlaySession` / `ShopLoss` / `Reservation` — migration `20260721040000_currency_stamp_monetary_rows` on disk (expand + backfill); dual-write on finance creates / mark-paid; dual-read via `currency-stamp.util.ts` (`effectiveMoneyCurrency`); analytics (`sumRevenueChannelsByCurrency`, shop-currency KPIs, `summary.revenueByCurrency`); conversion history `GET /shop/currency/history` + settings UI (audit `venue.currency.change`). Residual checklist: [`GO_SPOTS_CURRENCY_STAMPS.md`](./GO_SPOTS_CURRENCY_STAMPS.md).
   - Historical orders/tx/play/loss amounts never rewritten on currency change.
-- **What’s still missing (operator)**
-  - Neon `migrate deploy` of stamp migration (never from workstation prod `.env`).
+- **What’s still missing (operator / optional)**
+  - **OPERATOR:** Neon `migrate deploy` of stamp migration + Gates 0–4 smoke — [`GO_SPOTS_CURRENCY_STAMPS.md`](./GO_SPOTS_CURRENCY_STAMPS.md).
+  - Nullable stamp contract; optional NOT NULL tighten after null-count verification.
+  - Pre-stamp backfill honesty limit (shops that flipped before stamps may mis-label old rows).
+  - Optional FX “report currency” conversion in analytics UI (mixed eras use `revenueByCurrency` buckets only today).
 
-### 21. Timezone handling needs thorough verification — DONE
+### 21. Timezone handling needs thorough verification — DONE (PARTIAL residual)
 
 - **What exists**
-  - `Shop.timezone` column + settings UI (IANA); venue day-key wiring for finance/schedule; public schedule day bounds.
+  - `Shop.timezone` column + settings UI (IANA); venue day-key wiring for finance/schedule; public schedule day bounds — ship bar **DONE** (Lane **B-timezone-ui**).
+  - Explicit shipped vs residual + operator Gates 0–3 + Phases 0–3: [`GO_SPOTS_TIMEZONE.md`](./GO_SPOTS_TIMEZONE.md) (lane **TZ21-residual-docs**).
 - **What’s still missing**
-  - Neon must apply timezone migration; some display `toLocaleDateString` paths are not day-key boundaries (accepted residual).
+  - **OPERATOR:** Neon migrate apply for `20260720220000_shop_timezone`.
+  - **Accepted residual:** web display `toLocale*` and client date pickers use browser local, not venue IANA; deprecated `dayBoundsLocal` retained; no web day-key mirror.
 
-### 22. Email delivery needs a durable retry mechanism — DONE
+### 22. Email delivery needs a durable retry mechanism — PARTIAL
 
 - **What exists**
   - Design ([`GO_SPOTS_MAIL_OUTBOX.md`](./GO_SPOTS_MAIL_OUTBOX.md)) + durable `MailOutbox` table (`20260721020000_mail_outbox`).
@@ -265,7 +282,9 @@
   - Owner dead-letter API + settings UI (XXXX/ZZZZ).
   - **Lane TTTTT:** SUPER_ADMIN system-mail ops — `GET/POST /mail/outbox/system/*` (`shopId IS NULL` only) + `/admin` `SystemMailOutboxPanel`.
 - **What’s still missing (operator)**
-  - Retries **not yet proven in live prod** (ops smoke after Neon migrate + Resend). Alerting optional later.
+  - Retries **not yet proven in live prod** (operator Gates 0–5 after Neon migrate + Resend).
+  - Outbox alerting / DEAD growth metrics deferred ([`GO_SPOTS_OBSERVABILITY.md`](./GO_SPOTS_OBSERVABILITY.md) Phase 4).
+  - SENT-row retention purge — no TTL cron on disk.
 
 ---
 
@@ -285,7 +304,7 @@
 - **What exists**
   - Full DR runbook ([`docs/operations/DISASTER_RECOVERY.md`](../operations/DISASTER_RECOVERY.md)) — Neon PITR/branch restore paths, ordered post-restore (`DATABASE_URL` → migrate deploy if behind → `/ready`), RTO/RPO guidance, restore-drill checklist, secret rotation, API/Web re-point.
   - Partial-outage symptom table + in-app **Shop settings → Outage runbook** (bible #32 / Lane SSSSS).
-  - Friday operator pointers — [`REMAINING_P0_FRIDAY.md`](./REMAINING_P0_FRIDAY.md), [`DEPLOY_CHECKLIST.md`](./DEPLOY_CHECKLIST.md) §4.
+  - Friday operator pointers — [`DEPLOY_CHECKLIST.md`](./DEPLOY_CHECKLIST.md) §4 · [`docs/PRODUCTION_STATUS.md`](../PRODUCTION_STATUS.md).
   - **Lane JJJJJJ:** status flip — documented procedures = DONE ship bar (same pattern as #23 OTel residual / #9 Neon deploy residual).
 - **What’s still missing (operator residual, not code ship bar)**
   - Live Neon project TBD fields (project id, retention, last drill date) must be filled from console; restore drill not yet executed; no automated backup verification job; uploads/object-storage backup deferred.
@@ -361,7 +380,7 @@
   - Design: [`GO_SPOTS_ONBOARDING.md`](./GO_SPOTS_ONBOARDING.md).
   - **Lane LLLLLL (2026-07-21):** Web-guided 10-step wizard at `/dashboard/[venuePath]/onboarding` — progress + skip/resume (localStorage), five templates applied via existing `createResourceCategory` / `syncVenueCategories`, hours/settings/staff/play-session/publish compose existing APIs; register + create-venue redirect to wizard; owner resume banner. en/pl. **No schema / apply-template API / Neon.**
 - **What’s still missing (residual)**
-  - Server-side `onboardingCompletedAt` / multi-device resume; dedicated idempotent `POST /shop/onboarding/apply-template`; dining table-group seed in mixed template; sidebar F&B polish (Phase B of #33).
+  - Server-side `onboardingCompletedAt` / multi-device resume — **Phase 1 plan ticket** in [`GO_SPOTS_ONBOARDING.md`](./GO_SPOTS_ONBOARDING.md) (**ONBOARD32-phase1-plan**; implement lane **`ONBOARD32-phase1-implement`**; **no schema on disk**); dining table-group seed in mixed template; sidebar F&B polish (Phase B of #33).
 
 ### 32. Offline and degraded-operation behavior is unclear — DONE
 
@@ -417,7 +436,7 @@
 | C3 | Reliable concurrency | DONE | Booking locks + exclusion `20260721060000_*` (#4); stock atomic SALE + claim-before-delete/cancel (#5 DONE); live C1–C3 bodies local-only residual; Neon deploy residual |
 | C4 | Meaningful automated tests | PARTIAL | 465 unit tests + CI API; concurrency scaffold (`test:concurrency` skip path); not full e2e/integration impl |
 | C5 | One financial source of truth | PARTIAL | LedgerEntry dual-write shipped (#6); analytics still interim channel sum until Phase 4 |
-| C6 | Simpler architecture | PARTIAL | Pack-only authz (#12) + CSV rows SoT (#13) + #11 Phase 0–1 finance reports/losses extract; auth/reservations + remaining finance capabilities still monolith |
+| C6 | Simpler architecture | **DONE** (ship bar) | §14 service split complete (#11): finance/auth/reservations facades + extracted sub-services; login/register/activate remain on `AuthService` by design |
 | C7 | Narrower product focus | DONE | Focus doc + Phase A commercial UX (#33); marketing routes split (#34 DONE); marketplace Phase A city landing + GTM checklist (#35 DONE) |
 
 ---
@@ -429,11 +448,11 @@ Tracked for submit, not as item DONE flips (Lane **ZZZ** refreshed 2026-07-21):
 - Neon `migrate deploy` (**18** pending: `20260720210000_*` … `20260721120000_seating_source_dining_table_group`, including GuestCheck + seating source FK) — never reset; exclusion after overlaps=0; CSV DROP after app cutover
 - Host `CORS_ORIGINS` + cookie/CSRF/throttle prod defaults (`.env.production.example`)
 - Manual smoke (login/CSRF, CORS, book, guest link, stock+sale, webhook dup)
-- Deploy Node **20** LTS
+- Deploy Node **24.x** (Vercel; engines in package.json)
 - Confirm Neon PITR / retention + restore drill (fill TBD in [`DISASTER_RECOVERY.md`](../operations/DISASTER_RECOVERY.md)) — #24 **DONE** for docs; live fill-in remains operator residual
 - **#10 DONE** / **#14 DONE** (Phase 0–2) — not Friday operator blockers; include `guest_check` + `seating_source_dining_table_group` in migrate pass
 
-See [`REMAINING_P0_FRIDAY.md`](./REMAINING_P0_FRIDAY.md), [`OVERNIGHT_STATUS.md`](./OVERNIGHT_STATUS.md), [`DEPLOY_CHECKLIST.md`](./DEPLOY_CHECKLIST.md).
+See [`DEPLOY_CHECKLIST.md`](./DEPLOY_CHECKLIST.md), [`docs/PRODUCTION_STATUS.md`](../PRODUCTION_STATUS.md), [`WHAT_TO_DO_NOW.md`](./WHAT_TO_DO_NOW.md).
 
 ---
 

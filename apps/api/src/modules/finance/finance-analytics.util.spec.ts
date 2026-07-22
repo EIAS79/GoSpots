@@ -1,8 +1,146 @@
 import {
+  buildFinanceAnalytics,
+  FINANCE_ANALYTICS_ROW_TAKE,
   isPaidWalkInPlaySession,
+  sumLedgerSaleChannels,
   sumRevenueChannels,
   sumRevenueChannelsByCurrency,
 } from './finance-analytics.util';
+
+jest.mock('../../common/ledger-post.util', () => ({
+  isLedgerReadsEnabled: jest.fn(() => false),
+}));
+
+jest.mock('../../common/shop-venue-time.util', () => ({
+  loadShopVenueTimeContext: jest.fn(async () => ({
+    resolvedTimeZone: 'UTC',
+  })),
+}));
+
+const { isLedgerReadsEnabled } = jest.requireMock('../../common/ledger-post.util');
+
+describe('buildFinanceAnalytics take caps (PERF35)', () => {
+  const shopId = 'shop-analytics-cap';
+
+  function makePrisma() {
+    const findMany = jest.fn(async (args?: { take?: number }) => {
+      const take = args?.take ?? FINANCE_ANALYTICS_ROW_TAKE;
+      return Array.from({ length: take }, (_, i) => ({
+        amount: { toString: () => '1.0000' },
+        total: { toString: () => '1.0000' },
+        currency: 'EUR',
+        createdAt: new Date(`2026-07-${String(1 + (i % 20)).padStart(2, '0')}T12:00:00Z`),
+        completedAt: new Date(`2026-07-${String(1 + (i % 20)).padStart(2, '0')}T12:00:00Z`),
+        updatedAt: new Date(`2026-07-${String(1 + (i % 20)).padStart(2, '0')}T12:00:00Z`),
+        occurredAt: new Date(`2026-07-${String(1 + (i % 20)).padStart(2, '0')}T12:00:00Z`),
+        billedAt: new Date(`2026-07-${String(1 + (i % 20)).padStart(2, '0')}T12:00:00Z`),
+        billedAmount: { toString: () => '1.0000' },
+        startsAt: new Date(`2026-07-${String(1 + (i % 20)).padStart(2, '0')}T12:00:00Z`),
+        status: 'COMPLETED',
+        guestCount: 1,
+        partySize: 1,
+        playerCount: 1,
+        resourceId: null,
+        reservationId: null,
+        type: 'VENUE_VIEW',
+        kind: 'SALE',
+        method: 'CASH',
+        paymentMethod: 'CASH',
+        billingPaymentMethod: 'CASH',
+        menuItemId: 'item-1',
+        name: 'Coffee',
+        quantity: 1,
+        unitPrice: { toString: () => '1.0000' },
+      }));
+    });
+
+    return {
+      shop: {
+        findUnique: jest.fn(async () => ({ currency: 'EUR' })),
+      },
+      transaction: {
+        findMany,
+        count: jest.fn(async () => FINANCE_ANALYTICS_ROW_TAKE),
+      },
+      shopOrder: { findMany },
+      reservation: { findMany },
+      playSession: { findMany },
+      shopLoss: { findMany },
+      analyticsEvent: { findMany },
+      transactionLineItem: {
+        groupBy: jest.fn(async () => []),
+      },
+      shopOrderLine: { findMany },
+      ledgerEntry: { findMany },
+    };
+  }
+
+  beforeEach(() => {
+    isLedgerReadsEnabled.mockReturnValue(false);
+  });
+
+  it('passes FINANCE_ANALYTICS_ROW_TAKE to bounded findMany queries', async () => {
+    const prisma = makePrisma();
+    await buildFinanceAnalytics(prisma as never, shopId, 7);
+
+    for (const call of prisma.transaction.findMany.mock.calls) {
+      expect(call[0]?.take).toBe(FINANCE_ANALYTICS_ROW_TAKE);
+    }
+    for (const call of prisma.shopOrder.findMany.mock.calls) {
+      expect(call[0]?.take).toBe(FINANCE_ANALYTICS_ROW_TAKE);
+    }
+    for (const call of prisma.reservation.findMany.mock.calls) {
+      expect(call[0]?.take).toBe(FINANCE_ANALYTICS_ROW_TAKE);
+    }
+    for (const call of prisma.playSession.findMany.mock.calls) {
+      expect(call[0]?.take).toBe(FINANCE_ANALYTICS_ROW_TAKE);
+    }
+    for (const call of prisma.shopLoss.findMany.mock.calls) {
+      expect(call[0]?.take).toBe(FINANCE_ANALYTICS_ROW_TAKE);
+    }
+    for (const call of prisma.analyticsEvent.findMany.mock.calls) {
+      expect(call[0]?.take).toBe(FINANCE_ANALYTICS_ROW_TAKE);
+    }
+    for (const call of prisma.shopOrderLine.findMany.mock.calls) {
+      expect(call[0]?.take).toBe(FINANCE_ANALYTICS_ROW_TAKE);
+    }
+  });
+
+  it('sets analyticsTruncated when a source hits the take cap', async () => {
+    const prisma = makePrisma();
+    const out = await buildFinanceAnalytics(prisma as never, shopId, 7);
+
+    expect(out.summary.analyticsTruncated).toBe(true);
+    expect(out.summary.analyticsTruncatedSources).toEqual(
+      expect.arrayContaining(['revenueTransactions']),
+    );
+  });
+
+  it('omits truncation fields when under cap', async () => {
+    const prisma = makePrisma();
+    prisma.transaction.findMany.mockImplementation(async (args?: { take?: number }) => {
+      const take = args?.take ?? FINANCE_ANALYTICS_ROW_TAKE;
+      return Array.from({ length: take - 1 }, () => ({
+        amount: { toString: () => '1.0000' },
+        currency: 'EUR',
+        createdAt: new Date('2026-07-15T12:00:00Z'),
+        method: 'CASH',
+      }));
+    });
+    prisma.shopOrder.findMany.mockResolvedValue([]);
+    prisma.reservation.findMany.mockResolvedValue([]);
+    prisma.playSession.findMany.mockResolvedValue([]);
+    prisma.shopLoss.findMany.mockResolvedValue([]);
+    prisma.analyticsEvent.findMany.mockResolvedValue([]);
+    prisma.shopOrderLine.findMany.mockResolvedValue([]);
+    prisma.transaction.count.mockResolvedValue(0);
+
+    const out = await buildFinanceAnalytics(prisma as never, shopId, 7);
+
+    expect(out.summary.analyticsTruncated).toBeUndefined();
+    expect(out.summary.analyticsTruncatedSources).toBeUndefined();
+  });
+});
 
 describe('sumRevenueChannels (finance contract)', () => {
   it('sums four exclusive channels without overlap', () => {
@@ -145,5 +283,26 @@ describe('sumRevenueChannelsByCurrency', () => {
     expect(result.shopChannels.total).toBe(15); // 10 + 5, not EUR 40
     expect(result.byCurrency.EUR.total).toBe(40);
     expect(result.byCurrency.USD.total).toBe(15);
+  });
+});
+
+describe('sumLedgerSaleChannels (Phase 4)', () => {
+  it('maps ledger channels and ignores foreign currency', () => {
+    const channels = sumLedgerSaleChannels(
+      [
+        { amount: 10, channel: 'MENU_ORDERS', currency: 'EUR' },
+        { amount: 3, channel: 'QUICK_SALES', currency: 'EUR' },
+        { amount: 20, channel: 'PLAY_SESSIONS', currency: 'EUR' },
+        { amount: 8, channel: 'RESERVATIONS', currency: 'EUR' },
+        { amount: 99, channel: 'MENU_ORDERS', currency: 'USD' },
+        { amount: 5, channel: null, currency: 'EUR' },
+      ],
+      'EUR',
+    );
+    expect(channels.menuOrders).toBe(10);
+    expect(channels.quickSales).toBe(3);
+    expect(channels.playSessions).toBe(20);
+    expect(channels.reservations).toBe(8);
+    expect(channels.total).toBe(41);
   });
 });

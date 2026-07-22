@@ -9,7 +9,8 @@ import {
   Query,
   Req,
 } from '@nestjs/common';
-import { ApiTags } from '@nestjs/swagger';
+import { ApiOkResponse, ApiTags } from '@nestjs/swagger';
+import { ApiStandardErrorResponses } from '../../common/dto/api-error-responses.decorator';
 import { Throttle } from '@nestjs/throttler';
 import type { Request } from 'express';
 import { isCaptchaEscalated } from '../../common/captcha-escalation.util';
@@ -133,6 +134,8 @@ export class PublicController {
 
   @Public()
   @Get('venues/:slug')
+  @ApiOkResponse({ description: 'Public venue profile by slug' })
+  @ApiStandardErrorResponses(404)
   async venue(@Param('slug') slug: string) {
     const [venue, reviewData] = await Promise.all([
       this.shop.getPublicVenue(slug),
@@ -284,6 +287,7 @@ export class PublicController {
   @Public()
   @Throttle(publicThrottle('booking'))
   @Post('venues/:slug/dining/reservations')
+  @ApiStandardErrorResponses(400, 403, 404, 409)
   async submitDiningReservation(
     @Param('slug') slug: string,
     @Body() dto: CreatePublicDiningReservationDto,
@@ -307,6 +311,7 @@ export class PublicController {
   @Public()
   @Throttle(publicThrottle('booking'))
   @Post('venues/:slug/gaming/reservations')
+  @ApiStandardErrorResponses(400, 403, 404, 409)
   async submitGamingReservation(
     @Param('slug') slug: string,
     @Body() dto: CreatePublicGamingReservationDto,

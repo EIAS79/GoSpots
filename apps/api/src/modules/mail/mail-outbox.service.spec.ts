@@ -338,4 +338,35 @@ describe('MailOutboxService (durable)', () => {
     expect(row.status).toBe('PENDING');
     expect(row.shopId).toBeNull();
   });
+
+  it('purgeSentRows deletes SENT rows older than cutoff in batches', async () => {
+    const cutoff = new Date('2026-04-23T00:00:00.000Z');
+    const findMany = jest
+      .fn()
+      .mockResolvedValueOnce([{ id: 'old1' }, { id: 'old2' }])
+      .mockResolvedValueOnce([]);
+    const deleteMany = jest.fn().mockResolvedValue({ count: 2 });
+    const prisma = mockPrisma({
+      mailOutbox: { findMany, deleteMany },
+    });
+    const outbox = new MailOutboxService(prisma as never);
+
+    const result = await outbox.purgeSentRows({
+      olderThanDays: 90,
+      now: new Date('2026-07-22T00:00:00.000Z'),
+    });
+
+    expect(result.deleted).toBe(2);
+    expect(findMany).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: {
+          status: 'SENT',
+          sentAt: { lt: cutoff },
+        },
+      }),
+    );
+    expect(deleteMany).toHaveBeenCalledWith({
+      where: { id: { in: ['old1', 'old2'] } },
+    });
+  });
 });

@@ -19,6 +19,7 @@ import {
   AttachGuestCheckDto,
   CreateGuestCheckDto,
   DetachGuestCheckDto,
+  SettleGuestCheckDto,
   UpdateGuestCheckDto,
 } from './dto/guest-check.dto';
 import { GuestCheckService } from './guest-check.service';
@@ -74,6 +75,16 @@ export class GuestCheckController {
   @RequirePermissions(PERMISSIONS.TRANSACTION_WRITE)
   voidCheck(@CurrentUser() user: JwtAccessPayload, @Param('id') id: string) {
     return this.guestChecks.void(user, id);
+  }
+
+  @Post(':id/settle')
+  @RequirePermissions(PERMISSIONS.TRANSACTION_WRITE)
+  settle(
+    @CurrentUser() user: JwtAccessPayload,
+    @Param('id') id: string,
+    @Body() dto: SettleGuestCheckDto,
+  ) {
+    return this.guestChecks.settle(user, id, dto);
   }
 
   @Post(':id/attach')

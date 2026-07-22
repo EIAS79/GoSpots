@@ -11,16 +11,18 @@ import {
 } from "lucide-react";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { AuthCard, Field } from "@/components/auth/auth-card";
 import { cn } from "@/lib/cn";
-import { ensureCsrf } from "@/lib/api";
+import { ensureCsrf, resolveApiErrorDisplay } from "@/lib/api";
+import { sessionRevokedUserMessage } from "@/lib/api-error-message";
 import {
   login,
   requestStaffPasswordReset,
   type UserAccountType,
 } from "@/lib/auth-client";
 import { isMfaLoginChallenge, verifyMfaLogin } from "@/lib/auth-mfa-client";
+import { consumeSessionRevokedNotice } from "@/lib/auth-session";
 import { usePublicPrefs } from "@/lib/public-prefs-context";
 import { useAuth } from "@/lib/use-auth";
 import {
@@ -54,6 +56,12 @@ export function LoginForm() {
   const [mfaToken, setMfaToken] = useState<string | null>(null);
   const [mfaCode, setMfaCode] = useState("");
   const [mfaRecovery, setMfaRecovery] = useState("");
+
+  useEffect(() => {
+    if (consumeSessionRevokedNotice()) {
+      setError(sessionRevokedUserMessage());
+    }
+  }, []);
 
   const isOwner = panel === "owner";
   const accountType: UserAccountType = isOwner
@@ -132,7 +140,13 @@ export function LoginForm() {
       }
       await finishSession(session);
     } catch (err) {
-      setError(err instanceof Error ? err.message : t("auth.login.failed"));
+      setError(
+        resolveApiErrorDisplay(
+          err,
+          { CSRF_INVALID: t("auth.login.csrfInvalid") },
+          t("auth.login.failed"),
+        ),
+      );
     } finally {
       setLoading(false);
     }
@@ -152,7 +166,16 @@ export function LoginForm() {
       });
       await finishSession(session);
     } catch (err) {
-      setError(err instanceof Error ? err.message : t("auth.login.mfaFailed"));
+      setError(
+        resolveApiErrorDisplay(
+          err,
+          {
+            CSRF_INVALID: t("auth.login.csrfInvalid"),
+            MFA_INVALID: t("auth.login.mfaFailed"),
+          },
+          t("auth.login.mfaFailed"),
+        ),
+      );
     } finally {
       setLoading(false);
     }
@@ -172,7 +195,11 @@ export function LoginForm() {
       setForgotDone(res.message);
     } catch (err) {
       setError(
-        err instanceof Error ? err.message : t("auth.login.requestFailed"),
+        resolveApiErrorDisplay(
+          err,
+          { CSRF_INVALID: t("auth.login.csrfInvalid") },
+          t("auth.login.requestFailed"),
+        ),
       );
     } finally {
       setLoading(false);

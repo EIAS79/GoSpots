@@ -1,6 +1,7 @@
 import {
   ForbiddenException,
   Injectable,
+  Logger,
   NotFoundException,
 } from '@nestjs/common';
 import { hasPermission, PERMISSIONS } from '../../common/permissions';
@@ -18,6 +19,11 @@ import { MediaService } from '../media/media.service';
 
 @Injectable()
 export class GalleryService {
+  private readonly logger = new Logger(GalleryService.name);
+
+  /** Defensive cap on gallery items returned by `list` (response shape unchanged). */
+  static readonly GALLERY_LIST_TAKE = 200;
+
   constructor(
     private readonly prisma: PrismaService,
     private readonly audit: AuditService,
@@ -43,10 +49,18 @@ export class GalleryService {
     });
     if (!shop) throw new NotFoundException();
 
+    const take = GalleryService.GALLERY_LIST_TAKE;
     const items = await this.prisma.galleryItem.findMany({
       where: { shopId },
       orderBy: [{ sortOrder: 'asc' }, { createdAt: 'asc' }],
+      take,
     });
+
+    if (items.length === take) {
+      this.logger.warn(
+        `Gallery list hit take cap (${take}) for shop=${shopId}; items beyond the first ${take} by sortOrder may be omitted from response.`,
+      );
+    }
 
     return { coverImage: shop.coverImage, items };
   }

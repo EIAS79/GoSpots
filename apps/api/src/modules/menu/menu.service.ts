@@ -1,6 +1,7 @@
 import {
   ForbiddenException,
   Injectable,
+  Logger,
   NotFoundException,
 } from '@nestjs/common';
 import type { MealPeriod } from '@prisma/client';
@@ -35,6 +36,13 @@ import {
 
 @Injectable()
 export class MenuService {
+  private readonly logger = new Logger(MenuService.name);
+
+  /** Defensive caps on staff `GET /menu` payload (response shape unchanged). */
+  static readonly MENU_SECTION_TAKE = 200;
+  static readonly MENU_TAG_TAKE = 200;
+  static readonly MENU_ITEM_TAKE = 2000;
+
   constructor(
     private readonly prisma: PrismaService,
     private readonly audit: AuditService,
@@ -57,23 +65,48 @@ export class MenuService {
       shopId,
     );
     const today = venueDayKey(resolvedTimeZone);
+    const sectionTake = MenuService.MENU_SECTION_TAKE;
+    const tagTake = MenuService.MENU_TAG_TAKE;
+    const itemTake = MenuService.MENU_ITEM_TAKE;
+
     const [sections, tags, sectionImages] = await Promise.all([
       this.prisma.menuSection.findMany({
         where: { shopId },
         orderBy: { sortOrder: 'asc' },
+        take: sectionTake,
       }),
       this.prisma.shopTag.findMany({
         where: { shopId },
         orderBy: [{ type: 'asc' }, { sortOrder: 'asc' }],
+        take: tagTake,
       }),
       sectionImageUrlsByShop(this.prisma, shopId),
     ]);
+
+    if (sections.length === sectionTake) {
+      this.logger.warn(
+        `Menu sections hit take cap (${sectionTake}) for shop=${shopId}; POS menu may omit sections beyond sortOrder.`,
+      );
+    }
+    if (tags.length === tagTake) {
+      this.logger.warn(
+        `Menu tags hit take cap (${tagTake}) for shop=${shopId}; POS menu may omit tags beyond type/sortOrder.`,
+      );
+    }
+
     await resetShopMenuStockForDay(this.prisma, shopId, today);
     const itemsAfterReset = await this.prisma.menuItem.findMany({
       where: { shopId },
       include: { tags: { include: { tag: true } } },
       orderBy: { name: 'asc' },
+      take: itemTake,
     });
+
+    if (itemsAfterReset.length === itemTake) {
+      this.logger.warn(
+        `Menu items hit take cap (${itemTake}) for shop=${shopId}; POS menu may omit items beyond name sort.`,
+      );
+    }
     return {
       sections: sections.map((s) => ({
         ...s,

@@ -1,7 +1,9 @@
 import {
   absoluteAppUrl,
+  classifyReservationNotificationTab,
   guestVenueStatusPath,
   isSafeAppRelativeHref,
+  reservationNotificationTabWhere,
   reservationSessionsHref,
   sanitizeAppRelativeHref,
 } from './reservation-notification-href';
@@ -87,5 +89,82 @@ describe('reservationSessionsHref', () => {
       '/sessions?tab=dining&date=2026-07-20',
     );
     expect(reservationSessionsHref(d, 'events')).toBe('/sessions?tab=events');
+  });
+});
+
+describe('reservationNotificationTabWhere', () => {
+  const samples: Array<{
+    href: string | null;
+    title: string;
+    tab: 'dining' | 'schedule' | 'events' | null;
+  }> = [
+    {
+      href: '/sessions?tab=dining&date=2026-07-20',
+      title: 'New reservation',
+      tab: 'dining',
+    },
+    {
+      href: '/sessions?tab=events',
+      title: 'Event',
+      tab: 'events',
+    },
+    {
+      href: '/sessions?tab=schedule&date=2026-07-20',
+      title: 'Gaming',
+      tab: 'schedule',
+    },
+    {
+      href: null,
+      title: 'Table reservation confirmed',
+      tab: 'dining',
+    },
+    {
+      href: null,
+      title: 'Gaming booking starts soon',
+      tab: 'schedule',
+    },
+    {
+      href: null,
+      title: 'New event request',
+      tab: 'events',
+    },
+    {
+      href: null,
+      title: 'Dining event request',
+      tab: 'dining',
+    },
+    {
+      href: '/finance',
+      title: 'Unclassified',
+      tab: null,
+    },
+  ];
+
+  it.each(samples)(
+    'classifyReservationNotificationTab matches tab precedence for $title',
+    ({ href, title, tab }) => {
+      expect(classifyReservationNotificationTab({ href, title })).toBe(tab);
+    },
+  );
+
+  it('prefers dining over events when title contains both signals', () => {
+    expect(
+      classifyReservationNotificationTab({
+        href: null,
+        title: 'Dining event request',
+      }),
+    ).toBe('dining');
+  });
+
+  it('returns href/session tab filters for each tab', () => {
+    expect(reservationNotificationTabWhere('dining')).toEqual(
+      expect.objectContaining({ OR: expect.any(Array) }),
+    );
+    expect(reservationNotificationTabWhere('schedule')).toEqual(
+      expect.objectContaining({ OR: expect.any(Array) }),
+    );
+    expect(reservationNotificationTabWhere('events')).toEqual(
+      expect.objectContaining({ OR: expect.any(Array) }),
+    );
   });
 });

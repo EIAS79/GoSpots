@@ -1,5 +1,6 @@
 import { Body, Controller, Get, Headers, Patch, Post, Query, UseGuards } from '@nestjs/common';
-import { ApiTags } from '@nestjs/swagger';
+import { ApiOkResponse, ApiTags } from '@nestjs/swagger';
+import { ApiStaffErrorResponses } from '../../common/dto/api-error-responses.decorator';
 import {
   hashIdempotencyRequest,
   IDEMPOTENCY_SCOPES,
@@ -31,6 +32,8 @@ export class ShopController {
   ) {}
 
   @Get('settings')
+  @ApiOkResponse({ description: 'Shop settings for the authenticated owner/staff' })
+  @ApiStaffErrorResponses()
   getSettings(@CurrentUser() user: JwtAccessPayload) {
     return this.shop.getSettings(user);
   }

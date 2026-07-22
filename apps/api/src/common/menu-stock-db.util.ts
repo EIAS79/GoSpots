@@ -1,4 +1,6 @@
 import type { Prisma, PrismaClient } from '@prisma/client';
+import { ApiDomainErrorCode } from './api-error.codes';
+import { apiConflictException } from './api-error.util';
 
 type DbClient = PrismaClient | Prisma.TransactionClient;
 
@@ -159,4 +161,22 @@ export async function adjustMenuItemStockBy(
     `;
   }
   return true;
+}
+
+/** §36 — conditional decrement; 409 when insufficient stock or lost race. */
+export async function adjustMenuItemStockByOrThrow(
+  prisma: DbClient,
+  menuItemId: string,
+  delta: number,
+  shopId?: string,
+  message = 'Not enough stock for this item.',
+): Promise<void> {
+  const ok = await adjustMenuItemStockBy(prisma, menuItemId, delta, shopId);
+  if (!ok) {
+    throw apiConflictException(
+      ApiDomainErrorCode.MENU_STOCK_INSUFFICIENT,
+      message,
+      { menuItemId, delta, ...(shopId ? { shopId } : {}) },
+    );
+  }
 }

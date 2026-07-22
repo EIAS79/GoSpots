@@ -7,6 +7,12 @@ import { NotificationsModule } from '../notifications/notifications.module';
 import { MailModule } from '../mail/mail.module';
 import { AuthController } from './auth.controller';
 import { AuthService } from './auth.service';
+import { AuthSessionService } from './auth-session.service';
+import { AuthRefreshService } from './auth-refresh.service';
+import { AuthLogoutService } from './auth-logout.service';
+import { AuthPasswordService } from './auth-password.service';
+import { AuthVenueService } from './auth-venue.service';
+import { AuthMfaService } from './auth-mfa.service';
 import { JwtAccessStrategy } from './strategies/jwt-access.strategy';
 
 @Module({
@@ -28,7 +34,16 @@ import { JwtAccessStrategy } from './strategies/jwt-access.strategy';
     }),
   ],
   controllers: [AuthController],
-  providers: [AuthService, JwtAccessStrategy],
+  providers: [
+    AuthSessionService,
+    AuthRefreshService,
+    AuthLogoutService,
+    AuthPasswordService,
+    AuthVenueService,
+    AuthMfaService,
+    AuthService,
+    JwtAccessStrategy,
+  ],
   exports: [AuthService],
 })
 export class AuthModule {}

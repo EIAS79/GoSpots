@@ -2,9 +2,11 @@ import {
   BadRequestException,
   ConflictException,
   ForbiddenException,
+  forwardRef,
+  Inject,
   Injectable,
   Logger,
-  NotFoundException,
+  Optional,
   UnauthorizedException,
 } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
@@ -18,12 +20,7 @@ import {
   validatePasswordStrength,
   verifyPassword,
 } from '../../common/security/password';
-import {
-  generatePasswordResetToken,
-  generateRefreshTokenRaw,
-  hashToken,
-  PASSWORD_RESET_TTL_MS,
-} from '../../common/security/token';
+import { generateRefreshTokenRaw, hashToken } from '../../common/security/token';
 import { ShopRole, UserAccountType } from '@prisma/client';
 import {
   isValidOwnerEmail,
@@ -49,7 +46,6 @@ import {
   syncMembershipPermissionRows,
 } from '../../common/permissions';
 import {
-  classifyVenuePath,
   dashboardKeyPersistFields,
   generateDashboardKey,
 } from '../../common/dashboard-path';
@@ -61,25 +57,21 @@ import {
 import {
   MFA_CHALLENGE_PURPOSE,
   MFA_CHALLENGE_TTL_SEC,
-  isMfaChallengePayload,
 } from '../../common/mfa-challenge.util';
 import {
-  generateRecoveryCodes,
-  hashRecoveryCode,
-  matchRecoveryCodeHash,
-} from '../../common/mfa-recovery.util';
-import {
-  buildOtpAuthUri,
-  decryptTotpSecret,
-  encryptTotpSecret,
-  generateTotpSecret,
-  verifyTotpCode,
-  type MfaEncryptionKeySource,
-} from '../../common/mfa-totp.util';
-import { assertUserPassword } from '../../common/security/verify-password.util';
+  isStaffMfaOptInEnabled,
+  isUserMfaLoginEligible,
+  STAFF_MFA_PHASE1_ELIGIBLE_ROLES,
+} from '../../common/staff-mfa.util';
 import { AuditService } from '../audit/audit.service';
 import { NotificationsService } from '../notifications/notifications.service';
 import { MailService } from '../mail/mail.service';
+import { AuthSessionService } from './auth-session.service';
+import { AuthRefreshService } from './auth-refresh.service';
+import { AuthLogoutService } from './auth-logout.service';
+import { AuthPasswordService } from './auth-password.service';
+import { AuthVenueService } from './auth-venue.service';
+import { AuthMfaService } from './auth-mfa.service';
 import {
   ForgotPasswordDto,
   LoginDto,
@@ -122,6 +114,12 @@ export type LoginResult = AuthTokenBundle | MfaLoginChallenge;
 @Injectable()
 export class AuthService {
   private readonly logger = new Logger(AuthService.name);
+  private readonly sessions: AuthSessionService;
+  private readonly refreshSvc: AuthRefreshService;
+  private readonly logoutSvc: AuthLogoutService;
+  private readonly passwordSvc: AuthPasswordService;
+  private readonly venueSvc: AuthVenueService;
+  private readonly mfaSvc: AuthMfaService;
 
   constructor(
     private readonly prisma: PrismaService,
@@ -130,7 +128,40 @@ export class AuthService {
     private readonly notifications: NotificationsService,
     private readonly audit: AuditService,
     private readonly mail: MailService,
-  ) {}
+    // Bible #11 auth split: session API surface lives on AuthSessionService.
+    // Optional so pre-existing unit specs that construct AuthService with the
+    // legacy 6-arg signature keep working — we lazily wrap the same prisma.
+    @Optional() sessions?: AuthSessionService,
+    // Bible #14 auth split: refresh rotation lives on AuthRefreshService.
+    // Optional for the same legacy 6-arg unit-spec constructor path.
+    @Optional()
+    @Inject(forwardRef(() => AuthRefreshService))
+    refreshSvc?: AuthRefreshService,
+    // Bible #14 auth split: logout revoke lives on AuthLogoutService.
+    // Optional for the same legacy 6-arg unit-spec constructor path.
+    @Optional() logoutSvc?: AuthLogoutService,
+    // Bible #14 auth split: owner password reset lives on AuthPasswordService.
+    // Optional for the same legacy 6-arg unit-spec constructor path.
+    @Optional() passwordSvc?: AuthPasswordService,
+    // Bible #14 auth split: venue dashboard bind lives on AuthVenueService.
+    // Optional for the same legacy 6-arg unit-spec constructor path.
+    @Optional() venueSvc?: AuthVenueService,
+    // Bible #14 auth split: owner MFA lives on AuthMfaService.
+    // Optional for the same legacy 6-arg unit-spec constructor path.
+    @Optional()
+    @Inject(forwardRef(() => AuthMfaService))
+    mfaSvc?: AuthMfaService,
+  ) {
+    this.sessions = sessions ?? new AuthSessionService(prisma);
+    this.refreshSvc = refreshSvc ?? new AuthRefreshService(prisma, this);
+    this.logoutSvc = logoutSvc ?? new AuthLogoutService(prisma);
+    this.passwordSvc =
+      passwordSvc ??
+      new AuthPasswordService(prisma, config, mail, notifications);
+    this.venueSvc = venueSvc ?? new AuthVenueService(prisma, jwt, config);
+    this.mfaSvc =
+      mfaSvc ?? new AuthMfaService(prisma, jwt, config, mail, this);
+  }
 
   // ─── Registration ───────────────────────────────────────────────
   async register(dto: RegisterDto) {
@@ -590,10 +621,35 @@ export class AuthService {
       );
     }
 
-    // Owner TOTP: password OK but do not issue cookies until MFA verify.
+    // TOTP: password OK but do not issue cookies until MFA verify.
+    let staffMfaMembershipRoles: ShopRole[] | undefined;
     if (
-      user.accountType === UserAccountType.VENUE_OWNER &&
-      user.totpEnabled
+      user.accountType === UserAccountType.VENUE_STAFF &&
+      user.totpEnabled &&
+      isStaffMfaOptInEnabled({
+        STAFF_MFA_OPT_IN: this.config.get<string>('STAFF_MFA_OPT_IN'),
+      })
+    ) {
+      const eligibleMemberships = await this.prisma.membership.findMany({
+        where: {
+          userId: user.id,
+          isActive: true,
+          role: { in: [...STAFF_MFA_PHASE1_ELIGIBLE_ROLES] },
+        },
+        select: { role: true },
+      });
+      staffMfaMembershipRoles = eligibleMemberships.map((m) => m.role);
+    }
+
+    if (
+      isUserMfaLoginEligible({
+        accountType: user.accountType,
+        totpEnabled: user.totpEnabled,
+        staffMembershipRoles: staffMfaMembershipRoles,
+        staffMfaOptIn: isStaffMfaOptInEnabled({
+          STAFF_MFA_OPT_IN: this.config.get<string>('STAFF_MFA_OPT_IN'),
+        }),
+      })
     ) {
       const mfaToken = await this.jwt.signAsync(
         {
@@ -668,504 +724,70 @@ export class AuthService {
     return tokens;
   }
 
-  // ─── Owner TOTP MFA ──────────────────────────────────────────────
-
-  private mfaKeySource(): MfaEncryptionKeySource {
-    return {
-      mfaTotpEncryptionKey: this.config.get<string>('MFA_TOTP_ENCRYPTION_KEY'),
-      jwtAccessSecret: this.config.get<string>('JWT_ACCESS_SECRET'),
-    };
-  }
-
-  private assertVenueOwner(accountType: UserAccountType) {
-    if (accountType !== UserAccountType.VENUE_OWNER) {
-      throw new ForbiddenException('Two-factor authentication is owner-only.');
-    }
-  }
-
+  // ─── Owner TOTP MFA (facade → AuthMfaService, Bible #14) ────────
+  /** @see AuthMfaService.getMfaStatus */
   async getMfaStatus(userId: string) {
-    const user = await this.prisma.user.findUnique({
-      where: { id: userId },
-      select: { accountType: true, totpEnabled: true },
-    });
-    if (!user) throw new UnauthorizedException();
-    this.assertVenueOwner(user.accountType);
-    const recoveryCodesRemaining = user.totpEnabled
-      ? await this.prisma.mfaRecoveryCode.count({
-          where: { userId, usedAt: null },
-        })
-      : 0;
-    return {
-      totpEnabled: user.totpEnabled,
-      recoveryCodesRemaining,
-    };
+    return this.mfaSvc.getMfaStatus(userId);
   }
 
+  /** @see AuthMfaService.beginMfaTotp */
   async beginMfaTotp(userId: string, dto: MfaTotpBeginDto) {
-    const user = await this.prisma.user.findUnique({
-      where: { id: userId },
-      select: {
-        id: true,
-        email: true,
-        accountType: true,
-        totpEnabled: true,
-        passwordHash: true,
-      },
-    });
-    if (!user) throw new UnauthorizedException();
-    this.assertVenueOwner(user.accountType);
-    if (user.totpEnabled) {
-      throw new BadRequestException('MFA is already enabled.');
-    }
-    await assertUserPassword(this.prisma, userId, dto.password);
-
-    const secret = generateTotpSecret();
-    const totpSecretEnc = encryptTotpSecret(secret, this.mfaKeySource());
-    await this.prisma.user.update({
-      where: { id: userId },
-      data: { totpSecretEnc, totpVerifiedAt: null },
-    });
-
-    return {
-      secret,
-      otpauthUri: buildOtpAuthUri({
-        secret,
-        accountName: user.email,
-        issuer: 'Locora',
-      }),
-    };
+    return this.mfaSvc.beginMfaTotp(userId, dto);
   }
 
+  /** @see AuthMfaService.confirmMfaTotp */
   async confirmMfaTotp(userId: string, dto: MfaTotpConfirmDto) {
-    const user = await this.prisma.user.findUnique({
-      where: { id: userId },
-      select: {
-        id: true,
-        accountType: true,
-        totpEnabled: true,
-        totpSecretEnc: true,
-      },
-    });
-    if (!user) throw new UnauthorizedException();
-    this.assertVenueOwner(user.accountType);
-    if (user.totpEnabled) {
-      throw new BadRequestException('MFA is already enabled.');
-    }
-    if (!user.totpSecretEnc) {
-      throw new BadRequestException('Start MFA enrollment first.');
-    }
-
-    let plaintext: string;
-    try {
-      plaintext = decryptTotpSecret(user.totpSecretEnc, this.mfaKeySource());
-    } catch {
-      throw new BadRequestException('MFA enrollment secret is invalid. Start again.');
-    }
-    if (!verifyTotpCode(plaintext, dto.code)) {
-      throw new UnauthorizedException('Invalid authenticator code.');
-    }
-
-    const recoveryCodes = generateRecoveryCodes();
-    const now = new Date();
-    await this.prisma.$transaction(async (tx) => {
-      await tx.mfaRecoveryCode.deleteMany({ where: { userId } });
-      await tx.mfaRecoveryCode.createMany({
-        data: recoveryCodes.map((code) => ({
-          userId,
-          codeHash: hashRecoveryCode(code),
-        })),
-      });
-      await tx.user.update({
-        where: { id: userId },
-        data: {
-          totpEnabled: true,
-          totpVerifiedAt: now,
-        },
-      });
-    });
-
-    this.logger.log(`MFA enrolled for owner user=${userId}`);
-    return { recoveryCodes };
+    return this.mfaSvc.confirmMfaTotp(userId, dto);
   }
 
+  /** @see AuthMfaService.disableMfaTotp */
   async disableMfaTotp(userId: string, dto: MfaTotpDisableDto) {
-    const user = await this.prisma.user.findUnique({
-      where: { id: userId },
-      select: {
-        id: true,
-        accountType: true,
-        totpEnabled: true,
-        totpSecretEnc: true,
-      },
-    });
-    if (!user) throw new UnauthorizedException();
-    this.assertVenueOwner(user.accountType);
-    if (!user.totpEnabled) {
-      throw new BadRequestException('MFA is not enabled.');
-    }
-    await assertUserPassword(this.prisma, userId, dto.password);
-    await this.assertTotpOrRecovery(userId, user.totpSecretEnc, dto);
-
-    await this.prisma.$transaction(async (tx) => {
-      await tx.mfaRecoveryCode.deleteMany({ where: { userId } });
-      await tx.user.update({
-        where: { id: userId },
-        data: {
-          totpEnabled: false,
-          totpSecretEnc: null,
-          totpVerifiedAt: null,
-        },
-      });
-    });
-
-    this.logger.log(`MFA disabled for owner user=${userId}`);
-    return { ok: true as const };
+    return this.mfaSvc.disableMfaTotp(userId, dto);
   }
 
+  /** @see AuthMfaService.regenerateMfaRecoveryCodes */
   async regenerateMfaRecoveryCodes(
     userId: string,
     dto: MfaRecoveryRegenerateDto,
   ) {
-    const user = await this.prisma.user.findUnique({
-      where: { id: userId },
-      select: {
-        id: true,
-        accountType: true,
-        totpEnabled: true,
-        totpSecretEnc: true,
-      },
-    });
-    if (!user) throw new UnauthorizedException();
-    this.assertVenueOwner(user.accountType);
-    if (!user.totpEnabled || !user.totpSecretEnc) {
-      throw new BadRequestException('MFA is not enabled.');
-    }
-    await assertUserPassword(this.prisma, userId, dto.password);
-    await this.assertTotpOrRecovery(userId, user.totpSecretEnc, dto);
-
-    const recoveryCodes = generateRecoveryCodes();
-    await this.prisma.$transaction(async (tx) => {
-      await tx.mfaRecoveryCode.deleteMany({ where: { userId } });
-      await tx.mfaRecoveryCode.createMany({
-        data: recoveryCodes.map((code) => ({
-          userId,
-          codeHash: hashRecoveryCode(code),
-        })),
-      });
-    });
-
-    this.logger.log(`MFA recovery codes regenerated for owner user=${userId}`);
-    return { recoveryCodes };
+    return this.mfaSvc.regenerateMfaRecoveryCodes(userId, dto);
   }
 
+  /** @see AuthMfaService.verifyMfaLogin */
   async verifyMfaLogin(
     dto: MfaVerifyDto,
     ip?: string,
     ua?: string,
   ): Promise<AuthTokenBundle> {
-    let payload: unknown;
-    try {
-      payload = await this.jwt.verifyAsync(dto.mfaToken, {
-        secret: this.config.getOrThrow('JWT_ACCESS_SECRET'),
-      });
-    } catch {
-      throw new UnauthorizedException('Invalid or expired MFA challenge.');
-    }
-    if (!isMfaChallengePayload(payload)) {
-      throw new UnauthorizedException('Invalid or expired MFA challenge.');
-    }
-
-    const user = await this.prisma.user.findUnique({
-      where: { id: payload.sub },
-      select: {
-        id: true,
-        accountType: true,
-        totpEnabled: true,
-        totpSecretEnc: true,
-        lockedUntil: true,
-        failedLogins: true,
-      },
-    });
-    if (
-      !user ||
-      user.accountType !== UserAccountType.VENUE_OWNER ||
-      !user.totpEnabled ||
-      !user.totpSecretEnc
-    ) {
-      throw new UnauthorizedException('Invalid or expired MFA challenge.');
-    }
-
-    if (user.lockedUntil && user.lockedUntil > new Date()) {
-      throw new UnauthorizedException(
-        'Account locked. Try again later or reset your password.',
-      );
-    }
-
-    const factorOk = await this.tryTotpOrRecovery(
-      user.id,
-      user.totpSecretEnc,
-      dto,
-    );
-    if (!factorOk) {
-      await this.bumpFailedLogins(user.id, user.failedLogins);
-      throw new UnauthorizedException('Invalid MFA code.');
-    }
-
-    await this.prisma.user.update({
-      where: { id: user.id },
-      data: { failedLogins: 0, lockedUntil: null },
-    });
-
-    return this.completeLoginAfterPassword(user.id, ip, ua);
-  }
-
-  private async assertTotpOrRecovery(
-    userId: string,
-    totpSecretEnc: string | null,
-    dto: { code?: string; recoveryCode?: string },
-  ) {
-    const ok = await this.tryTotpOrRecovery(userId, totpSecretEnc, dto);
-    if (!ok) {
-      throw new UnauthorizedException('Invalid authenticator or recovery code.');
-    }
-  }
-
-  /** Verify TOTP or consume one recovery code. Returns false if neither matches. */
-  private async tryTotpOrRecovery(
-    userId: string,
-    totpSecretEnc: string | null,
-    dto: { code?: string; recoveryCode?: string },
-  ): Promise<boolean> {
-    const hasCode = Boolean(dto.code?.trim());
-    const hasRecovery = Boolean(dto.recoveryCode?.trim());
-    if (!hasCode && !hasRecovery) {
-      throw new BadRequestException(
-        'Provide an authenticator code or a recovery code.',
-      );
-    }
-
-    if (hasCode && totpSecretEnc) {
-      try {
-        const secret = decryptTotpSecret(totpSecretEnc, this.mfaKeySource());
-        if (verifyTotpCode(secret, dto.code!)) {
-          return true;
-        }
-      } catch {
-        /* fall through */
-      }
-    }
-
-    if (hasRecovery) {
-      const rows = await this.prisma.mfaRecoveryCode.findMany({
-        where: { userId },
-        select: { id: true, codeHash: true, usedAt: true },
-      });
-      const matchId = matchRecoveryCodeHash(dto.recoveryCode!, rows);
-      if (matchId) {
-        const marked = await this.prisma.mfaRecoveryCode.updateMany({
-          where: { id: matchId, usedAt: null },
-          data: { usedAt: new Date() },
-        });
-        if (marked.count === 1) {
-          this.logger.log(
-            `MFA recovery code used for owner user=${userId}`,
-          );
-          return true;
-        }
-      }
-    }
-
-    return false;
-  }
-
-  private async bumpFailedLogins(userId: string, current: number) {
-    const failed = current + 1;
-    const lock =
-      failed >= MAX_FAILED
-        ? new Date(Date.now() + LOCK_MINUTES * 60 * 1000)
-        : null;
-    await this.prisma.user.update({
-      where: { id: userId },
-      data: { failedLogins: failed, lockedUntil: lock },
-    });
+    return this.mfaSvc.verifyMfaLogin(dto, ip, ua);
   }
 
   /**
-   * Owner-only password reset request. Always returns the same message
-   * (no email enumeration). Staff accounts are never reset this way.
+   * Wire hook for AuthMfaService DI factory (Bible #14). Not for controllers.
+   * Login completion stays here because password login shares this path.
    */
+  mfaCompleteLogin(
+    userId: string,
+    ip?: string,
+    ua?: string,
+  ): Promise<AuthTokenBundle> {
+    return this.completeLoginAfterPassword(userId, ip, ua);
+  }
+
+  // ─── Password reset (facade → AuthPasswordService, Bible #14) ───
+  /** @see AuthPasswordService.requestOwnerPasswordReset */
   async requestOwnerPasswordReset(dto: ForgotPasswordDto) {
-    const email = normalizeLoginIdentifier(dto.email);
-    const generic = {
-      ok: true as const,
-      message:
-        'If that email belongs to a venue owner account, we sent a reset link. Staff cannot reset passwords here — ask your owner.',
-    };
-
-    if (!isValidOwnerEmail(email) || isVenueStaffLoginEmail(email)) {
-      return generic;
-    }
-
-    const user = await this.prisma.user.findUnique({ where: { email } });
-    if (!user || user.accountType !== 'VENUE_OWNER') {
-      return generic;
-    }
-
-    const raw = generatePasswordResetToken();
-    const expiresAt = new Date(Date.now() + PASSWORD_RESET_TTL_MS);
-    await this.prisma.user.update({
-      where: { id: user.id },
-      data: {
-        passwordResetTokenHash: hashToken(raw),
-        passwordResetExpiresAt: expiresAt,
-      },
-    });
-
-    const webOrigin =
-      this.config.get<string>('WEB_APP_URL') ??
-      this.config.get<string>('WEB_ORIGIN') ??
-      'http://localhost:3000';
-    const resetUrl = `${webOrigin}/reset-password?token=${encodeURIComponent(raw)}`;
-
-    await this.mail.send({
-      to: email,
-      subject: 'Reset your Locora owner password',
-      text: `Reset your password (valid ~1 hour):\n\n${resetUrl}\n\nIf you did not request this, ignore this email.`,
-      html: `<p>Reset your Locora owner password (link valid about 1 hour):</p><p><a href="${resetUrl}">${resetUrl}</a></p><p>If you did not request this, you can ignore this email.</p>`,
-      required: true,
-    });
-
-    return generic;
+    return this.passwordSvc.requestOwnerPasswordReset(dto);
   }
 
+  /** @see AuthPasswordService.resetOwnerPassword */
   async resetOwnerPassword(dto: ResetPasswordDto) {
-    const pwError = validatePasswordStrength(dto.password);
-    if (pwError) throw new BadRequestException(pwError);
-
-    const tokenHash = hashToken(dto.token.trim());
-    const invalidMsg =
-      'This reset link is invalid or expired. Request a new one from the owner sign-in panel.';
-    const passwordHash = await hashPassword(dto.password);
-
-    await this.prisma.$transaction(async (tx) => {
-      const user = await tx.user.findFirst({
-        where: {
-          passwordResetTokenHash: tokenHash,
-          passwordResetExpiresAt: { gt: new Date() },
-          accountType: 'VENUE_OWNER',
-        },
-      });
-      if (!user) {
-        throw new BadRequestException(invalidMsg);
-      }
-
-      // Atomic consume: concurrent reuse loses the race (count !== 1).
-      const consumed = await tx.user.updateMany({
-        where: {
-          id: user.id,
-          passwordResetTokenHash: tokenHash,
-          passwordResetExpiresAt: { gt: new Date() },
-        },
-        data: {
-          passwordHash,
-          passwordResetTokenHash: null,
-          passwordResetExpiresAt: null,
-          failedLogins: 0,
-          lockedUntil: null,
-        },
-      });
-      if (consumed.count !== 1) {
-        throw new BadRequestException(invalidMsg);
-      }
-
-      await tx.authSession.updateMany({
-        where: { userId: user.id, revokedAt: null },
-        data: { revokedAt: new Date() },
-      });
-    });
-
-    return { ok: true as const };
+    return this.passwordSvc.resetOwnerPassword(dto);
   }
 
-  /**
-   * Staff forgot-password: match venue/owner name + login ID, flag membership,
-   * notify owner. Always returns a generic message (no enumeration).
-   * Owner generates a new /staff/activate link from Employee accounts.
-   */
+  /** @see AuthPasswordService.requestStaffPasswordReset */
   async requestStaffPasswordReset(dto: StaffForgotPasswordDto) {
-    const generic = {
-      ok: true as const,
-      message:
-        'If that matches a staff account, your venue owner was notified. They will send you a new password setup link (WhatsApp, SMS, etc.).',
-    };
-
-    const loginId = normalizeLoginIdentifier(dto.loginId);
-    const venueName = dto.venueName.trim().toLowerCase();
-    if (!venueName || !isVenueStaffLoginEmail(loginId)) {
-      return generic;
-    }
-
-    const user = await this.prisma.user.findUnique({
-      where: { email: loginId },
-      include: {
-        memberships: {
-          where: {
-            isActive: true,
-            role: { in: [ShopRole.STAFF, ShopRole.MANAGER] },
-          },
-          include: {
-            shop: {
-              select: {
-                id: true,
-                name: true,
-                displayName: true,
-                owner: { select: { name: true, email: true } },
-              },
-            },
-          },
-        },
-      },
-    });
-
-    if (
-      !user ||
-      user.accountType !== UserAccountType.VENUE_STAFF ||
-      !user.passwordSetAt
-    ) {
-      return generic;
-    }
-
-    const membership = user.memberships.find((m) => {
-      const names = [
-        m.shop.name,
-        m.shop.displayName,
-        m.shop.owner.name,
-      ]
-        .filter(Boolean)
-        .map((n) => n!.trim().toLowerCase());
-      return names.some((n) => n === venueName);
-    });
-
-    if (!membership) {
-      return generic;
-    }
-
-    await this.prisma.membership.update({
-      where: { id: membership.id },
-      data: { passwordResetRequestedAt: new Date() },
-    });
-
-    const label =
-      user.name?.trim() || user.staffHandle || user.email.split('@')[0];
-
-    await this.notifications.recordTeamEvent(membership.shopId, {
-      title: 'Staff forgot password',
-      body: `${label} (${user.email}) asked for a new password link. Open Employee accounts to generate one and send it to them.`,
-      href: '/staff',
-      dedupeKey: `staff_pw_reset_${membership.id}`,
-    });
-
-    return generic;
+    return this.passwordSvc.requestStaffPasswordReset(dto);
   }
 
   /** Employee sets their own password once via invite link (anti–credential sharing). */
@@ -1289,156 +911,48 @@ export class AuthService {
     return this.issueTokens(membership.userId, ip, ua);
   }
 
-  // ─── Refresh token rotation ─────────────────────────────────────
+  // ─── Refresh token rotation (facade → AuthRefreshService, Bible #14) ───
+  /** @see AuthRefreshService.refresh */
   async refresh(refreshToken: string, ip?: string, ua?: string) {
-    const tokenHash = hashToken(refreshToken);
-    const session = await this.prisma.authSession.findUnique({
-      where: { refreshTokenHash: tokenHash },
-    });
-    if (!session) {
-      throw new UnauthorizedException('Refresh token invalid.');
-    }
-
-    // Reuse of a rotated token → steal signal: revoke the whole family.
-    if (session.revokedAt) {
-      await this.revokeSessionFamily(session.familyId);
-      throw new UnauthorizedException('Refresh token invalid.');
-    }
-
-    if (session.expiresAt < new Date()) {
-      await this.prisma.authSession.updateMany({
-        where: { id: session.id, revokedAt: null },
-        data: { revokedAt: new Date() },
-      });
-      throw new UnauthorizedException('Refresh token invalid.');
-    }
-
-    // Rotate: claim-revoke current (lost race = treat as reuse), then issue same family.
-    const claimed = await this.prisma.authSession.updateMany({
-      where: { id: session.id, revokedAt: null },
-      data: { revokedAt: new Date() },
-    });
-    if (claimed.count !== 1) {
-      await this.revokeSessionFamily(session.familyId);
-      throw new UnauthorizedException('Refresh token invalid.');
-    }
-
-    return this.issueTokens(session.userId, ip, ua, session.familyId);
+    return this.refreshSvc.refresh(refreshToken, ip, ua);
   }
 
-  /** Revoke every active session in a refresh-token family (reuse / theft response). */
-  private async revokeSessionFamily(familyId: string) {
-    await this.prisma.authSession.updateMany({
-      where: { familyId, revokedAt: null },
-      data: { revokedAt: new Date() },
-    });
+  /**
+   * Wire hook for AuthRefreshService DI factory (Bible #14). Not for controllers.
+   * Token issuance stays here because login / activate share `issueTokens`.
+   */
+  refreshIssueTokens(
+    userId: string,
+    ip?: string,
+    ua?: string,
+    familyId?: string,
+  ): Promise<AuthTokenBundle> {
+    return this.issueTokens(userId, ip, ua, familyId);
   }
 
-  // ─── Logout — revoke current session ────────────────────────────
+  // ─── Logout (facade → AuthLogoutService, Bible #14) ─────────────
+  /** @see AuthLogoutService.logout */
   async logout(refreshToken?: string) {
-    if (!refreshToken) return;
-    const tokenHash = hashToken(refreshToken);
-    await this.prisma.authSession.updateMany({
-      where: { refreshTokenHash: tokenHash, revokedAt: null },
-      data: { revokedAt: new Date() },
-    });
+    return this.logoutSvc.logout(refreshToken);
   }
 
-  /**
-   * Active refresh sessions for the signed-in user (no raw tokens / hashes).
-   * AuthSession has no updatedAt — createdAt is issue/rotate time for the row.
-   */
+  // ─── Session API surface (facade → AuthSessionService, Bible #11) ────
+  /** @see AuthSessionService.listAuthSessions */
   async listAuthSessions(userId: string) {
-    const now = new Date();
-    const sessions = await this.prisma.authSession.findMany({
-      where: {
-        userId,
-        revokedAt: null,
-        expiresAt: { gt: now },
-      },
-      select: {
-        id: true,
-        createdAt: true,
-        userAgent: true,
-        expiresAt: true,
-      },
-      orderBy: { createdAt: 'desc' },
-    });
-    return { sessions };
+    return this.sessions.listAuthSessions(userId);
   }
 
-  /** Revoke one session (and its refresh family). Must belong to userId. */
+  /** @see AuthSessionService.revokeAuthSession */
   async revokeAuthSession(userId: string, sessionId: string) {
-    const session = await this.prisma.authSession.findFirst({
-      where: { id: sessionId, userId },
-      select: { id: true, familyId: true, revokedAt: true },
-    });
-    if (!session) {
-      throw new NotFoundException('Session not found.');
-    }
-    await this.revokeSessionFamily(session.familyId);
-    return { revoked: true as const };
+    return this.sessions.revokeAuthSession(userId, sessionId);
   }
 
-  /**
-   * Revoke every active session except the caller's current family.
-   * Current family is resolved from refresh cookie, else JWT `sid` (staff).
-   */
+  /** @see AuthSessionService.revokeOtherAuthSessions */
   async revokeOtherAuthSessions(
     userId: string,
     opts: { refreshToken?: string; sessionId?: string } = {},
   ) {
-    const keepFamilyId = await this.resolveCurrentSessionFamilyId(userId, opts);
-    if (!keepFamilyId) {
-      throw new BadRequestException(
-        'Current session required to revoke others.',
-      );
-    }
-
-    const result = await this.prisma.authSession.updateMany({
-      where: {
-        userId,
-        revokedAt: null,
-        familyId: { not: keepFamilyId },
-      },
-      data: { revokedAt: new Date() },
-    });
-
-    return { revokedCount: result.count };
-  }
-
-  private async resolveCurrentSessionFamilyId(
-    userId: string,
-    opts: { refreshToken?: string; sessionId?: string },
-  ): Promise<string | null> {
-    if (opts.refreshToken) {
-      const tokenHash = hashToken(opts.refreshToken);
-      const byRefresh = await this.prisma.authSession.findUnique({
-        where: { refreshTokenHash: tokenHash },
-        select: { userId: true, familyId: true, revokedAt: true },
-      });
-      if (
-        byRefresh &&
-        byRefresh.userId === userId &&
-        byRefresh.revokedAt === null
-      ) {
-        return byRefresh.familyId;
-      }
-    }
-
-    if (opts.sessionId) {
-      const byId = await this.prisma.authSession.findFirst({
-        where: {
-          id: opts.sessionId,
-          userId,
-          revokedAt: null,
-        },
-        select: { familyId: true },
-      });
-      if (byId) return byId.familyId;
-    }
-
-    return null;
+    return this.sessions.revokeOtherAuthSessions(userId, opts);
   }
 
   // ─── Profile + memberships for /me ──────────────────────────────
@@ -1525,113 +1039,22 @@ export class AuthService {
     };
   }
 
-  /** Ensures the signed-in user may access this private dashboard URL. */
+  // ─── Venue dashboard (facade → AuthVenueService, Bible #14) ─────
+  /** @see AuthVenueService.verifyVenueDashboard */
   async verifyVenueDashboard(
     userId: string,
     sysRole: string,
     venuePath: string,
   ) {
-    const ref = classifyVenuePath(venuePath);
-    if (!ref) {
-      throw new BadRequestException('Invalid venue dashboard path.');
-    }
-
-    // Phase 3: always slug-only (legacy slug--key strips to slug; key not verified).
-    const shop = await this.prisma.shop.findFirst({
-      where: { slug: ref.slug },
-      select: {
-        id: true,
-        slug: true,
-        name: true,
-        locale: true,
-        currency: true,
-        city: true,
-        isPublished: true,
-      },
-    });
-    if (!shop) {
-      throw new UnauthorizedException('Venue not found or access denied.');
-    }
-
-    if (sysRole === 'SUPER_ADMIN') {
-      return { shop, membership: null };
-    }
-
-    const membership = await this.prisma.membership.findFirst({
-      where: { userId, shopId: shop.id, isActive: true },
-      include: { permissionRows: { select: { permission: true } } },
-    });
-    if (!membership) {
-      throw new UnauthorizedException('You do not have access to this venue.');
-    }
-
-    return { shop, membership };
+    return this.venueSvc.verifyVenueDashboard(userId, sysRole, venuePath);
   }
 
-  /** Re-issue access token scoped to the venue in the dashboard URL. */
+  /** @see AuthVenueService.bindVenueSession */
   async bindVenueSession(actor: JwtAccessPayload, venuePath: string) {
-    const { shop, membership } = await this.verifyVenueDashboard(
-      actor.sub,
-      actor.sysRole,
-      venuePath,
-    );
-
-    const shopFull = await this.prisma.shop.findUnique({
-      where: { id: shop.id },
-      include: { subscription: true },
-    });
-
-    const shopProfile = await this.prisma.shop.findUnique({
-      where: { id: shop.id },
-      select: {
-        id: true,
-        name: true,
-        displayName: true,
-        slug: true,
-        description: true,
-        address: true,
-        city: true,
-        country: true,
-        phone: true,
-        email: true,
-        coverImage: true,
-        locale: true,
-        currency: true,
-        isPublished: true,
-        floorCount: true,
-      },
-    });
-    if (!shopProfile) {
-      throw new UnauthorizedException('Venue not found or access denied.');
-    }
-
-    const accessTtl = +this.config.get('JWT_ACCESS_TTL', '900');
-    const effectivePerms = membership
-      ? permissionsToEffectiveCsv({
-          permissionRows: membership.permissionRows,
-        })
-      : '*';
-    const payload: JwtAccessPayload = {
-      sub: actor.sub,
-      sysRole: actor.sysRole,
-      email: actor.email,
-      acct: actor.acct,
-      sid: actor.sid,
-      shopId: shop.id,
-      shopRole: membership?.role ?? 'OWNER',
-      perms: effectivePerms,
-      tier: shopFull?.subscription?.tier,
-    };
-
-    const accessToken = await this.jwt.signAsync(payload, {
-      secret: this.config.getOrThrow('JWT_ACCESS_SECRET'),
-      expiresIn: accessTtl,
-    });
-
-    return { shop: shopProfile, accessToken, accessExpiresIn: accessTtl };
+    return this.venueSvc.bindVenueSession(actor, venuePath);
   }
 
-  /** Primary venue slug for redirects (never the secret `slug--key`). */
+  /** @see AuthVenueService.resolveVenuePathForUser */
   resolveVenuePathForUser(user: {
     memberships: {
       isActive: boolean;
@@ -1639,10 +1062,7 @@ export class AuthService {
       shop: { slug: string };
     }[];
   }): string | null {
-    const active = user.memberships.filter((m) => m.isActive);
-    const primary = active.find((m) => m.role === 'OWNER') ?? active[0];
-    if (!primary) return null;
-    return primary.shop.slug;
+    return this.venueSvc.resolveVenuePathForUser(user);
   }
 
   /**
@@ -1755,7 +1175,7 @@ export class AuthService {
       expiresIn: accessTtl,
     });
 
-    const venuePath = this.resolveVenuePathForUser({
+    const venuePath = this.venueSvc.resolveVenuePathForUser({
       memberships: activeMemberships.map((m) => ({
         isActive: m.isActive,
         role: m.role,

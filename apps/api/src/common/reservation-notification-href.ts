@@ -1,3 +1,5 @@
+import type { Prisma } from '@prisma/client';
+
 export type ReservationNotificationTab = 'dining' | 'schedule' | 'events';
 
 export type GuestStatusKind = 'dining' | 'gaming' | 'event';
@@ -105,6 +107,98 @@ export function reservationTabFromHref(
   if (href.includes('tab=events')) return 'events';
   if (href.includes('tab=dining')) return 'dining';
   return 'schedule';
+}
+
+const hrefHasSessionsWhere: Prisma.NotificationWhereInput = {
+  href: { contains: '/sessions' },
+};
+
+const hrefNoSessionsWhere: Prisma.NotificationWhereInput = {
+  OR: [{ href: null }, { NOT: { href: { contains: '/sessions' } } }],
+};
+
+const titleDiningWhere: Prisma.NotificationWhereInput = {
+  OR: [
+    { title: { contains: 'table', mode: 'insensitive' } },
+    { title: { contains: 'dining', mode: 'insensitive' } },
+  ],
+};
+
+const titleGamingWhere: Prisma.NotificationWhereInput = {
+  OR: [
+    { title: { contains: 'gaming', mode: 'insensitive' } },
+    { title: { contains: 'game booking', mode: 'insensitive' } },
+    { title: { contains: 'booking starts', mode: 'insensitive' } },
+    { title: { contains: 'booking is starting', mode: 'insensitive' } },
+  ],
+};
+
+const titleEventsWhere: Prisma.NotificationWhereInput = {
+  AND: [
+    { title: { contains: 'event', mode: 'insensitive' } },
+    { title: { contains: 'request', mode: 'insensitive' } },
+  ],
+};
+
+/**
+ * SQL filter matching {@link classifyReservationNotificationTab} for one tab.
+ * Mutually exclusive across dining / schedule / events (same precedence as JS).
+ */
+export function reservationNotificationTabWhere(
+  tab: ReservationNotificationTab,
+): Prisma.NotificationWhereInput {
+  switch (tab) {
+    case 'dining':
+      return {
+        OR: [
+          {
+            AND: [
+              hrefHasSessionsWhere,
+              { href: { contains: 'tab=dining' } },
+            ],
+          },
+          { AND: [hrefNoSessionsWhere, titleDiningWhere] },
+        ],
+      };
+    case 'events':
+      return {
+        OR: [
+          {
+            AND: [
+              hrefHasSessionsWhere,
+              { href: { contains: 'tab=events' } },
+            ],
+          },
+          {
+            AND: [
+              hrefNoSessionsWhere,
+              { NOT: titleDiningWhere },
+              { NOT: titleGamingWhere },
+              titleEventsWhere,
+            ],
+          },
+        ],
+      };
+    case 'schedule':
+      return {
+        OR: [
+          {
+            AND: [
+              hrefHasSessionsWhere,
+              { NOT: { href: { contains: 'tab=events' } } },
+              { NOT: { href: { contains: 'tab=dining' } } },
+            ],
+          },
+          {
+            AND: [
+              hrefNoSessionsWhere,
+              { NOT: titleDiningWhere },
+              titleGamingWhere,
+            ],
+          },
+        ],
+      };
+  }
 }
 
 /** Maps unread reservation notifications to dining / gaming / events tabs. */

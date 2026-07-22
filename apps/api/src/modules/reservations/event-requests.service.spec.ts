@@ -14,6 +14,7 @@ describe('EventRequestsService.createFromPublic', () => {
     partySize: 8,
     preferredStartsAt: '2030-06-15T14:00:00.000Z',
     preferredEndsAt: '2030-06-15T16:00:00.000Z',
+    privacyConsentAccepted: true,
   };
 
   function makeService(prisma: Record<string, unknown>) {
@@ -48,6 +49,7 @@ describe('EventRequestsService.createFromPublic', () => {
           closesAt,
         }),
       },
+      consentRecord: { create: jest.fn().mockResolvedValue({ id: 'consent-1' }) },
     };
   }
 
@@ -62,6 +64,18 @@ describe('EventRequestsService.createFromPublic', () => {
     await expect(
       svc.createFromPublic('missing', baseDto as never),
     ).rejects.toBeInstanceOf(NotFoundException);
+  });
+
+  it('rejects when privacy consent is not accepted', async () => {
+    const svc = makeService({
+      shop: { findFirst: jest.fn().mockResolvedValue(shop) },
+    });
+    await expect(
+      svc.createFromPublic('arena', {
+        ...baseDto,
+        privacyConsentAccepted: false,
+      } as never),
+    ).rejects.toThrow(/privacy notice/i);
   });
 
   it('rejects when neither email nor phone is provided', async () => {

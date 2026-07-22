@@ -1,5 +1,3 @@
-import type { SeatingZone } from "./seating-zone";
-
 /** Seat counts staff can assign per table type in a dining area. */
 export const DINING_TABLE_SIZES = [1, 2, 3, 4, 5, 6, 7, 8] as const;
 
@@ -12,11 +10,6 @@ export function normalizeDiningTableSize(value: unknown): DiningTableSize {
   const n = typeof value === "number" ? value : parseInt(String(value), 10);
   if (n >= 1 && n <= 8) return n as DiningTableSize;
   return 4;
-}
-
-/** @deprecated Use `seatingZoneLabel(t, zone)` from `./seating-zone` for a localized label. */
-export function diningZoneLabel(zone: SeatingZone | string | null | undefined) {
-  return zone === "OUTDOOR" ? "Outdoors" : "Indoors";
 }
 
 export function diningTableGroupLabel(

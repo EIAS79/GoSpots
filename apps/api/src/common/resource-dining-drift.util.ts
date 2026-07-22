@@ -57,6 +57,17 @@ export const SEATING_COUNT_MUTATION_SURFACES = [
 ] as const;
 
 /**
+ * Phase 3 — staff SeatingTablesService rejects manual non-custom edits when the shop
+ * has DINING layout or the row is a dual-write mirror (`sourceDiningTableGroupId`).
+ * Dual-write util + event custom blocks bypass this guard.
+ */
+export const SEATING_MANUAL_EDIT_GUARD_SURFACES = [
+  'SeatingTablesService.create.nonCustom.diningLayout',
+  'SeatingTablesService.update.nonCustom.mirrorOrDiningLayout',
+  'SeatingTablesService.delete.nonCustom.mirrorOrDiningLayout',
+] as const;
+
+/**
  * Option C Phase 0 contract — bookable DINING inventory write paths.
  * These lock/create Resource / Reservation; they must not touch availableCount.
  */

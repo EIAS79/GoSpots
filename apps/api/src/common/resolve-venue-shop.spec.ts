@@ -1,5 +1,11 @@
 import { ForbiddenException } from '@nestjs/common';
+import { ApiDomainErrorCode } from './api-error.codes';
 import { resolveVenueShopId } from './resolve-venue-shop';
+
+function expectForbiddenWithCode(err: unknown, code: string) {
+  expect(err).toBeInstanceOf(ForbiddenException);
+  expect((err as ForbiddenException).getResponse()).toMatchObject({ code });
+}
 
 describe('resolveVenueShopId', () => {
   const prisma = {
@@ -62,7 +68,21 @@ describe('resolveVenueShopId', () => {
         { sub: 'user_1', sysRole: 'USER' } as never,
         'arcade',
       ),
-    ).rejects.toBeInstanceOf(ForbiddenException);
+    ).rejects.toMatchObject({
+      response: { code: ApiDomainErrorCode.VENUE_ACCESS_DENIED },
+    });
+  });
+
+  it('throws VENUE_ACCESS_DENIED when venue path missing', async () => {
+    try {
+      await resolveVenueShopId(
+        prisma as never,
+        { sub: 'user_1', sysRole: 'USER' } as never,
+      );
+      throw new Error('expected ForbiddenException');
+    } catch (err) {
+      expectForbiddenWithCode(err, ApiDomainErrorCode.VENUE_ACCESS_DENIED);
+    }
   });
 
   it('allows SUPER_ADMIN slug-only without membership', async () => {

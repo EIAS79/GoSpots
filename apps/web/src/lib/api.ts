@@ -1,7 +1,11 @@
 import { getApiBaseUrl } from "./api-base-url";
 import {
-  httpFailureMessage,
+  apiErrorFromResponse,
+  csrfInvalidUserMessage,
   networkUnreachableMessage,
+  permissionDeniedUserMessage,
+  sessionRevokedUserMessage,
+  venueAccessDeniedUserMessage,
 } from "./api-error-message";
 import {
   getCsrfHeaders,
@@ -15,14 +19,57 @@ export const API_BASE_URL = getApiBaseUrl();
 export class ApiError extends Error {
   status: number;
   details?: unknown;
-  constructor(message: string, status: number, details?: unknown) {
+  /** Domain or default error code from API envelope (§36 dual-read). */
+  code?: string;
+  constructor(
+    message: string,
+    status: number,
+    details?: unknown,
+    code?: string,
+  ) {
     super(message);
     this.status = status;
     this.details = details;
+    if (code) this.code = code;
   }
 }
 
 export { httpFailureMessage, networkUnreachableMessage } from "./api-error-message";
+
+const BUILTIN_API_ERROR_COPY: Record<string, () => string> = {
+  CSRF_INVALID: csrfInvalidUserMessage,
+  PERMISSION_DENIED: permissionDeniedUserMessage,
+  VENUE_ACCESS_DENIED: venueAccessDeniedUserMessage,
+  SESSION_REVOKED: sessionRevokedUserMessage,
+};
+
+/** Prefer stable `code` copy when mapped; fall back to server `message`. */
+export function resolveApiErrorDisplay(
+  err: unknown,
+  byCode: Record<string, string>,
+  fallback: string,
+): string {
+  if (err instanceof ApiError) {
+    if (err.code && byCode[err.code]) return byCode[err.code];
+    if (err.code && BUILTIN_API_ERROR_COPY[err.code]) {
+      return BUILTIN_API_ERROR_COPY[err.code]();
+    }
+    if (err.message.trim()) return err.message;
+  }
+  if (err instanceof Error && err.message.trim()) return err.message;
+  return fallback;
+}
+
+function throwApiErrorFromResponse(
+  res: Response,
+  body: unknown,
+  csrfRetried: boolean,
+): never {
+  const { message, code } = apiErrorFromResponse(res.status, body);
+  const displayMessage =
+    csrfRetried && code === "CSRF_INVALID" ? csrfInvalidUserMessage() : message;
+  throw new ApiError(displayMessage, res.status, body, code);
+}
 
 /** Bootstrap double-submit CSRF cookie (safe GET). */
 export async function ensureCsrf(): Promise<string | null> {
@@ -108,8 +155,10 @@ export async function api<T = unknown>(
 
   // Rare race: session cookies exist but csrf cookie not yet readable — retry once.
   const method = (init.method ?? "GET").toUpperCase();
+  let csrfRetried = false;
   if (res.status === 403 && method !== "GET" && method !== "HEAD") {
     await ensureCsrf();
+    csrfRetried = true;
     res = await fetch(`${API_BASE_URL}${path}`, {
       credentials: "include",
       ...rest,
@@ -127,11 +176,7 @@ export async function api<T = unknown>(
   }
 
   if (!res.ok) {
-    const message = httpFailureMessage(
-      res.status,
-      (body as { message?: string | string[] } | null)?.message,
-    );
-    throw new ApiError(message, res.status, body);
+    throwApiErrorFromResponse(res, body, csrfRetried);
   }
 
   return body as T;

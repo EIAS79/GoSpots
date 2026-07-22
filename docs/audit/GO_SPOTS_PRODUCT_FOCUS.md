@@ -1,11 +1,38 @@
-# Locora — Product scope & narrow focus
+# Locora — Product scope & narrow focus (Bible §31 / #33)
 
-**Date:** 2026-07-21  
-**Status:** **DONE** (Phase A commercial UX ship bar) — gaming-first self-serve register/pricing/landing; hide > delete. Phase B–D residual.  
+**Date:** 2026-07-21 (Phase A ship bar) / 2026-07-22 (residual docs lane **PRODUCT31-residual-docs**)  
+**Status:** **Bible §31 / #33 PARTIAL** — Phase A commercial UX ship bar **DONE** (Lane **KKKKKK**). Phase B–D dashboard/onboarding polish and catalog evaluation **explicitly deferred**. Hide > delete; no pack/API removal.  
 **Bible:** P3 **#33** — the product scope is too broad; Locora sells five venue types, seven billable add-ons, gaming + dining + menu + chat + events + marketplace discovery as parallel stories.  
-**Ship timing:** Phase A shipped **2026-07-21** (Lane **KKKKKK**). Phase B–D remain post-Friday residuals.
+**Audit:** P3 **§31** product-focus cleanup (crosswalk: old bible **#33** product focus + **#35** marketplace GTM — see [`GO_SPOTS_MARKETPLACE.md`](./GO_SPOTS_MARKETPLACE.md)).
 
-**Related (separate lanes):** P3 **#34** owner vs guest marketing surfaces · P3 **#35** supply-first marketplace GTM.
+**Related (separate lanes, same §31 band):** P3 **#34** owner vs guest marketing surfaces (**DONE**) · P3 **#35** supply-first marketplace GTM (**Phase A DONE**; operator cohort residual).
+
+---
+
+## Shipped vs residual (honest)
+
+| Item | State | Evidence |
+|------|--------|----------|
+| Gaming-first register — self-serve **gaming + mixed** only | **DONE** | `SELF_SERVE_PACK_*` in `apps/web/src/lib/venue-packs.ts`; register / create-venue flows |
+| Three marketing bundles (ops & trust, gaming floor, F&B) | **DONE** | `MARKETING_BUNDLES`; landing pricing + who-its-for |
+| Restaurant / hotel → contact sales (not self-serve tile) | **DONE** | Register + landing CTAs; en/pl |
+| `venue_presence` / `guest_chat` hidden from marketing calculator | **DONE** | Marketing UI only; entitlements unchanged |
+| Gaming-first hero + page metadata | **DONE** | `/`, `/for-venues`, register — en/pl |
+| Catalog pack ids unchanged (hide > delete) | **DONE** | `apps/api/src/common/venue-packs.ts` full matrix intact |
+| Dashboard subscription editor lists full packs | **DONE** (legacy path) | Intentional — scope cut is marketing/self-serve, not entitlement shrink |
+| Owner vs guest marketing split (#34) | **DONE** | `/` + `/for-venues` owner; `/venues` guest; no dual-mode homepage |
+| Marketplace Phase A city landing + GTM checklist (#35) | **DONE** | [`GO_SPOTS_MARKETPLACE.md`](./GO_SPOTS_MARKETPLACE.md) — `/venues/wroclaw`, pilot CTA, `MARKETPLACE_GTM_CHECKLIST.md` |
+| Onboarding wizard (#31 / §32) | **DONE** (adjacent) | [`GO_SPOTS_ONBOARDING.md`](./GO_SPOTS_ONBOARDING.md) — reduces empty-dashboard problem cited in bible #33 |
+| Sidebar F&B group collapse until F&B bundle purchased | **RESIDUAL** | Phase B — `tenant-shell.tsx` still shows all entitled modules flat |
+| Ops landing weight (sessions + play billing primary) | **RESIDUAL** | Phase B |
+| Events / marketing publish discoverability polish | **RESIDUAL** | Phase B — settings deep link vs nav hero |
+| Subscription upsell before setup wizard | **RESIDUAL** | Product ordering — wizard ships first today |
+| Pack alias / `bar` → `hospitality` merge | **RESIDUAL** | Phase C — evaluation only; DB alias not shipped |
+| Tier 3 manual-only sales flows (`hotel_fb`, enterprise) | **RESIDUAL** | Phase D — sales ops |
+| Live marketplace cohort S1–S4 / M4–M5 | **RESIDUAL** | Operator + product — **not** Phase A product-focus scope |
+| National guest acquisition before S2 density | **RESIDUAL** | #35 GTM — defer per [`GO_SPOTS_MARKETPLACE.md`](./GO_SPOTS_MARKETPLACE.md) |
+
+**§31 classification:** **PARTIAL** — commercial UX + marketing split + marketplace Phase A surfaces met; dashboard discoverability (Phase B–D) and live directory cohort documented here, not hidden.
 
 ---
 
@@ -14,7 +41,7 @@
 | When | Action |
 |------|--------|
 | **Shipped (Phase A — commercial UX)** | Lead with gaming venues on homepage, register, and pricing. Collapse seven add-ons into **three bundles** in marketing UI only. Hide `hotel_fb` and `bar` (and dining as equal tile) from self-serve picker — restaurant/hotel → contact sales. Default register pack = **`gaming`**. |
-| **After Friday (Phase B — dashboard shrink, ~1–2 sprints)** | Onboarding wizard ([`GO_SPOTS_ONBOARDING.md`](./GO_SPOTS_ONBOARDING.md)) seeds **gaming templates only** for v1. Move dining/menu/event/chat behind explicit “Add F&B” upgrade. No code removal — **hide + defer discoverability**. |
+| **Next (Phase B — dashboard shrink, ~1–2 sprints)** | Onboarding wizard **shipped** ([`GO_SPOTS_ONBOARDING.md`](./GO_SPOTS_ONBOARDING.md)). **Still open:** sidebar F&B group collapse, ops landing weight, events/marketing discoverability. Move dining/menu/event/chat behind explicit “Add F&B” upgrade in nav. No code removal — **hide + defer discoverability**. |
 | **Post-Q1 (Phase C — evaluate)** | If dining/hotel attach rate stays low, merge `bar` + `dining` → **`hospitality`** pack in catalog; keep legacy pack ids in DB. Do **not** rip out dining APIs until a paying customer needs them. |
 
 **One-line strategy:** **Win gaming-floor operators first** (reservations + live floor + play billing). Everything else is optional expansion, not co-equal product pillars.
@@ -35,7 +62,7 @@ Locora reads as **five products in one SKU**:
 
 **Impact:**
 
-- Owners don’t know which path is “for them”; empty dashboards after signup (#31).
+- Owners don’t know which path is “for them”; empty dashboards after signup (mitigated by onboarding wizard — [`GO_SPOTS_ONBOARDING.md`](./GO_SPOTS_ONBOARDING.md); server progress still residual).
 - Sales/support must explain module matrices instead of outcomes.
 - Engineering pays rent on dual floor models ([`GO_SPOTS_RESOURCE_MODEL_MERGE.md`](./GO_SPOTS_RESOURCE_MODEL_MERGE.md)), unified ticket debt ([`GO_SPOTS_UNIFIED_TICKET.md`](./GO_SPOTS_UNIFIED_TICKET.md)), and F&B + gaming concurrency paths — while **no wedge market is saturated**.
 - Marketing competes with guest marketplace story (#34–#35) before supply exists.
@@ -210,17 +237,17 @@ Track whether the cut worked — not vanity signup breadth:
 | Phase | Deliverable | Status |
 |-------|-------------|--------|
 | **A** | Gaming-first landing, register, pricing bundles | **DONE** (**KKKKKK**) — web marketing + register; `SELF_SERVE_PACK_*` + `MARKETING_BUNDLES` in `apps/web/src/lib/venue-packs.ts` |
-| **B** | Onboarding wizard + sidebar group collapse | Residual (#31) |
-| **C** | Pack alias / hospitality merge evaluation | Residual |
-| **D** | Tier 3 manual-only flows | Residual (sales ops) |
+| **B** | Sidebar F&B group collapse + ops landing weight + events/marketing discoverability | **RESIDUAL** |
+| **C** | Pack alias / hospitality merge evaluation | **RESIDUAL** |
+| **D** | Tier 3 manual-only flows | **RESIDUAL** (sales ops) |
 
 **Explicit non-goals for this bible item:**
 
 - Deleting dining or menu modules from API  
 - Merging resource models (see #14)  
 - Unified guest check (see #10)  
-- Marketplace GTM execution (see #35)  
-- Owner vs guest marketing split (see #34)
+- Live marketplace cohort execution (see #35 — Phase A surfaces **DONE**; operator S1–S4 residual)  
+- Re-splitting owner vs guest marketing (#34 **DONE** — out of scope for Phase B–D)
 
 ---
 
@@ -237,15 +264,32 @@ Track whether the cut worked — not vanity signup breadth:
 
 ---
 
+## Residual phased plan (Phase B–D)
+
+| Phase | Deliverable | Status | Notes |
+|-------|-------------|--------|-------|
+| **B1** | Collapse sidebar “F&B” group until F&B bundle purchased | **RESIDUAL** | Same entitlement gates; UX grouping only |
+| **B2** | Operations landing — sessions + play billing primary | **RESIDUAL** | Orders secondary tab |
+| **B3** | Events inbox → settings deep link; marketing publish step 10 only | **RESIDUAL** | Pairs with onboarding step 10 |
+| **B4** | Subscription upsell after wizard (not before) | **RESIDUAL** | Product ordering |
+| **C** | Evaluate `bar` + `dining` → `hospitality` pack alias | **RESIDUAL** | No DROP; legacy ids in DB |
+| **D** | Document manual-only flows for Tier 3 packs | **RESIDUAL** | Sales ops playbook |
+
+**Marketplace residuals (old #35, same §31 band):** operator S0–S4 execution, S2 density gate before guest promo, M4 admin cohort tools, M5 free-directory entitlement split — [`GO_SPOTS_MARKETPLACE.md`](./GO_SPOTS_MARKETPLACE.md) + [`MARKETPLACE_GTM_CHECKLIST.md`](./MARKETPLACE_GTM_CHECKLIST.md). **Do not** conflate with Phase A product-focus DONE.
+
+---
+
 ## References
 
-- Bible status: [`BIBLE_STATUS.md`](./BIBLE_STATUS.md) (#33)  
-- Ship slice: [`FOUR_DAY_SHIP_PLAN.md`](./FOUR_DAY_SHIP_PLAN.md)  
-- Onboarding compose: [`GO_SPOTS_ONBOARDING.md`](./GO_SPOTS_ONBOARDING.md)  
+- Canonical §31 tracker: [`ORIGINAL_AUDIT_BIBLE.md`](./ORIGINAL_AUDIT_BIBLE.md) §31  
+- Bible status: [`BIBLE_STATUS.md`](./BIBLE_STATUS.md) (#33–#35)  
+- Marketplace GTM: [`GO_SPOTS_MARKETPLACE.md`](./GO_SPOTS_MARKETPLACE.md)  
+- Onboarding (§32 / old #31): [`GO_SPOTS_ONBOARDING.md`](./GO_SPOTS_ONBOARDING.md)  
+- Owner vs guest (#34): [`BIBLE_STATUS.md`](./BIBLE_STATUS.md) §34  
 - Packs source: `apps/api/src/common/venue-packs.ts`  
 - Dashboard nav: `apps/web/src/components/layout/tenant-shell.tsx`  
 - Deep audit breadth: [`GO_SPOTS_DEEP_AUDIT.md`](./GO_SPOTS_DEEP_AUDIT.md)
 
 ---
 
-*Lane **KKKKKK** — bible #33 Phase A DONE. Phase B–D residual.*
+*Lane **KKKKKK** — bible #33 Phase A DONE. Lane **PRODUCT31-residual-docs** — honest Phase B–D + §31 cross-links.*

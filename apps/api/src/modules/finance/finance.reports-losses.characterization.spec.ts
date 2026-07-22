@@ -2,7 +2,11 @@ import { ForbiddenException, NotFoundException } from '@nestjs/common';
 import { SubscriptionStatus, SubscriptionTier } from '@prisma/client';
 import { FinanceReportsService } from './finance-reports.service';
 import { FinanceService } from './finance.service';
+import { FinanceTransactionService } from './finance-transaction.service';
 import { ShopLossService } from './shop-loss.service';
+import { ShopOrderService } from './shop-order.service';
+import { PlayBillingService } from './play-billing.service';
+import { PlaySessionService } from './play-session.service';
 
 jest.mock('./finance-analytics.util', () => ({
   aggregateTopItems: jest.fn(),
@@ -69,12 +73,36 @@ describe('FinanceService reports + losses characterization (Phase 1 split)', () 
       audit as never,
       notifications as never,
     );
+    const transactions = new FinanceTransactionService(
+      prisma as never,
+      audit as never,
+    );
+    const shopOrders = new ShopOrderService(
+      prisma as never,
+      audit as never,
+      notifications as never,
+    );
+    const playBilling = new PlayBillingService(
+      prisma as never,
+      audit as never,
+      notifications as never,
+    );
+    const playSessions = new PlaySessionService(
+      prisma as never,
+      audit as never,
+      notifications as never,
+      playBilling,
+    );
     return new FinanceService(
       prisma as never,
       audit as never,
       notifications as never,
       reports,
       losses,
+      transactions,
+      shopOrders,
+      playBilling,
+      playSessions,
     );
   }
 

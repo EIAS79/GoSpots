@@ -7,6 +7,7 @@ import {
 } from '@nestjs/common';
 import { randomUUID } from 'crypto';
 import { Observable, tap } from 'rxjs';
+import { recordHttpRequest } from './metrics.util';
 import type { JwtAccessPayload } from '../modules/auth/auth.service';
 
 const REQUEST_ID_HEADER = 'x-request-id';
@@ -101,10 +102,13 @@ export class RequestLoggingInterceptor implements NestInterceptor {
     if (
       path === '/api/v1/live' ||
       path === '/api/v1/ready' ||
-      path === '/api/v1/health'
+      path === '/api/v1/health' ||
+      path === '/api/v1/metrics'
     ) {
       return;
     }
+
+    recordHttpRequest(method, statusCode, Date.now() - started);
 
     const shopId = req.user?.shopId ?? undefined;
     const payload: Record<string, string | number | undefined> = {

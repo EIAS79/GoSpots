@@ -3,10 +3,13 @@ import {
   GDPR_RETENTION_CRON_LOCK_KEY2,
   MAIL_OUTBOX_CRON_LOCK_KEY1,
   MAIL_OUTBOX_CRON_LOCK_KEY2,
+  MAIL_OUTBOX_RETENTION_CRON_LOCK_KEY1,
+  MAIL_OUTBOX_RETENTION_CRON_LOCK_KEY2,
   RESERVATION_REMINDERS_CRON_LOCK_KEY1,
   RESERVATION_REMINDERS_CRON_LOCK_KEY2,
   withGdprRetentionCronLock,
   withMailOutboxCronLock,
+  withMailOutboxRetentionCronLock,
   withPgAdvisoryXactLock,
   withReservationRemindersCronLock,
 } from './pg-advisory-lock.util';
@@ -113,6 +116,32 @@ describe('pg-advisory-lock.util', () => {
       expect.arrayContaining([
         MAIL_OUTBOX_CRON_LOCK_KEY1,
         MAIL_OUTBOX_CRON_LOCK_KEY2,
+      ]),
+    );
+  });
+
+  it('withMailOutboxRetentionCronLock uses fixed GS/MR key pair', async () => {
+    const tx = {
+      $queryRaw: jest.fn().mockResolvedValue([{ acquired: true }]),
+    };
+    const prisma = {
+      $transaction: jest.fn(async (fn: (t: typeof tx) => Promise<unknown>) =>
+        fn(tx),
+      ),
+    };
+
+    await withMailOutboxRetentionCronLock(prisma as never, async () => 1);
+
+    expect(MAIL_OUTBOX_RETENTION_CRON_LOCK_KEY1).toBe(0x4753);
+    expect(MAIL_OUTBOX_RETENTION_CRON_LOCK_KEY2).toBe(0x4d52);
+    expect(MAIL_OUTBOX_RETENTION_CRON_LOCK_KEY2).not.toBe(
+      MAIL_OUTBOX_CRON_LOCK_KEY2,
+    );
+    const call = tx.$queryRaw.mock.calls[0];
+    expect(call).toEqual(
+      expect.arrayContaining([
+        MAIL_OUTBOX_RETENTION_CRON_LOCK_KEY1,
+        MAIL_OUTBOX_RETENTION_CRON_LOCK_KEY2,
       ]),
     );
   });

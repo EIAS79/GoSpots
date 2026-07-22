@@ -16,6 +16,7 @@ import {
   AttachGuestCheckDto,
   CreateGuestCheckDto,
   DetachGuestCheckDto,
+  SettleGuestCheckDto,
   UpdateGuestCheckDto,
 } from './dto/guest-check.dto';
 
@@ -296,6 +297,91 @@ export class GuestCheckService {
       action: 'guest_check.void',
       summary: 'Voided guest check (children detached)',
       meta: { guestCheckId: id },
+    });
+
+    return this.serialize(updated);
+  }
+
+  /**
+   * Phase 3 close-out: OPEN → SETTLED.
+   * Children must already be billed/completed via existing money paths (Option A → settle gate).
+   * Does not post a second revenue stamp (avoids double-count with finance contract).
+   */
+  async settle(actor: JwtAccessPayload, id: string, dto: SettleGuestCheckDto = {}) {
+    this.assert(actor, PERMISSIONS.TRANSACTION_WRITE);
+    const shopId = requireShopId(actor);
+    const existing = await this.loadCheck(shopId, id);
+    this.assertOpen(existing);
+
+    const blockers: string[] = [];
+    for (const o of existing.shopOrders) {
+      if (o.status !== 'COMPLETED' && o.status !== 'CANCELED') {
+        blockers.push(`order ${o.id.slice(0, 8)} is ${o.status} (need COMPLETED or CANCELED)`);
+      }
+    }
+    for (const p of existing.playSessions) {
+      if (p.reservationId) continue; // billed via reservation
+      if (p.status !== 'COMPLETED' && p.status !== 'CANCELED') {
+        blockers.push(
+          `play ${p.id.slice(0, 8)} is ${p.status} (need COMPLETED or CANCELED)`,
+        );
+      }
+    }
+    for (const r of existing.reservations) {
+      if (r.status === 'CANCELED' || r.status === 'NO_SHOW') continue;
+      if (r.billedAmount == null) {
+        blockers.push(
+          `reservation ${r.id.slice(0, 8)} has no billedAmount (mark paid first)`,
+        );
+      }
+    }
+    if (blockers.length > 0) {
+      throw new BadRequestException({
+        message: 'Guest check cannot settle until attached children are closed',
+        blockers,
+      });
+    }
+
+    const totals = computeGuestCheckRunningTotal({
+      orders: existing.shopOrders,
+      playSessions: existing.playSessions,
+      reservations: existing.reservations,
+    });
+
+    const updated = await this.prisma.$transaction(async (tx) => {
+      const result = await tx.guestCheck.updateMany({
+        where: { id, shopId, status: 'OPEN' },
+        data: {
+          status: 'SETTLED',
+          settledAt: new Date(),
+          ...(dto.paymentMethod !== undefined
+            ? { paymentMethod: dto.paymentMethod?.trim() || null }
+            : {}),
+          ...(dto.note !== undefined
+            ? { note: dto.note?.trim() || null }
+            : {}),
+        },
+      });
+      if (result.count === 0) {
+        throw new ConflictException('Guest check is no longer open');
+      }
+      return tx.guestCheck.findFirst({
+        where: { id, shopId },
+        include: childInclude,
+      });
+    });
+
+    if (!updated) throw new NotFoundException('Guest check not found');
+
+    await this.audit.record(actor, {
+      section: 'operations',
+      action: 'guest_check.settle',
+      summary: 'Settled guest check',
+      meta: {
+        guestCheckId: id,
+        runningTotal: totals.runningTotal,
+        paymentMethod: dto.paymentMethod ?? null,
+      },
     });
 
     return this.serialize(updated);

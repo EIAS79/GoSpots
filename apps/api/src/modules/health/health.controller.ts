@@ -1,10 +1,7 @@
 import { Controller, Get, HttpStatus, Res } from '@nestjs/common';
-import {
-  ApiOkResponse,
-  ApiServiceUnavailableResponse,
-  ApiTags,
-} from '@nestjs/swagger';
+import { ApiOkResponse, ApiTags } from '@nestjs/swagger';
 import type { Response } from 'express';
+import { ApiStandardErrorResponses } from '../../common/dto/api-error-responses.decorator';
 import { Public } from '../auth/decorators/public.decorator';
 import { HealthService } from './health.service';
 
@@ -33,7 +30,7 @@ export class HealthController {
   @Public()
   @Get('ready')
   @ApiOkResponse({ description: 'Readiness probe — DB reachable' })
-  @ApiServiceUnavailableResponse({ description: 'Database unreachable' })
+  @ApiStandardErrorResponses(503)
   async ready(@Res({ passthrough: true }) res: Response) {
     const body = await this.health.ready();
     if (body.status !== 'ok') {

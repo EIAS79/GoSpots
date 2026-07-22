@@ -1,5 +1,6 @@
-import { ConflictException } from '@nestjs/common';
 import type { Prisma, PrismaClient } from '@prisma/client';
+import { ApiDomainErrorCode } from './api-error.codes';
+import { apiConflictException } from './api-error.util';
 
 type PrismaClientLike = PrismaClient | Prisma.TransactionClient;
 
@@ -37,7 +38,8 @@ export function isReservationExclusionViolation(err: unknown): boolean {
 /** Map exclusion to the same 409 copy as assertNoReservationOverlap. */
 export function rethrowIfReservationExclusion(err: unknown): never {
   if (isReservationExclusionViolation(err)) {
-    throw new ConflictException(
+    throw apiConflictException(
+      ApiDomainErrorCode.RESERVATION_OVERLAP,
       'This unit already has a booking that overlaps that time.',
     );
   }

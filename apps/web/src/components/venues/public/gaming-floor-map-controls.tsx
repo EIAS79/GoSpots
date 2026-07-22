@@ -10,7 +10,10 @@ import {
 import type { ReactNode } from "react";
 import { cn } from "@/lib/cn";
 import { usePublicPrefs } from "@/lib/public-prefs-context";
-import { todayDateInput } from "@/lib/seating-event-datetime";
+import {
+  isVenueToday,
+  resolveVenueTimeZone,
+} from "@/lib/venue-timezone";
 
 function shiftDate(dateStr: string, delta: number) {
   const d = new Date(`${dateStr}T12:00:00`);
@@ -29,6 +32,8 @@ export function GamingFloorMapControls({
   onWindowEndTimeChange,
   windowError,
   floorTabs,
+  timezone,
+  venueLocale,
 }: {
   mapLabel?: string;
   scheduleDate: string;
@@ -39,18 +44,27 @@ export function GamingFloorMapControls({
   onWindowEndTimeChange: (time: string) => void;
   windowError?: string | null;
   floorTabs?: ReactNode;
+  /** Venue IANA timezone from `PublicVenue.timezone`. */
+  timezone?: string;
+  /** Venue locale from `PublicVenue.locale` (fallback when IANA unset). */
+  venueLocale?: string;
 }) {
   const { t, locale } = usePublicPrefs();
+  const venueTimeZone = resolveVenueTimeZone({
+    timezone,
+    locale: venueLocale ?? locale,
+  });
 
   function formatScheduleDay(dateStr: string) {
     const d = new Date(`${dateStr}T12:00:00`);
-    const today = todayDateInput();
     const label = d.toLocaleDateString(locale, {
       weekday: "short",
       month: "short",
       day: "numeric",
     });
-    if (dateStr === today) return t("venuePage.floor.today", { label });
+    if (isVenueToday(dateStr, venueTimeZone)) {
+      return t("venuePage.floor.today", { label });
+    }
     return label;
   }
 

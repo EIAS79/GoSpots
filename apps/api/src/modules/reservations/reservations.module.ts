@@ -5,6 +5,9 @@ import { EventRequestsController } from './event-requests.controller';
 import { EventRequestsService } from './event-requests.service';
 import { ReservationRemindersService } from './reservation-reminders.service';
 import { ReservationsController } from './reservations.controller';
+import { ReservationsPublicService } from './reservations-public.service';
+import { ReservationsScheduleService } from './reservations-schedule.service';
+import { ReservationsStaffService } from './reservations-staff.service';
 import { ReservationsService } from './reservations.service';
 import { SeatingTablesController } from './seating-tables.controller';
 import { SeatingTablesService } from './seating-tables.service';
@@ -17,6 +20,9 @@ import { SeatingTablesService } from './seating-tables.service';
     EventRequestsController,
   ],
   providers: [
+    ReservationsPublicService,
+    ReservationsScheduleService,
+    ReservationsStaffService,
     ReservationsService,
     SeatingTablesService,
     EventRequestsService,

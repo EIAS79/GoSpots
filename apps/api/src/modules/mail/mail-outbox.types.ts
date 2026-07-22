@@ -77,6 +77,12 @@ export const MAIL_OUTBOX_SYNC_GRACE_MS = 120_000;
 /** Batch size per processor tick. */
 export const MAIL_OUTBOX_BATCH_SIZE = 20;
 
+/** Default age (days) before SENT rows are eligible for retention purge. */
+export const MAIL_OUTBOX_SENT_RETENTION_DAYS_DEFAULT = 90;
+
+/** Max SENT rows deleted per retention batch (loop until drained). */
+export const MAIL_OUTBOX_SENT_PURGE_BATCH_SIZE = 500;
+
 /** Exponential-ish backoff after failure attempt N (1-based). */
 export function mailOutboxBackoffMs(attemptAfterFail: number): number {
   const caps = [

@@ -1,6 +1,7 @@
 "use client";
 
 import {
+  CheckCircle2,
   Loader2,
   Plus,
   Receipt,
@@ -16,6 +17,7 @@ import {
   createGuestCheck,
   detachFromGuestCheck,
   fetchGuestChecks,
+  settleGuestCheck,
   voidGuestCheck,
   type GuestCheck,
 } from "@/lib/guest-check-client";
@@ -135,6 +137,23 @@ export function GuestChecksPanel({ canWrite }: { canWrite: boolean }) {
       await load();
     } catch (e) {
       setError(e instanceof ApiError ? e.message : t("guestChecks.voidFailed"));
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function onSettle() {
+    if (!canWrite || !selected || busy) return;
+    if (!window.confirm(t("guestChecks.settleConfirm"))) return;
+    setBusy(true);
+    setError(null);
+    try {
+      await settleGuestCheck(selected.id);
+      await load();
+    } catch (e) {
+      setError(
+        e instanceof ApiError ? e.message : t("guestChecks.settleFailed"),
+      );
     } finally {
       setBusy(false);
     }
@@ -436,8 +455,17 @@ export function GuestChecksPanel({ canWrite }: { canWrite: boolean }) {
                   <button
                     type="button"
                     disabled={busy}
+                    onClick={() => void onSettle()}
+                    className="ml-auto inline-flex items-center gap-1.5 rounded-md border border-emerald-200 bg-emerald-50 px-3 py-2 text-sm text-emerald-800 hover:bg-emerald-100 disabled:opacity-50"
+                  >
+                    <CheckCircle2 className="h-3.5 w-3.5" />
+                    {t("guestChecks.settle")}
+                  </button>
+                  <button
+                    type="button"
+                    disabled={busy}
                     onClick={() => void onVoid()}
-                    className="ml-auto inline-flex items-center gap-1.5 rounded-md border border-red-200 px-3 py-2 text-sm text-red-700 hover:bg-red-50 disabled:opacity-50"
+                    className="inline-flex items-center gap-1.5 rounded-md border border-red-200 px-3 py-2 text-sm text-red-700 hover:bg-red-50 disabled:opacity-50"
                   >
                     <XCircle className="h-3.5 w-3.5" />
                     {t("guestChecks.void")}

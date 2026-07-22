@@ -28,6 +28,8 @@ describe('SeatingTablesService tenant-scoped mutations', () => {
     sortOrder: 0,
     eventStartsAt: null,
     eventEndsAt: null,
+    isCustom: true,
+    sourceDiningTableGroupId: null,
   };
 
   beforeEach(() => {
@@ -38,6 +40,7 @@ describe('SeatingTablesService tenant-scoped mutations', () => {
     const update = jest.fn().mockResolvedValue({ ...existing, label: 'Patio' });
     const prisma = {
       shop: { findUnique: jest.fn().mockResolvedValue({ floorCount: 2 }) },
+      resourceCategory: { findFirst: jest.fn().mockResolvedValue(null) },
       seatingTableGroup: {
         findFirst: jest.fn().mockResolvedValue(existing),
         update,
@@ -57,6 +60,7 @@ describe('SeatingTablesService tenant-scoped mutations', () => {
   it('delete uses shopId in delete where', async () => {
     const del = jest.fn().mockResolvedValue({ id: 'st_1' });
     const prisma = {
+      resourceCategory: { findFirst: jest.fn().mockResolvedValue(null) },
       seatingTableGroup: {
         findFirst: jest.fn().mockResolvedValue(existing),
         delete: del,

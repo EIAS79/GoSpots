@@ -1,115 +1,53 @@
-# Bible / 40-point progress index
+# Bible / progress index
 
-> **Per-item matrix:** [`BIBLE_STATUS.md`](./BIBLE_STATUS.md) (1–35 DONE/PARTIAL/…) · **Finished log:** [`BIBLE_FINISHED.md`](./BIBLE_FINISHED.md) (append when a slice ships).  
-> **Operator next steps:** [`WHAT_TO_DO_NOW.md`](./WHAT_TO_DO_NOW.md) (migrate + env + smoke).
+> **Canonical tracker (original mega-prompt §§1–40):** [`ORIGINAL_AUDIT_BIBLE.md`](./ORIGINAL_AUDIT_BIBLE.md)  
+> **Operator inventory (§§1–40 status + one-line residuals):** [`BIBLE_RESIDUAL_INVENTORY.md`](./BIBLE_RESIDUAL_INVENTORY.md)  
+> **Verdict:** **Not fully done** vs the full audit prompt. Ship bars are strong; residuals remain (§5 ledger-primary, §35 perf, operator soaks). §14 service split **DONE** (ship bar; login/register/activate remain on `AuthService` by design). §19 Option B/C settle-root **explicitly deferred** (Phase 3a settle gate shipped).  
+> **Legacy #1–35 matrix:** [`BIBLE_STATUS.md`](./BIBLE_STATUS.md) (kept for history; prefer ORIGINAL_AUDIT_BIBLE) · **Ship log:** [`BIBLE_FINISHED.md`](./BIBLE_FINISHED.md)  
+> **Deliverables:** [`GO_SPOTS_DEEP_AUDIT.md`](./GO_SPOTS_DEEP_AUDIT.md) · [`GO_SPOTS_FIX_PLAN.md`](./GO_SPOTS_FIX_PLAN.md) · [`GO_SPOTS_TEST_MATRIX.md`](./GO_SPOTS_TEST_MATRIX.md) (§34 test coverage residual Phases 0–4) · [`GO_SPOTS_MIGRATION_PLAN.md`](./GO_SPOTS_MIGRATION_PLAN.md) · [`GO_SPOTS_WEBHOOK_IDEMPOTENCY.md`](./GO_SPOTS_WEBHOOK_IDEMPOTENCY.md) (§9 Lemon webhook — **no code residual**; operator Gates 0–2; §9 ≠ guest contact — see crosswalk) · [`GO_SPOTS_MONEY_WIRE.md`](./GO_SPOTS_MONEY_WIRE.md) (§4 accepted residuals) · [`GO_SPOTS_PERF.md`](./GO_SPOTS_PERF.md) (§35 light smoke + Phases 0–4 residual) · [`GO_SPOTS_API_ENVELOPE.md`](./GO_SPOTS_API_ENVELOPE.md) (§36 OpenAPI / domain codes residual) · [`GO_SPOTS_CURRENCY_STAMPS.md`](./GO_SPOTS_CURRENCY_STAMPS.md) (§20 currency/FX residual Gates 0–4) · [`GO_SPOTS_CSRF.md`](./GO_SPOTS_CSRF.md) (§10 operator Gates 0–2 + optional e2e/outage UX residual) · [`GO_SPOTS_MFA.md`](./GO_SPOTS_MFA.md) (§12 residual) · [`GO_SPOTS_RLS.md`](./GO_SPOTS_RLS.md) (§6 operator soak Gates 0–4) · [`GO_SPOTS_LEDGER.md`](./GO_SPOTS_LEDGER.md) (§5 operator soak Gates 0–7) · [`GO_SPOTS_CSV_CUTOVER.md`](./GO_SPOTS_CSV_CUTOVER.md) (§16 operator DROP checklist Gates 0–6) · [`GO_SPOTS_PACK_TIER.md`](./GO_SPOTS_PACK_TIER.md) (§15 residual DROP checklist) · [`GO_SPOTS_TIMEZONE.md`](./GO_SPOTS_TIMEZONE.md) (§21 venue TZ residual) · [`GO_SPOTS_OFFERING_CONFIG.md`](./GO_SPOTS_OFFERING_CONFIG.md) (§18 offeringConfig residual) · [`GO_SPOTS_MAIL_OUTBOX.md`](./GO_SPOTS_MAIL_OUTBOX.md) (§22 prod retry proof + alerting residual) · [`GO_SPOTS_PUBLIC_ABUSE.md`](./GO_SPOTS_PUBLIC_ABUSE.md) (§28 CAPTCHA operator Gates 0–4) · [`GO_SPOTS_REALTIME.md`](./GO_SPOTS_REALTIME.md) (§23 Redis SSE residual) · [`GO_SPOTS_OBSERVABILITY.md`](./GO_SPOTS_OBSERVABILITY.md) (§24 OTel / web Sentry residual) · [`GO_SPOTS_UPLOAD_SECURITY.md`](./GO_SPOTS_UPLOAD_SECURITY.md) (§26 legacy cutover + Phase 2–3 residual) · [`GO_SPOTS_A11Y.md`](./GO_SPOTS_A11Y.md) (§29 a11y residual) · [`GO_SPOTS_OFFLINE.md`](./GO_SPOTS_OFFLINE.md) (§33 offline residual) · [`GO_SPOTS_I18N.md`](./GO_SPOTS_I18N.md) (§30 i18n residual) · [`GO_SPOTS_PRODUCT_FOCUS.md`](./GO_SPOTS_PRODUCT_FOCUS.md) (§31 product-focus Phase B–D residual) · [`GO_SPOTS_MARKETPLACE.md`](./GO_SPOTS_MARKETPLACE.md) (§31 / #35 operator GTM residual)  
+> **Operator:** [`WHAT_TO_DO_NOW.md`](./WHAT_TO_DO_NOW.md) · [`docs/PRODUCTION_STATUS.md`](../PRODUCTION_STATUS.md)
 
-**As of:** 2026-07-21 (post-**OOOOOO-p2** #14 DONE Phase 0–2; **#10** DONE) · Sources: `OVERNIGHT_STATUS.md`, `REMAINING_P0_FRIDAY.md`, `AGENT_COORDINATION.md` completed lanes, design docs linked below.  
-**Legend:** **Done** = ship code · **Design-only** = doc, defer impl · **Operator Friday** = human deploy/smoke · **Still deferred** = post-submit.
+**As of:** 2026-07-22
 
-**Verify snapshot:** nest build **PASS** · web typecheck **PASS** · bible matrix **35 DONE** · CI `api-migrate` · pending migrations on disk through `20260721120000_seating_source_dining_table_group` (Neon deploy still operator).
+### Quick status (§ feature slices)
 
----
+| Band | State |
+|------|--------|
+| §4 monetary correctness | **DONE** (ship bar) — `Decimal(19,4)` + 4dp string wire + web dual-read **shipped**; accepted residuals: `toMoneyNumber` intermediates + numeric form/PATCH inputs (optional Phases 2–3) — [`GO_SPOTS_MONEY_WIRE.md`](./GO_SPOTS_MONEY_WIRE.md); ledger §5 · currency stamps §20 **out of scope** |
+| §5–§7 P0 tenant/concurrency | Mostly **DONE** (§5 ledger + §6 RLS flags/soak **OPERATOR**) |
+| §10 CSRF + cookies | **DONE** (ship bar) — double-submit guard + cookie flags + web wiring **DONE**; operator Gates 0–2 smoke + optional Playwright/outage UX **residual** — [`GO_SPOTS_CSRF.md`](./GO_SPOTS_CSRF.md) |
+| §9 Lemon webhook idempotency (legacy **#8**) | **DONE** (ship bar) — **no code residual**; operator Gates 0–2 (migrate folder #1 + Lemon URL/secret + duplicate-delivery smoke) — [`GO_SPOTS_WEBHOOK_IDEMPOTENCY.md`](./GO_SPOTS_WEBHOOK_IDEMPOTENCY.md) · **§9 ≠ guest contact** (see doc crosswalk → §11 / §19 / §28) |
+| §6 tenant RLS | **DONE** (ship bar) — migration + `SET LOCAL` plumbing; **`TENANT_RLS` default off**; operator Gates 0–4 [`GO_SPOTS_RLS.md`](./GO_SPOTS_RLS.md) |
+| §7 booking concurrency | **DONE** (ship bar) — app `FOR UPDATE` lock + GiST exclusion on disk + **applied on Neon**; live Docker C1/C2 **OPERATOR** — Gates 0–3 [`GO_SPOTS_CONCURRENCY_TESTS.md`](./GO_SPOTS_CONCURRENCY_TESTS.md); DDL [`GO_SPOTS_EXCLUSION_CONSTRAINT.md`](./GO_SPOTS_EXCLUSION_CONSTRAINT.md); walk-in `PlaySession` app-lock only (**no exclusion**) |
+| §8 stock concurrency | **DONE** (ship bar) — conditional stock SQL + claim-before-delete/cancel; live Docker C3 **OPERATOR** — same Gates 0–3 [`GO_SPOTS_CONCURRENCY_TESTS.md`](./GO_SPOTS_CONCURRENCY_TESTS.md) |
+| §5 unified ledger | Phase 1–4 **shipped** (dual-write + `backfill:ledger` + `LEDGER_READS`; flags default off); Phase 5 freeze **residual** — Gates 0–7 operator checklist [`GO_SPOTS_LEDGER.md`](./GO_SPOTS_LEDGER.md) |
+| §11–§22 P1 security/ops domains | Mostly **DONE** or **PARTIAL** |
+| §21 timezone / scheduling | **PARTIAL** — `Shop.timezone` + API venue day keys + settings IANA UI **DONE** (Bible #21 ship bar; Lane **B-timezone-ui**); web `venue-timezone.ts` helper + staff sessions/finance/event-requests/dining/resources day labels **PARTIAL** (Lanes **TZ21-web-day-helper**, **TZ21-staff-event-today**, **TZ21-staff-layout-today**); `formatDate` optional `timeZone` + staff notifications + overview reservations **PARTIAL** (Lane **TZ21-format-timezone**); public gaming/dining schedule date defaults **DONE** (Lane **TZ21-public-timezone**); secondary public booking/floor-map + public event form “today” labels **DONE** (Lanes **TZ21-public-secondary**, **TZ21-event-today**); bulk `toLocale*` **residual** — [`GO_SPOTS_TIMEZONE.md`](./GO_SPOTS_TIMEZONE.md) Phases 0–3 (**operator Neon migrate OPEN**) |
+| §11 guest token Clear→DROP | Hash + expiry + clear CLI **DONE**; operator checklist [`GO_SPOTS_GUEST_TOKEN.md`](./GO_SPOTS_GUEST_TOKEN.md) — dual-read stop + DROP **residual** (no DROP migration on disk) |
+| §13 dashboard key Clear→DROP | Slug-only bind + hash dual-write **DONE**; operator checklist [`GO_SPOTS_DASHBOARD_KEY.md`](./GO_SPOTS_DASHBOARD_KEY.md) — stop dual-write + DROP **residual** (no clear CLI / no DROP migration on disk) |
+| §15 pack/tier collapse | Phase 1 pack-only `resolveModules` + backfill script **DONE** ([`GO_SPOTS_PACK_TIER.md`](./GO_SPOTS_PACK_TIER.md)); optional DROP `Subscription.tier` **residual** — Gates 0–7 operator checklist (**no DROP migration on disk**) |
+| §16 CSV permissions/add-ons | **DONE** (ship bar) — rows SoT + stop dual-write + DROP migration **on disk** (Lane **IIIIII**); operator expand → DROP → post-DROP verify **residual** — Gates 0–6 [`GO_SPOTS_CSV_CUTOVER.md`](./GO_SPOTS_CSV_CUTOVER.md) ([`WHAT_TO_DO_NOW.md`](./WHAT_TO_DO_NOW.md): **18/18 applied 2026-07-21**) |
+| §12 owner MFA / sessions | Owner TOTP + sessions + login challenge **DONE** ([`GO_SPOTS_2FA.md`](./GO_SPOTS_2FA.md)); elevated staff MFA Phase 1 **DONE** behind `STAFF_MFA_OPT_IN` ([`GO_SPOTS_MFA.md`](./GO_SPOTS_MFA.md)); WebAuthn, org require-MFA, plain-staff MFA, broader reauth **residual** Phases 2–5 |
+| §22 mail outbox / jobs | Durable table + worker + dead-letter API + owner + SUPER_ADMIN UI + SENT retention cron **DONE** ([`GO_SPOTS_MAIL_OUTBOX.md`](./GO_SPOTS_MAIL_OUTBOX.md)); **prod retry proof** + outbox alerting **residual** — operator Gates 0–5 |
+| §23 realtime / SSE | In-process notifications SSE + poll fallback **DONE** (Bible #28 ship bar); Redis/PG NOTIFY multi-instance fan-out + floor/chat SSE **residual** — [`GO_SPOTS_REALTIME.md`](./GO_SPOTS_REALTIME.md) Phases 1–4 (**no Redis on disk**) |
+| §24 observability | API logs + request interceptor + optional Sentry 5xx + `/live` `/ready` **DONE** (Bible #23 ship bar); opt-in Prometheus `/metrics` stub **PARTIAL** (Lane **OBS24-metrics-phase**); OTel SDK/export, API tracing, web Sentry, alerts **residual** — [`GO_SPOTS_OBSERVABILITY.md`](./GO_SPOTS_OBSERVABILITY.md) Phases 1–4 |
+| §25 backup/DR | Runbook ship bar **DONE** (Bible #24); Neon PITR **6h** confirmed; **PITR restore drill OPEN residual** (`_never_` / `_TBD_` — never executed) — operator gates 0–7 in [`DISASTER_RECOVERY.md`](../operations/DISASTER_RECOVERY.md); automated backup-verify deferred |
+| §26 upload security | Phase 0 ingest harden + Phase 1 legacy inventory/migrate CLIs + `LEGACY_UPLOADS_STATIC` gate **DONE** (legacy #27 ship bar); operator Gates 0–5 cutover + private/signed GET + malware scan **residual** — [`GO_SPOTS_UPLOAD_SECURITY.md`](./GO_SPOTS_UPLOAD_SECURITY.md) Phases 2–3 (**no `StoredImage.visibility` / no AV on disk**) |
+| §20 currency / FX | **PARTIAL** (ship bar met) — preview + confirm apply + atomic catalog reprice + M6 stamps on disk **DONE**; operator Gates 0–4 + nullable contract + optional report-currency FX display **residual** — [`GO_SPOTS_CURRENCY_STAMPS.md`](./GO_SPOTS_CURRENCY_STAMPS.md) |
+| §14 service split / §19 ticket | **DONE** (ship bar) — finance all domain services extracted (`FinanceService` facade ~223 lines); auth session/refresh/logout/password (owner+staff)/venue/MFA extracted (`AuthService` thin facade ~1 170 lines; **by design** login/register/activate/me/`issueTokens` remain); reservations public/schedule/staff extracted (facade shell ~109 lines; reminders cron may remain); §19 Phase 3a settle gate **DONE**; Option B/C settle-root **DEFERRED** post–ledger soak — [`GO_SPOTS_SERVICE_SPLIT.md`](./GO_SPOTS_SERVICE_SPLIT.md) |
+| §17 resource/dining merge | **PARTIAL** — Phase 0–2 **DONE** + Phase 3 code **SHIPPED** (`RES17-ui-cutover`: API guardrails + Sessions advisory panel); operator drift baseline + Phase 3 soak + Phase 4 DROP **residual** — [`GO_SPOTS_RESOURCE_MODEL_MERGE.md`](./GO_SPOTS_RESOURCE_MODEL_MERGE.md) §4.1–4.4 |
+| §18 offeringConfig JSON | **DONE** (ship bar) — write validation + `schemaVersion: 1` + 4dp string prices + inventory CLI **DONE** (Bible #15 **EEEEEE**); JSON behavioral overlay + three-surface price overlap remain; **optional** relational rate de-dup / column promote Phase 1–3 **residual** — [`GO_SPOTS_OFFERING_CONFIG.md`](./GO_SPOTS_OFFERING_CONFIG.md) (**no Phase 1 DDL on disk**) |
+| §28 abuse / CAPTCHA | **PARTIAL** — throttles + verify + widget + in-memory 429 escalation **DONE** (Bible #26 ship bar; `CAPTCHA_PROVIDER=off`); live provider enable + Redis multi-instance store + metrics **residual** — [`GO_SPOTS_PUBLIC_ABUSE.md`](./GO_SPOTS_PUBLIC_ABUSE.md) Gates 0–4 (**no Redis escalation on disk**) |
+| §29 accessibility | **PARTIAL** — public 13-route axe smoke **DONE** (Lane **WWWWW**); dashboard axe, focus trap, contrast, hard CI gate **residual** — [`GO_SPOTS_A11Y.md`](./GO_SPOTS_A11Y.md) Phases 0–4 |
+| §30 internationalization | **PARTIAL** — en/pl product UI ship bar **DONE** (Lane **TTTTT**; `i18n:check` **1992**+**1020**); secondary locales, API/email/legal, CI gate **residual** — [`GO_SPOTS_I18N.md`](./GO_SPOTS_I18N.md) Phases 0–4 |
+| §33 offline / degraded | **PARTIAL** — Modes A–C/F + poll backoff + public booking/chat fail-closed + DR + in-app runbook **DONE** (Lanes **QQQ→SSSSS**); Mode E toasts, floor timestamps, guest status cards, finance retry polish **residual** — [`GO_SPOTS_OFFLINE.md`](./GO_SPOTS_OFFLINE.md) Phases 5–6 (**no PWA / no offline queue on disk**) |
+| §34 test coverage | **PARTIAL** — ~**105** API Jest specs + CI api/migrate/web + opt-in concurrency (gate + C1–C3 bodies) + optional Playwright smokes **DONE** (Lanes **GGGGGG**, **HHHHHH**, **QQ**, **WWWWW**); full e2e matrix, web unit tests, hard `next build`/eslint/`i18n:check` CI **residual** — [`GO_SPOTS_TEST_MATRIX.md`](./GO_SPOTS_TEST_MATRIX.md) Phases 0–4 (**no web `*.test.ts` on disk**) |
+| §31 product focus / marketplace | **PARTIAL** — Phase A commercial UX (#33 **KKKKKK**) + owner/guest split (#34) + marketplace city landing (#35 **MMMMMM**) **DONE**; Phase B–D sidebar/ops discoverability + operator S1–S4 / M4–M5 **residual** — [`GO_SPOTS_PRODUCT_FOCUS.md`](./GO_SPOTS_PRODUCT_FOCUS.md) Phases B–D; [`GO_SPOTS_MARKETPLACE.md`](./GO_SPOTS_MARKETPLACE.md) |
+| §23–§34 P2 quality | **PARTIAL** — §23 realtime [`GO_SPOTS_REALTIME.md`](./GO_SPOTS_REALTIME.md); §32 onboarding web wizard + apply-template API + web delegation **DONE** (no schema); server progress **Phase 1 plan ticket** [`GO_SPOTS_ONBOARDING.md`](./GO_SPOTS_ONBOARDING.md) (**ONBOARD32-phase1-plan** — implement lane **`ONBOARD32-phase1-implement`**); mixed dining seed / sidebar **residual** Phases 3–4; §33 offline ship bar **DONE**, polish **residual** [`GO_SPOTS_OFFLINE.md`](./GO_SPOTS_OFFLINE.md) Phases 5–6; §34 unit+CI ship bar **DONE**, e2e/hard web gates **residual** [`GO_SPOTS_TEST_MATRIX.md`](./GO_SPOTS_TEST_MATRIX.md) Phases 0–4 |
+| §35 perf / §36 API envelope | **§35 light smoke + Phase 0 inventory + Phase 1 k6 read stub + Phase 2 gated k6 write stub shipped**; Phase 3 partial: play billing pagination (**PERF35-play-billing-page**), schedule day `take` caps + category `select` trim (**PERF35-schedule-take** + **PERF35-schedule-select**), notification badges (**PERF35-notif-badges**), dashboard analytics caps (**PERF35-dashboard-analytics**), staff menu `getFullMenu` take caps (**PERF35-menu-take**) — [`artifacts/perf/n1-pagination-inventory.md`](./artifacts/perf/n1-pagination-inventory.md) **0 HIGH**; staff read mix, staff/finance write scenarios, live EXPLAIN, CI perf gate **residual** — [`GO_SPOTS_PERF.md`](./GO_SPOTS_PERF.md) Phases 1–4 · **§36** OpenAPI Phase 0–2 catalog **DONE**; domain throw-site codes + remaining controllers + web dual-read **residual** — [`GO_SPOTS_API_ENVELOPE.md`](./GO_SPOTS_API_ENVELOPE.md) |
+| §37 gates | **NOT DONE** — code/migrate/board **DONE**; Render **suspended**; smoke **blocked**; `TENANT_RLS` / `LEDGER_*` **off** until soak — [`ORIGINAL_AUDIT_BIBLE.md`](./ORIGINAL_AUDIT_BIBLE.md) §37 |
 
-## Done (ship code)
+### Privacy docs (§27)
 
-| Theme (audit) | Notes |
-|---------------|--------|
-| Money `Decimal(19,4)` + **string wire** | M1 columns + util; **#1 DONE** (**XXXXX**) — API `serializeMoney` → 4dp strings; offeringConfig string prices; web `coerceMoney`; design [`GO_SPOTS_MONEY_WIRE.md`](./GO_SPOTS_MONEY_WIRE.md) |
-| Finance anti-double-count | Interim [`GO_SPOTS_FINANCE_CONTRACT.md`](./GO_SPOTS_FINANCE_CONTRACT.md) + channel sum |
-| Unified guest check / open tabs | **#10 DONE** (**NNNNNN**) — Option A ops container; Phase 3 settle residual; design [`GO_SPOTS_UNIFIED_TICKET.md`](./GO_SPOTS_UNIFIED_TICKET.md) |
-| Financial ledger Phase 1–2 | **#6 DONE** (**LEDGER6**) — `LedgerEntry` + `LEDGER_DUAL_WRITE` dual-write; analytics interim until Phase 4; design [`GO_SPOTS_LEDGER.md`](./GO_SPOTS_LEDGER.md) |
-| Tenant isolation (app + RLS belt) | App `shopId` mutators + two-venue unit matrix; RLS migration `20260721050000_*` + `SET LOCAL` plumbing (**ZZZZZ** — **#3 DONE**); opt-in `TENANT_RLS`; opaque media GET residual; Neon migrate + flag soak OPERATOR; design [`GO_SPOTS_RLS.md`](./GO_SPOTS_RLS.md) |
-| Booking locks + stock/order txns | Resource `FOR UPDATE`; atomic SALE/lines; play-billing claim (Lane A); **#4 DONE** exclusion `20260721060000_*` (**WWWWWW**); **#5 DONE** claim-before-delete/cancel (**BBBBBB**); live C1–C3 local-only residual |
-| Lemon webhook idempotency | Receipt uniqueness migration on disk |
-| CSRF + cookies + Helmet + boot secrets | Prod Secure/CORS guidance |
-| Guest token hash/expiry/revoke | Dual-read plaintext window remains; clear CLI (Lane PP); **#17 DONE** (**DDDDDD**); cutover/DROP design [`GO_SPOTS_GUEST_TOKEN.md`](./GO_SPOTS_GUEST_TOKEN.md) |
-| Refresh family revoke + sessions API/UI | Lanes J/O/R; new-device alert (VV); owner TOTP MFA (**AAAAAA** — **#18 DONE**) |
-| Timezone column + settings UI | Lane B |
-| offeringConfig validation + Phase 0 version stamp | Write DTO/util; **#15 DONE** (**EEEEEE**) — `schemaVersion: 1` + typed contract + inventory CLI; hybrid design [`GO_SPOTS_OFFERING_CONFIG.md`](./GO_SPOTS_OFFERING_CONFIG.md); relational de-dup residual |
-| Feature/seat asserts + staff invite lifecycle | Dual-write permissions; **#12 DONE** pack-only authz (**FFFFFF**) |
-| Pack + add-ons vs legacy tier | **#12 DONE** (**FFFFFF**) — pack-only `resolveModules` + effectiveAddOns synthesis; optional DROP tier residual; design [`GO_SPOTS_PACK_TIER.md`](./GO_SPOTS_PACK_TIER.md) |
-| Permissions/addOns CSV cutover | **#13 DONE** (**IIIIII**) — rows SoT + DROP migration on disk; `pendingAddOns` stays CSV; design [`GO_SPOTS_CSV_CUTOVER.md`](./GO_SPOTS_CSV_CUTOVER.md) |
-| Atomic FX catalog reprice + preview/confirm + M6 stamps | Lanes D / CC / MM / **YYYYY** — **#20 DONE**; history UI + row stamps; OPERATOR Neon stamp migrate |
-| Cron single-flight (reminders + mail outbox) | Lanes C / SS advisory locks |
-| GDPR export + guest erase stub (+ forced reauth) | Lanes F/H/W/X/OO — superseded by **#25 DONE** (VVVVVV) |
-| GDPR full program (export/erase/account wipe/consent/DSAR/retention) | Lane **VVVVVV** — **#25 DONE**; money amounts kept (accounting); OPERATOR Neon migrate + Lemon/Resend processor purge |
-| Durable mail outbox + processor | Lane SS + dead-letter API/UI (XXXX/ZZZZ) + system-mail ops (**TTTTT**) — **#22 DONE**; OPERATOR prod retry proof |
-| Client finance `Idempotency-Key` | Lanes AA / NN / GGGG / LLLL / OOOO / RRRR / **TTTT** / **NNNNN** — Tier A+B+C + currency apply + retry handoff + Phase 3 require-keys (**#7 DONE**); operator live flag flip residual |
-| CAPTCHA / public abuse | Lanes BB / GGGGG / IIIII / LLLLL / MMMMM / **RRRRR** — (**#26 DONE**); operator enable secrets |
-| Connectivity / offline Modes A–C/F | Lanes RR–WWW + ops runbook (**#32 DONE**) |
-| Dashboard capability key | Lanes EE / IIII / MMMM / QQQQ / **QQQQQ** — Phase 3 slug-only + hash-at-rest (**#19 DONE**); Neon migrate OPERATOR; optional DROP |
-| CI API build/Jest + web typecheck + ephemeral migrate dry-run + post-deploy verify | Health `/live` `/ready`; Lane **KKKKK** `api-migrate`; Lane **CCCCCC** Phase 2 template + `verify:migrations` (**#9 DONE**); Neon deploy still operator |
-| Image upload harden | MIME/magic/size + Phase 1 inventory/migrate + `LEGACY_UPLOADS_STATIC` (**#27 DONE** via **VVVVV**); OPERATOR inventory=0 + flag off; opaque public GET accepted; malware/signed Phase 2–3 deferred |
-| Notifications SSE + poll fallback | Lane XX + **UUUUU** — **#28 DONE**; Redis/floor SSE scale residual |
-| Oversized services / capability split | **#11 DONE** (**SPLIT11**) — Phase 0 `auth.types` + Phase 1 finance reports/losses extract + characterization; Phases 2–9 residual; design [`GO_SPOTS_SERVICE_SPLIT.md`](./GO_SPOTS_SERVICE_SPLIT.md) |
-| Owner/guest marketing route split | Lane GG (#34 DONE) |
-| Product scope / gaming-first commercial UX | **#33 DONE** (**KKKKKK**) — self-serve gaming/mixed + marketing bundles; Phase B–D residual |
-| Marketplace city-first GTM Phase A | **#35 DONE** (**MMMMMM**) — `/venues/wroclaw` + GTM checklist; live cohort residual |
-| Connectivity / offline Modes A–C/F + ops runbook | Lanes RR–WWW + **PPPPP** (DR) + **SSSSS** (in-app settings); #32 **DONE**; design [`GO_SPOTS_OFFLINE.md`](./GO_SPOTS_OFFLINE.md) |
-| Optional e2e + axe a11y smoke (13 public routes) | Lanes QQ / UU / EEE / YYY / JJJJJ / **WWWWW** — **#29 DONE**; critical-clean verified; CI `web-a11y-smoke` non-blocking; dashboard residual |
-| Product UI en/pl (dashboard + public + auth) | Lanes WW–HHHHH + **TTTTT** / **TTTTT-i18n-enpl-done** — **#30 DONE**; `i18n:check` **1871**+**989**; secondary locales residual |
-| Observability (Sentry + request log + health) | Lanes V / Y / **UUUUUU** — **#23 DONE**; OTel residual |
-| Automated testing (unit + CI + opt-in concurrency) | **#2 DONE** (**GGGGGG** + **HHHHHH**) — API Jest in CI + web typecheck + migrate dry-run + `test:concurrency` scaffold + util/lock C1–C3 bodies; OPERATOR local Docker run; web unit/CI residual; design [`GO_SPOTS_CONCURRENCY_TESTS.md`](./GO_SPOTS_CONCURRENCY_TESTS.md) |
-
----
-
-## Design-only (link docs)
-
-| Theme | Doc |
-|-------|-----|
-| Ledger Phase 3–5 (backfill / LEDGER_READS) | [`GO_SPOTS_LEDGER.md`](./GO_SPOTS_LEDGER.md) — Phase 1–2 **#6 DONE**; OPERATOR Neon + flag |
-| Owner 2FA / TOTP | [`GO_SPOTS_2FA.md`](./GO_SPOTS_2FA.md) — **#18 DONE** (ship); staff MFA residual |
-| Permissions/addOns CSV cutover | [`GO_SPOTS_CSV_CUTOVER.md`](./GO_SPOTS_CSV_CUTOVER.md) — **#13 DONE**; OPERATOR Neon DROP |
-| Unified guest ticket / check | [`GO_SPOTS_UNIFIED_TICKET.md`](./GO_SPOTS_UNIFIED_TICKET.md) — **#10 DONE** Phase 0–2 Option A (**NNNNNN**); Phase 3 settle residual |
-| Resource / dining model merge | [`GO_SPOTS_RESOURCE_MODEL_MERGE.md`](./GO_SPOTS_RESOURCE_MODEL_MERGE.md) — **#14 DONE** Phase 0–2 (**OOOOOO** / **OOOOOO-p2**); Phases 3–4 cutover residual |
-| Observability (OTel / deeper Sentry) | [`GO_SPOTS_OBSERVABILITY.md`](./GO_SPOTS_OBSERVABILITY.md) — **#23 DONE** for Sentry+logs+health; OTel residual |
-| Full a11y / i18n sweeps | [`GO_SPOTS_A11Y_I18N.md`](./GO_SPOTS_A11Y_I18N.md) — **#29 DONE** (public axe); **#30 DONE** (en/pl product UI); secondary locales + dashboard a11y residual |
-| Product scope / narrow focus | [`GO_SPOTS_PRODUCT_FOCUS.md`](./GO_SPOTS_PRODUCT_FOCUS.md) — **#33 DONE** (Phase A commercial UX **KKKKKK**); Phase B–D residual |
-| Onboarding wizard | [`GO_SPOTS_ONBOARDING.md`](./GO_SPOTS_ONBOARDING.md) |
-| Marketplace GTM (city-first) | [`GO_SPOTS_MARKETPLACE.md`](./GO_SPOTS_MARKETPLACE.md) — **#35 DONE** Phase A (**MMMMMM**); live cohort + M4–M5 residual; checklist [`MARKETPLACE_GTM_CHECKLIST.md`](./MARKETPLACE_GTM_CHECKLIST.md) |
-| CAPTCHA escalation | [`GO_SPOTS_PUBLIC_ABUSE.md`](./GO_SPOTS_PUBLIC_ABUSE.md) — **#26 DONE**; OPERATOR enable secrets; Redis/metrics optional |
-| GDPR retention / consent | [`GO_SPOTS_GDPR_RETENTION.md`](./GO_SPOTS_GDPR_RETENTION.md) — **#25 DONE**; OPERATOR Neon + Lemon/Resend |
-| Service splits | [`GO_SPOTS_SERVICE_SPLIT.md`](./GO_SPOTS_SERVICE_SPLIT.md) — **#11 DONE** Phase 0+1; Phases 2–9 residual |
-| Live concurrency recipes | [`GO_SPOTS_CONCURRENCY_TESTS.md`](./GO_SPOTS_CONCURRENCY_TESTS.md) — **#2 DONE**; util/lock C1–C3 bodies shipped (**HHHHHH**); OPERATOR local Docker run |
-| Dashboard key rotate / Phase 2–3 bind + hash | [`GO_SPOTS_DASHBOARD_KEY.md`](./GO_SPOTS_DASHBOARD_KEY.md) — **#19 DONE** (QQQQQ); Neon hash migrate OPERATOR; optional DROP |
-| Upload / media residuals (malware, signed private, live flag-off) | [`GO_SPOTS_UPLOAD_SECURITY.md`](./GO_SPOTS_UPLOAD_SECURITY.md) — **#27 DONE**; OPERATOR inventory=0 + `LEGACY_UPLOADS_STATIC=false`; Phase 2–3 deferred |
-| Realtime multi-instance / floor SSE | [`GO_SPOTS_REALTIME.md`](./GO_SPOTS_REALTIME.md) — **#28 DONE** for in-process; Redis/floor = scale residual |
-| Pack + add-ons vs legacy `SubscriptionTier` collapse | [`GO_SPOTS_PACK_TIER.md`](./GO_SPOTS_PACK_TIER.md) — **#12 DONE** Phase 1; optional DROP / catalog multi_shop add-ons residual |
-| OfferingConfig relational rates / column promote | [`GO_SPOTS_OFFERING_CONFIG.md`](./GO_SPOTS_OFFERING_CONFIG.md) — **#15 DONE** Phase 0; Phase 1–3 residual |
-| Remaining money-path Idempotency-Key | [`GO_SPOTS_IDEMPOTENCY.md`](./GO_SPOTS_IDEMPOTENCY.md) — **#7 DONE**; OPERATOR live `IDEMPOTENCY_REQUIRE_MONEY_KEYS=true` |
-| Guest token dual-read stop / DROP plaintext | [`GO_SPOTS_GUEST_TOKEN.md`](./GO_SPOTS_GUEST_TOKEN.md) |
-| Migration safety (Phase 1 CI dry-run + Phase 2 template + Phase 3 verify) | [`GO_SPOTS_MIGRATION_SAFETY.md`](./GO_SPOTS_MIGRATION_SAFETY.md) — **#9 DONE**; OPERATOR Neon deploy + `verify:migrations` |
-
----
-
-## Operator Friday
-
-| Action | Ref |
-|--------|-----|
-| Neon `migrate deploy` (pending on disk through `20260721120000_seating_source_dining_table_group`, never reset) | [`REMAINING_P0_FRIDAY.md`](./REMAINING_P0_FRIDAY.md), [`MIGRATION_PREFLIGHT.md`](./MIGRATION_PREFLIGHT.md) |
-| Host `CORS_ORIGINS` + cookie/CSRF/throttle prod defaults | [`DEPLOY_CHECKLIST.md`](./DEPLOY_CHECKLIST.md), `.env.production.example` |
-| Manual smoke (login/CSRF, CORS, book, guest link, stock+sale, webhook dup) | Same |
-| Deploy Node **20** LTS | Host engines |
-| Confirm Neon PITR / retention + restore drill (fill TBD) | [`docs/operations/DISASTER_RECOVERY.md`](../operations/DISASTER_RECOVERY.md) — **#24 DONE** (docs); live fill-in residual |
-
----
-
-## Still deferred (post-submit; residual)
-
-| Theme | Note |
-|-------|------|
-| Live concurrency C1–C3 bodies (local Docker) | Util/lock bodies shipped (**HHHHHH**); harness refuses Neon; OPERATOR opt-in run residual |
-| GDPR full **delete** / account erase / RTBF | **#25 DONE** — PII redact + account wipe; money rows retained by design; Lemon/Resend = OPERATOR |
-| Signed / shop-scoped media URLs + malware + `/uploads` retirement | **#27 DONE** for Phase 1; OPERATOR inventory=0 + flag off; Phase 2–3 deferred |
-| Pack vs tier schema collapse | **#12 DONE** for pack-only authz; optional DROP `tier` residual ([`GO_SPOTS_PACK_TIER.md`](./GO_SPOTS_PACK_TIER.md)) |
-| OfferingConfig relational rate de-dup / column promote | **#15 DONE** for Phase 0 version stamp; Phase 1–3 residual ([`GO_SPOTS_OFFERING_CONFIG.md`](./GO_SPOTS_OFFERING_CONFIG.md)) |
-| Auth/finance/reservations service file splits | **#11 DONE** Phase 0+1 (reports/losses); Phases 2–9 residual |
-| Money string JSON wire | Design [`GO_SPOTS_MONEY_WIRE.md`](./GO_SPOTS_MONEY_WIRE.md) |
-| Marketing / branding polish | Beyond #34 route split |
-| Neon PITR live confirm + restore drill | **#24 DONE** for runbook; OPERATOR fill TBD + drill residual |
-| Clear leftover plaintext guest tokens + DROP columns | **#17 DONE** for hash/expiry/revoke/clear CLI; dual-read stop + DROP after verification window; design [`GO_SPOTS_GUEST_TOKEN.md`](./GO_SPOTS_GUEST_TOKEN.md) |
-| Full `next build` / web eslint / hard a11y CI gate | Typecheck + optional smokes + non-blocking `web-a11y-smoke` already |
-
----
-
-*Board: [`AGENT_COORDINATION.md`](./AGENT_COORDINATION.md) · Snapshot: [`OVERNIGHT_STATUS.md`](./OVERNIGHT_STATUS.md) · Status: [`BIBLE_STATUS.md`](./BIBLE_STATUS.md) · Finished: [`BIBLE_FINISHED.md`](./BIBLE_FINISHED.md)*
+- [`docs/privacy/DATA_MAP.md`](../privacy/DATA_MAP.md)  
+- [`docs/privacy/RETENTION_POLICY.md`](../privacy/RETENTION_POLICY.md)

@@ -33,6 +33,9 @@ import {
   financeReportToCsv,
 } from "@/lib/export-report";
 import { useVenueSettings } from "@/lib/venue-settings-context";
+import {
+  formatVenueDayKey,
+} from "@/lib/venue-timezone";
 
 const DAY_OPTS = [1, 7, 30, 90] as const;
 
@@ -43,7 +46,8 @@ export function FinanceReportsPanel({
   venueName?: string;
   liveRefresh?: boolean;
 }) {
-  const { formatMoney, t } = useVenueSettings();
+  const { formatMoney, t, locale } = useVenueSettings();
+  const formatDayKey = (dayKey: string) => formatVenueDayKey(dayKey, locale);
   const [days, setDays] = useState(30);
   const [data, setData] = useState<FinanceAnalytics | null>(null);
   const [salesByItem, setSalesByItem] = useState<SalesByItem[]>([]);
@@ -264,7 +268,7 @@ export function FinanceReportsPanel({
         {showDailyClose && dailyClose ? (
           <section className="rounded-xl border border-amber-400/20 bg-amber-500/5 p-5 print:border-zinc-300 print:bg-white">
             <h2 className="text-sm font-semibold text-white print:text-black">
-              {t("finance.reportDailyClose", { day: dailyClose.day })}
+              {t("finance.reportDailyClose", { day: formatDayKey(dailyClose.day) })}
             </h2>
             <p className="mt-1 text-xs text-zinc-500 print:text-zinc-600">
               {t("finance.reportDailyCloseHint")}
@@ -369,7 +373,7 @@ export function FinanceReportsPanel({
             </h2>
             <VenueLineChart
               data={data.revenueByDay.map((d) => ({
-                label: d.day,
+                label: formatDayKey(d.day),
                 value: Math.round(coerceMoney(d.total) * 100) / 100,
               }))}
               label={t("finance.reportChartRevenue")}
@@ -381,7 +385,7 @@ export function FinanceReportsPanel({
             </h2>
             {data.revenueByDay.length > 1 ? (
               <VenueMultiBarChart
-                labels={data.revenueByDay.map((d) => d.day)}
+                labels={data.revenueByDay.map((d) => formatDayKey(d.day))}
                 datasets={[
                   {
                     label: t("finance.reportChannelMenu"),

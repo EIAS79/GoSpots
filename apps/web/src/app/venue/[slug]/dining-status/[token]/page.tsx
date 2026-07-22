@@ -22,6 +22,7 @@ import {
   fetchPublicDiningReservationStatus,
   type PublicDiningReservationStatus,
 } from "@/lib/public-dining-client";
+import { resolveGuestTokenApiErrorDisplay } from "@/lib/guest-token-error-display";
 import { usePublicPrefs } from "@/lib/public-prefs-context";
 import { useLiveData } from "@/lib/use-live-data";
 
@@ -104,7 +105,11 @@ export default function DiningReservationStatusPage() {
         if (!opts.silent) {
           setData(null);
           setError(
-            e instanceof Error ? e.message : t("guestStatus.dining.loadError"),
+            resolveGuestTokenApiErrorDisplay(
+              e,
+              locale,
+              t("guestStatus.dining.loadError"),
+            ),
           );
         }
         return false;
@@ -112,7 +117,7 @@ export default function DiningReservationStatusPage() {
         if (!opts.silent) setLoading(false);
       }
     },
-    [slug, token, t],
+    [slug, token, t, locale],
   );
 
   useEffect(() => {
@@ -150,7 +155,11 @@ export default function DiningReservationStatusPage() {
       await loadStatus({ silent: true });
     } catch (e) {
       setCancelError(
-        e instanceof Error ? e.message : t("guestStatus.dining.cancelError"),
+        resolveGuestTokenApiErrorDisplay(
+          e,
+          locale,
+          t("guestStatus.dining.cancelError"),
+        ),
       );
     } finally {
       setCancelBusy(false);

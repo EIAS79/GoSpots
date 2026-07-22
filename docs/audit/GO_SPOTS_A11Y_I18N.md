@@ -1,9 +1,12 @@
 # Locora — Accessibility + i18n sweep
 
-**Date:** 2026-07-20 (design) / 2026-07-21 (#29 a11y smoke DONE)  
-**Status:** **Bible #29 DONE** for public axe smoke ship bar (Lane **WWWWW**). **Bible #30 DONE** for en/pl product UI ship bar (Lane **TTTTT**); secondary locales residual.  
+**Date:** 2026-07-20 (design) / 2026-07-21 (#29 a11y smoke DONE) / 2026-07-22 (§29 + §30 residual split)  
+**Status:** **Bible #29 DONE** for public axe smoke ship bar (Lane **WWWWW**); **§29 classification stays PARTIAL** — dashboard/contrast/CI residuals in [`GO_SPOTS_A11Y.md`](./GO_SPOTS_A11Y.md). **Bible #30 DONE** for en/pl product UI ship bar (Lane **TTTTT**); **§30 classification stays PARTIAL** — secondary locales / API / email residuals in [`GO_SPOTS_I18N.md`](./GO_SPOTS_I18N.md).  
 **Audit:** P2/P3 §2.20 — a11y formal-testing bar met for listed public routes; dashboard a11y + contrast polish residual.  
 **Ship timing:** Public axe smoke + en/pl product UI shipped; dashboard focus-trap / hard CI gate / full contrast / de/fr/es/ar still post-submit polish.
+
+> **§29 canonical residual plan:** [`GO_SPOTS_A11Y.md`](./GO_SPOTS_A11Y.md) (shipped vs residual table + Phases 0–4).  
+> **§30 canonical residual plan:** [`GO_SPOTS_I18N.md`](./GO_SPOTS_I18N.md) (shipped vs residual table + Phases 0–4). This doc retains combined a11y/i18n historical context.
 
 ### #29 ship bar (Lane WWWWW + CI follow-up)
 
@@ -145,7 +148,7 @@ Floor maps, gaming/dining layout editors, day agendas — pointer-first. Post-ch
 #### 5. Testing gap
 
 **Shipped (#29):** optional `test:a11y:smoke` on 13 public routes (critical hard-fail; CI `web-a11y-smoke` non-blocking).  
-**Residual:** dashboard/settings/sessions axe; contrast/focus CI gate (`GO_SPOTS_TEST_MATRIX.md`).
+**Residual:** dashboard/settings/sessions axe; contrast/focus CI gate — [`GO_SPOTS_A11Y.md`](./GO_SPOTS_A11Y.md) Phases 0–4 (`GO_SPOTS_TEST_MATRIX.md`).
 
 ---
 
@@ -230,6 +233,8 @@ Claim via `AGENT_COORDINATION.md`; do not parallelize two lanes on `i18n.ts` wit
 
 | Doc / code | Relevance |
 |------------|-----------|
+| [`GO_SPOTS_A11Y.md`](./GO_SPOTS_A11Y.md) | **§29 canonical** shipped vs residual + Phases 0–4 |
+| [`GO_SPOTS_I18N.md`](./GO_SPOTS_I18N.md) | **§30 canonical** shipped vs residual + Phases 0–4 |
 | `GO_SPOTS_DEEP_AUDIT.md` §2.20 | a11y/i18n PARTIALLY |
 | `GO_SPOTS_TEST_MATRIX.md` | i18n / a11y smoke Need |
 | `FOUR_DAY_SHIP_PLAN.md` / `REMAINING_P0_FRIDAY.md` | Sweeps deferred post-submit |

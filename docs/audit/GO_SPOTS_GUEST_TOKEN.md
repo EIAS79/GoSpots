@@ -1,9 +1,108 @@
-# Locora — Guest token dual-read cutover (design only)
+# Locora — Guest token dual-read cutover
 
-**Date:** 2026-07-21  
-**Status:** Expand + clear tooling **shipped** — bible **#17 DONE** (Lane **DDDDDD**). Dual-read stop / DROP plaintext / statusPath mail residual remain operator/post-verification (no apps cutover code before clear soak).  
-**Bible:** P1 **#17** — guest-management tokens need explicit expiry and revocation (hash-at-rest shipped; plaintext dual-read residual).  
-**Ship timing:** Hash + expiry + revoke + clear CLI **already shipped**. **Stop dual-read / DROP plaintext / statusPath mail fix defer until after Friday submit + verification window.**
+**Date:** 2026-07-22 (operator checklist lane **GUEST11-plaintext-docs**)  
+**Status:** Hash + expiry + revoke + clear CLI **shipped** (bible **#17 / §11** ship bar). Dual-read stop, contract DROP, and statusPath mail remain **operator / future app lane** — **no DROP migration folder on disk**.  
+**Bible:** P1 **#17** / **§11** — guest-management tokens need explicit expiry and revocation.  
+**Canonical operator path:** Clear leftover plaintext → soak → hash-only app deploy → contract DROP (future migration lane).
+
+---
+
+## Shipped vs residual (honest)
+
+| Item | State | Evidence |
+|------|--------|----------|
+| Hash-at-rest + expiry + revoke on new issues | **DONE** | `guest-token.util.ts`; migration `20260720250000_guest_token_hash_expiry` |
+| New writes persist hash only (`guestToken = null`) | **DONE** | `guestTokenPersistFields` |
+| Dual-read lookup (hash OR legacy plaintext) | **DONE** (intentional window) | `guestTokenLookupWhere` |
+| Post-verify plaintext clear CLI | **DONE** | `pnpm run clear:guest-plaintext`; `guest-plaintext-clear.util.ts` |
+| Operator runs clear after smoke | **OPERATOR** | [`DEPLOY_CHECKLIST.md`](./DEPLOY_CHECKLIST.md) smoke #3 + post-verify |
+| Stop dual-read (hash-only lookup) | **RESIDUAL** (app lane) | Not deployed; Phase 1 below |
+| DROP `guestToken` columns | **RESIDUAL** (operator + migration lane) | **No migration on disk** — illustrative SQL only |
+| Status-update email `statusPath` for hash-only rows | **RESIDUAL** (optional product) | Phase 3 below; document-omit first |
+
+---
+
+## Operator cutover checklist (Clear → DROP)
+
+Use this after Neon has applied `20260720250000_guest_token_hash_expiry` and production smoke #3 passes. **Do not skip gates** — DROP is irreversible without PITR.
+
+### Gate 0 — Expand migration applied
+
+- [ ] `20260720250000_guest_token_hash_expiry` applied on Neon (pgcrypto backfill + hash indexes).
+- [ ] Smoke #3: new booking status link works (hash path); at least one known legacy plaintext link still resolves (dual-read OK during window).
+
+### Gate 1 — Inventory (read-only SQL)
+
+Run on production (or staging mirror). All **plaintext-without-hash** counts must be **0** (backfill complete):
+
+```sql
+SELECT COUNT(*) FROM "Reservation" WHERE "guestToken" IS NOT NULL AND "guestTokenHash" IS NULL;
+SELECT COUNT(*) FROM "EventRequest" WHERE "guestToken" IS NOT NULL AND "guestTokenHash" IS NULL;
+SELECT COUNT(*) FROM "GuestChat" WHERE "guestToken" IS NOT NULL AND "guestTokenHash" IS NULL;
+```
+
+Record **plaintext+hash** counts (clear targets — may be > 0 until Gate 2):
+
+```sql
+SELECT COUNT(*) FROM "Reservation" WHERE "guestToken" IS NOT NULL AND "guestTokenHash" IS NOT NULL;
+SELECT COUNT(*) FROM "EventRequest" WHERE "guestToken" IS NOT NULL AND "guestTokenHash" IS NOT NULL;
+SELECT COUNT(*) FROM "GuestChat" WHERE "guestToken" IS NOT NULL AND "guestTokenHash" IS NOT NULL;
+```
+
+### Gate 2 — Clear leftover plaintext (operator CLI)
+
+From `apps/api` against the target database:
+
+```bash
+# Default dry-run — JSON counts only, no writes
+pnpm run clear:guest-plaintext -- --dry-run
+
+# Apply only when dry-run counts look expected (nulls guestToken where hash exists)
+pnpm run clear:guest-plaintext -- --apply
+```
+
+**Safe by design:** never touches plaintext-only rows (no hash); does **not** drop columns or change lookup code.
+
+- [ ] Dry-run reviewed (`counted.total` acceptable).
+- [ ] `--apply` run.
+- [ ] Re-run inventory: all three **plaintext+hash** counts → **0**.
+- [ ] Spot-check: guest who only has the **create** email link can still open status (lookup uses hash of presented token).
+
+### Gate 3 — Soak (recommended ≥ 7 days)
+
+- [ ] No unexpected “status link broken” support tickets after clear.
+- [ ] Cancel / NO_SHOW still revokes tokens; expired tokens rejected.
+- [ ] Document dual-read as closed **only after** Gate 4 app deploy — until then legacy plaintext URLs may still match if any plaintext-only row existed (should be 0 post-backfill).
+
+### Gate 4 — Stop dual-read (future **app** lane; not in repo yet)
+
+Deploy an API release that narrows `guestTokenLookupWhere` to **hash-only** (no `OR guestToken`). Jest dual-read specs flip accordingly.
+
+- [ ] App deployed; smoke #3 re-run with hash links only.
+- [ ] Confirm no production dependency on DB plaintext column for lookup.
+
+### Gate 5 — Contract DROP (future **migration** lane; **not on disk**)
+
+**Preconditions:** Gate 4 live; Gate 2 counts = 0; optional Gate 3 soak complete.
+
+There is **no** `drop_guest_token_plaintext` migration folder in `apps/api/prisma/migrations/` today. When a dedicated lane adds one, it should drop `guestToken` on all three models only after Gate 4:
+
+```sql
+-- Illustrative only — do not apply manually without a reviewed Prisma migration
+ALTER TABLE "Reservation" DROP COLUMN "guestToken";
+ALTER TABLE "EventRequest" DROP COLUMN "guestToken";
+ALTER TABLE "GuestChat" DROP COLUMN "guestToken";
+```
+
+- [ ] Migration authored + reviewed (Prisma schema removes `guestToken` from Reservation / EventRequest / GuestChat).
+- [ ] Neon `migrate deploy` during maintenance window.
+- [ ] Post-DROP: `pnpm run clear:guest-plaintext` should report `counted.total = 0` (tool becomes no-op).
+
+**Rollback:** forward-fix only after DROP — raw tokens cannot be reconstructed. Prefer Neon PITR / branch if premature. **Forbidden:** `prisma migrate reset`.
+
+### Gate 6 — Status email residual (optional; does not block DROP)
+
+Hash-only rows omit `statusPath` in status/cancel mails (guest keeps create-email link). See Phase 3 below. Ship DROP with **Option A — document omit** unless product adds resend/rotate.
 
 ---
 
@@ -126,7 +225,7 @@ Prefer **≥ 7 days** after clear with no “old link broke unexpectedly” tick
 
 ### Phase 2 — Contract DROP (migration after Phase 1 live)
 
-Illustrative — **do not add this folder before Phase 1 is live in prod.**
+**No migration folder on disk today.** See **Gate 5** in the operator checklist above. When a lane adds `drop_guest_token_plaintext`, use:
 
 ```sql
 -- 20YYMMDDHHMMSS_drop_guest_token_plaintext

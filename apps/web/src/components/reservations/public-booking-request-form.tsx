@@ -25,8 +25,11 @@ import { usePublicPrefs } from "@/lib/public-prefs-context";
 import {
   combineLocalDateTime,
   defaultEventTimes,
-  todayDateInput,
 } from "@/lib/seating-event-datetime";
+import {
+  resolveVenueTimeZone,
+  venueDayKey,
+} from "@/lib/venue-timezone";
 import {
   SEATING_ZONES,
   type SeatingZone,
@@ -56,6 +59,10 @@ type PublicBookingRequestFormProps = {
   title?: string;
   description?: string;
   className?: string;
+  /** Venue IANA timezone from `PublicVenue.timezone`. */
+  timezone?: string;
+  /** Venue locale from `PublicVenue.locale` (fallback when IANA unset). */
+  venueLocale?: string;
 };
 
 const MODE_ICONS: Record<BookingFormMode, typeof CalendarCheck> = {
@@ -73,8 +80,14 @@ export function PublicBookingRequestForm({
   title,
   description,
   className,
+  timezone,
+  venueLocale,
 }: PublicBookingRequestFormProps) {
-  const { t } = usePublicPrefs();
+  const { t, locale } = usePublicPrefs();
+  const venueTimeZone = resolveVenueTimeZone({
+    timezone,
+    locale: venueLocale ?? locale,
+  });
   const Icon = MODE_ICONS[mode];
   const modeTitle =
     mode === "TABLE"
@@ -106,7 +119,7 @@ export function PublicBookingRequestForm({
   const [guestEmail, setGuestEmail] = useState("");
   const [guestPhone, setGuestPhone] = useState("");
   const [partySize, setPartySize] = useState(mode === "TABLE" ? 4 : mode === "EVENT" ? 12 : 2);
-  const [eventDate, setEventDate] = useState(todayDateInput());
+  const [eventDate, setEventDate] = useState(() => venueDayKey(venueTimeZone));
   const [eventStartTime, setEventStartTime] = useState(defaultStartTime);
   const [eventEndTime, setEventEndTime] = useState(defaultEndTime);
   const [zone, setZone] = useState<SeatingZone>("INDOOR");

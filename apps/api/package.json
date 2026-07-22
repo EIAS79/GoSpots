@@ -6,7 +6,7 @@
   "private": true,
   "license": "UNLICENSED",
   "engines": {
-    "node": "20.x"
+    "node": "24.x"
   },
   "scripts": {
     "build": "nest build",
@@ -22,10 +22,14 @@
     "detect:resource-dining-drift": "tsx scripts/detect-resource-dining-drift.ts",
     "clear:guest-plaintext": "tsx scripts/clear-guest-plaintext.ts",
     "backfill:legacy-addon-tier": "tsx scripts/backfill-legacy-addon-tier.ts",
+    "backfill:ledger": "tsx scripts/backfill-ledger.ts",
     "inventory:legacy-uploads": "tsx scripts/inventory-legacy-uploads.ts",
     "inventory:offering-config": "tsx scripts/inventory-offering-config.ts",
     "migrate:legacy-uploads": "tsx scripts/migrate-legacy-uploads.ts",
     "verify:migrations": "tsx scripts/verify-migrations.ts",
+    "perf:smoke": "node scripts/perf-smoke.mjs",
+    "perf:k6": "k6 run scripts/perf-read-smoke.js",
+    "perf:k6:write": "k6 run scripts/perf-write-smoke.js",
     "start:debug": "nest start --debug --watch",
     "start:prod": "node dist/main",
     "migrate:deploy": "prisma migrate deploy",

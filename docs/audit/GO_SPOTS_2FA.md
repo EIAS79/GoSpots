@@ -1,7 +1,7 @@
 # Locora — Owner 2FA
 
 **Date:** 2026-07-20 (design) · **Shipped:** 2026-07-21 (Lane **AAAAAA**)  
-**Status:** **DONE** for owner TOTP + recovery codes + login challenge (API + web). Staff MFA / WebAuthn deferred.  
+**Status:** **DONE** for owner TOTP + recovery codes + login challenge (API + web). Staff MFA / WebAuthn / org require-MFA deferred — phased plan: [`GO_SPOTS_MFA.md`](./GO_SPOTS_MFA.md).  
 **Audit:** P1 §2.9  
 **Operator:** Neon `migrate deploy` of `20260721080000_user_mfa_totp` (never from workstation prod `.env`).
 
@@ -38,7 +38,7 @@ Web sessions panel (Lane O) is complementary UX — **not** blocked on 2FA, and 
 | Lockout | `failedLogins` / `lockedUntil` on `User` |
 | Sessions | Multi-session for owners; staff login historically revokes prior sessions on `issueTokens` |
 | Secrets at rest | Refresh = SHA-256 hash; password = bcrypt/argon style hash; guest tokens hashed (separate lane) |
-| Mail | Transactional (`MailService` + outbox stub) — password reset for owners; **not** a durable OTP pipeline |
+| Mail | Transactional (`MailService` + durable outbox) — password reset for owners; **not** a per-login OTP pipeline |
 | Grep | No `2fa` / `totp` / `mfa` / recovery-code paths in apps |
 
 Guests and public status tokens are **out of scope** for MFA (opaque guest tokens, not owner accounts).
@@ -65,7 +65,7 @@ Optional second factor for **venue owners** so a leaked password alone cannot co
 |-----------|--------------------------|---------------|
 | Security | Second factor independent of inbox; phishing-resistant if user checks issuer/account | Same channel as password reset → **not** a strong second factor if mailbox is compromised |
 | UX | QR once at enroll; 6-digit code at login | No app install; depends on mail latency / spam |
-| Ops cost | No per-login mail; works offline | Every login = send; couples MFA to mail deliverability and outbox durability (`GO_SPOTS_MAIL_OUTBOX.md` still stub) |
+| Ops cost | No per-login mail; works offline | Every login = send; couples MFA to mail deliverability and outbox durability (email OTP deferred — [`GO_SPOTS_MAIL_OUTBOX.md`](./GO_SPOTS_MAIL_OUTBOX.md) prod proof still operator) |
 | Abuse | Rate-limit verify attempts; reuse existing lockout | Rate-limit + inbox flooding risk; OTP brute-force windows |
 | Fit with Locora | Owners already use real emails for reset; staff emails are **not** real inboxes | Email OTP for staff is especially weak (synthetic addresses) |
 | Schema / deps | Secret (encrypted/hashed at rest) + recovery codes; small lib (`otplib` / `otpauth`) | Challenge table or cache + TTL; mail templates |
@@ -232,6 +232,7 @@ Verify commands when coded (not this lane): `tsc` + `nest build` + focused jest 
 
 ## Related
 
+- Residual phased plan (staff / WebAuthn / org policy) — [`GO_SPOTS_MFA.md`](./GO_SPOTS_MFA.md)  
 - Audit §2.9 — `GO_SPOTS_DEEP_AUDIT.md`  
 - Session API — Lane J (`GO_SPOTS_IMPLEMENTATION_REPORT.md`); web UI Lane O  
 - Fix plan Phase E “(Later) optional owner 2FA” — `GO_SPOTS_FIX_PLAN.md`  

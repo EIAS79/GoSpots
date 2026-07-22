@@ -2,7 +2,9 @@
 
 import { Loader2, Trash2, UserX, X } from "lucide-react";
 import { useMemo, useState } from "react";
+import { ApiError, resolveApiErrorDisplay } from "@/lib/api";
 import { cn } from "@/lib/cn";
+import { publishLiveEvent } from "@/lib/live-events";
 import { ConfirmDialog } from "@/components/ui/confirm-dialog";
 import { FeedbackBanner } from "@/components/ui/feedback-banner";
 import { ModalPortal } from "@/components/ui/modal-portal";
@@ -24,6 +26,12 @@ import { bookingCollectsPartySize } from "@/lib/booking-unit-kind";
 import type { ResourceType } from "@/lib/resource-types";
 import { coerceMoney } from "@/lib/money";
 import { useVenueSettings } from "@/lib/venue-settings-context";
+
+const BOOKING_OVERLAP_CODES = new Set([
+  "RESERVATION_OVERLAP",
+  "WALK_IN_OVERLAP",
+  "WALK_IN_ACTIVE",
+]);
 
 export function GameBillingEditDialog({
   item,
@@ -173,7 +181,17 @@ export function GameBillingEditDialog({
       await onSaved();
       onClose();
     } catch (e) {
-      setFeedback(e instanceof Error ? e.message : t("finance.playSaveFailed"));
+      setFeedback(
+        resolveApiErrorDisplay(
+          e,
+          { RESERVATION_OVERLAP: t("reservationDialog.overlapUnit") },
+          t("finance.playSaveFailed"),
+        ),
+      );
+      if (e instanceof ApiError && BOOKING_OVERLAP_CODES.has(e.code ?? "")) {
+        publishLiveEvent({ section: "reservation" });
+        void onSaved();
+      }
     } finally {
       setSaving(false);
     }

@@ -1,4 +1,5 @@
 import {
+  BadRequestException,
   ConflictException,
   ForbiddenException,
   NotFoundException,
@@ -253,6 +254,62 @@ describe('GuestCheckService', () => {
     } as never;
     await expect(svc.create(staff, {})).rejects.toBeInstanceOf(
       ForbiddenException,
+    );
+  });
+
+  it('settle marks OPEN → SETTLED when children are closed', async () => {
+    const settled = baseCheck({
+      status: 'SETTLED',
+      settledAt: new Date('2026-07-21T12:00:00Z'),
+      paymentMethod: 'CARD',
+    });
+    const prisma = makePrisma({
+      $transaction: jest.fn(async (fn: (tx: unknown) => Promise<unknown>) => {
+        const tx = {
+          guestCheck: {
+            updateMany: jest.fn().mockResolvedValue({ count: 1 }),
+            findFirst: jest.fn().mockResolvedValue(settled),
+          },
+        };
+        return fn(tx);
+      }),
+    });
+    const audit = makeAudit();
+    const svc = new GuestCheckService(prisma as never, audit as never);
+    const out = await svc.settle(actor, 'gc_1', { paymentMethod: 'CARD' });
+    expect(out.status).toBe('SETTLED');
+    expect(audit.record).toHaveBeenCalledWith(
+      actor,
+      expect.objectContaining({ action: 'guest_check.settle' }),
+    );
+  });
+
+  it('settle rejects when attached order is still PENDING', async () => {
+    const withPending = baseCheck({
+      shopOrders: [
+        {
+          id: 'ord_pending',
+          status: 'PENDING',
+          total: new Prisma.Decimal('10.0000'),
+          label: 'Food',
+          reservationFee: null,
+          guestCount: 1,
+          createdAt: new Date(),
+          completedAt: null,
+        },
+      ],
+    });
+    const prisma = makePrisma({
+      guestCheck: {
+        findFirst: jest.fn().mockResolvedValue(withPending),
+        findMany: jest.fn(),
+        create: jest.fn(),
+        updateMany: jest.fn(),
+      },
+    });
+    const svc = new GuestCheckService(prisma as never, makeAudit() as never);
+    await expect(svc.settle(actor, 'gc_1', {})).rejects.toBeInstanceOf(
+      BadRequestException,
     );
   });
 });

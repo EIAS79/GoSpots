@@ -83,6 +83,8 @@ const en: DictTree = {
     whatYouCanDo: "What you can do here",
     aboutSection: "About this section",
     viewOnly: "View-only — ask your admin for edit access.",
+    permissionDenied: "You don't have permission to perform this action.",
+    venueAccessDenied: "You don't have access to this venue.",
   },
   subscription: {
     title: "Subscription & features",
@@ -1121,6 +1123,7 @@ const en: DictTree = {
     saveSectionFailed: "Could not save section.",
     saveItemFailed: "Could not save item.",
     uploadSectionFailed: "Could not upload section photo.",
+    uploadSectionPartial: "Section saved but photo upload failed.",
     removeSectionFailed: "Could not remove section.",
     removeItemFailed: "Could not remove item.",
     removeSectionsTitle: "Remove sections?",
@@ -1252,6 +1255,8 @@ const en: DictTree = {
     sessionExpired: "Session expired. Refresh the page or sign in again.",
     loadFailed: "Could not load orders.",
     saveTicketFailed: "Could not save ticket.",
+    stockInsufficient:
+      "Not enough stock for that quantity — refresh the menu and try again.",
     requestFailed: "Request failed.",
     topSellers: "Top sellers · 30 days",
     title: "Orders",
@@ -1361,6 +1366,7 @@ const en: DictTree = {
     loadFailed: "Could not load open tabs.",
     createFailed: "Could not open a tab.",
     voidFailed: "Could not void this tab.",
+    settleFailed: "Could not settle this tab.",
     attachFailed: "Could not attach that item.",
     detachFailed: "Could not detach that item.",
     refresh: "Refresh",
@@ -1388,8 +1394,11 @@ const en: DictTree = {
     void: "Void tab",
     voidConfirm:
       "Void this tab and detach all children? Existing bills stay as they are.",
+    settle: "Settle tab",
+    settleConfirm:
+      "Settle this tab? All attached orders/play/reservations must already be completed or billed. This does not charge again.",
     optionAHint:
-      "Children still complete and bill via Orders / Game billing / Reservations. Single settle is not enabled yet.",
+      "Complete and bill children via Orders / Game billing / Reservations first, then settle the tab. Settle does not post a second charge.",
   },
   /** Owner ops: mail outbox dead letters (Bible #22) */
   mailOutbox: {
@@ -1894,6 +1903,18 @@ const en: DictTree = {
     noAccess: "You don't have access to this venue dashboard.",
     signInOther: "Sign in with another account",
   },
+  seating: {
+    advisory: {
+      title: "Advisory seating counters",
+      subtitlePrefix: "Mirrored totals follow",
+      subtitleSuffix: " — edit bookable tables there; counts here are staff reference only.",
+      mirroredBadge: "Mirrored from layout",
+      tablesFree: "{available} / {total} tables free",
+      seatsFree: "{available} / {total} seats free",
+      loadFailed: "Could not load advisory seating summary.",
+      empty: "No advisory seating groups yet — add tables in Dining layout.",
+    },
+  },
   sessionsPage: {
     tabDining: "Dining bookings",
     tabGaming: "Game bookings",
@@ -2013,6 +2034,9 @@ const en: DictTree = {
     declinePlaceholder: "e.g. Date fully booked, minimum party size is 15…",
     declineRequestBtn: "Decline request",
     declinedNote: "Declined: {note}",
+    floorBlockLabel: "Event floor block",
+    floorBlockHint:
+      "Advisory hold only — not a bookable layout table. Add real tables under Dining layout if needed.",
     legacyFloorBlockCreated:
       "Legacy floor block created — add tables in Dining layout if needed.",
     reserveTablesHint:
@@ -2626,6 +2650,8 @@ const pl: DictTree = {
     whatYouCanDo: "Co możesz tu zrobić",
     aboutSection: "O tej sekcji",
     viewOnly: "Tylko podgląd — poproś administratora o dostęp do edycji.",
+    permissionDenied: "Nie masz uprawnień do wykonania tej czynności.",
+    venueAccessDenied: "Nie masz dostępu do tego lokalu.",
   },
   subscription: {
     title: "Subskrypcja i funkcje",
@@ -3660,6 +3686,7 @@ const pl: DictTree = {
     saveSectionFailed: "Nie udało się zapisać sekcji.",
     saveItemFailed: "Nie udało się zapisać pozycji.",
     uploadSectionFailed: "Nie udało się przesłać zdjęcia sekcji.",
+    uploadSectionPartial: "Sekcja zapisana, ale przesyłanie zdjęcia nie powiodło się.",
     removeSectionFailed: "Nie udało się usunąć sekcji.",
     removeItemFailed: "Nie udało się usunąć pozycji.",
     removeSectionsTitle: "Usunąć sekcje?",
@@ -3790,6 +3817,8 @@ const pl: DictTree = {
     sessionExpired: "Sesja wygasła. Odśwież stronę lub zaloguj się ponownie.",
     loadFailed: "Nie udało się wczytać zamówień.",
     saveTicketFailed: "Nie udało się zapisać rachunku.",
+    stockInsufficient:
+      "Za mało na stanie dla tej ilości — odśwież menu i spróbuj ponownie.",
     requestFailed: "Żądanie nie powiodło się.",
     topSellers: "Bestsellery · 30 dni",
     title: "Zamówienia",
@@ -3900,6 +3929,7 @@ const pl: DictTree = {
     loadFailed: "Nie udało się wczytać otwartych rachunków.",
     createFailed: "Nie udało się otworzyć rachunku.",
     voidFailed: "Nie udało się unieważnić rachunku.",
+    settleFailed: "Nie udało się rozliczyć rachunku.",
     attachFailed: "Nie udało się dołączyć pozycji.",
     detachFailed: "Nie udało się odłączyć pozycji.",
     refresh: "Odśwież",
@@ -3928,8 +3958,11 @@ const pl: DictTree = {
     void: "Unieważnij rachunek",
     voidConfirm:
       "Unieważnić ten rachunek i odłączyć wszystkie elementy? Istniejące rozliczenia pozostają bez zmian.",
+    settle: "Rozlicz rachunek",
+    settleConfirm:
+      "Rozliczyć ten rachunek? Dołączone zamówienia/gry/rezerwacje muszą już być zakończone lub opłacone. To nie pobiera ponownie opłaty.",
     optionAHint:
-      "Elementy nadal zamykane są przez Zamówienia / Rozliczenia gier / Rezerwacje. Jedno rozliczenie nie jest jeszcze włączone.",
+      "Najpierw zamknij i rozlicz elementy przez Zamówienia / Rozliczenia gier / Rezerwacje, potem rozlicz rachunek. Rozliczenie nie księguje drugiej opłaty.",
   },
   /** Owner ops: mail outbox dead letters (Bible #22) */
   mailOutbox: {
@@ -4438,6 +4471,19 @@ const pl: DictTree = {
     noAccess: "Nie masz dostępu do tego panelu lokalu.",
     signInOther: "Zaloguj się na inne konto",
   },
+  seating: {
+    advisory: {
+      title: "Informacyjne liczniki miejsc",
+      subtitlePrefix: "Sumy lustrzane pochodzą z",
+      subtitleSuffix:
+        " — edytuj rezerwowalne stoliki tam; liczniki tutaj służą personelowi tylko do podglądu.",
+      mirroredBadge: "Lustrzane z układu",
+      tablesFree: "{available} / {total} wolnych stolików",
+      seatsFree: "{available} / {total} wolnych miejsc",
+      loadFailed: "Nie udało się wczytać podsumowania miejsc.",
+      empty: "Brak grup miejsc — dodaj stoliki w układzie Dining.",
+    },
+  },
   sessionsPage: {
     tabDining: "Rezerwacje stolików",
     tabGaming: "Rezerwacje gier",
@@ -4560,6 +4606,9 @@ const pl: DictTree = {
       "np. Termin w pełni zarezerwowany, minimalna liczba osób to 15…",
     declineRequestBtn: "Odmów zgłoszenia",
     declinedNote: "Odmowa: {note}",
+    floorBlockLabel: "Blokada wydarzenia",
+    floorBlockHint:
+      "Tylko informacyjna rezerwa — to nie jest rezerwowalny stolik z układu. Dodaj prawdziwe stoliki w Układzie dining.",
     legacyFloorBlockCreated:
       "Utworzono klasyczną blokadę — dodaj stoliki w Układzie sali, jeśli potrzebne.",
     reserveTablesHint:

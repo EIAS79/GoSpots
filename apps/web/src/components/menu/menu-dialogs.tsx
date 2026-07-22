@@ -20,6 +20,17 @@ type MenuT = (
   vars?: Record<string, string | number>,
 ) => string;
 
+function notifyPartialFailure(
+  message: string,
+  onPartialFailure?: (message: string) => void,
+) {
+  if (onPartialFailure) {
+    onPartialFailure(message);
+  } else {
+    window.alert(message);
+  }
+}
+
 function DialogShell({
   title,
   onClose,
@@ -115,6 +126,7 @@ export function SectionDialog({
   onClose,
   onSave,
   onSaved,
+  onPartialFailure,
   onDelete,
   onUploadImage,
   onClearImage,
@@ -130,6 +142,7 @@ export function SectionDialog({
     availableDays: string;
   }) => Promise<MenuSection | void>;
   onSaved?: () => void;
+  onPartialFailure?: (message: string) => void;
   onDelete?: () => void | Promise<void>;
   onUploadImage?: (sectionId: string, file: File) => Promise<void>;
   onClearImage?: () => Promise<void>;
@@ -201,10 +214,11 @@ export function SectionDialog({
                 await onUploadImage(saved.id, pendingImage);
                 setPendingImage(null);
               } catch (err) {
-                window.alert(
+                notifyPartialFailure(
                   err instanceof Error
                     ? err.message
-                    : t("menu.uploadSectionFailed"),
+                    : t("menu.uploadSectionPartial"),
+                  onPartialFailure,
                 );
                 onSaved?.();
                 return;
@@ -453,6 +467,7 @@ export function ItemDialog({
   onClose,
   onSave,
   onSaved,
+  onPartialFailure,
   onDelete,
   onUploadImage,
   saving,
@@ -463,6 +478,7 @@ export function ItemDialog({
   onClose: () => void;
   onSave: (body: Record<string, unknown>) => Promise<MenuItem | void>;
   onSaved?: () => void;
+  onPartialFailure?: (message: string) => void;
   onDelete?: () => void | Promise<void>;
   onUploadImage: (
     itemId: string,
@@ -596,10 +612,11 @@ export function ItemDialog({
                 try {
                   await Promise.all(jobs);
                 } catch (err) {
-                  window.alert(
+                  notifyPartialFailure(
                     err instanceof Error
                       ? err.message
                       : t("menu.photoUploadPartial"),
+                    onPartialFailure,
                   );
                 } finally {
                   setUploadingImage(false);

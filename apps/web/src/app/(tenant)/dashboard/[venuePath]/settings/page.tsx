@@ -7,6 +7,10 @@ import { MailOutboxPanel } from "@/components/settings/mail-outbox-panel";
 import { OpsOutageRunbookPanel } from "@/components/settings/ops-outage-runbook-panel";
 import { ShopSettingsPanel } from "@/components/settings/shop-settings-panel";
 import { hasPermission } from "@/lib/auth-client";
+import {
+  isStaffMfaEligibleRole,
+  isStaffMfaOptInEnabled,
+} from "@/lib/staff-mfa";
 import { useAuth } from "@/lib/use-auth";
 import { useCurrentMembership } from "@/lib/use-current-membership";
 import { useDashboardGuide } from "@/lib/use-dashboard-guide";
@@ -18,6 +22,15 @@ export default function SettingsPage() {
   const guide = useDashboardGuide("settings");
   const t = useVenueSettingsOptional()?.t;
   const isOwner = membership?.role === "OWNER";
+  const showOwnerMfa =
+    state.status === "authed" &&
+    state.user.accountType === "VENUE_OWNER" &&
+    isOwner;
+  const showStaffMfa =
+    state.status === "authed" &&
+    state.user.accountType === "VENUE_STAFF" &&
+    isStaffMfaOptInEnabled() &&
+    isStaffMfaEligibleRole(membership?.role);
   const canWrite =
     state.status === "authed" &&
     (isOwner || hasPermission(membership?.permissions ?? "", "shop.manage"));
@@ -36,7 +49,7 @@ export default function SettingsPage() {
       ) : null}
       <div className="space-y-6">
         <ShopSettingsPanel canWrite={canWrite} />
-        {state.status === "authed" && isOwner ? <AuthMfaPanel /> : null}
+        {showOwnerMfa || showStaffMfa ? <AuthMfaPanel /> : null}
         {state.status === "authed" ? <AuthSessionsPanel /> : null}
         {state.status === "authed" && isOwner ? <MailOutboxPanel /> : null}
         {state.status === "authed" && isOwner ? (

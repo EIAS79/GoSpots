@@ -51,6 +51,8 @@ export function PublicGamingFloorExplorer({
   highlightedUnitId,
   onBookUnit,
   onInspectBlocked,
+  timezone,
+  venueLocale,
 }: {
   category: ScheduleCategory;
   mapLabel?: string;
@@ -65,6 +67,8 @@ export function PublicGamingFloorExplorer({
   highlightedUnitId?: string | null;
   onBookUnit: (unit: ScheduleUnit) => void;
   onInspectBlocked?: (unitId: string, booking: ScheduleBooking) => void;
+  timezone?: string;
+  venueLocale?: string;
 }) {
   const { t } = usePublicPrefs();
   const [activeFloor, setActiveFloor] = useState(1);
@@ -211,6 +215,8 @@ export function PublicGamingFloorExplorer({
           onWindowStartTimeChange={onWindowStartTimeChange}
           onWindowEndTimeChange={onWindowEndTimeChange}
           windowError={windowError}
+          timezone={timezone}
+          venueLocale={venueLocale}
         />
         <p className="px-6 py-12 text-center text-sm text-zinc-500">
           {t("venuePage.floor.noStations")}
@@ -231,6 +237,8 @@ export function PublicGamingFloorExplorer({
         onWindowEndTimeChange={onWindowEndTimeChange}
         windowError={windowError}
         floorTabs={isLaneMap ? undefined : floorTabs}
+        timezone={timezone}
+        venueLocale={venueLocale}
       />
 
       {windowError ? (

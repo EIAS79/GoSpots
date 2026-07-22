@@ -1,4 +1,5 @@
-import { ForbiddenException } from '@nestjs/common';
+import { ApiDomainErrorCode } from './api-error.codes';
+import { apiForbiddenException } from './api-error.util';
 import { classifyVenuePath } from './dashboard-path';
 import type { JwtAccessPayload } from '../modules/auth/auth.service';
 import { PrismaService } from '../prisma/prisma.service';
@@ -12,14 +13,18 @@ export async function resolveVenueShopId(
   if (actor.shopId) return actor.shopId;
 
   if (!venuePath?.trim()) {
-    throw new ForbiddenException(
+    throw apiForbiddenException(
+      ApiDomainErrorCode.VENUE_ACCESS_DENIED,
       'Open a venue dashboard first, then try again.',
     );
   }
 
   const ref = classifyVenuePath(venuePath);
   if (!ref) {
-    throw new ForbiddenException('Invalid venue dashboard path.');
+    throw apiForbiddenException(
+      ApiDomainErrorCode.VENUE_ACCESS_DENIED,
+      'Invalid venue dashboard path.',
+    );
   }
 
   // Phase 3: always slug-only (legacy slug--key strips to slug; key not verified).
@@ -28,7 +33,10 @@ export async function resolveVenueShopId(
     select: { id: true },
   });
   if (!shop) {
-    throw new ForbiddenException('Venue not found.');
+    throw apiForbiddenException(
+      ApiDomainErrorCode.VENUE_ACCESS_DENIED,
+      'Venue not found.',
+    );
   }
 
   if (actor.sysRole === 'SUPER_ADMIN') {
@@ -40,7 +48,10 @@ export async function resolveVenueShopId(
     select: { id: true },
   });
   if (!membership) {
-    throw new ForbiddenException('You do not have access to this venue.');
+    throw apiForbiddenException(
+      ApiDomainErrorCode.VENUE_ACCESS_DENIED,
+      'You do not have access to this venue.',
+    );
   }
 
   return shop.id;

@@ -26,14 +26,18 @@ import { useDashboardGuide } from "@/lib/use-dashboard-guide";
 import { useLiveData } from "@/lib/use-live-data";
 import { useVenueAccess } from "@/lib/use-venue-access";
 import { useVenueSettings } from "@/lib/venue-settings-context";
-
-function todayDateInput() {
-  return new Date().toISOString().slice(0, 10);
-}
+import {
+  resolveVenueTimeZone,
+  venueDayKey,
+} from "@/lib/venue-timezone";
 
 export default function DiningPage() {
   const { state } = useAuth();
-  const { formatMoney, t } = useVenueSettings();
+  const { formatMoney, t, shop, locale } = useVenueSettings();
+  const venueTimeZone = resolveVenueTimeZone({
+    timezone: shop?.timezone,
+    locale: shop?.locale ?? locale,
+  });
   const guide = useDashboardGuide("dining");
   const access = useVenueAccess();
   const [menu, setMenu] = useState<GamingMenuResponse | null>(null);
@@ -64,7 +68,7 @@ export default function DiningPage() {
     try {
       const [menuData, scheduleData] = await Promise.all([
         fetchDiningMenu(),
-        fetchDaySchedule(todayDateInput()),
+        fetchDaySchedule(venueDayKey(venueTimeZone)),
       ]);
       setMenu(menuData);
       setSchedule(scheduleData);
@@ -77,7 +81,7 @@ export default function DiningPage() {
     } finally {
       if (!opts.silent) setLoading(false);
     }
-  }, [t]);
+  }, [t, venueTimeZone]);
 
   useEffect(() => {
     void load();

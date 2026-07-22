@@ -2,7 +2,8 @@
 
 **Date:** 2026-07-20  
 **Status:** Binding for dashboard KPIs, `/finance/analytics`, CSV export, and top-items rollups.  
-**Not in scope:** append-only `LedgerEntry` rewrite (post-ship).
+**Not in scope:** append-only `LedgerEntry` rewrite (post-ship).  
+**Ledger cutover:** Phase 1–4 code is shipped; **`LEDGER_READS` defaults off** — this contract remains the active read path until operator completes Gates 0–7 in [`GO_SPOTS_LEDGER.md`](./GO_SPOTS_LEDGER.md). When `LEDGER_READS=on`, analytics prefer ledger SALE-by-channel; four channels map 1:1 to `LedgerChannel` enum.
 
 ---
 
@@ -49,4 +50,4 @@ Gross **venue revenue** for a time window is the sum of **four mutually exclusiv
 
 - No FK between `ShopOrder` and `Reservation` / `Transaction` — duplicate staff entry across channels cannot be auto-deduped.
 - No currency stamp per row — shop-level currency assumed → **M6 stamps shipped** (row stamp + shop fallback; KPIs in shop currency; `revenueByCurrency` for mixed eras). See [`GO_SPOTS_CURRENCY_STAMPS.md`](./GO_SPOTS_CURRENCY_STAMPS.md).
-- Full ledger + single posting target remains the long-term fix (`GO_SPOTS_MIGRATION_PLAN.md` M3).
+- Full ledger + single posting target remains the long-term fix (`GO_SPOTS_MIGRATION_PLAN.md` M3). **Operator path:** dual-write soak → backfill → optional reads — [`GO_SPOTS_LEDGER.md`](./GO_SPOTS_LEDGER.md) Gates 0–7.

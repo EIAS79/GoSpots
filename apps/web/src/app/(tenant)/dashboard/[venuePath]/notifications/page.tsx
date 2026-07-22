@@ -80,6 +80,8 @@ function NotificationItem({
   hrefBase,
   showCheckboxes,
   isArchivedView,
+  locale,
+  venueTimeZone,
   t,
 }: {
   row: NotificationRow;
@@ -90,6 +92,8 @@ function NotificationItem({
   hrefBase: string;
   showCheckboxes: boolean;
   isArchivedView: boolean;
+  locale: string;
+  venueTimeZone?: string;
   t: NotifT;
 }) {
   const Icon = TYPE_ICON[row.type] ?? Bell;
@@ -133,7 +137,9 @@ function NotificationItem({
           ) : null}
         </div>
         <p className="mt-0.5 text-sm leading-snug text-zinc-500">{row.body}</p>
-        <p className="mt-1.5 text-xs text-zinc-600">{formatDate(row.createdAt)}</p>
+        <p className="mt-1.5 text-xs text-zinc-600">
+          {formatDate(row.createdAt, locale, venueTimeZone)}
+        </p>
         {!isArchivedView ? (
           <div className="mt-2 flex gap-2">
             {unread ? (
@@ -198,6 +204,8 @@ export default function NotificationsPage() {
   const guide = useDashboardGuide("notifications");
   const vs = useVenueSettingsOptional();
   const t: NotifT = vs?.t ?? ((key) => key);
+  const locale = vs?.locale ?? "en";
+  const venueTimeZone = vs?.shop?.timezone ?? undefined;
   const { state } = useAuth();
   const membership = useCurrentMembership();
   const access = useVenueAccess();
@@ -685,6 +693,8 @@ export default function NotificationsPage() {
                 hrefBase={hrefBase}
                 showCheckboxes={showCheckboxes}
                 isArchivedView={isArchivedView}
+                locale={locale}
+                venueTimeZone={venueTimeZone}
                 t={t}
               />
             </li>

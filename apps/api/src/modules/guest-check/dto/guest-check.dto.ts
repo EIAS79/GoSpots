@@ -107,3 +107,16 @@ export class DetachGuestCheckDto {
   @MinLength(1)
   reservationId?: string;
 }
+
+/** Phase 3 close-out: mark OPEN → SETTLED after children are already billed/completed. */
+export class SettleGuestCheckDto {
+  @IsOptional()
+  @IsString()
+  @MaxLength(40)
+  paymentMethod?: string;
+
+  @IsOptional()
+  @IsString()
+  @MaxLength(2000)
+  note?: string;
+}

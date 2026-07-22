@@ -1,8 +1,14 @@
 import { ForbiddenException } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { Reflector } from '@nestjs/core';
+import { ApiDomainErrorCode } from '../../../common/api-error.codes';
 import { CSRF_COOKIE } from '../../../common/csrf.constants';
 import { CsrfGuard } from './csrf.guard';
+
+function expectForbiddenWithCode(err: unknown, code: string) {
+  expect(err).toBeInstanceOf(ForbiddenException);
+  expect((err as ForbiddenException).getResponse()).toMatchObject({ code });
+}
 
 function mockCtx(req: {
   method: string;
@@ -69,28 +75,34 @@ describe('CsrfGuard', () => {
 
   it('rejects cookie session mutation with missing CSRF header', () => {
     const guard = build();
-    expect(() =>
+    try {
       guard.canActivate(
         mockCtx({
           method: 'POST',
           cookies: { access_token: 'a', [CSRF_COOKIE]: 'tok' },
           headers: {},
         }),
-      ),
-    ).toThrow(ForbiddenException);
+      );
+      throw new Error('expected ForbiddenException');
+    } catch (err) {
+      expectForbiddenWithCode(err, ApiDomainErrorCode.CSRF_INVALID);
+    }
   });
 
   it('rejects cookie session mutation with invalid CSRF header', () => {
     const guard = build();
-    expect(() =>
+    try {
       guard.canActivate(
         mockCtx({
           method: 'DELETE',
           cookies: { refresh_token: 'r', [CSRF_COOKIE]: 'tok' },
           headers: { 'x-csrf-token': 'wrong' },
         }),
-      ),
-    ).toThrow(ForbiddenException);
+      );
+      throw new Error('expected ForbiddenException');
+    } catch (err) {
+      expectForbiddenWithCode(err, ApiDomainErrorCode.CSRF_INVALID);
+    }
   });
 
   it('allows cookie session mutation with matching CSRF header', () => {
@@ -170,7 +182,7 @@ describe('CsrfGuard', () => {
       get: jest.fn((_k: string, def?: string) => def ?? 'true'),
     } as unknown as ConfigService;
     const guard = new CsrfGuard(reflector, config);
-    expect(() =>
+    try {
       guard.canActivate(
         mockCtx({
           method: 'POST',
@@ -180,7 +192,10 @@ describe('CsrfGuard', () => {
           url: '/auth/refresh',
           baseUrl: '/api/v1',
         }),
-      ),
-    ).toThrow(ForbiddenException);
+      );
+      throw new Error('expected ForbiddenException');
+    } catch (err) {
+      expectForbiddenWithCode(err, ApiDomainErrorCode.CSRF_INVALID);
+    }
   });
 });

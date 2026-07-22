@@ -1,7 +1,7 @@
 # Unified customer ticket / guest tab
 
-**Date:** 2026-07-20 (design) · **Impl lane NNNNNN-guest-check-done:** 2026-07-21  
-**Status:** Phase 0 option **A** recorded; Phase 1–2 shipped (schema + attach APIs + staff open-tabs UI). Phase 3 single-settle = residual.  
+**Date:** 2026-07-20 (design) · **Impl lanes:** `NNNNNN-guest-check-done` 2026-07-21 (Phase 1–2) · `BIBLE10-guest-check-settle` 2026-07-22 (Phase 3a) · `TICKET19-defer` 2026-07-22 (Phase 3b deferral)  
+**Status:** Phase 0 option **A** recorded; Phase 1–2 **DONE** (schema + attach APIs + staff open-tabs UI). **Phase 3a DONE:** `POST /guest-checks/:id/settle` transitions `OPEN` → `SETTLED` once children are closed, plus staff Settle UI — **status/UX gate only**; **no second ledger/revenue post** (children still revenue-stamp as today per `GO_SPOTS_FINANCE_CONTRACT.md`). **Phase 3b Option B/C — DEFERRED (not abandoned):** settle-as-revenue-root (making settle the single posting event) is **explicitly deferred** until after **§14 finance service splits** (play-billing / play-session / reservations extracts) **and** **ledger operator soak** (`LEDGER_DUAL_WRITE` → backfill → optional `LEDGER_READS`). Do **not** implement Option B/C in the current wave; do **not** describe the finance contract as rewritten.  
 **Related:** Deep audit §2.16, §2.2; `GO_SPOTS_FINANCE_CONTRACT.md`; `schema.prisma` (`GuestCheck`, `Reservation`, `PlaySession`, `ShopOrder`, …); `apps/api/src/modules/guest-check/**`.
 
 ---
@@ -208,11 +208,38 @@ Choose posting model:
 - Public: optional visit hub behind flag; keep legacy status URLs working (dual-read tokens).
 - Still settle via existing complete/bill endpoints if Option A.
 
-### Phase 3 — Single settle (Option B/C)
+### Phase 3a — Settle gate (**shipped**, `BIBLE10-guest-check-settle`)
 
-- `POST …/guest-checks/:id/settle`: atomic tender + mark children paid/completed + one revenue posting strategy.
+- `POST /guest-checks/:id/settle`: guard requires all attached children (`ShopOrder`/`PlaySession`/`Reservation`) already closed/completed/billed, then transitions the check `OPEN` → `SETTLED`; staff Settle button (en/pl).
+- **No second ledger/revenue post** — children keep posting revenue exactly as they do today (Option A rules unchanged); settle is a completion/status gate, not a posting event.
+- Verify: jest `guest-check` **8** PASS; i18n **1992**+**1020**.
+
+### Phase 3b — Single settle / revenue root (Option B/C) — **DEFERRED**
+
+**Decision (2026-07-22, Lane `TICKET19-defer`):** Option B/C is **deferred**, not abandoned. Ship bar for §19 / #10 is **Phase 3a settle gate** (Option A ops container + status close-out). Revenue posting model stays on the interim four-channel contract until a future lane unblocks.
+
+| Option | Posting model | Status |
+|--------|---------------|--------|
+| **B. Settle root** | Settle posts revenue once; child complete/bill does not stamp revenue when attached to an OPEN check | **DEFERRED** |
+| **C. Hybrid** | Kitchen/order flow may complete; play/reservation revenue deferred or reparented until settle | **DEFERRED** |
+
+**Finance-contract note (binding until un-deferred):**
+
+- [`GO_SPOTS_FINANCE_CONTRACT.md`](./GO_SPOTS_FINANCE_CONTRACT.md) remains the **authoritative** revenue contract. `GuestCheck` is an **ops container** + settle **status gate** only.
+- `POST /guest-checks/:id/settle` transitions `OPEN` → `SETTLED`; it does **not** create a `Transaction`, `LedgerEntry`, or second channel sum. Children (`ShopOrder` complete, `PlaySession` complete, `Reservation` bill) still stamp revenue at their existing endpoints and timestamps.
+- Anti-double-count rules unchanged: linked play excluded when reservation billed; `reservationFee` menu-channel only; no client-side re-sum on top of `summary.revenue`.
+- **Do not** edit `GO_SPOTS_FINANCE_CONTRACT.md` for settle-as-root until Phase 3b is scheduled and implemented.
+
+**Un-defer gates (all required before Option B/C implementation):**
+
+1. **§14 service split** — play-billing, play-session, and reservations extracts off `finance.service.ts` (characterization → move-only), reducing blast radius for posting-root changes.
+2. **Ledger soak** — operator `LEDGER_DUAL_WRITE` production soak, `backfill:ledger` apply where needed, optional `LEDGER_READS` flag validation; analytics dual-path stable before rewriting posting hooks.
+
+**When un-deferred, Phase 3b would:**
+
+- Make settle the **one** revenue posting event (or post channel lines atomically) instead of children posting individually.
 - Disable or no-op revenue side-effects on child complete when `guestCheckId` set and check still OPEN.
-- Update `GO_SPOTS_FINANCE_CONTRACT.md` and analytics tests.
+- Rewrite `GO_SPOTS_FINANCE_CONTRACT.md` + analytics/guest-check tests to match the new posting root.
 
 ### Phase 4 — Guest identity consolidation
 
@@ -230,28 +257,58 @@ Choose posting model:
 
 ---
 
-## 6. Explicit non-goals for Phase 1–2 (shipped Option A)
+## 6. Explicit non-goals (shipped Option A + Phase 3a; Phase 3b deferred)
 
-- No single-settle revenue posting (Phase 3).
+**Shipped / closed for current wave (Phase 1–3a):**
+
+- Option A ops container + running total + settle status gate — **done**.
+- Settle as **non-posting** gate (no second ledger/revenue entry on settle) — **done**.
+
+**Deferred (Phase 3b — do not implement until un-defer gates met):**
+
+- No Option B/C single-settle revenue posting / posting-root rewrite.
+- No disabling child complete/bill revenue side-effects when `guestCheckId` is set.
+- No `GO_SPOTS_FINANCE_CONTRACT.md` rewrite for settle-as-root.
+- No split-tender / partial-payment check ops (adjacent product scope).
+
+**Still out of scope (later phases):**
+
 - No merge of guest status URLs or chat tokens (Phase 4).
-- No finance analytics / channel-sum changes (children still complete/bill as today).
+- No finance analytics / channel-sum changes while Option A posting stands (children complete/bill as today; settle does not add a second post).
 - No Neon `migrate deploy` from workstation.
 
 ---
 
-## 7. Acceptance criteria (when a future lane implements)
+## 7. Acceptance criteria
 
-1. Phase 0 option (A / B / C) recorded and finance contract updated if posting changes.
+### Phase 1–3a (Option A + settle gate) — **met**
+
+1. Phase 0 option **A** recorded; finance contract **unchanged** (settle does not post revenue).
 2. Staff can open a tab, attach menu + play (+ optional reservation), and see one running total.
 3. Revenue for a visit is **not** double-counted vs today’s channel rules (tests for linked play + billed reservation + completed order + reservationFee).
 4. Cross-tenant: checks and attachments always `shopId`-scoped.
-5. Legacy status tokens and complete/bill endpoints keep working through dual-read/dual-write window.
-6. Expand-only migrations; rollback = stop writing `guestCheckId` and hide UI.
-7. Coordination board lane claimed for finance + schema touchpoints.
+5. `POST /guest-checks/:id/settle` closes check only after children closed; **no** second revenue/ledger post.
+6. Legacy status tokens and complete/bill endpoints keep working.
+7. Expand-only migrations; rollback = stop writing `guestCheckId` and hide UI.
+
+### Phase 3b deferral (Lane `TICKET19-defer`) — **met (docs-only)**
+
+1. Option B/C explicitly marked **DEFERRED** (not abandoned) in this doc and [`ORIGINAL_AUDIT_BIBLE.md`](./ORIGINAL_AUDIT_BIBLE.md) §19.
+2. Finance-contract note recorded: settle = status gate; four-channel interim contract stays authoritative.
+3. Un-defer gates documented: §14 finance splits + ledger operator soak before any settle-as-root code.
+4. No `apps/**` or schema changes for Option B/C in this lane.
+
+### Phase 3b implementation (future lane, when un-deferred)
+
+1. Phase 0 posting option (B or C) re-confirmed; finance contract + analytics tests updated.
+2. Settle (or atomic channel post) is the **only** revenue stamp for attached children on an OPEN check.
+3. Characterization tests prove no double-count vs prior Option A era during cutover window.
+4. Coordination board lane claimed for finance + schema touchpoints.
 
 ---
 
 ## 8. Verify
 
-Implementation verify (Lane **NNNNNN**): jest `guest-check-total` + `guest-check.service` **12** PASS; `nest build` PASS; web typecheck PASS; `i18n:check` **1989**+**1020**.  
+Phase 1–2 (Lane **NNNNNN**): jest `guest-check-total` + `guest-check.service` **12** PASS; `nest build` PASS; web typecheck PASS; `i18n:check` **1989**+**1020**.  
+Phase 3a settle gate (Lane **BIBLE10-guest-check-settle**): jest `guest-check` **8** PASS; `i18n:check` **1992**+**1020**.  
 Operator: Neon `migrate deploy` for `20260721110000_guest_check` (never from workstation `.env`).

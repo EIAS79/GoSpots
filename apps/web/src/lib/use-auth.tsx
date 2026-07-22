@@ -8,7 +8,11 @@ import {
   useState,
   type ReactNode,
 } from "react";
-import { ensureCsrf } from "./api";
+import { ApiError, ensureCsrf } from "./api";
+import {
+  notifySessionRevoked,
+  registerAuthGuestHandler,
+} from "./auth-session";
 import { clearCachedCsrfToken } from "./csrf";
 import {
   type AuthUser,
@@ -44,7 +48,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         await apiRefresh();
         const user = await fetchMe();
         setState({ status: "authed", user });
-      } catch {
+      } catch (err) {
+        if (err instanceof ApiError && err.code === "SESSION_REVOKED") {
+          notifySessionRevoked();
+        }
         setState({ status: "guest", user: null });
       }
     }
@@ -58,6 +65,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       clearCachedCsrfToken();
       setState({ status: "guest", user: null });
     }
+  }, []);
+
+  useEffect(() => {
+    return registerAuthGuestHandler(() => {
+      setState({ status: "guest", user: null });
+    });
   }, []);
 
   useEffect(() => {

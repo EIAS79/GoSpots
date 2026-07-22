@@ -11,6 +11,11 @@ import { assertShopHasFeature } from '../../common/venue-entitlements';
 import { AuditService } from '../audit/audit.service';
 import type { JwtAccessPayload } from '../auth/auth.service';
 import {
+  SEATING_MANUAL_EDIT_DENIED_MESSAGE,
+  shopHasActiveDiningLayout,
+  shouldDenyManualSeatingMutation,
+} from '../../common/resource-dining-seating-guard.util';
+import {
   CreateSeatingTableGroupDto,
   UpdateSeatingTableGroupDto,
 } from './dto/seating-tables.dto';
@@ -65,6 +70,20 @@ export class SeatingTablesService {
 
     if (p !== '*' && !p.split(',').includes('reservation.write')) {
       throw new ForbiddenException('Missing reservation.write');
+    }
+  }
+
+  private assertManualEditAllowed(
+    row: { isCustom: boolean; sourceDiningTableGroupId: string | null },
+    shopHasDiningLayout: boolean,
+  ) {
+    if (
+      shouldDenyManualSeatingMutation({
+        row,
+        shopHasDiningLayout,
+      })
+    ) {
+      throw new BadRequestException(SEATING_MANUAL_EDIT_DENIED_MESSAGE);
     }
   }
 
@@ -182,8 +201,14 @@ export class SeatingTablesService {
     );
 
     const isCustom = dto.isCustom ?? false;
+    const shopHasDiningLayout = await shopHasActiveDiningLayout(this.prisma, shopId);
 
     const sourceDiningTableGroupId = dto.sourceDiningTableGroupId?.trim() || null;
+
+    this.assertManualEditAllowed(
+      { isCustom, sourceDiningTableGroupId },
+      shopHasDiningLayout,
+    );
     if (sourceDiningTableGroupId && isCustom) {
       throw new BadRequestException(
         'Custom event seating cannot link to a dining table group.',
@@ -282,6 +307,8 @@ export class SeatingTablesService {
     const maxFloors = await this.shopFloorCount(shopId);
 
     const existing = await this.ensureGroup(shopId, id);
+    const shopHasDiningLayout = await shopHasActiveDiningLayout(this.prisma, shopId);
+    this.assertManualEditAllowed(existing, shopHasDiningLayout);
 
     const totalCount =
       dto.totalCount != null ? dto.totalCount : existing.totalCount;
@@ -367,6 +394,8 @@ export class SeatingTablesService {
     await assertShopHasFeature(this.prisma, shopId, 'reservation');
 
     const existing = await this.ensureGroup(shopId, id);
+    const shopHasDiningLayout = await shopHasActiveDiningLayout(this.prisma, shopId);
+    this.assertManualEditAllowed(existing, shopHasDiningLayout);
 
     await this.prisma.seatingTableGroup.delete({ where: { id, shopId } });
 

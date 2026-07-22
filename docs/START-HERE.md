@@ -1,4 +1,6 @@
-# GoSpots — production
+# Locora / GoSpots — production
+
+**Operator status:** [`docs/PRODUCTION_STATUS.md`](./PRODUCTION_STATUS.md)
 
 ```
 Neon (DB)  ◄──  Render (API)  ◄──  Vercel (site + /api/v1 proxy)
@@ -6,11 +8,13 @@ Neon (DB)  ◄──  Render (API)  ◄──  Vercel (site + /api/v1 proxy)
 
 | Piece | What you set |
 |-------|----------------|
-| GitHub | Your repo (e.g. `EIAS79/VenueFlow` or renamed) |
-| API (Render) | **GoSpots** service URL from Render dashboard |
-| Website (Vercel) | **GoSpots** project URL from Vercel → Domains |
+| GitHub | Your repo |
+| API (Render) | `https://gospots-api.onrender.com` (must be **Resumed**, not suspended) |
+| Website (Vercel) | `https://www.gospots.eu` (also `.pl`) |
 | API readiness | `https://YOUR-RENDER-URL/api/v1/ready` (DB). `/live` and `/health` are liveness-only. |
-| Proxy readiness | `https://YOUR-VERCEL-URL/api/v1/ready` → same JSON |
+| Proxy readiness | `https://www.gospots.eu/api/v1/ready` → same JSON |
+
+If Render returns **503** with `x-render-routing: suspend-by-user`, open the Render dashboard and **Resume** the service.
 
 **API is the same** — still `/api/v1/auth/register`, `/api/v1/auth/login`, etc. Only names and host URLs changed.
 

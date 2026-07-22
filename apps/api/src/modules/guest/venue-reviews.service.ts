@@ -1,9 +1,10 @@
 import {
   BadRequestException,
-  ForbiddenException,
   Injectable,
   NotFoundException,
 } from '@nestjs/common';
+import { ApiDomainErrorCode } from '../../common/api-error.codes';
+import { apiForbiddenException } from '../../common/api-error.util';
 import { ShopReviewsMode, VenueReviewStatus } from '@prisma/client';
 import { PrismaService } from '../../prisma/prisma.service';
 import { requireShopId } from '../../common/tenant';
@@ -31,13 +32,21 @@ export class VenueReviewsService {
 
   private assertRead(actor: JwtAccessPayload) {
     if (!hasPermission(actor.perms ?? '', PERMISSIONS.REVIEWS_READ)) {
-      throw new ForbiddenException('Missing reviews.read permission.');
+      throw apiForbiddenException(
+        ApiDomainErrorCode.PERMISSION_DENIED,
+        'Missing reviews.read permission.',
+        { permission: PERMISSIONS.REVIEWS_READ },
+      );
     }
   }
 
   private assertWrite(actor: JwtAccessPayload) {
     if (!hasPermission(actor.perms ?? '', PERMISSIONS.REVIEWS_WRITE)) {
-      throw new ForbiddenException('Missing reviews.write permission.');
+      throw apiForbiddenException(
+        ApiDomainErrorCode.PERMISSION_DENIED,
+        'Missing reviews.write permission.',
+        { permission: PERMISSIONS.REVIEWS_WRITE },
+      );
     }
   }
 

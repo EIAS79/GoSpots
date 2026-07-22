@@ -1,11 +1,13 @@
-import { Injectable, UnauthorizedException } from '@nestjs/common';
+import { Injectable } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { PassportStrategy } from '@nestjs/passport';
 import { UserAccountType } from '@prisma/client';
 import { Request } from 'express';
 import { ExtractJwt, Strategy } from 'passport-jwt';
-import { PrismaService } from '../../../prisma/prisma.service';
+import { ApiDomainErrorCode } from '../../../common/api-error.codes';
+import { apiUnauthorizedException } from '../../../common/api-error.util';
 import { isVenueStaffLoginEmail } from '../../../common/venue-account';
+import { PrismaService } from '../../../prisma/prisma.service';
 import { JwtAccessPayload } from '../auth.service';
 
 const cookieExtractor = (req: Request): string | null => {
@@ -38,7 +40,10 @@ export class JwtAccessStrategy extends PassportStrategy(
       (payload.email && isVenueStaffLoginEmail(payload.email))
     ) {
       if (!payload.sid) {
-        throw new UnauthorizedException('Session expired. Sign in again.');
+        throw apiUnauthorizedException(
+          ApiDomainErrorCode.SESSION_REVOKED,
+          'Session expired. Sign in again.',
+        );
       }
       const session = await this.prisma.authSession.findFirst({
         where: {
@@ -49,7 +54,8 @@ export class JwtAccessStrategy extends PassportStrategy(
         },
       });
       if (!session) {
-        throw new UnauthorizedException(
+        throw apiUnauthorizedException(
+          ApiDomainErrorCode.SESSION_REVOKED,
           'This employee account is signed in elsewhere. Only one active session is allowed.',
         );
       }

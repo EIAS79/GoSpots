@@ -111,7 +111,7 @@ pnpm --filter @gospots/web run build
 
 Deploy API and web artifacts per your hosting flow (Vercel / container / etc.).
 
-**Node (Render + Vercel):** use **20 LTS** (root `engines.node` is `20.x`; local `next build` passed on Node 26 with engine warning only).
+**Node (Render + Vercel):** use **24.x** (root `engines.node` is `24.x`; Vercel deprecates 20.x after 2026-10-01).
 
 **Render / host:** set the API health-check path to **GET `/api/v1/ready`** (DB probe). Do not use `/live` or `/health` alone — they skip the database.
 
@@ -207,7 +207,7 @@ From `apps/api/.env.production.example` (in addition to JWT / DB / Lemon / Resen
 | `MFA_TOTP_ENCRYPTION_KEY` | preferred for owner TOTP secret encryption (64 hex / any string → SHA-256); falls back to `JWT_ACCESS_SECRET` if unset |
 
 Local smoke may set `THROTTLE_DISABLED=true` or raise the `AUTH_THROTTLE_*` / `PUBLIC_THROTTLE_*` limits — see `.env.example`.
-CAPTCHA escalation for public creates is **not** implemented yet.
+CAPTCHA stack is **code-complete** (assert + optional widget + in-memory 429 escalation); keep `CAPTCHA_PROVIDER=off` until keys set — [`GO_SPOTS_PUBLIC_ABUSE.md`](./GO_SPOTS_PUBLIC_ABUSE.md) Gates 0–4.
 
 ---
 

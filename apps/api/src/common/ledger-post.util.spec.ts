@@ -63,6 +63,27 @@ describe('ledger-post.util', () => {
       expect(create).not.toHaveBeenCalled();
     });
 
+    it('posts when force even if flag off', async () => {
+      delete process.env.LEDGER_DUAL_WRITE;
+      const create = jest.fn().mockResolvedValue({ id: 'le1' });
+      const result = await postLedgerEntry(
+        { ledgerEntry: { create } } as never,
+        {
+          shopId: 's1',
+          currency: 'EUR',
+          amount: 10,
+          kind: 'SALE',
+          channel: 'QUICK_SALES',
+          sourceType: 'TRANSACTION',
+          sourceId: 'tx1',
+          occurredAt: new Date(),
+        },
+        { force: true },
+      );
+      expect(result).toBe('posted');
+      expect(create).toHaveBeenCalled();
+    });
+
     it('posts when flag on', async () => {
       process.env.LEDGER_DUAL_WRITE = '1';
       const create = jest.fn().mockResolvedValue({ id: 'le1' });

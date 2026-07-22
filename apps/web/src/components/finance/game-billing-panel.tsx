@@ -17,6 +17,7 @@ import {
 import Link from "next/link";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useSearchParams } from "next/navigation";
+import { ApiError, resolveApiErrorDisplay } from "@/lib/api";
 import { cn } from "@/lib/cn";
 import { formatEventWindow } from "@/lib/seating-event-datetime";
 import {
@@ -48,6 +49,12 @@ import type { MessageKey } from "@/lib/i18n";
 import { GameBillingEditDialog } from "./game-billing-edit-dialog";
 
 const PAGE_SIZE = 10;
+
+const BOOKING_OVERLAP_CODES = new Set([
+  "RESERVATION_OVERLAP",
+  "WALK_IN_OVERLAP",
+  "WALK_IN_ACTIVE",
+]);
 
 const TABS: PlayBillingTab[] = ["in_progress", "awaiting_payment", "paid"];
 
@@ -383,7 +390,17 @@ export function GameBillingPanel({ canWrite }: { canWrite: boolean }) {
       setTab("in_progress");
       await load({ silent: true });
     } catch (err) {
-      setError(err instanceof Error ? err.message : t("finance.playWalkInFailed"));
+      setError(
+        resolveApiErrorDisplay(
+          err,
+          { RESERVATION_OVERLAP: t("reservationDialog.overlapUnit") },
+          t("finance.playWalkInFailed"),
+        ),
+      );
+      if (err instanceof ApiError && BOOKING_OVERLAP_CODES.has(err.code ?? "")) {
+        publishLiveEvent({ section: "reservation" });
+        void load({ silent: true });
+      }
     } finally {
       setWiCreating(false);
     }

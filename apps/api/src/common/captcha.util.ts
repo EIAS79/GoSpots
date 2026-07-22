@@ -11,7 +11,8 @@
  * after public-create 429s (process-local; Redis later for multi-instance).
  */
 
-import { ForbiddenException } from '@nestjs/common';
+import { ApiDomainErrorCode } from './api-error.codes';
+import { apiForbiddenException } from './api-error.util';
 
 /** Lowercase; Express normalizes incoming header names. */
 export const CAPTCHA_TOKEN_HEADER = 'x-captcha-token';
@@ -175,5 +176,13 @@ export async function assertCaptchaOrThrow(opts: {
   });
   if (result.ok) return;
 
-  throw new ForbiddenException('CAPTCHA verification failed');
+  const missing = result.reason === 'missing_token';
+  throw apiForbiddenException(
+    missing
+      ? ApiDomainErrorCode.CAPTCHA_REQUIRED
+      : ApiDomainErrorCode.CAPTCHA_FAILED,
+    missing
+      ? 'Complete the CAPTCHA challenge to continue.'
+      : 'CAPTCHA verification failed.',
+  );
 }

@@ -720,6 +720,8 @@ const en: Dict = {
   "auth.login.mfaVerify": "Verify and sign in",
   "auth.login.mfaBack": "Back to password",
   "auth.login.mfaFailed": "Invalid or expired MFA code.",
+  "auth.login.csrfInvalid":
+    "We couldn't verify this request — refresh the page and try again.",
   "auth.login.staffTip":
     "Use your staff login ID and the password you set from the setup link. Forgot it? Ask your owner for a new link below.",
   "auth.login.forgotStaffPassword": "Forgot password?",
@@ -829,6 +831,8 @@ const en: Dict = {
   "guestStatus.phase.completed": "Completed",
   "guestStatus.phase.no_show": "No-show",
   "guestStatus.phase.canceled": "Canceled",
+  "guestStatus.tokenExpired": "This link has expired.",
+  "guestStatus.tokenRevoked": "This link is no longer valid.",
 
   "guestStatus.gaming.loading": "Loading your booking…",
   "guestStatus.gaming.loadError": "Could not load booking.",
@@ -1068,9 +1072,13 @@ const en: Dict = {
   "venuePage.booking.invalidTime": "Pick a valid time slot.",
   "venuePage.booking.overlap":
     "This station is already reserved {start}–{end}. Pick a time before or after that slot.",
+  "venuePage.booking.overlapServer":
+    "That time slot was just taken. Pick another time or station.",
   "venuePage.booking.capacityExceeded":
     "{name} seats up to {capacity} — choose a smaller party or another table.",
   "venuePage.booking.submitFailed": "Could not complete booking.",
+  "venuePage.booking.emailDelayed":
+    "Your booking is saved. Confirmation email is delayed — use the link below to track your session.",
   // Match OfflineBanner Mode A/B/C (bible #32 public booking outage UX)
   "venuePage.booking.outageOffline":
     "No internet — changes won’t save until you’re back online.",
@@ -1978,6 +1986,8 @@ const pl: Dict = {
   "auth.login.mfaVerify": "Zweryfikuj i zaloguj",
   "auth.login.mfaBack": "Wróć do hasła",
   "auth.login.mfaFailed": "Nieprawidłowy lub wygasły kod MFA.",
+  "auth.login.csrfInvalid":
+    "Nie udało się zweryfikować żądania — odśwież stronę i spróbuj ponownie.",
   "auth.login.staffTip":
     "Użyj ID logowania i hasła ustawionego z linku aktywacyjnego. Nie pamiętasz? Poproś właściciela o nowy link poniżej.",
   "auth.login.forgotStaffPassword": "Nie pamiętam hasła?",
@@ -2087,6 +2097,8 @@ const pl: Dict = {
   "guestStatus.phase.completed": "Zakończona",
   "guestStatus.phase.no_show": "Nieobecność",
   "guestStatus.phase.canceled": "Anulowana",
+  "guestStatus.tokenExpired": "Ten link wygasł.",
+  "guestStatus.tokenRevoked": "Ten link nie jest już ważny.",
 
   "guestStatus.gaming.loading": "Ładowanie rezerwacji…",
   "guestStatus.gaming.loadError": "Nie udało się wczytać rezerwacji.",
@@ -2328,9 +2340,13 @@ const pl: Dict = {
   "venuePage.booking.invalidTime": "Wybierz prawidłowy termin.",
   "venuePage.booking.overlap":
     "To stanowisko jest już zarezerwowane {start}–{end}. Wybierz godzinę przed lub po tym terminie.",
+  "venuePage.booking.overlapServer":
+    "Ten termin właśnie został zajęty. Wybierz inną godzinę lub stanowisko.",
   "venuePage.booking.capacityExceeded":
     "{name} mieści do {capacity} osób — wybierz mniejszą grupę lub inny stolik.",
   "venuePage.booking.submitFailed": "Nie udało się dokończyć rezerwacji.",
+  "venuePage.booking.emailDelayed":
+    "Rezerwacja zapisana. E-mail potwierdzający jest opóźniony — użyj linku poniżej, aby śledzić wizytę.",
   "venuePage.booking.outageOffline":
     "Brak internetu — zmiany nie zapiszą się, dopóki nie wrócisz online.",
   "venuePage.booking.outageUnreachable":

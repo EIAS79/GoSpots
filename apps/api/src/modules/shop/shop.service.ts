@@ -961,6 +961,7 @@ export class ShopService {
       description: true,
       coverImage: true,
       locale: true,
+      timezone: true,
       currency: true,
       tags: {
         where: { type: TagType.VENUE_CATEGORY },
@@ -1059,6 +1060,7 @@ export class ShopService {
         email: true,
         coverImage: true,
         locale: true,
+        timezone: true,
         currency: true,
         reviewsMode: true,
         galleryItems: {

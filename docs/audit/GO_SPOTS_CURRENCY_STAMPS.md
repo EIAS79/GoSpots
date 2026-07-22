@@ -1,16 +1,63 @@
-# GoSpots / Locora — M6 Currency stamps
+# GoSpots / Locora — Currency / FX safety (Bible §20 / #20)
 
-**Date:** 2026-07-20 (design) · **Impl:** 2026-07-21 (Lane YYYYY)  
-**Status:** Implemented on disk — migration `20260721040000_currency_stamp_monetary_rows` + dual-write/read + conversion history UI.  
-**Operator:** Neon `migrate deploy` (not from workstation prod `.env`).  
+**Date:** 2026-07-20 (design) / 2026-07-21 (Lanes D, CC, MM, YYYYY) / 2026-07-22 (residual docs **FX20-residual-docs**)  
+**Status:** **Bible §20 / #20 PARTIAL** — preview + confirm apply, atomic catalog reprice, and M6 row stamps **shipped on disk**. Nullable stamp contract, operator Neon deploy, pre-stamp backfill honesty limits, and optional FX “report currency” conversion remain **explicitly deferred**.  
+**Operator:** Neon `migrate deploy` for stamp migration (never from workstation prod `.env`).  
 **Depends on:** M1 money `Decimal(19,4)` (`20260720230000_money_decimal_core`).  
-**Related:** `GO_SPOTS_MONEY_DECISION.md`, `GO_SPOTS_MIGRATION_PLAN.md` §M6, `GO_SPOTS_FINANCE_CONTRACT.md`, audit P1 §2.17.
+**Related:** `GO_SPOTS_MONEY_DECISION.md`, `GO_SPOTS_MIGRATION_PLAN.md` §M6, `GO_SPOTS_FINANCE_CONTRACT.md`, audit P1 §2.17.  
+**Lanes:** **D-fx-reprice-atomic**, **CC-currency-preview**, **MM-currency-preview-ui**, **YYYYY-currency-done**, **FX20-residual-docs** (operator gates).
+
+---
+
+## Shipped vs residual (honest)
+
+| Item | State | Evidence |
+|------|--------|----------|
+| Atomic all-or-nothing catalog FX reprice | **DONE** | Lane D — `$transaction` over menu, rates, offeringConfig, hourlyRate |
+| Preview before apply (no writes) | **DONE** | `POST /shop/currency/preview`; settings modal (Lane CC/MM) |
+| Apply requires explicit confirm | **DONE** | `PATCH /shop/settings` with `currency` + `confirm: true` |
+| Historical money rows never rewritten on flip | **DONE** | reprice touches catalog only; finance rows keep amounts + stamp |
+| M6 stamp migration on disk | **DONE** | `20260721040000_currency_stamp_monetary_rows` |
+| Dual-write stamps on finance creates / mark-paid | **DONE** | `loadShopCurrency` + row `currency` on Transaction/ShopOrder/PlaySession/ShopLoss/Reservation |
+| Dual-read effective currency | **DONE** | `currency-stamp.util.ts` — `effectiveMoneyCurrency(row ?? shop ?? EUR)` |
+| Analytics group by currency | **DONE** | `sumRevenueChannelsByCurrency`, `summary.revenueByCurrency`; headline KPIs stay shop-currency |
+| Conversion history API + settings UI | **DONE** | `GET /shop/currency/history`; audit `venue.currency.change` |
+| Optional idempotency on currency apply | **DONE** (§7 adjacency) | Lane TTTT — `SHOP_CURRENCY_APPLY`; preview unwrapped |
+| Neon migrate deploy (stamp DDL + backfill) | **OPERATOR** | Gates 0–2 below — same wave as other `20260721*` migrations |
+| Nullable `currency` columns + null fallback reads | **RESIDUAL** | Expand-first contract; optional NOT NULL tighten after soak (Phase E) |
+| Pre-stamp backfill uses **current** `Shop.currency` | **RESIDUAL** (accepted) | Shops that flipped currency **before** stamps may mis-label old rows — no time-travel fix on disk |
+| FX conversion to single “report currency” in UI | **RESIDUAL** | Design explicitly out of M6 MVP; mixed eras show `revenueByCurrency` buckets only |
+| Ledger `currency` from day one | **RESIDUAL** (§5) | `LedgerEntry` ships with currency; cutover is ledger operator soak — [`GO_SPOTS_LEDGER.md`](./GO_SPOTS_LEDGER.md) |
+| Line-item row stamps (`ShopOrderLine`, `TransactionLineItem`) | **RESIDUAL** (deferred) | Parent stamp + join is enough for v1; see table below |
+
+**§20 classification:** **PARTIAL** — money-change safety ship bar met; operator migrate + contract tighten + optional FX display documented here, not hidden.
+
+---
+
+## Operator checklist (Gates 0–4)
+
+| Gate | Action | Pass criteria |
+|------|--------|---------------|
+| **0** | Confirm stamp migration in pending set | `20260721040000_currency_stamp_monetary_rows` listed in `migrate status` / preflight |
+| **1** | Neon `migrate deploy` (operator host) | Five tables have nullable `currency`; backfill SQL in migration applied |
+| **2** | Smoke currency change | Preview → confirm → apply; catalog repriced; prior sale amount unchanged; new sale gets new stamp |
+| **3** | Analytics spot-check | Mixed-era window shows `revenueByCurrency`; headline KPI matches shop currency only |
+| **4** | Optional contract tighten | `COUNT(*) FILTER (WHERE currency IS NULL) = 0` on stamped tables → consider NOT NULL migration (**future app lane**) |
+
+SQL spot-checks (post Gate 1):
+
+```sql
+SELECT currency, COUNT(*) FROM "Transaction" GROUP BY 1;
+SELECT currency, COUNT(*) FROM "ShopOrder" GROUP BY 1;
+SELECT COUNT(*) FILTER (WHERE "billedAmount" IS NOT NULL AND currency IS NULL) AS unstamped_billed
+FROM "Reservation";
+```
 
 ---
 
 ## Recommendation (operator / ship timing)
 
-**Do M6 after Friday Neon `migrate deploy` of the existing six `20260720*` migrations — not before.**
+**M6 shipped (Lane YYYYY).** Operator follow **Gates 0–4** above; optional Phases 2–3 deferred.
 
 | When | Action |
 |------|--------|
@@ -197,7 +244,9 @@ Shop currency change:
 
 ## What NOT to do before Friday Neon deploy of the existing 6 migrations
 
-1. **Do not** create any new folder under `apps/api/prisma/migrations/` for M6.
+> **Historical (pre–Lane YYYYY):** M6 shipped after the Friday six. Do not revert stamps or re-bundle into the old six-migration gate.
+
+1. ~~**Do not** create any new folder under `apps/api/prisma/migrations/` for M6.~~ — **shipped** `20260721040000_currency_stamp_monetary_rows`
 2. **Do not** edit `schema.prisma` to add `currency` on monetary models.
 3. **Do not** run `prisma migrate dev` / `db push` aimed at Neon for currency work.
 4. **Do not** bundle M6 into the Friday six (`webhook`, `timezone`, `money_decimal`, `permissions`, `guest_token`, `auth_session_family`).
@@ -240,4 +289,44 @@ FROM "Reservation";
 
 ---
 
-*Aligned with `GO_SPOTS_MIGRATION_PLAN.md` M6, `GO_SPOTS_MONEY_DECISION.md`, audit §2.17. Lane K — design only.*
+## Future phases (residual — not on disk)
+
+### Phase 1 — Operator deploy + smoke (**OPERATOR**)
+
+| Step | Action |
+|------|--------|
+| 1 | Neon `migrate deploy` includes stamp migration |
+| 2 | Gates 0–4 checklist above |
+| 3 | Document in submit notes: stamps live; nullable contract; optional FX display deferred |
+
+### Phase 2 — Contract tighten (optional app lane)
+
+| Step | Action |
+|------|--------|
+| 1 | Verify null counts on stamped tables (SQL above) |
+| 2 | Optional migration: `ALTER COLUMN currency SET NOT NULL` |
+| 3 | Remove null fallback in reads once soak clean |
+
+### Phase 3 — Report-currency FX display (optional product lane)
+
+| Step | Action |
+|------|--------|
+| 1 | Analytics UI: convert mixed-era buckets to shop currency with explicit rate + label |
+| 2 | Never silently sum EUR+USD into one headline total |
+| 3 | CSV export documents conversion rate when used |
+
+**Out of scope:** line-item stamps; rewriting pre-stamp history for shops that flipped before M6; removing `Shop.currency`.
+
+---
+
+## Related
+
+- Interim finance reporting — [`GO_SPOTS_FINANCE_CONTRACT.md`](./GO_SPOTS_FINANCE_CONTRACT.md)
+- Bible §20 tracker — [`ORIGINAL_AUDIT_BIBLE.md`](./ORIGINAL_AUDIT_BIBLE.md) §20
+- Ship log — [`BIBLE_FINISHED.md`](./BIBLE_FINISHED.md) #20 (Lane YYYYY)
+- Ledger currency (§5) — [`GO_SPOTS_LEDGER.md`](./GO_SPOTS_LEDGER.md)
+- Operator deploy — [`DEPLOY_CHECKLIST.md`](./DEPLOY_CHECKLIST.md), [`WHAT_TO_DO_NOW.md`](./WHAT_TO_DO_NOW.md)
+
+---
+
+*Aligned with `GO_SPOTS_MIGRATION_PLAN.md` M6, `GO_SPOTS_MONEY_DECISION.md`, audit §2.17 / §20. Residual docs lane **FX20-residual-docs**.*

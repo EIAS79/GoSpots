@@ -54,6 +54,7 @@ export function OverviewDashboard({
   const { kpis, charts, topMenuItems, recentReservations, recentAudit } = data;
   const vs = useVenueSettingsOptional();
   const t: OverviewT = vs?.t ?? ((key) => key);
+  const venueTimeZone = vs?.shop?.timezone ?? undefined;
 
   return (
     <div className="space-y-5">
@@ -339,7 +340,7 @@ export function OverviewDashboard({
                     </p>
                     <p className="truncate text-zinc-500">
                       {r.resource ?? t("dashOverview.noTable")} ·{" "}
-                      {formatDate(r.startsAt, locale)}
+                      {formatDate(r.startsAt, locale, venueTimeZone)}
                     </p>
                   </div>
                   <span className="shrink-0 text-amber-200">{r.status}</span>

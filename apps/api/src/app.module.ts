@@ -9,6 +9,7 @@ import { AppService } from './app.service';
 import { PrismaModule } from './prisma/prisma.module';
 import { MailModule } from './modules/mail/mail.module';
 import { HealthModule } from './modules/health/health.module';
+import { MetricsModule } from './modules/metrics/metrics.module';
 import { AuthModule } from './modules/auth/auth.module';
 import { StaffModule } from './modules/staff/staff.module';
 import { DashboardModule } from './modules/dashboard/dashboard.module';
@@ -20,6 +21,7 @@ import { BillingModule } from './modules/billing/billing.module';
 import { AuditModule } from './modules/audit/audit.module';
 import { PublicModule } from './modules/public/public.module';
 import { ShopModule } from './modules/shop/shop.module';
+import { OnboardingModule } from './modules/onboarding/onboarding.module';
 import { NotificationsModule } from './modules/notifications/notifications.module';
 import { HoursModule } from './modules/hours/hours.module';
 import { GalleryModule } from './modules/gallery/gallery.module';
@@ -70,6 +72,7 @@ import { RolesGuard } from './modules/auth/guards/roles.guard';
     MediaModule,
     AuditModule,
     ShopModule,
+    OnboardingModule,
     PublicModule,
     GuestModule,
     AuthModule,
@@ -87,6 +90,7 @@ import { RolesGuard } from './modules/auth/guards/roles.guard';
     GdprModule,
     GuestCheckModule,
     HealthModule,
+    MetricsModule,
   ],
   controllers: [AppController],
   providers: [

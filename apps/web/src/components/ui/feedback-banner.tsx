@@ -1,9 +1,9 @@
 "use client";
 
-import { AlertCircle, CheckCircle2, X } from "lucide-react";
+import { AlertCircle, AlertTriangle, CheckCircle2, X } from "lucide-react";
 import { cn } from "@/lib/cn";
 
-export type FeedbackVariant = "error" | "success" | "info";
+export type FeedbackVariant = "error" | "success" | "info" | "warning";
 
 export function FeedbackBanner({
   variant,
@@ -19,13 +19,13 @@ export function FeedbackBanner({
   const Icon =
     variant === "success"
       ? CheckCircle2
-      : variant === "error"
-        ? AlertCircle
+      : variant === "warning"
+        ? AlertTriangle
         : AlertCircle;
 
   return (
     <div
-      role="alert"
+      role={variant === "warning" ? "status" : "alert"}
       className={cn(
         "flex items-start gap-3 rounded-xl border px-4 py-3 text-sm shadow-lg backdrop-blur-sm",
         variant === "error" &&
@@ -34,6 +34,8 @@ export function FeedbackBanner({
           "border-emerald-400/35 bg-emerald-500/15 text-emerald-50",
         variant === "info" &&
           "border-sky-400/35 bg-sky-500/15 text-sky-50",
+        variant === "warning" &&
+          "border-amber-400/35 bg-amber-500/15 text-amber-50",
         className,
       )}
     >
@@ -44,6 +46,7 @@ export function FeedbackBanner({
           variant === "error" && "text-rose-300",
           variant === "success" && "text-emerald-300",
           variant === "info" && "text-sky-300",
+          variant === "warning" && "text-amber-300",
         )}
         aria-hidden
       />

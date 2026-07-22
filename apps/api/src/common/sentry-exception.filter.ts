@@ -6,6 +6,10 @@ import {
 } from '@nestjs/common';
 import { BaseExceptionFilter, HttpAdapterHost } from '@nestjs/core';
 import * as Sentry from '@sentry/node';
+import {
+  buildApiErrorBody,
+  resolveRequestIdFromRequest,
+} from './api-error.util';
 
 /** HTTP status for Nest/Http exceptions; unexpected errors → 500. */
 export function httpStatusFromException(exception: unknown): number {
@@ -48,19 +52,41 @@ export function isSentryClientActive(): boolean {
 
 /**
  * Global filter: capture 5xx/unexpected to Sentry when DSN configured.
- * Delegates response + Nest logging to BaseExceptionFilter.
- * 4xx stay out of Sentry (request interceptor already logs status).
+ * Responds with §36 envelope `{ code, message, details, requestId }`.
  */
 @Catch()
 export class SentryExceptionFilter extends BaseExceptionFilter {
+  private readonly adapter: HttpAdapterHost['httpAdapter'];
+
   constructor(httpAdapterHost: HttpAdapterHost) {
     super(httpAdapterHost.httpAdapter);
+    this.adapter = httpAdapterHost.httpAdapter;
   }
 
   catch(exception: unknown, host: ArgumentsHost): void {
     if (shouldCaptureExceptionForSentry(exception) && isSentryClientActive()) {
       Sentry.captureException(exception);
     }
-    super.catch(exception, host);
+
+    if (host.getType() !== 'http') {
+      super.catch(exception, host);
+      return;
+    }
+
+    const ctx = host.switchToHttp();
+    const req = ctx.getRequest<{
+      requestId?: string;
+      headers?: Record<string, string | string[] | undefined>;
+    }>();
+    const res = ctx.getResponse();
+    const status = httpStatusFromException(exception);
+    const requestId = resolveRequestIdFromRequest(req ?? {});
+    try {
+      this.adapter.setHeader?.(res, 'x-request-id', requestId);
+    } catch {
+      // some adapters may not expose setHeader the same way
+    }
+    const body = buildApiErrorBody(exception, requestId, status);
+    this.adapter.reply(res, body, status);
   }
 }

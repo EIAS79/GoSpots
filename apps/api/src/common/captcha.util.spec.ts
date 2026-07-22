@@ -1,4 +1,4 @@
-import { ForbiddenException } from '@nestjs/common';
+import { ApiDomainErrorCode } from './api-error.codes';
 import {
   assertCaptchaOrThrow,
   captchaEnforcementActive,
@@ -160,7 +160,7 @@ describe('captcha.util', () => {
     ).resolves.toBeUndefined();
   });
 
-  it('assertCaptchaOrThrow throws Forbidden when always + bad token', async () => {
+  it('assertCaptchaOrThrow throws CAPTCHA_FAILED when always + bad token', async () => {
     const fetchImpl = jest.fn().mockResolvedValue({
       ok: true,
       json: async () => ({ success: false }),
@@ -176,7 +176,9 @@ describe('captcha.util', () => {
         token: 'bad',
         fetchImpl,
       }),
-    ).rejects.toBeInstanceOf(ForbiddenException);
+    ).rejects.toMatchObject({
+      response: { code: ApiDomainErrorCode.CAPTCHA_FAILED },
+    });
   });
 
   it('assertCaptchaOrThrow after_throttle skips until escalated', async () => {
@@ -199,6 +201,8 @@ describe('captcha.util', () => {
         escalated: true,
         fetchImpl,
       }),
-    ).rejects.toBeInstanceOf(ForbiddenException);
+    ).rejects.toMatchObject({
+      response: { code: ApiDomainErrorCode.CAPTCHA_REQUIRED },
+    });
   });
 });

@@ -115,6 +115,17 @@ export function voidGuestCheck(id: string) {
   return api<GuestCheck>(`/guest-checks/${id}/void`, { method: "POST" });
 }
 
+/** Close OPEN → SETTLED after children are already billed/completed (no second charge). */
+export function settleGuestCheck(
+  id: string,
+  body: { paymentMethod?: string; note?: string } = {},
+) {
+  return api<GuestCheck>(`/guest-checks/${id}/settle`, {
+    method: "POST",
+    body: JSON.stringify(body),
+  });
+}
+
 export function attachToGuestCheck(
   id: string,
   body: {

@@ -1,5 +1,7 @@
+import { Logger } from '@nestjs/common';
 import type { PrismaService } from '../../prisma/prisma.service';
 import { effectiveMoneyCurrency } from '../../common/currency-stamp.util';
+import { isLedgerReadsEnabled } from '../../common/ledger-post.util';
 import { venueDayKey } from '../../common/menu-stock.util';
 import {
   serializeMoney,
@@ -8,6 +10,26 @@ import {
   type MoneyWire,
 } from '../../common/money.util';
 import { loadShopVenueTimeContext } from '../../common/shop-venue-time.util';
+
+/** Defensive cap per analytics `findMany` (response shape unchanged; totals may understate). */
+export const FINANCE_ANALYTICS_ROW_TAKE = 5000;
+
+const analyticsLogger = new Logger('FinanceAnalytics');
+
+function noteAnalyticsTruncation(
+  source: string,
+  rowCount: number,
+  take: number,
+  shopId: string,
+  days: number | undefined,
+  truncated: string[],
+) {
+  if (rowCount < take) return;
+  truncated.push(source);
+  analyticsLogger.warn(
+    `Finance analytics ${source} hit take cap (${take}) for shop=${shopId}${days != null ? ` days=${days}` : ''}; totals and day buckets may be understated.`,
+  );
+}
 
 export type DayKey = string;
 
@@ -34,6 +56,90 @@ export type RevenueChannels = {
   reservations: number;
   total: number;
 };
+
+export function emptyRevenueChannels(): RevenueChannels {
+  return {
+    menuOrders: 0,
+    quickSales: 0,
+    playSessions: 0,
+    reservations: 0,
+    total: 0,
+  };
+}
+
+/** Phase 4: sum SALE ledger rows by channel (shop currency only). */
+export function sumLedgerSaleChannels(
+  rows: Array<{
+    amount: MoneyInput;
+    channel: string | null;
+    currency?: string | null;
+  }>,
+  shopCurrency: string,
+): RevenueChannels {
+  const out = emptyRevenueChannels();
+  for (const row of rows) {
+    if (!row.channel) continue;
+    if (effectiveMoneyCurrency(row.currency, shopCurrency) !== shopCurrency) {
+      continue;
+    }
+    const amt = toMoneyNumber(row.amount);
+    switch (row.channel) {
+      case 'MENU_ORDERS':
+        out.menuOrders += amt;
+        break;
+      case 'QUICK_SALES':
+        out.quickSales += amt;
+        break;
+      case 'PLAY_SESSIONS':
+        out.playSessions += amt;
+        break;
+      case 'RESERVATIONS':
+        out.reservations += amt;
+        break;
+      default:
+        break;
+    }
+  }
+  out.total =
+    out.menuOrders + out.quickSales + out.playSessions + out.reservations;
+  return out;
+}
+
+export async function loadLedgerSaleRows(
+  prisma: PrismaService,
+  shopId: string,
+  since: Date,
+  options?: { take?: number; days?: number; truncated?: string[] },
+) {
+  const take = options?.take ?? FINANCE_ANALYTICS_ROW_TAKE;
+  const rows = await prisma.ledgerEntry.findMany({
+    where: {
+      shopId,
+      kind: 'SALE',
+      channel: { not: null },
+      occurredAt: { gte: since },
+    },
+    orderBy: { occurredAt: 'desc' },
+    take,
+    select: {
+      amount: true,
+      channel: true,
+      currency: true,
+      occurredAt: true,
+    },
+  });
+  if (options?.truncated) {
+    noteAnalyticsTruncation(
+      'ledgerSaleRows',
+      rows.length,
+      take,
+      shopId,
+      options.days,
+      options.truncated,
+    );
+  }
+  return rows;
+}
 
 export type RevenueOrderRow = {
   total: MoneyInput;
@@ -190,7 +296,10 @@ async function loadRevenueSourceRows(
   prisma: PrismaService,
   shopId: string,
   since: Date,
+  options?: { take?: number; days?: number; truncated?: string[] },
 ) {
+  const take = options?.take ?? FINANCE_ANALYTICS_ROW_TAKE;
+  const truncated = options?.truncated;
   const [shop, transactions, completedOrders, billedReservations, walkInPlaySessions] =
     await Promise.all([
       prisma.shop.findUnique({
@@ -199,6 +308,8 @@ async function loadRevenueSourceRows(
       }),
       prisma.transaction.findMany({
         where: { shopId, kind: 'SALE', createdAt: { gte: since } },
+        orderBy: { createdAt: 'desc' },
+        take,
         select: { amount: true, createdAt: true, method: true, currency: true },
       }),
       prisma.shopOrder.findMany({
@@ -208,6 +319,8 @@ async function loadRevenueSourceRows(
           archivedAt: null,
           completedAt: { gte: since },
         },
+        orderBy: { completedAt: 'desc' },
+        take,
         select: {
           total: true,
           guestCount: true,
@@ -222,6 +335,8 @@ async function loadRevenueSourceRows(
           billedAt: { gte: since },
           billedAmount: { not: null },
         },
+        orderBy: { billedAt: 'desc' },
+        take,
         select: {
           billedAmount: true,
           billedAt: true,
@@ -233,6 +348,8 @@ async function loadRevenueSourceRows(
       }),
       prisma.playSession.findMany({
         where: paidWalkInPlayWhere(shopId, since),
+        orderBy: [{ completedAt: 'desc' }, { updatedAt: 'desc' }],
+        take,
         select: {
           amount: true,
           completedAt: true,
@@ -245,6 +362,41 @@ async function loadRevenueSourceRows(
         },
       }),
     ]);
+
+  if (truncated) {
+    noteAnalyticsTruncation(
+      'revenueTransactions',
+      transactions.length,
+      take,
+      shopId,
+      options?.days,
+      truncated,
+    );
+    noteAnalyticsTruncation(
+      'revenueCompletedOrders',
+      completedOrders.length,
+      take,
+      shopId,
+      options?.days,
+      truncated,
+    );
+    noteAnalyticsTruncation(
+      'revenueBilledReservations',
+      billedReservations.length,
+      take,
+      shopId,
+      options?.days,
+      truncated,
+    );
+    noteAnalyticsTruncation(
+      'revenueWalkInPlaySessions',
+      walkInPlaySessions.length,
+      take,
+      shopId,
+      options?.days,
+      truncated,
+    );
+  }
 
   const shopCurrency = (shop?.currency ?? 'EUR').toUpperCase();
   return {
@@ -337,7 +489,20 @@ export async function computeRevenueSince(
   shopId: string,
   since: Date,
 ) {
-  const rows = await loadRevenueSourceRows(prisma, shopId, since);
+  if (isLedgerReadsEnabled()) {
+    const shop = await prisma.shop.findUnique({
+      where: { id: shopId },
+      select: { currency: true },
+    });
+    const shopCurrency = (shop?.currency ?? 'EUR').toUpperCase();
+    const truncated: string[] = [];
+    const ledgerRows = await loadLedgerSaleRows(prisma, shopId, since, {
+      truncated,
+    });
+    return sumLedgerSaleChannels(ledgerRows, shopCurrency).total;
+  }
+  const truncated: string[] = [];
+  const rows = await loadRevenueSourceRows(prisma, shopId, since, { truncated });
   return sumRevenueChannelsByCurrency({
     shopCurrency: rows.shopCurrency,
     orders: rows.completedOrders,
@@ -353,7 +518,9 @@ export async function aggregateTopItems(
   shopId: string,
   since: Date,
   limit: number,
+  options?: { take?: number; days?: number; truncated?: string[] },
 ) {
+  const take = options?.take ?? FINANCE_ANALYTICS_ROW_TAKE;
   const [txRows, orderLines] = await Promise.all([
     prisma.transactionLineItem.groupBy({
       by: ['menuItemId', 'name'],
@@ -372,6 +539,8 @@ export async function aggregateTopItems(
           completedAt: { gte: since },
         },
       },
+      orderBy: { id: 'desc' },
+      take,
       select: {
         menuItemId: true,
         name: true,
@@ -380,6 +549,17 @@ export async function aggregateTopItems(
       },
     }),
   ]);
+
+  if (options?.truncated) {
+    noteAnalyticsTruncation(
+      'topItemsOrderLines',
+      orderLines.length,
+      take,
+      shopId,
+      options.days,
+      options.truncated,
+    );
+  }
 
   type Agg = {
     menuItemId: string | null;
@@ -436,6 +616,9 @@ export async function buildFinanceAnalytics(
     shopId,
   );
   const keys = dayKeysForRange(days, locale, now);
+  const take = FINANCE_ANALYTICS_ROW_TAKE;
+  const truncatedSources: string[] = [];
+  const truncationOpts = { take, days, truncated: truncatedSources };
 
   const [
     revenueRows,
@@ -446,19 +629,26 @@ export async function buildFinanceAnalytics(
     completedReservationsInRange,
     txForPaymentBreakdown,
     txSalesCount,
+    ledgerSaleRows,
   ] = await Promise.all([
-    loadRevenueSourceRows(prisma, shopId, since),
+    loadRevenueSourceRows(prisma, shopId, since, truncationOpts),
     prisma.shopLoss.findMany({
       where: { shopId, occurredAt: { gte: since } },
+      orderBy: { occurredAt: 'desc' },
+      take,
       select: { amount: true, occurredAt: true, currency: true },
     }),
     prisma.shopOrder.findMany({
       where: { shopId, createdAt: { gte: since }, archivedAt: null },
+      orderBy: { createdAt: 'desc' },
+      take,
       select: { status: true, createdAt: true, guestCount: true },
     }),
-    aggregateTopItems(prisma, shopId, since, 10),
+    aggregateTopItems(prisma, shopId, since, 10, truncationOpts),
     prisma.analyticsEvent.findMany({
       where: { shopId, createdAt: { gte: since } },
+      orderBy: { createdAt: 'desc' },
+      take,
       select: { type: true, createdAt: true },
     }),
     prisma.reservation.findMany({
@@ -467,6 +657,8 @@ export async function buildFinanceAnalytics(
         status: { in: ['COMPLETED', 'CHECKED_IN'] },
         startsAt: { gte: since },
       },
+      orderBy: { startsAt: 'desc' },
+      take,
       select: { partySize: true, startsAt: true },
     }),
     prisma.transaction.findMany({
@@ -475,12 +667,58 @@ export async function buildFinanceAnalytics(
         kind: { in: ['SALE', 'REFUND'] },
         createdAt: { gte: since },
       },
+      orderBy: { createdAt: 'desc' },
+      take,
       select: { amount: true, method: true, kind: true, currency: true },
     }),
     prisma.transaction.count({
       where: { shopId, kind: 'SALE', createdAt: { gte: since } },
     }),
+    isLedgerReadsEnabled()
+      ? loadLedgerSaleRows(prisma, shopId, since, truncationOpts)
+      : Promise.resolve([] as Awaited<ReturnType<typeof loadLedgerSaleRows>>),
   ]);
+
+  noteAnalyticsTruncation(
+    'losses',
+    lossesByDayRows.length,
+    take,
+    shopId,
+    days,
+    truncatedSources,
+  );
+  noteAnalyticsTruncation(
+    'ordersInRange',
+    allOrdersInRange.length,
+    take,
+    shopId,
+    days,
+    truncatedSources,
+  );
+  noteAnalyticsTruncation(
+    'marketingEvents',
+    marketingEvents.length,
+    take,
+    shopId,
+    days,
+    truncatedSources,
+  );
+  noteAnalyticsTruncation(
+    'completedReservations',
+    completedReservationsInRange.length,
+    take,
+    shopId,
+    days,
+    truncatedSources,
+  );
+  noteAnalyticsTruncation(
+    'paymentBreakdownTransactions',
+    txForPaymentBreakdown.length,
+    take,
+    shopId,
+    days,
+    truncatedSources,
+  );
 
   const {
     shopCurrency,
@@ -490,13 +728,24 @@ export async function buildFinanceAnalytics(
     walkInPlaySessions: completedPlaySessions,
   } = revenueRows;
 
-  const currencyBuckets = sumRevenueChannelsByCurrency({
-    shopCurrency,
-    orders: completedOrders,
-    transactions: txByDay,
-    billedReservations,
-    walkInPlaySessions: completedPlaySessions,
-  });
+  const preferLedger = isLedgerReadsEnabled();
+  const ledgerChannels = preferLedger
+    ? sumLedgerSaleChannels(ledgerSaleRows, shopCurrency)
+    : null;
+  const currencyBuckets = preferLedger
+    ? {
+        shopCurrency,
+        byCurrency: { [shopCurrency]: ledgerChannels! },
+        shopChannels: ledgerChannels!,
+        mixedCurrencies: false,
+      }
+    : sumRevenueChannelsByCurrency({
+        shopCurrency,
+        orders: completedOrders,
+        transactions: txByDay,
+        billedReservations,
+        walkInPlaySessions: completedPlaySessions,
+      });
   const channels = currencyBuckets.shopChannels;
   const orderRevenue = channels.menuOrders;
   const txRevenue = channels.quickSales;
@@ -522,55 +771,83 @@ export async function buildFinanceAnalytics(
     revenueByDay.map((r) => [r.day, r]),
   ) as Record<string, (typeof revenueByDay)[0]>;
 
-  for (const t of txByDay) {
-    if (effectiveMoneyCurrency(t.currency, shopCurrency) !== shopCurrency) {
-      continue;
+  if (preferLedger) {
+    for (const row of ledgerSaleRows) {
+      if (effectiveMoneyCurrency(row.currency, shopCurrency) !== shopCurrency) {
+        continue;
+      }
+      const day = dayBucket(locale, row.occurredAt);
+      if (!revMap[day] || !row.channel) continue;
+      const amt = toMoneyNumber(row.amount);
+      switch (row.channel) {
+        case 'MENU_ORDERS':
+          revMap[day].menuOrders += amt;
+          break;
+        case 'QUICK_SALES':
+          revMap[day].quickSales += amt;
+          break;
+        case 'PLAY_SESSIONS':
+          revMap[day].playSessions += amt;
+          break;
+        case 'RESERVATIONS':
+          revMap[day].reservations += amt;
+          break;
+        default:
+          continue;
+      }
+      revMap[day].total += amt;
     }
-    const day = dayBucket(locale, t.createdAt);
-    if (!revMap[day]) continue;
-    const amt = toMoneyNumber(t.amount);
-    revMap[day].quickSales += amt;
-    revMap[day].total += amt;
-  }
-  for (const o of completedOrders) {
-    if (!o.completedAt) continue;
-    if (effectiveMoneyCurrency(o.currency, shopCurrency) !== shopCurrency) {
-      continue;
+  } else {
+    for (const t of txByDay) {
+      if (effectiveMoneyCurrency(t.currency, shopCurrency) !== shopCurrency) {
+        continue;
+      }
+      const day = dayBucket(locale, t.createdAt);
+      if (!revMap[day]) continue;
+      const amt = toMoneyNumber(t.amount);
+      revMap[day].quickSales += amt;
+      revMap[day].total += amt;
     }
-    const day = dayBucket(locale, o.completedAt);
-    if (!revMap[day]) continue;
-    const amt = toMoneyNumber(o.total);
-    revMap[day].menuOrders += amt;
-    revMap[day].total += amt;
-  }
-  for (const r of billedReservations) {
-    if (!r.billedAt) continue;
-    if (effectiveMoneyCurrency(r.currency, shopCurrency) !== shopCurrency) {
-      continue;
+    for (const o of completedOrders) {
+      if (!o.completedAt) continue;
+      if (effectiveMoneyCurrency(o.currency, shopCurrency) !== shopCurrency) {
+        continue;
+      }
+      const day = dayBucket(locale, o.completedAt);
+      if (!revMap[day]) continue;
+      const amt = toMoneyNumber(o.total);
+      revMap[day].menuOrders += amt;
+      revMap[day].total += amt;
     }
-    const day = dayBucket(locale, r.billedAt);
-    if (!revMap[day]) continue;
-    const amt = toMoneyNumber(r.billedAmount);
-    if (r.resourceId) {
+    for (const r of billedReservations) {
+      if (!r.billedAt) continue;
+      if (effectiveMoneyCurrency(r.currency, shopCurrency) !== shopCurrency) {
+        continue;
+      }
+      const day = dayBucket(locale, r.billedAt);
+      if (!revMap[day]) continue;
+      const amt = toMoneyNumber(r.billedAmount);
+      if (r.resourceId) {
+        revMap[day].playSessions += amt;
+      } else {
+        revMap[day].reservations += amt;
+      }
+      revMap[day].total += amt;
+    }
+    for (const p of completedPlaySessions) {
+      if (p.reservationId != null) continue;
+      if (!isPaidWalkInPlaySession(p)) continue;
+      if (effectiveMoneyCurrency(p.currency, shopCurrency) !== shopCurrency) {
+        continue;
+      }
+      const at = p.completedAt ?? p.updatedAt;
+      if (!at) continue;
+      const day = dayBucket(locale, at);
+      if (!revMap[day]) continue;
+      const amt = toMoneyNumber(p.amount);
       revMap[day].playSessions += amt;
-    } else {
-      revMap[day].reservations += amt;
+      revMap[day].total += amt;
     }
-    revMap[day].total += amt;
-  }
-  for (const p of completedPlaySessions) {
-    if (p.reservationId != null) continue;
-    if (!isPaidWalkInPlaySession(p)) continue;
-    if (effectiveMoneyCurrency(p.currency, shopCurrency) !== shopCurrency) {
-      continue;
-    }
-    const at = p.completedAt ?? p.updatedAt;
-    if (!at) continue;
-    const day = dayBucket(locale, at);
-    if (!revMap[day]) continue;
-    const amt = toMoneyNumber(p.amount);
-    revMap[day].playSessions += amt;
-    revMap[day].total += amt;
   }
 
   const lossesByDay = emptyDayMap(keys);
@@ -715,11 +992,19 @@ export async function buildFinanceAnalytics(
     total: serializeMoney(closeRow?.total ?? 0),
   };
 
+  const analyticsTruncated = truncatedSources.length > 0;
+
   return {
     days,
     summary: {
       currency: shopCurrency,
       mixedCurrencies: currencyBuckets.mixedCurrencies,
+      ...(analyticsTruncated
+        ? {
+            analyticsTruncated: true as const,
+            analyticsTruncatedSources: [...new Set(truncatedSources)],
+          }
+        : {}),
       revenueByCurrency: Object.fromEntries(
         Object.entries(currencyBuckets.byCurrency).map(([code, ch]) => [
           code,

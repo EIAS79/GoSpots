@@ -1,272 +1,79 @@
-# GoSpots / Locora — Migration Plan (Phase 1)
+# GoSpots migration plan (current)
 
-**Rule:** Never recommend `prisma migrate reset` for production or shared Neon. Use expand → backfill → contract. Always `prisma migrate deploy`.
-
-Schema today: PostgreSQL, Prisma 6, migrations under `apps/api/prisma/migrations/`.  
-**Money (wave 2):** core commercial columns are `Decimal(19,4)` via `20260720230000_money_decimal_core`. `billingDiscountPercent` remains Float (percent, not money).  
-**Guest tokens (wave 2):** hash + expiry expand via `20260720250000_guest_token_hash_expiry` (dual-read plaintext until contract).  
-**Webhook receipts (wave 1):** `BillingWebhookEvent` via `20260720210000_billing_webhook_events`.
+**As of:** 2026-07-22  
+**Rule:** never `prisma migrate reset` on shared/prod. Prefer forward migrations + PITR.  
+**Safety design:** [`GO_SPOTS_MIGRATION_SAFETY.md`](./GO_SPOTS_MIGRATION_SAFETY.md)  
+**Verify:** `pnpm --filter @gospots/api run verify:migrations`
 
 ---
 
-## 1. Candidate migrations (only where audit CONFIRMED need)
+## Applied on Neon (Friday wave — operator confirmed)
 
-### M1 — Money columns (CONFIRMED — **core cutover shipped wave 2**)
+Folders through `20260721120000_seating_source_dining_table_group` (18 folders in that wave; disk total higher historically). Includes among others:
 
-**Why:** Commercial amounts were `Float` (`MenuItem.price`, rates, orders, transactions, play, losses, reservation billing).
+| Migration (representative) | Purpose |
+|----------------------------|---------|
+| `20260720210000_billing_webhook_events` | Lemon webhook receipt uniqueness |
+| `20260720230000_money_decimal_core` | Money Decimal columns |
+| `20260720240000_*` / `20260721090000_*` | MembershipPermission / SubscriptionAddOn + CSV DROP |
+| `20260721010000_idempotency_receipts` | Client idempotency |
+| `20260721020000_mail_outbox` | Durable mail |
+| `20260721030000_dashboard_key_hash` | Hash-at-rest dashboard key |
+| `20260721040000_currency_stamp_*` | Currency stamps |
+| `20260721050000_tenant_rls_core` | RLS ENABLE+FORCE + policies |
+| `20260721060000_reservation_resource_exclusion` | GiST exclusion (`tsrange`) |
+| `20260721070000_gdpr_*` | Consent / DSAR |
+| `20260721080000_user_mfa_totp` | Owner TOTP |
+| `20260721100000_ledger_entry` | LedgerEntry + RLS |
+| `20260721110000_guest_check` | GuestCheck + FKs |
+| `20260721120000_seating_source_dining_table_group` | Dual-write FK |
 
-**Shipped approach:** In-place `ALTER COLUMN … TYPE DECIMAL(19,4) USING ROUND((col)::numeric, 4)` (preserves values; no silent truncate beyond 4dp).
+**Deploy order:** backup/PITR → `prisma migrate deploy` → `verify:migrations` → app boot → smoke.
 
-**Columns converted:**
-
-| Table | Columns |
-|-------|---------|
-| MenuItem | price |
-| ResourceRate | price |
-| Resource | hourlyRate |
-| Reservation | billedAmount, billingBaseAmount |
-| PlaySession | amount |
-| ShopOrder | total, reservationFee |
-| ShopOrderLine | unitPrice |
-| Transaction | amount |
-| TransactionLineItem | unitPrice, total |
-| ShopLoss | amount |
-
-**Not converted:** `billingDiscountPercent` (percent). Ratings remain Int.
-
-**API serialization:** numbers via `serializeMoney` / `toMoneyNumber` (compat). String form available as `serializeMoneyString`.
-
-**Validation (operator, after migrate deploy):**
-
-```sql
--- Spot-check: no NULL surprises on required money cols; sample precision
-SELECT COUNT(*) FILTER (WHERE price IS NULL) AS null_prices FROM "MenuItem";
-SELECT COUNT(*) FILTER (WHERE amount IS NULL) AS null_tx FROM "Transaction";
-SELECT id, price::text FROM "MenuItem" ORDER BY "updatedAt" DESC LIMIT 20;
-SELECT id, amount::text, total::text FROM "TransactionLineItem" ORDER BY id DESC LIMIT 20;
-```
-
-**Still later:** M6 currency stamps; ledger (M3); any remaining app paths not yet using `money.util`.
-
-**Rollback:** reverse type to `double precision` or Neon PITR — **never reset**.
+**Rollback:** forward-fix or Neon PITR — do not reset.
 
 ---
 
-### M2 — Billing webhook receipts (CONFIRMED — **shipped wave 1**)
+## App-level / flag cutovers (not SQL)
 
-```prisma
-model BillingWebhookEvent {
-  id           String   @id @default(cuid())
-  provider     String   // "lemon_squeezy"
-  eventId      String   // Lemon event id or hash(payload meta)
-  eventName    String
-  shopId       String?
-  payloadHash  String?
-  processedAt  DateTime @default(now())
-  @@unique([provider, eventId])
-  @@index([shopId, processedAt])
-}
-```
-
-**Migration:** `20260720210000_billing_webhook_events`  
-**Backfill:** None required (empty table).  
-
-**Compatibility:** Handler: insert receipt first (or upsert); on unique conflict return `{ ok: true, duplicate: true }` without re-applying side effects.  
-
-**Rollback:** Stop writing table; drop model later if abandoned.
+| Step | Command / flag | When |
+|------|----------------|------|
+| Legacy guest plaintext clear | `pnpm clear:guest-plaintext` | Before DROP plaintext |
+| Pack add-on backfill | `pnpm backfill:legacy-addon-tier -- --apply` | Optional |
+| Ledger backfill | `pnpm backfill:ledger -- --dry-run` then `--apply` | After `LEDGER_DUAL_WRITE` soak |
+| Dual-write | `LEDGER_DUAL_WRITE=on` | After migrate + soak |
+| Ledger reads | `LEDGER_READS=on` | After backfill parity |
+| Tenant RLS | `TENANT_RLS=on` | After migrate + smoke — Gates 0–4 [`GO_SPOTS_RLS.md`](./GO_SPOTS_RLS.md) |
+| Legacy uploads off | `LEGACY_UPLOADS_STATIC=false` | When inventory=0 |
 
 ---
 
-### M3 — Financial ledger (CONFIRMED needed for long-term; can stage)
+## Residual schema work (not yet / optional)
 
-**Why:** Fragmented `Transaction` / `ShopOrder` / `PlaySession` / `Reservation.billedAmount`.
+- DROP guest plaintext token columns (§11)  
+- DROP dashboard key plaintext / grace (§13)  
+- DROP `Subscription.tier` (§15)  
+- Resource/dining Phase 4 DROP superseded seating (§17)  
+- Split DB roles for RLS (§6)  
 
-**Candidate:**
-
-```prisma
-model LedgerEntry {
-  id            String   @id @default(cuid())
-  shopId        String
-  currency      String
-  amountMinor   Int      // or Decimal — match M1 Decimal(19,4)
-  kind          String   // SALE, REFUND, ADJUSTMENT, …
-  sourceType    String   // SHOP_ORDER, TRANSACTION, PLAY_SESSION, RESERVATION, …
-  sourceId      String
-  occurredAt    DateTime
-  createdAt     DateTime @default(now())
-  @@unique([shopId, sourceType, sourceId, kind]) // idempotent post
-  @@index([shopId, occurredAt])
-}
-```
-
-**Backfill:** Script posting historical completed orders, SALE transactions, paid play (no reservation), billed reservations — **one post per source**, never sum duplicates.  
-
-**Compatibility:** Analytics dual-read: prefer ledger if shop has any entries after cutover date; else legacy aggregate.  
-
-**Rollback:** Feature-flag ledger reads off; keep legacy writers.
-
-**Deferred to wave 3+** — money type decided and core columns converted.
+Each requires its own expand → dual-read → cutover → DROP sequence.
 
 ---
 
-### M4 — Guest token hashes + expiry (CONFIRMED — **expand shipped wave 2**)
+## Validation queries / scripts
 
-**Models:** `Reservation`, `EventRequest`, `GuestChat`.
-
-**Shipped expand (`20260720250000_guest_token_hash_expiry`):**
-
-- `guestTokenHash String? @unique`
-- `guestTokenExpiresAt DateTime?`
-- `guestTokenRevokedAt DateTime?`
-- `GuestChat.guestToken` made nullable
-- Backfill: `encode(digest(guestToken, 'sha256'), 'hex')` via pgcrypto; expiry = endsAt/preferredEnds/createdAt + TTL
-
-**App behavior:**
-
-- New writes: hash only (plaintext null); raw returned once in API/email
-- Dual-read: `guestTokenHash` OR legacy `guestToken`
-- Timing-safe hash compare; reject expired/revoked
-- Revoke on cancel / chat end
-
-**Contract (later):**
-
-- Null out remaining plaintext after dual-read window verified
-- Drop `guestToken` column
-
-**Breakage note:** Email/SMS links with old tokens keep working during dual-read window.
+- `pnpm --filter @gospots/api run verify:migrations`  
+- `pnpm --filter @gospots/api run detect:reservation-overlaps` (before exclusion; already 0 at apply time)  
+- `pnpm --filter @gospots/api run detect:resource-dining-drift`  
+- Ledger: dry-run backfill counts; compare day totals to interim analytics during dual-read soak  
 
 ---
 
-### M5 — Shop timezone (CONFIRMED needed)
+## Post-deploy checks
 
-```prisma
-// on Shop
-timezone String @default("UTC") // IANA
-```
-
-**Backfill:** Map from existing `locale` using current `localeToTz` table; default UTC.  
-
-**Compatibility:** App prefers `shop.timezone` over locale map.  
-
-**Rollback:** Ignore column; fall back to locale map.
-
----
-
-### M6 — Currency stamp on monetary rows (PARTIALLY needed)
-
-Add `currency String` (ISO 4217) to `Transaction`, `ShopOrder`, `PlaySession`, `ShopLoss`, and reservation billing fields group.
-
-**Backfill:** `SET currency = Shop.currency` via join.  
-
-**Compatibility:** Reports group by currency.  
-
-**Depends on:** Prefer after M1 (M1 core done).
-
----
-
-### M7 — Permissions / add-ons tables (CONFIRMED eventual; not blocking P0)
-
-```prisma
-model MembershipPermission {
-  membershipId String
-  permission   String
-  @@id([membershipId, permission])
-}
-model SubscriptionAddOn {
-  subscriptionId String
-  addOnId        String
-  @@id([subscriptionId, addOnId])
-}
-```
-
-**Backfill:** Parse CSV → rows. Dual-read CSV until contract.  
-
-**Defer** until after P0 integrity (per fix plan).
-
----
-
-### M8 — Webhook / money: areas that do **NOT** need migration yet
-
-| Area | Verdict | Evidence |
-|------|---------|----------|
-| CSRF tokens | No schema | Cookie/SameSite policy |
-| 2FA | No schema until product | Absent today |
-| Owner session list | **No migration** | `AuthSession` already exists |
-| Dashboard key | **No migration** | `dashboardKey` already on `Shop` |
-| Dual pack/tier | **No immediate migration** | Keep `tier` derived; drop later |
-| Dining vs seating unify | **Product first** | Don’t migrate until model chosen |
-| Unified guest check | New tables later | Not started |
-| Realtime | No schema | Absent |
-| Image storage | **No migration** | `StoredImage` works; policy only |
-| Stock columns | **No migration for types** | Int stock OK; fix transactions in app |
-| Overlap exclusion constraint | **Optional Postgres DDL** | Can be raw SQL migration without Prisma model |
-
----
-
-## 2. Optional raw SQL: booking exclusion (Phase D)
-
-If using Postgres ranges:
-
-```sql
--- Illustrative only; refine active status filter
--- CREATE EXTENSION IF NOT EXISTS btree_gist;
--- ALTER TABLE "Reservation" ADD EXCLUDE USING gist (
---   "resourceId" WITH =,
---   tstzrange("startsAt", "endsAt", '[)') WITH &&
--- ) WHERE ("resourceId" IS NOT NULL AND "status" IN ('PENDING','CONFIRMED','CHECKED_IN'));
-```
-
-**Risk:** Fails if existing overlapping rows exist — **must** clean data first.  
-
-**Rollback:** `DROP INDEX` / drop constraint.  
-
-**Never reset DB to “fix” overlaps.**
-
----
-
-## 3. Backfill / compatibility playbook
-
-1. Deploy expand migration (`migrate deploy`)  
-2. Deploy app dual-write / dual-read  
-3. Run backfill job (idempotent, batched, logged) on Neon  
-4. Verify row counts + checksum samples  
-5. Deploy read-prefer-new  
-6. Stop dual-write  
-7. Contract migration drops old columns  
-
-Document backfill commands in `docs/` when implemented — not in this phase.
-
----
-
-## 4. Rollback notes (production)
-
-- Prefer **forward fixes** over reset  
-- Keep previous Render deploy + prior migration reversible only if contract not applied  
-- Neon PITR / branch restore for disaster — ops Phase H  
-- **Forbidden:** `prisma migrate reset`, `db push --force-reset`, dropping prod data to “re-seed”
-
----
-
-## 5. Local / CI databases
-
-- Local: `docker-compose.yml` Postgres 16  
-- CI: ephemeral Postgres service; apply migrations fresh per job  
-- Do not point CI at production Neon  
-- Ignore/remove reliance on `apps/api/prisma/dev.db` for Postgres workflows
-
----
-
-## 6. Suggested migration order
-
-1. M2 Webhook receipts — **done (wave 1)**  
-2. M5 Timezone (small) — still open  
-3. M1 Money core cutover — **done (wave 2)**  
-4. M6 Currency stamps — next money wave  
-5. M4 Guest token hash expand — **done (wave 2)**; contract later  
-6. M3 Ledger (wave 3+)  
-7. Exclusion constraint (after overlap cleanup)  
-8. M7 Permissions tables (architecture phase)  
-
----
-
-*Aligned with `GO_SPOTS_DEEP_AUDIT.md` and `GO_SPOTS_FIX_PLAN.md`.*
+1. `/api/v1/live` 200 · `/api/v1/ready` database up  
+2. Login + CSRF mutation  
+3. Create booking + guest status link  
+4. Complete order (stock)  
+5. Lemon webhook duplicate no-op  
+6. Optional: open GuestCheck → settle after children billed  

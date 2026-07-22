@@ -1,6 +1,6 @@
 # Disaster recovery
 
-**Status:** Ship bar met for bible **#24** (documented procedures). Live Neon PITR / retention values and restore-drill date remain **OPERATOR** fill-ins — confirm in the Neon console before relying on this in an incident.
+**Status:** Ship bar met for bible **#24** / §25 (documented procedures). Neon project id + **6h** PITR retention are recorded below. **PITR restore drill is an OPEN operator residual** — never executed (`_never_` / `_TBD_`); complete the checklist in [Restore drill](#restore-drill--open-residual-operator) before treating DR as proven in an incident. Do not backdate a drill date.
 
 **Ship bar (code/docs):** clear Postgres restore paths · API/Web re-point order · post-restore verify · RTO/RPO guidance · restore-drill checklist · partial-outage runbook (+ in-app mirror). Not required for DONE: automated backup job, app-level upload backup, or filled TBD fields from a live console.
 
@@ -63,18 +63,22 @@ Typical Neon flows — confirm UI labels on the live project:
 - **Web (Vercel):** redeploy once API URL / DNS is correct; confirm `WEB_ORIGIN`, `API_PROXY_TARGET`, and `CORS_ORIGINS`.
 - **Cookies / CSRF:** after URL or proxy changes, re-check Secure / SameSite behind the proxy (not a DB outage — mode **D**).
 
-## Restore drill (practice — OPERATOR)
+## Restore drill — **OPEN residual** (OPERATOR)
 
-Run at least once before treating DR as proven. Prefer a **non-prod** Neon branch or a disposable project.
+**Not done:** last drill `_never_`; outcome `_TBD_`. Runbook template is shipped; **proving** PITR restore requires completing this checklist once. Prefer a **non-prod** Neon branch or a disposable project — never first-test on production.
 
-| Step | Action | Pass? |
-|------|--------|-------|
-| 1 | Create branch / restore to a timestamp ~1h ago | ☐ |
-| 2 | Point a staging API at the branch `DATABASE_URL` | ☐ |
-| 3 | `migrate:deploy` only if behind; never reset | ☐ |
-| 4 | `/ready` → database up | ☐ |
-| 5 | Login + one read path (reservations or finance list) | ☐ |
-| 6 | Record date + notes in the table above | ☐ |
+### PITR restore-drill checklist (close §25 / §37 gate 10)
+
+| # | Gate | Action | Pass? |
+|---|------|--------|-------|
+| 0 | Pre-flight | Confirm PITR / history retention in Neon console matches the project record table (currently **6 hours**) | ☐ |
+| 1 | Branch | Create branch / restore to a timestamp ~1h ago via Neon PITR | ☐ |
+| 2 | Wire | Point a **staging** API at the branch `DATABASE_URL` (`?sslmode=require`) | ☐ |
+| 3 | Migrate | `pnpm --filter @gospots/api migrate:deploy` **only if** behind; **never** reset | ☐ |
+| 4 | Ready | `GET /api/v1/ready` → `database: up` (do not trust `/live` alone) | ☐ |
+| 5 | Smoke | Owner login + CSRF + one read path (reservations or finance list) | ☐ |
+| 6 | Record | Fill **Last restore drill date** + **Drill outcome** in the [project record](#pre-incident-checklist-do-once-before-friday-smoke-if-possible) table — use the actual run date only | ☐ |
+| 7 | Calibrate | Update accepted RPO/RTO in the project record if the drill changed guidance | ☐ |
 
 Failure modes to note: wrong SSL mode, pooler vs direct URL, migrations ahead of restored schema, webhook secret mismatch after URL change.
 
@@ -97,17 +101,19 @@ App UX modes (bible #32): **A** browser offline · **B** API unreachable · **C*
 
 **Communication:** in-app connectivity banner is enough for v1; for prolonged mode **C** during open hours, venue operators notify guests out-of-band. Full restore / PITR remains this doc’s Database section.
 
-## Explicit residuals (not blockers for #24 DONE)
+## Explicit residuals (not blockers for #24 / §25 DONE)
 
-- Live Neon project TBD fields (project id, retention, last drill) — **OPERATOR**
-- Automated backup verification cron
-- Upload / media object-storage backup
-- Documented partial-table restore
+| Residual | Status | Close via |
+|----------|--------|-----------|
+| **PITR restore drill** | **OPEN** — never run (`_never_` / `_TBD_`) | [Restore drill checklist](#restore-drill--open-residual-operator) gates 0–7 |
+| Automated backup verification cron | Deferred | — |
+| Upload / media object-storage backup | Deferred | — |
+| Documented partial-table restore | Deferred | — |
 
 ## Related
 
 - [`docs/audit/DEPLOY_CHECKLIST.md`](../audit/DEPLOY_CHECKLIST.md) — Friday migrate + smoke
-- [`docs/audit/REMAINING_P0_FRIDAY.md`](../audit/REMAINING_P0_FRIDAY.md) — operator blockers
+- [`docs/PRODUCTION_STATUS.md`](../PRODUCTION_STATUS.md) — operator blockers / live status
 - [`docs/audit/GO_SPOTS_OFFLINE.md`](../audit/GO_SPOTS_OFFLINE.md) — failure taxonomy + UX modes
 - [`docs/audit/BIBLE_STATUS.md`](../audit/BIBLE_STATUS.md) — bible #24
 - `docs/DEPLOYMENT.md` — Neon + Render setup

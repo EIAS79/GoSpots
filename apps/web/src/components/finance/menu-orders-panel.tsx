@@ -13,7 +13,7 @@ import {
 } from "lucide-react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { cn } from "@/lib/cn";
-import { ApiError } from "@/lib/api";
+import { ApiError, resolveApiErrorDisplay } from "@/lib/api";
 import { OrderDetailPanel } from "@/components/finance/order-detail-panel";
 import { OrderGridCard } from "@/components/finance/order-grid-card";
 import { ConfirmDialog } from "@/components/ui/confirm-dialog";
@@ -337,7 +337,20 @@ export function MenuOrdersPanel({
       publishLiveEvent({ section: "shop_orders" });
       return result;
     } catch (e) {
-      setError(e instanceof Error ? e.message : t("orders.requestFailed"));
+      setError(
+        resolveApiErrorDisplay(
+          e,
+          {
+            MENU_STOCK_INSUFFICIENT: t("orders.stockInsufficient"),
+            PERMISSION_DENIED: t("common.permissionDenied"),
+            VENUE_ACCESS_DENIED: t("common.venueAccessDenied"),
+          },
+          t("orders.requestFailed"),
+        ),
+      );
+      if (e instanceof ApiError && e.code === "MENU_STOCK_INSUFFICIENT") {
+        void refreshMenu();
+      }
     } finally {
       setBusy(false);
     }

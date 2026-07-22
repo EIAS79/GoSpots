@@ -16,6 +16,10 @@ export const MAIL_OUTBOX_CRON_LOCK_KEY2 = 0x4d4f; // 'MO'
 export const GDPR_RETENTION_CRON_LOCK_KEY1 = 0x4753; // 'GS'
 export const GDPR_RETENTION_CRON_LOCK_KEY2 = 0x4744; // 'GD'
 
+/** Mail outbox SENT retention cron — 'GS' + 'MR'. */
+export const MAIL_OUTBOX_RETENTION_CRON_LOCK_KEY1 = 0x4753; // 'GS'
+export const MAIL_OUTBOX_RETENTION_CRON_LOCK_KEY2 = 0x4d52; // 'MR'
+
 export type AdvisoryLockOutcome<T> =
   | { acquired: false }
   | { acquired: true; result: T };
@@ -102,6 +106,21 @@ export async function withGdprRetentionCronLock<T>(
     prisma,
     GDPR_RETENTION_CRON_LOCK_KEY1,
     GDPR_RETENTION_CRON_LOCK_KEY2,
+    fn,
+    options,
+  );
+}
+
+/** Single-flight wrapper for the mail outbox SENT retention cron tick. */
+export async function withMailOutboxRetentionCronLock<T>(
+  prisma: PrismaClient,
+  fn: () => Promise<T>,
+  options?: XactLockOptions,
+): Promise<AdvisoryLockOutcome<T>> {
+  return withPgAdvisoryXactLock(
+    prisma,
+    MAIL_OUTBOX_RETENTION_CRON_LOCK_KEY1,
+    MAIL_OUTBOX_RETENTION_CRON_LOCK_KEY2,
     fn,
     options,
   );

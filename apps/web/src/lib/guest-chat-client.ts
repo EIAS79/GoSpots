@@ -1,5 +1,6 @@
 import { ApiError } from "./api";
 import { getApiBaseUrl } from "./api-base-url";
+import { apiErrorFromResponse } from "./api-error-message";
 
 export type GuestChatStatus = "WAITING" | "OPEN" | "PAUSED" | "ENDED";
 export type GuestChatSender = "GUEST" | "STAFF";
@@ -76,13 +77,8 @@ async function publicFetch<T>(path: string, init?: RequestInit): Promise<T> {
     /* ignore */
   }
   if (!res.ok) {
-    const message =
-      (payload as { message?: string | string[] })?.message &&
-      (Array.isArray((payload as { message?: string[] }).message)
-        ? (payload as { message: string[] }).message.join(", ")
-        : (payload as { message: string }).message) ||
-      `Request failed: ${res.status}`;
-    throw new ApiError(message, res.status, payload);
+    const { message, code } = apiErrorFromResponse(res.status, payload);
+    throw new ApiError(message, res.status, payload, code);
   }
   return payload as T;
 }

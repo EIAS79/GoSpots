@@ -83,6 +83,24 @@ describe('GalleryService tenant-scoped mutations', () => {
     });
   });
 
+  it('list applies shop-scoped take cap on findMany', async () => {
+    const findMany = jest.fn().mockResolvedValue([]);
+    const service = makeService({
+      shop: {
+        findUnique: jest.fn().mockResolvedValue({ coverImage: '/cover.jpg' }),
+      },
+      galleryItem: { findMany },
+    });
+
+    await service.list(actor);
+
+    expect(findMany).toHaveBeenCalledWith({
+      where: { shopId: 'shop_a' },
+      orderBy: [{ sortOrder: 'asc' }, { createdAt: 'asc' }],
+      take: GalleryService.GALLERY_LIST_TAKE,
+    });
+  });
+
   it('deleteItem rejects Shop B item id for Shop A actor', async () => {
     const del = jest.fn();
     const service = makeService({

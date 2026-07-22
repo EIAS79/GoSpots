@@ -1,151 +1,128 @@
-# Postgres exclusion constraint — booking overlaps
+# Locora — Reservation GiST exclusion constraint
 
-**Status:** Migration **on disk** (`20260721060000_reservation_resource_exclusion`). App path aligned (half-open `[)` + `ACTIVE_RESERVATION`). Neon / shared deploy = **operator** after `detect:reservation-overlaps` = 0.  
-**Date:** 2026-07-21 (ship lane **WWWWWW**)  
-**Related:** `booking-lock.util.ts` (FOR UPDATE + 23P01→409), `booking-overlap.util.ts`, `reservation-overlap-detect.util.ts`.
-
----
-
-## 1. Why this exists
-
-App-level mitigation:
-
-- `withResourceBookingLock` → `SELECT … FROM "Resource" … FOR UPDATE`
-- then `assertBookingSlotFree` / overlap helpers → create/update
-- exclusion violation (`23P01` on `Reservation_resource_tstzrange_excl`) → same `ConflictException` 409
-
-Row locks serialize check+write for a resource. The Postgres `EXCLUDE` is defense-in-depth for reservation↔reservation races (and for any code path that forgets the lock).
+**Date:** 2026-07-21 (DDL shipped) / 2026-07-22 (operator checklist **CONCUR7-residual-docs**)  
+**Status:** **Implemented (ship bar)** — migration on disk + **applied on Neon** (18-folder deploy 2026-07-21); app lock + overlap asserts aligned. Live Docker concurrency proof = operator residual (see [`GO_SPOTS_CONCURRENCY_TESTS.md`](./GO_SPOTS_CONCURRENCY_TESTS.md)).  
+**Bible:** §7 P0 reservation/session concurrency — **DONE** (app belt + DB belt); live C1/C2 **OPERATOR**.  
+**Lanes:** **WWWWWW-exclusion-done** (code/migrate), **HHHHHH-concurrency-live** (util bodies), **CONCUR7-residual-docs** (honest residual + gates).
 
 ---
 
-## 2. Shipped SQL (migration)
+## Recommendation (operator / ship timing)
 
-Match app overlap semantics: half-open `[)` so adjacent slots that only touch at an endpoint do **not** conflict (`startsAt < other.endsAt AND endsAt > other.startsAt`).
+| When | Action |
+|------|--------|
+| **Code (done)** | `withResourceBookingLock` + half-open overlap asserts; migration `20260721060000_reservation_resource_exclusion`. |
+| **Neon (done 2026-07-21)** | Preflight `pnpm detect:reservation-overlaps` = **0** → `migrate deploy` applied constraint. |
+| **Post-ship (operator)** | Optional: run live C1/C2 on **local Docker** — [`GO_SPOTS_CONCURRENCY_TESTS.md`](./GO_SPOTS_CONCURRENCY_TESTS.md) Gates 0–3. **Never** point live concurrency tests at Neon. |
+| **Future (optional)** | Extend exclusion or add policy for walk-in `PlaySession` ↔ reservation races (C4). |
 
-Active statuses must match `ACTIVE_RESERVATION` in `booking-floor-status.ts`: `PENDING`, `CONFIRMED`, `CHECKED_IN`.
+---
+
+## Problem (bible §7 / legacy #4)
+
+Two concurrent booking attempts for the same `resourceId` and overlapping time window can both pass an application-level “slot free” check if their transactions interleave before either commits. The deep audit flagged this as P0 double-book risk.
+
+**Defense in depth (shipped):**
+
+| Layer | Mechanism |
+|-------|-----------|
+| App lock | `withResourceBookingLock` → `SELECT … FOR UPDATE` on `Resource` inside `$transaction` |
+| App assert | `assertBookingSlotFree` / `booking-overlap.util.ts` — half-open `[)` interval semantics |
+| DB belt | GiST `EXCLUDE` on `(resourceId, tsrange(startsAt, endsAt, '[)'))` for active statuses |
+| Error map | Postgres `23P01` (exclusion violation) → HTTP 409 under booking lock path |
+| Detect | `pnpm detect:reservation-overlaps` — post-hoc audit CLI (SQL matches constraint) |
+
+---
+
+## DDL (shipped migration)
 
 File: `apps/api/prisma/migrations/20260721060000_reservation_resource_exclusion/migration.sql`
 
-```sql
-CREATE EXTENSION IF NOT EXISTS btree_gist;
+- Requires `btree_gist` extension.
+- Uses **`tsrange`** on Prisma `timestamp(3)` columns (not `tstzrange` — avoids `42P17` immutability issues with session timezone).
+- Partial index predicate: `resourceId IS NOT NULL` AND `status IN ('PENDING', 'CONFIRMED', 'CHECKED_IN')`.
+- Constraint name: `Reservation_resource_tstzrange_excl`.
 
-DROP FUNCTION IF EXISTS reservation_tstzrange(timestamptz, timestamptz);
-
-ALTER TABLE "Reservation"
-  ADD CONSTRAINT "Reservation_resource_tstzrange_excl"
-  EXCLUDE USING gist (
-    "resourceId" WITH =,
-    tsrange("startsAt", "endsAt", '[)') WITH &&
-  )
-  WHERE (
-    "resourceId" IS NOT NULL
-    AND "status" IN ('PENDING', 'CONFIRMED', 'CHECKED_IN')
-  );
-```
-
-Same string: `RESERVATION_EXCLUSION_CONSTRAINT_SQL` in `reservation-overlap-detect.util.ts`.
-
-**If this migration failed mid-deploy (P3018 / 42P17):** mark rolled back, then re-deploy (fixed SQL is in the same folder — do not reset):
+**Preflight (mandatory before first apply on any DB):**
 
 ```bash
-pnpm --filter @gospots/api exec prisma migrate resolve --rolled-back 20260721060000_reservation_resource_exclusion
-pnpm --filter @gospots/api migrate:deploy
+pnpm --filter @gospots/api run detect:reservation-overlaps
+# must exit 0 — ALTER fails if overlapping active pairs exist
 ```
-
-**Rollback (forward-only preferred):**
-
-```sql
-ALTER TABLE "Reservation"
-  DROP CONSTRAINT IF EXISTS "Reservation_resource_tstzrange_excl";
-```
-
-**Notes:**
-
-- `btree_gist` is required so `=` on `text`/`cuid` can participate in a GiST exclusion with ranges.
-- Columns are Prisma `DateTime` → `timestamp(3)` **without** time zone. Use **`tsrange`** (IMMUTABLE). Do **not** use `tstzrange` (casts via session TZ → STABLE → **42P17** on Neon).
-- Constraint name keeps `…tstzrange_excl` for app `23P01` matching — range type underneath is `tsrange`.
-- Partial `WHERE` keeps canceled / completed / no-show / null-`resourceId` rows out of the constraint.
-- This does **not** cover `PlaySession` walk-ins (see §5).
-- Prisma does **not** model `EXCLUDE` in `schema.prisma` — SQL-only migration is intentional.
 
 ---
 
-## 3. Detection query (existing overlaps)
+## Coverage boundaries (honest)
 
-Self-join on the same active statuses and half-open overlap. Safe to run read-only anytime.
+| Scenario | Covered by exclusion? | Mitigation today |
+|----------|----------------------|------------------|
+| Reservation ↔ reservation (same resource, overlapping slot) | **Yes** | App lock + EXCLUDE |
+| Staff create vs public book (same slot) | **Yes** | Same paths use booking lock |
+| Walk-in `PlaySession` ↔ reservation | **No** | App `FOR UPDATE` on resource only — optional C4 in concurrency doc |
+| Walk-in ↔ walk-in same unit | **No** | App lock path on play-session create |
+| Cross-resource / dining table groups | **No** | Out of v1 exclusion scope |
+
+Do **not** claim walk-in floor occupancy is DB-enforced by this constraint.
+
+---
+
+## Shipped vs residual (honest)
+
+| Item | State | Evidence |
+|------|--------|----------|
+| GiST EXCLUDE migration on disk | **DONE** | `20260721060000_reservation_resource_exclusion` |
+| Neon migrate applied | **DONE** | 18-folder deploy 2026-07-21; overlaps preflight = **0** |
+| App lock + overlap assert + `23P01`→409 | **DONE** | `booking-lock.util.ts`, `booking-overlap.util.ts` (+specs) |
+| Overlap detect CLI | **DONE** | `reservation-overlap-detect.util.ts` |
+| Unit specs (lock + overlap SQL) | **DONE** | jest booking-lock + reservation-overlap-detect **11** PASS |
+| Live Docker C1/C2 concurrency proof | **OPERATOR** | Gates 0–3 [`GO_SPOTS_CONCURRENCY_TESTS.md`](./GO_SPOTS_CONCURRENCY_TESTS.md) |
+| Walk-in PlaySession in exclusion | **RESIDUAL** | Future app lane / optional C4 |
+| CI Postgres concurrency job | **RESIDUAL** | Not wired; optional post-ship |
+
+**Verify (at ship time):** jest booking-lock + overlap-detect PASS; `pnpm detect:reservation-overlaps` = **0** on production after migrate.
+
+---
+
+## Operator verify checklist (post-migrate)
+
+Use after Neon has applied `20260721060000_reservation_resource_exclusion`. These are **read-only** sanity checks — not a substitute for live C1/C2.
+
+### Gate 0 — Constraint present
 
 ```sql
-SELECT
-  a.id AS "aId",
-  b.id AS "bId",
-  a."shopId",
-  a."resourceId",
-  a."startsAt" AS "aStartsAt",
-  a."endsAt" AS "aEndsAt",
-  a.status AS "aStatus",
-  b."startsAt" AS "bStartsAt",
-  b."endsAt" AS "bEndsAt",
-  b.status AS "bStatus"
-FROM "Reservation" a
-JOIN "Reservation" b
-  ON a."resourceId" = b."resourceId"
- AND a."shopId" = b."shopId"
- AND a.id < b.id
- AND a."resourceId" IS NOT NULL
- AND a.status IN ('PENDING', 'CONFIRMED', 'CHECKED_IN')
- AND b.status IN ('PENDING', 'CONFIRMED', 'CHECKED_IN')
- AND tstzrange(a."startsAt", a."endsAt", '[)')
-  && tstzrange(b."startsAt", b."endsAt", '[)');
+SELECT conname, pg_get_constraintdef(oid)
+FROM pg_constraint
+WHERE conname = 'Reservation_resource_tstzrange_excl';
 ```
 
-**Read-only script:** from `apps/api`:
+Expect one row with `EXCLUDE USING gist`.
+
+### Gate 1 — No active overlaps
 
 ```bash
-pnpm detect:reservation-overlaps
+pnpm --filter @gospots/api run detect:reservation-overlaps
 ```
 
-Uses `DATABASE_URL`. Prints pairs; **never deletes or updates**. Exit code `1` if any pair found. Jest: `reservation-overlap-detect.util.spec.ts`.
+Must exit **0**. Re-run after bulk imports or manual SQL edits.
+
+### Gate 2 — Manual smoke (when Render resumed)
+
+From [`WHAT_TO_DO_NOW.md`](./WHAT_TO_DO_NOW.md) §2: public book same slot → second attempt **409**, not double row.
+
+### Gate 3 — Optional live concurrency (local Docker only)
+
+See [`GO_SPOTS_CONCURRENCY_TESTS.md`](./GO_SPOTS_CONCURRENCY_TESTS.md) Gates 0–3 — C1 public + C2 staff double-book recipes.
 
 ---
 
-## 4. Deploy gate (Neon / prod)
+## Relationship to other docs
 
-1. Run `pnpm detect:reservation-overlaps` on the target DB; `overlapPairs = 0`.
-2. Manually resolve any pairs (cancel or move — venue ops). **Never** auto-wipe / migrate reset.
-3. Re-run detection until clean.
-4. `prisma migrate deploy` only — never reset.
-5. Keep app locks; constraint is belt-and-suspenders.
-6. Live concurrency recipes: local Docker / ephemeral Postgres only (`RUN_CONCURRENCY_TESTS=1`); harness **refuses Neon** hosts.
+| Doc | Relationship |
+|-----|--------------|
+| [`GO_SPOTS_CONCURRENCY_TESTS.md`](./GO_SPOTS_CONCURRENCY_TESTS.md) | Live C1–C3 recipes; Neon-refuse harness; operator Docker gates |
+| [`GO_SPOTS_TEST_MATRIX.md`](./GO_SPOTS_TEST_MATRIX.md) | Matrix rows C1–C2 map to booking scenarios |
+| [`GO_SPOTS_PERF.md`](./GO_SPOTS_PERF.md) | Notes walk-in still app-lock |
+| [`ORIGINAL_AUDIT_BIBLE.md`](./ORIGINAL_AUDIT_BIBLE.md) §7 | Canonical §7 status |
+| [`BIBLE_FINISHED.md`](./BIBLE_FINISHED.md) | Lane **WWWWWW** ship log |
 
-CI ephemeral `api-migrate` applies this migration on an empty DB (always clean).
-
----
-
-## 5. Walk-ins / PlaySession (out of this DDL)
-
-Active walk-ins use `PlaySession` (`status = ACTIVE`, effective end via `walkInEffectiveEnd`). Exclusion on `Reservation` does not see them.
-
-Options later:
-
-- Keep app locks + `assertNoWalkInOverlap` / `assertNoReservationOverlap` under `FOR UPDATE` (current intent).
-- Or a separate exclusion / generated range column on `PlaySession` (harder: open-ended sessions use a 24h effective end in app code).
-
----
-
-## 6. Booking-lock coverage
-
-| Path | Lock today? | Notes |
-|------|-------------|--------|
-| Public create (`createPublic` / gaming+dining) | Yes | `withResourceBookingLock` + `assertBookingSlotFree` |
-| Staff create with `resourceId` | Yes | Same |
-| Staff create **without** `resourceId` | No | Unassigned booking; no resource to lock / exclude |
-| Staff update with `resourceId` | Yes | Locks **target** resource only (not previous, if reassigned) |
-| Staff update **without** `resourceId` | No | Unassigned / cleared unit |
-| Walk-in `createPlaySession` with `resourceId` | Yes | Overlap asserts under lock |
-| Walk-in create without `resourceId` | No | No unit |
-| **`updatePlaySession`** resource / duration / end / clearPaid | Yes | Same lock path as create; locks **target** resource; excludes self from walk-in overlap |
-| Walk-in update without `resourceId` (or status-only / amount-only) | No | No unit, or interval unchanged |
-| Walk-in `markPlaySessionPaid` / cancel / status→COMPLETED | Conditional `updateMany` (no resource lock) | Money/status claim in one txn; cancel only unpaid `ACTIVE` |
-| Guest cancel / reservation billing mark-paid | No | Not create-slot paths; lower risk for double-book |
-
-Primary overlap gap closed: `updatePlaySession` uses `withResourceBookingLock` + overlap asserts when `resourceId`, `durationMinutes`, or `endSession` changes while remaining `ACTIVE` (and on `clearPaid` reopen with a resource). Pay/cancel races closed via conditional status claims.
+*Board: [`AGENT_COORDINATION.md`](./AGENT_COORDINATION.md) · Status: [`ORIGINAL_AUDIT_BIBLE.md`](./ORIGINAL_AUDIT_BIBLE.md) §7 · Operator: [`WHAT_TO_DO_NOW.md`](./WHAT_TO_DO_NOW.md)*

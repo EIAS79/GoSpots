@@ -7,7 +7,9 @@ import cookieParser from 'cookie-parser';
 import helmet from 'helmet';
 import { join } from 'path';
 import { AppModule } from './app.module';
+import { ApiErrorCode } from './common/api-error.codes';
 import { resolveCorsPolicy } from './common/cors-origins';
+import { ApiErrorBodyDto } from './common/dto/api-error-body.dto';
 import {
   isLegacyUploadsStaticEnabled,
   legacyUploadsStaticBootWarning,
@@ -123,12 +125,37 @@ async function bootstrap() {
   });
 
   if (config.get('NODE_ENV') !== 'production') {
+    const errorEnvelopeDoc = [
+      '## Error responses',
+      '',
+      'All failed requests return the `ApiErrorBody` envelope:',
+      '',
+      '```json',
+      '{ "code": "CONFLICT", "message": "...", "details": {}, "requestId": "req_..." }',
+      '```',
+      '',
+      '| HTTP | Default `code` |',
+      '|------|----------------|',
+      `| 400 | \`${ApiErrorCode.VALIDATION_FAILED}\` |`,
+      `| 401 | \`${ApiErrorCode.UNAUTHORIZED}\` |`,
+      `| 403 | \`${ApiErrorCode.FORBIDDEN}\` |`,
+      `| 404 | \`${ApiErrorCode.NOT_FOUND}\` |`,
+      `| 409 | \`${ApiErrorCode.CONFLICT}\` |`,
+      `| 5xx | \`${ApiErrorCode.INTERNAL}\` |`,
+      '',
+      'Custom `code` on `HttpException` body wins when present. See `ApiErrorBodyDto` in components.',
+    ].join('\n');
+
     const swaggerConfig = new DocumentBuilder()
       .setTitle('Locora API')
-      .setDescription('Gaming & billiard center management SaaS')
+      .setDescription(
+        `Gaming & billiard center management SaaS\n\n${errorEnvelopeDoc}`,
+      )
       .setVersion('1.0')
       .build();
-    const document = SwaggerModule.createDocument(app, swaggerConfig);
+    const document = SwaggerModule.createDocument(app, swaggerConfig, {
+      extraModels: [ApiErrorBodyDto],
+    });
     SwaggerModule.setup('docs', app, document);
   }
 

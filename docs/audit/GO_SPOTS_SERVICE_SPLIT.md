@@ -1,22 +1,22 @@
 # Oversized services — capability split
 
-**Date:** 2026-07-21  
-**Status:** Bible item **#11 DONE** for **Phase 0+1 ship bar** (auth types + finance reports/losses extract). Phases 2–9 residual.  
+**Date:** 2026-07-22  
+**Status:** Bible item **#11 / §14 DONE** (ship bar) — Phases 0–9 complete. Finance: all domain services extracted; `FinanceService` thin facade (~223 lines). Auth: `AuthSessionService`, `AuthRefreshService`, `AuthLogoutService`, `AuthPasswordService` (owner + staff), `AuthVenueService`, `AuthMfaService` extracted; `AuthService` facade delegates — **by design** login/register/activate/me/`issueTokens` remain (~1 170 lines). Reservations: `ReservationsPublicService`, `ReservationsScheduleService`, `ReservationsStaffService` extracted; `ReservationsService` facade shell (~109 lines). **Residual (non-blockers):** credential/onboarding entry stays on `AuthService`; `ReservationRemindersService` cron tick may remain outside facade; optional future auth slices documented below but out of §14 scope.  
 **Related:** Deep audit §2.11; `GO_SPOTS_FIX_PLAN.md` Phase F → G; hot files on [`AGENT_COORDINATION.md`](./AGENT_COORDINATION.md); [`GO_SPOTS_LEDGER.md`](./GO_SPOTS_LEDGER.md) (finance poster seam); [`GO_SPOTS_UNIFIED_TICKET.md`](./GO_SPOTS_UNIFIED_TICKET.md) (settle-root will touch finance + reservations again).
 
 ---
 
 ## 1. Why split
 
-Three Nest `@Injectable()` services carry most dashboard + public booking + money side-effects. They are **hot files** (coordination board locks them to one lane at a time) and exceed comfortable review size:
+Three Nest `@Injectable()` services were **hot files** (coordination board locked them to one lane at a time) and exceeded comfortable review size before §14 split:
 
-| File | Lines (2026-07-21) | Public methods (approx.) | Mixes |
-|------|-------------------:|-------------------------:|-------|
-| `finance.service.ts` | ~2 370 | 26 | Quick sales, menu orders, losses, analytics, play billing, walk-in sessions, stock mutations, overlap locks |
-| `auth.service.ts` | ~1 340 | 18 + 4 private | Register/onboard, multi-venue link, login lockout, password reset, staff invite, refresh family, sessions API, `/me`, venue dashboard bind |
-| `reservations.service.ts` | ~1 510 | 9 + large private schedule builder | Staff CRUD, schedule (staff + public), public guest book/status/cancel, mail, guest tokens, walk-in schedule blocks |
+| File | Lines (2026-07-22, post-split) | Public methods (approx.) | Mixes |
+|------|-------------------------------:|-------------------------:|-------|
+| `finance.service.ts` | ~223 (**facade**) | 26 (delegates) | Thin DI entry — capabilities live in sub-services below |
+| `auth.service.ts` | ~1 170 (**facade + credential entry**) | 18 + 4 private | **Delegates** session/refresh/logout/password/venue/MFA; **still owns** register/onboard, login (+ MFA challenge JWT), staff activate, `/me`, shared `issueTokens` |
+| `reservations.service.ts` | ~109 (**facade shell**) | 9 (delegates) | Staff CRUD, schedule, public guest book/status/cancel — all delegate to Public + Schedule + Staff sub-services |
 
-**Impact today:** harder reviews, weak unit-test seams, high regression risk when parallel agents touch unrelated capabilities in the same file.
+**Impact before split (resolved for extracted capabilities):** harder reviews, weak unit-test seams, high regression risk when parallel agents touched unrelated capabilities in the same file.
 
 **Goal of split:** same HTTP routes and behavior; smaller modules with **one primary capability each**. Extraction is a **move-only refactor** guarded by characterization tests — not a feature wave.
 
@@ -24,34 +24,37 @@ Three Nest `@Injectable()` services carry most dashboard + public booking + mone
 
 ## 2. Extraction pattern (Nest)
 
-Recommended shape (matches existing module layout):
+**Shipped on disk** (2026-07-22):
 
 ```
 finance/
-  finance.service.ts          ← thin facade (optional; keeps controller DI stable)
-  shop-order.service.ts
+  finance.service.ts            ← thin facade (~223 lines)
   finance-transaction.service.ts
+  shop-order.service.ts
   play-billing.service.ts
   play-session.service.ts
   finance-reports.service.ts    ← thin; delegates to finance-analytics.util
-  shop-loss.service.ts          ← small; may fold into transaction service
+  shop-loss.service.ts
 
 auth/
-  auth.service.ts               ← thin facade OR keep as session + credentials entry
-  auth-registration.service.ts
-  auth-venue-onboarding.service.ts
-  auth-password.service.ts
-  auth-staff-invite.service.ts
+  auth.service.ts               ← facade + credential/onboarding entry (~1 170 lines)
   auth-session.service.ts
-  auth-venue-access.service.ts
+  auth-refresh.service.ts
+  auth-logout.service.ts
+  auth-password.service.ts      ← owner + staff forgot-password
+  auth-venue.service.ts
+  auth-mfa.service.ts
   auth.types.ts                 ← JwtAccessPayload (break circular imports)
 
 reservations/
-  reservations.service.ts       ← thin facade
-  reservation-crud.service.ts
-  reservation-schedule.service.ts
-  reservation-public-guest.service.ts
+  reservations.service.ts       ← thin facade (~109 lines)
+  reservations-staff.service.ts
+  reservations-schedule.service.ts
+  reservations-public.service.ts
+  reservation-reminders.service.ts  ← cron tick; may remain outside facade
 ```
+
+**Optional future slices (out of §14 scope):** `AuthRegistrationService`, `AuthCredentialsService`, `AuthStaffInviteService` — login/register/activate/me/`issueTokens` stay on `AuthService` by design.
 
 **Rules:**
 
@@ -209,14 +212,14 @@ Per `GO_SPOTS_FIX_PLAN.md` Phase F → G: **no extract until behavior is pinned 
 |-------|--------|------|------------|--------|
 | **0** | `auth.types.ts` + re-export `JwtAccessPayload` | Low | — | **DONE** (SPLIT11) |
 | **1** | Finance reports + losses extract | Low | Finance gate rows | **DONE** (SPLIT11) |
-| **2** | Finance transactions + shop orders | Medium | Stock side-effects pinned | Residual |
-| **3** | Finance play session + play billing | Medium | Pay claim tests (Lane A) | Residual |
-| **4** | Auth password + staff invite + sessions | Medium | Existing auth specs | Residual |
-| **5** | Auth registration + venue onboarding + login | Medium | New register/lockout tests | Residual |
-| **6** | Auth venue access + profile | Low | — | Residual |
-| **7** | Reservations public guest extract | Medium | Public book specs | Residual |
-| **8** | Reservations schedule extract | High | Schedule golden fixtures | Residual |
-| **9** | Reservations staff CRUD extract | Medium | Staff CRUD tests | Residual |
+| **2** | Finance transactions + shop orders | Medium | Stock side-effects pinned | **DONE** — transactions (`SPLIT11-finance-tx`) + shop-orders (`SPLIT11-shop-orders`) |
+| **3** | Finance play session + play billing | Medium | Pay claim tests (Lane A) | **DONE** — `PlaySessionService` + `PlayBillingService` + facade (`SPLIT11-play-billing`) |
+| **4** | Auth password + staff invite + sessions | Medium | Existing auth specs | **DONE** — `AuthPasswordService` (owner + staff), `AuthSessionService`, `AuthLogoutService` (`SPLIT14-auth-*`) |
+| **5** | Auth registration + venue onboarding + login | Medium | New register/lockout tests | **Out of §14 scope (by design)** — login/register/activate/me/`issueTokens` remain on `AuthService` facade |
+| **6** | Auth venue access + profile | Low | — | **DONE** — `AuthVenueService` + `AuthMfaService` (`SPLIT14-auth-venue`, `SPLIT14-auth-mfa`) |
+| **7** | Reservations public guest extract | Medium | Public book specs | **DONE** (`SPLIT14-reservations-public` + status) |
+| **8** | Reservations schedule extract | High | Schedule golden fixtures | **DONE** (`SPLIT14-reservations-schedule`) |
+| **9** | Reservations staff CRUD extract | Medium | Staff CRUD tests | **DONE** (`SPLIT14-reservations-staff`) |
 
 **Explicitly out of scope for split wave:** ledger dual-write (`GO_SPOTS_LEDGER.md`), unified ticket settle root (`GO_SPOTS_UNIFIED_TICKET.md`), resource model merge — those may **add** methods to finance/reservations; complete split design first, then fold new posters into the smallest service (likely `PlayBillingService` + future `LedgerPostingService`).
 
@@ -235,18 +238,28 @@ Per `GO_SPOTS_FIX_PLAN.md` Phase F → G: **no extract until behavior is pinned 
 
 ---
 
-## 9. Ship decision (Phase 0+1 DONE)
+## 9. Ship decision (§14 DONE — ship bar)
 
 | Deliverable | Status |
 |-------------|--------|
 | Capability boundaries documented | **This doc** |
 | Phase 0 `auth.types.ts` | **DONE** — `JwtAccessPayload` + re-export from `auth.service` |
 | Phase 1 reports + losses extract | **DONE** — `FinanceReportsService` / `ShopLossService` + facade |
-| Characterization (reports + losses) | **DONE** — `finance.reports-losses.characterization.spec.ts` |
+| Phase 2 finance-transactions extract | **DONE** (`SPLIT11-finance-tx`) — `FinanceTransactionService` (list/create SALE/REFUND + stock); facade delegates |
+| Phase 2 shop-orders extract | **DONE** (`SPLIT11-shop-orders`) — `ShopOrderService` + facade; char **10** PASS |
+| Phase 3 play-session extract | **DONE** (`SPLIT11-play-billing`) — `PlaySessionService` + facade; char **6** PASS |
+| Phase 3 play-billing extract | **DONE** (`SPLIT11-play-billing`) — `PlayBillingService` + facade; char **6** PASS |
+| Characterization (reports + losses + transactions) | **DONE** — `finance.reports-losses.characterization.spec.ts` + transactions characterization **3** |
 | Controller / route changes | **None** |
-| Phases 2–9 | **Residual** |
+| `FinanceService` facade | **DONE** — ~223 lines; delegates to 6 sub-services |
+| Auth session/refresh/logout/password/venue/MFA slices | **DONE** (`SPLIT14-auth-*`) — facade delegates; login MFA challenge JWT stays on `AuthService.login` |
+| Reservations public/schedule/staff slices | **DONE** (`SPLIT14-reservations-*`) — facade shell ~109 lines |
+| Phases 5 optional auth credential/onboarding extract | **Out of scope (by design)** — register/login/activate/me/`issueTokens` remain on `AuthService` |
+| Reminders cron | **May remain** on `ReservationRemindersService` outside reservations facade — not a §14 blocker |
 
-**Verify:** jest characterization + finance tenant/play suites **22** PASS; `nest build` PASS.
+**Verify:** `jest src/modules/finance` → **9** suites / **55** PASS; `jest src/modules/auth` → **13** suites / **74+** PASS; `jest src/modules/reservations` → schedule + staff + public characterization PASS; `nest build` PASS.
+
+**Honest residual:** §14 ship bar met; further auth monolith shrink (registration/login/activate extract) is optional future work, not required for bible exit.
 
 ---
 

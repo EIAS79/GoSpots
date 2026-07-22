@@ -1,5 +1,8 @@
 import { BadRequestException, NotFoundException } from '@nestjs/common';
 import { ReservationsService } from './reservations.service';
+import { ReservationsPublicService } from './reservations-public.service';
+import { ReservationsScheduleService } from './reservations-schedule.service';
+import { ReservationsStaffService } from './reservations-staff.service';
 
 jest.mock('../../common/booking-lock.util', () => ({
   withResourceBookingLock: jest.fn(
@@ -24,6 +27,22 @@ jest.mock('../../common/subscription-feature.util', () => ({
   assertShopFeature: jest.fn().mockResolvedValue(undefined),
 }));
 
+jest.mock('../../common/gdpr-consent.util', () => ({
+  assertPrivacyConsentAccepted: jest.fn(),
+  recordConsent: jest.fn().mockResolvedValue(undefined),
+}));
+
+jest.mock('../../common/shop-venue-time.util', () => ({
+  loadShopVenueTimeContext: jest.fn().mockResolvedValue({
+    resolvedTimeZone: 'UTC',
+  }),
+}));
+
+jest.mock('../../common/gdpr-consent.util', () => ({
+  assertPrivacyConsentAccepted: jest.fn(),
+  recordConsent: jest.fn().mockResolvedValue(undefined),
+}));
+
 describe('ReservationsService.createPublicGamingBooking', () => {
   const shop = { id: 'shop-1', name: 'Arena', slug: 'arena' };
   // Within schedule/booking horizon (~1 year) from ship-window "today".
@@ -37,12 +56,35 @@ describe('ReservationsService.createPublicGamingBooking', () => {
   };
 
   function makeService(prisma: Record<string, unknown>) {
+    const audit = { recordForShop: jest.fn() } as never;
+    const notifications = { recordReservationEvent: jest.fn() } as never;
+    const mail = { send: jest.fn().mockResolvedValue({ sent: false }) } as never;
+    const config = { get: () => undefined } as never;
+    const prismaDeps = prisma as never;
+    const publicGuest = new ReservationsPublicService(
+      prismaDeps,
+      audit,
+      notifications,
+      mail,
+      config,
+    );
+    const schedule = new ReservationsScheduleService(prismaDeps);
+    const staff = new ReservationsStaffService(
+      prismaDeps,
+      audit,
+      notifications,
+      mail,
+      config,
+    );
     return new ReservationsService(
-      prisma as never,
-      { recordForShop: jest.fn() } as never,
-      { recordReservationEvent: jest.fn() } as never,
-      { send: jest.fn().mockResolvedValue({ sent: false }) } as never,
-      { get: () => undefined } as never,
+      prismaDeps,
+      audit,
+      notifications,
+      mail,
+      config,
+      publicGuest,
+      schedule,
+      staff,
     );
   }
 
@@ -271,12 +313,35 @@ describe('ReservationsService.create (staff)', () => {
   } as const;
 
   function makeService(prisma: Record<string, unknown>) {
+    const audit = { recordForShop: jest.fn() } as never;
+    const notifications = { recordReservationEvent: jest.fn() } as never;
+    const mail = { send: jest.fn().mockResolvedValue({ sent: false }) } as never;
+    const config = { get: () => undefined } as never;
+    const prismaDeps = prisma as never;
+    const publicGuest = new ReservationsPublicService(
+      prismaDeps,
+      audit,
+      notifications,
+      mail,
+      config,
+    );
+    const schedule = new ReservationsScheduleService(prismaDeps);
+    const staff = new ReservationsStaffService(
+      prismaDeps,
+      audit,
+      notifications,
+      mail,
+      config,
+    );
     return new ReservationsService(
-      prisma as never,
-      { recordForShop: jest.fn() } as never,
-      { recordReservationEvent: jest.fn() } as never,
-      { send: jest.fn().mockResolvedValue({ sent: false }) } as never,
-      { get: () => undefined } as never,
+      prismaDeps,
+      audit,
+      notifications,
+      mail,
+      config,
+      publicGuest,
+      schedule,
+      staff,
     );
   }
 
@@ -313,12 +378,35 @@ describe('ReservationsService.update (staff)', () => {
   } as const;
 
   function makeService(prisma: Record<string, unknown>) {
+    const audit = { recordForShop: jest.fn() } as never;
+    const notifications = { recordReservationEvent: jest.fn() } as never;
+    const mail = { send: jest.fn().mockResolvedValue({ sent: false }) } as never;
+    const config = { get: () => undefined } as never;
+    const prismaDeps = prisma as never;
+    const publicGuest = new ReservationsPublicService(
+      prismaDeps,
+      audit,
+      notifications,
+      mail,
+      config,
+    );
+    const schedule = new ReservationsScheduleService(prismaDeps);
+    const staff = new ReservationsStaffService(
+      prismaDeps,
+      audit,
+      notifications,
+      mail,
+      config,
+    );
     return new ReservationsService(
-      prisma as never,
-      { recordForShop: jest.fn() } as never,
-      { recordReservationEvent: jest.fn() } as never,
-      { send: jest.fn().mockResolvedValue({ sent: false }) } as never,
-      { get: () => undefined } as never,
+      prismaDeps,
+      audit,
+      notifications,
+      mail,
+      config,
+      publicGuest,
+      schedule,
+      staff,
     );
   }
 

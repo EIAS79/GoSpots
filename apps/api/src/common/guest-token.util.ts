@@ -1,5 +1,6 @@
 import { timingSafeEqual } from 'crypto';
-import { BadRequestException } from '@nestjs/common';
+import { ApiDomainErrorCode } from './api-error.codes';
+import { apiUnauthorizedException } from './api-error.util';
 import { generateRefreshTokenRaw, hashToken } from './security/token';
 
 /**
@@ -144,12 +145,18 @@ export function assertGuestTokenActive(
   now = new Date(),
 ): void {
   if (row.guestTokenRevokedAt) {
-    throw new BadRequestException('This link has been revoked.');
+    throw apiUnauthorizedException(
+      ApiDomainErrorCode.GUEST_TOKEN_REVOKED,
+      'This link has been revoked.',
+    );
   }
   if (
     row.guestTokenExpiresAt &&
     row.guestTokenExpiresAt.getTime() < now.getTime()
   ) {
-    throw new BadRequestException('This link has expired.');
+    throw apiUnauthorizedException(
+      ApiDomainErrorCode.GUEST_TOKEN_EXPIRED,
+      'This link has expired.',
+    );
   }
 }

@@ -1,4 +1,5 @@
 import { UnauthorizedException } from '@nestjs/common';
+import { ApiDomainErrorCode } from '../../common/api-error.codes';
 import { ConfigService } from '@nestjs/config';
 import { JwtService } from '@nestjs/jwt';
 import { UserAccountType } from '@prisma/client';
@@ -145,9 +146,9 @@ describe('AuthService refresh rotation', () => {
       user: { findUnique: jest.fn() },
     });
 
-    await expect(svc.refresh(raw)).rejects.toBeInstanceOf(
-      UnauthorizedException,
-    );
+    await expect(svc.refresh(raw)).rejects.toMatchObject({
+      response: { code: ApiDomainErrorCode.SESSION_REVOKED },
+    });
     expect(updateMany).toHaveBeenCalledWith({
       where: { familyId: 'fam_1', revokedAt: null },
       data: { revokedAt: expect.any(Date) },
@@ -177,9 +178,9 @@ describe('AuthService refresh rotation', () => {
       user: { findUnique: jest.fn() },
     });
 
-    await expect(svc.refresh(raw)).rejects.toBeInstanceOf(
-      UnauthorizedException,
-    );
+    await expect(svc.refresh(raw)).rejects.toMatchObject({
+      response: { code: ApiDomainErrorCode.SESSION_REVOKED },
+    });
     expect(updateMany).toHaveBeenNthCalledWith(1, {
       where: { id: 'sess_1', revokedAt: null },
       data: { revokedAt: expect.any(Date) },

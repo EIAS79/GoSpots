@@ -27,8 +27,11 @@ import {
   combineLocalDateTime,
   defaultEventTimes,
   formatEventWindow,
-  todayDateInput,
 } from "@/lib/seating-event-datetime";
+import {
+  resolveVenueTimeZone,
+  venueDayKey,
+} from "@/lib/venue-timezone";
 import {
   SEATING_ZONE_LABELS,
   SEATING_ZONES,
@@ -42,14 +45,14 @@ const { start: defaultStartTime, end: defaultEndTime } = defaultEventTimes();
 
 type Filter = "PENDING" | "ALL";
 
-function initialLogDraft() {
+function initialLogDraft(eventDate: string) {
   return {
     eventType: "BIRTHDAY" as EventRequestType,
     guestName: "",
     guestEmail: "",
     guestPhone: "",
     partySize: 10,
-    eventDate: todayDateInput(),
+    eventDate,
     eventStartTime: defaultStartTime,
     eventEndTime: defaultEndTime,
     zone: "INDOOR" as SeatingZone,
@@ -58,7 +61,13 @@ function initialLogDraft() {
 }
 
 export function EventRequestsPanel({ canWrite }: { canWrite: boolean }) {
-  const t = useVenueSettingsOptional()?.t ?? ((k: string) => k);
+  const vs = useVenueSettingsOptional();
+  const t = vs?.t ?? ((k: string) => k);
+  const venueTimeZone = resolveVenueTimeZone({
+    timezone: vs?.shop?.timezone,
+    locale: vs?.shop?.locale ?? vs?.locale,
+  });
+  const venueToday = venueDayKey(venueTimeZone);
   const [requests, setRequests] = useState<EventRequest[]>([]);
   const [pendingCount, setPendingCount] = useState(0);
   const [filter, setFilter] = useState<Filter>("PENDING");
@@ -66,7 +75,7 @@ export function EventRequestsPanel({ canWrite }: { canWrite: boolean }) {
   const [error, setError] = useState<string | null>(null);
   const [busyId, setBusyId] = useState<string | null>(null);
   const [showLogForm, setShowLogForm] = useState(false);
-  const [logDraft, setLogDraft] = useState(initialLogDraft);
+  const [logDraft, setLogDraft] = useState(() => initialLogDraft(venueToday));
   const [declineTarget, setDeclineTarget] = useState<EventRequest | null>(null);
   const [declineNote, setDeclineNote] = useState("");
 
@@ -137,7 +146,7 @@ export function EventRequestsPanel({ canWrite }: { canWrite: boolean }) {
         message: logDraft.message.trim() || undefined,
       });
       setShowLogForm(false);
-      setLogDraft(initialLogDraft());
+      setLogDraft(initialLogDraft(venueToday));
       await load();
       publishLiveEvent({ section: "reservation" });
     } catch (e) {
@@ -634,8 +643,11 @@ function EventRequestCard({
       ) : null}
 
       {request.status === "APPROVED" && request.seatingTableGroupId ? (
-        <p className="mt-2 text-[11px] text-emerald-300/80">
-          {t("eventRequests.legacyFloorBlockCreated")}
+        <p
+          className="mt-2 text-[11px] text-emerald-300/80"
+          title={t("eventRequests.floorBlockHint")}
+        >
+          {t("eventRequests.floorBlockLabel")} — {t("eventRequests.floorBlockHint")}
         </p>
       ) : null}
 

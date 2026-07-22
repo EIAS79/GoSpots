@@ -6,6 +6,7 @@ import {
   NotFoundException,
 } from '@nestjs/common';
 import * as Sentry from '@sentry/node';
+import { ApiErrorCode } from './api-error.codes';
 import {
   httpStatusFromException,
   isSentryClientActive,
@@ -87,58 +88,79 @@ describe('isSentryClientActive', () => {
 });
 
 describe('SentryExceptionFilter.catch', () => {
-  let superCatch: jest.SpyInstance;
+  const reply = jest.fn();
+  const setHeader = jest.fn();
 
   beforeEach(() => {
-    // Avoid needing a full Nest ArgumentsHost / HTTP adapter.
-    const { BaseExceptionFilter } = jest.requireActual('@nestjs/core') as {
-      BaseExceptionFilter: { prototype: { catch: (...args: unknown[]) => void } };
-    };
-    superCatch = jest
-      .spyOn(BaseExceptionFilter.prototype, 'catch')
-      .mockImplementation(() => undefined);
-  });
-
-  afterEach(() => {
+    reply.mockReset();
+    setHeader.mockReset();
     getClient.mockReset();
     captureException.mockReset();
-    superCatch.mockRestore();
   });
 
   function makeFilter() {
     return new SentryExceptionFilter({
-      httpAdapter: {},
+      httpAdapter: { reply, setHeader },
     } as never);
   }
 
-  const host = {} as never;
+  function makeHost(req: Record<string, unknown> = {}) {
+    return {
+      getType: () => 'http',
+      switchToHttp: () => ({
+        getRequest: () => req,
+        getResponse: () => ({}),
+      }),
+    } as never;
+  }
 
-  it('does not capture 4xx even when Sentry is active', () => {
+  it('does not capture 4xx even when Sentry is active; replies envelope', () => {
     getClient.mockReturnValue({} as ReturnType<typeof Sentry.getClient>);
-    makeFilter().catch(new BadRequestException('nope'), host);
+    makeFilter().catch(new BadRequestException('nope'), makeHost());
     expect(captureException).not.toHaveBeenCalled();
-    expect(superCatch).toHaveBeenCalled();
+    expect(reply).toHaveBeenCalledWith(
+      expect.anything(),
+      expect.objectContaining({
+        code: ApiErrorCode.VALIDATION_FAILED,
+        message: 'nope',
+        requestId: expect.any(String),
+      }),
+      400,
+    );
   });
 
   it('does not capture 5xx when Sentry client is absent', () => {
     getClient.mockReturnValue(undefined);
-    makeFilter().catch(new Error('server'), host);
+    makeFilter().catch(new Error('server'), makeHost({ requestId: 'req_fixed1' }));
     expect(captureException).not.toHaveBeenCalled();
-    expect(superCatch).toHaveBeenCalled();
+    expect(reply).toHaveBeenCalledWith(
+      expect.anything(),
+      expect.objectContaining({
+        code: ApiErrorCode.INTERNAL,
+        message: 'An unexpected error occurred.',
+        requestId: 'req_fixed1',
+      }),
+      500,
+    );
   });
 
   it('captures unexpected Error when Sentry is active', () => {
     getClient.mockReturnValue({} as ReturnType<typeof Sentry.getClient>);
     const err = new Error('server boom');
-    makeFilter().catch(err, host);
+    makeFilter().catch(err, makeHost({ requestId: 'req_boom99' }));
     expect(captureException).toHaveBeenCalledWith(err);
-    expect(superCatch).toHaveBeenCalledWith(err, host);
+    expect(reply).toHaveBeenCalled();
   });
 
   it('captures HttpException 503 when Sentry is active', () => {
     getClient.mockReturnValue({} as ReturnType<typeof Sentry.getClient>);
     const err = new HttpException('down', HttpStatus.SERVICE_UNAVAILABLE);
-    makeFilter().catch(err, host);
+    makeFilter().catch(err, makeHost({ requestId: 'req_503xxx' }));
     expect(captureException).toHaveBeenCalledWith(err);
+    expect(reply).toHaveBeenCalledWith(
+      expect.anything(),
+      expect.objectContaining({ code: ApiErrorCode.INTERNAL, requestId: 'req_503xxx' }),
+      503,
+    );
   });
 });

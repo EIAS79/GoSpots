@@ -5,6 +5,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { MenuBoard } from "@/components/menu/menu-board";
 import { ItemDialog, SectionDialog } from "@/components/menu/menu-dialogs";
 import { ConfirmDialog } from "@/components/ui/confirm-dialog";
+import { FeedbackBanner } from "@/components/ui/feedback-banner";
 import { FeatureGate } from "@/components/subscription/feature-gate";
 import { TenantPage } from "@/components/layout/tenant-page";
 import { hasPermission } from "@/lib/auth-client";
@@ -47,6 +48,7 @@ export default function MenuPage() {
   const [loading, setLoading] = useState(true);
   const [syncing, setSyncing] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [partialWarning, setPartialWarning] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
 
   const [sectionDialog, setSectionDialog] = useState<MenuSection | "new" | null>(
@@ -187,6 +189,10 @@ export default function MenuPage() {
     } finally {
       setSaving(false);
     }
+  }
+
+  function handleMenuPartialFailure(message: string) {
+    setPartialWarning(message);
   }
 
   function handleSectionSaved() {
@@ -365,6 +371,15 @@ export default function MenuPage() {
               <p className="mb-4 text-xs text-zinc-500">{t("menu.viewOnly")}</p>
             ) : null}
 
+            {partialWarning ? (
+              <FeedbackBanner
+                variant="warning"
+                message={partialWarning}
+                onDismiss={() => setPartialWarning(null)}
+                className="mb-4"
+              />
+            ) : null}
+
             <div className="flex justify-center">
               <MenuBoard
                 sections={sections}
@@ -424,6 +439,7 @@ export default function MenuPage() {
               : undefined
           }
           onSaved={handleSectionSaved}
+          onPartialFailure={handleMenuPartialFailure}
         />
       ) : null}
 
@@ -482,6 +498,7 @@ export default function MenuPage() {
           onClose={() => setItemDialog(null)}
           onSave={handleSaveItem}
           onSaved={handleItemSaved}
+          onPartialFailure={handleMenuPartialFailure}
           onUploadImage={handleItemImageUpload}
           onDelete={
             itemDialog.item

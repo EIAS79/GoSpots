@@ -1,3 +1,5 @@
+import { UnauthorizedException } from '@nestjs/common';
+import { ApiDomainErrorCode } from './api-error.codes';
 import {
   assertGuestTokenActive,
   guestTokenHashesEqual,
@@ -10,6 +12,11 @@ import {
   verifyPresentedGuestToken,
   GUEST_TOKEN_DEFAULT_TTL_MS,
 } from './guest-token.util';
+
+function expectUnauthorizedWithCode(err: unknown, code: string) {
+  expect(err).toBeInstanceOf(UnauthorizedException);
+  expect((err as UnauthorizedException).getResponse()).toMatchObject({ code });
+}
 
 describe('guest-token.util', () => {
   it('issues high-entropy raw token and matching hash', () => {
@@ -107,7 +114,11 @@ describe('guest-token.util', () => {
       guestTokenExpiresAt: issued.expiresAt,
       guestTokenRevokedAt: null,
     };
-    expect(() => assertGuestTokenActive(row)).toThrow(/expired/i);
+    try {
+      assertGuestTokenActive(row);
+    } catch (err) {
+      expectUnauthorizedWithCode(err, ApiDomainErrorCode.GUEST_TOKEN_EXPIRED);
+    }
   });
 
   it('rejects revoked tokens', () => {
@@ -118,7 +129,11 @@ describe('guest-token.util', () => {
       guestTokenExpiresAt: issued.expiresAt,
       guestTokenRevokedAt: new Date(),
     };
-    expect(() => assertGuestTokenActive(row)).toThrow(/revoked/i);
+    try {
+      assertGuestTokenActive(row);
+    } catch (err) {
+      expectUnauthorizedWithCode(err, ApiDomainErrorCode.GUEST_TOKEN_REVOKED);
+    }
   });
 
   it('revoke fields clear plaintext', () => {
@@ -163,7 +178,11 @@ describe('guest-token.util', () => {
 
     const expiredLegacy = { ...activeLegacy, guestTokenExpiresAt: past };
     expect(verifyPresentedGuestToken(expiredLegacy, raw)).toBe(true);
-    expect(() => assertGuestTokenActive(expiredLegacy)).toThrow(/expired/i);
+    try {
+      assertGuestTokenActive(expiredLegacy);
+    } catch (err) {
+      expectUnauthorizedWithCode(err, ApiDomainErrorCode.GUEST_TOKEN_EXPIRED);
+    }
   });
 
   it('cancel revoke then assert refuses reuse (status/cancel gate)', () => {
@@ -182,7 +201,11 @@ describe('guest-token.util', () => {
     expect(guestTokenNeedsRevoke(revoked)).toBe(false);
     // Hash still verifies (lookup can find the row) but active gate refuses.
     expect(verifyPresentedGuestToken(revoked, issued.raw)).toBe(true);
-    expect(() => assertGuestTokenActive(revoked)).toThrow(/revoked/i);
+    try {
+      assertGuestTokenActive(revoked);
+    } catch (err) {
+      expectUnauthorizedWithCode(err, ApiDomainErrorCode.GUEST_TOKEN_REVOKED);
+    }
   });
 
   it('expired hash token cannot pass cancel/status active gate', () => {
@@ -196,6 +219,10 @@ describe('guest-token.util', () => {
       guestTokenRevokedAt: null,
     };
     expect(verifyPresentedGuestToken(row, issued.raw)).toBe(true);
-    expect(() => assertGuestTokenActive(row)).toThrow(/expired/i);
+    try {
+      assertGuestTokenActive(row);
+    } catch (err) {
+      expectUnauthorizedWithCode(err, ApiDomainErrorCode.GUEST_TOKEN_EXPIRED);
+    }
   });
 });

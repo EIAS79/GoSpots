@@ -35,6 +35,8 @@ export const IDEMPOTENCY_SCOPES = {
   FINANCE_ORDERS_BULK_UNARCHIVE: 'finance.orders.bulk.unarchive',
   /** Tier C residual — catalog FX apply via settings (Lane TTTT); keys optional. */
   SHOP_CURRENCY_APPLY: 'shop.currency.apply',
+  /** Onboarding template seed — derived key from templateId when header absent (Lane ONBOARD32). */
+  SHOP_ONBOARDING_APPLY_TEMPLATE: 'shop.onboarding.apply-template',
 } as const;
 
 /**

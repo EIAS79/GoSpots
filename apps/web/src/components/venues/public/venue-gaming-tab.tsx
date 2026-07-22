@@ -37,7 +37,10 @@ import type {
   PublicGamingOffering,
   PublicVenueDetail,
 } from "@/lib/shop-settings-client";
-import { todayDateInput } from "@/lib/seating-event-datetime";
+import {
+  resolveVenueTimeZone,
+  venueDayKey,
+} from "@/lib/venue-timezone";
 import { useLiveData } from "@/lib/use-live-data";
 import { usePublicPrefs } from "@/lib/public-prefs-context";
 import type { ResourceType } from "@/lib/resource-types";
@@ -71,11 +74,22 @@ export function VenueGamingTab({
   onCategoryChange?: (categoryId: string) => void;
 }) {
   const { t } = usePublicPrefs();
+  const venueTzProps = {
+    timezone: venue.timezone,
+    venueLocale: venue.locale,
+  };
   const offerings = venue.gamingOfferings ?? [];
   const [selectedCategoryId, setSelectedCategoryId] = useState(
     initialCategoryId ?? offerings[0]?.id ?? "",
   );
-  const [scheduleDate, setScheduleDate] = useState(() => todayDateInput());
+  const [scheduleDate, setScheduleDate] = useState(() =>
+    venueDayKey(
+      resolveVenueTimeZone({
+        timezone: venue.timezone,
+        locale: venue.locale,
+      }),
+    ),
+  );
   const [windowStartTime, setWindowStartTime] = useState(
     () => defaultCheckWindowTimes().start,
   );
@@ -259,6 +273,7 @@ export function VenueGamingTab({
               onWindowStartTimeChange={setWindowStartTime}
               onWindowEndTimeChange={setWindowEndTime}
               windowError={windowError}
+              {...venueTzProps}
             />
             <div className="flex flex-col items-center justify-center gap-3 py-24 text-zinc-500">
               <Loader2 size={28} className="animate-spin text-emerald-400/80" />
@@ -276,6 +291,7 @@ export function VenueGamingTab({
               onWindowStartTimeChange={setWindowStartTime}
               onWindowEndTimeChange={setWindowEndTime}
               windowError={windowError}
+              {...venueTzProps}
             />
             <div className="px-6 py-16 text-center">
               <p className="text-sm text-rose-300">{error}</p>
@@ -299,6 +315,7 @@ export function VenueGamingTab({
             windowError={windowError}
             onWindowStartTimeChange={setWindowStartTime}
             onWindowEndTimeChange={setWindowEndTime}
+            {...venueTzProps}
             visualType={getFloorMapVisualType(activeCategory.type)}
             highlightedUnitId={highlightedUnitId}
             onBookUnit={(unit) => {
@@ -322,6 +339,7 @@ export function VenueGamingTab({
               onWindowStartTimeChange={setWindowStartTime}
               onWindowEndTimeChange={setWindowEndTime}
               windowError={windowError}
+              {...venueTzProps}
             />
             <div className="px-6 py-16 text-center text-sm text-zinc-500">
               {t("gaming.couldNotLoad")}
@@ -340,7 +358,7 @@ export function VenueGamingTab({
           initialEndTime={windowEndTime}
           offeringRates={selectedOffering?.rates ?? []}
           currency={venue.currency}
-          locale={venue.locale}
+          {...venueTzProps}
           onClose={() => {
             setBookingUnit(null);
             setHighlightedUnitId(null);

@@ -8,6 +8,7 @@ import { randomUUID } from 'crypto';
 import { PrismaService } from '../../prisma/prisma.service';
 import {
   MAIL_OUTBOX_MAX_ATTEMPTS,
+  MAIL_OUTBOX_SENT_PURGE_BATCH_SIZE,
   MAIL_OUTBOX_SYNC_GRACE_MS,
   mailOutboxBackoffMs,
   truncateMailOutboxError,
@@ -21,6 +22,7 @@ import {
 } from './mail-outbox.types';
 
 const RING_MAX = 100;
+const DAY_MS = 24 * 60 * 60 * 1000;
 
 /**
  * Durable mail outbox — persists PENDING rows before/around Resend delivery.
@@ -350,6 +352,54 @@ export class MailOutboxService {
       `[outbox requeue] id=${updated.id} shopId=${updated.shopId ?? 'null'} priorAttempts=${existing.attempts}`,
     );
     return this.toDeadLetterRow(updated);
+  }
+
+  /**
+   * Delete aged SENT rows (payload includes PII). Uses existing `sentAt` column.
+   * Batched loop; safe to call from daily retention cron under advisory lock.
+   */
+  async purgeSentRows(opts: {
+    olderThanDays: number;
+    batchSize?: number;
+    now?: Date;
+  }): Promise<{ deleted: number; cutoff: string }> {
+    const days = Math.max(1, Math.floor(opts.olderThanDays));
+    const batchSize = Math.max(
+      1,
+      Math.min(
+        opts.batchSize ?? MAIL_OUTBOX_SENT_PURGE_BATCH_SIZE,
+        MAIL_OUTBOX_SENT_PURGE_BATCH_SIZE,
+      ),
+    );
+    const now = opts.now ?? new Date();
+    const cutoff = new Date(now.getTime() - days * DAY_MS);
+
+    let deleted = 0;
+    for (;;) {
+      const rows = await this.prisma.mailOutbox.findMany({
+        where: {
+          status: 'SENT',
+          sentAt: { lt: cutoff },
+        },
+        select: { id: true },
+        take: batchSize,
+      });
+      if (rows.length === 0) break;
+
+      const result = await this.prisma.mailOutbox.deleteMany({
+        where: { id: { in: rows.map((r) => r.id) } },
+      });
+      deleted += result.count;
+      if (rows.length < batchSize) break;
+    }
+
+    if (deleted > 0) {
+      this.logger.log(
+        `[outbox retention] purged ${deleted} SENT row(s) with sentAt before ${cutoff.toISOString()}`,
+      );
+    }
+
+    return { deleted, cutoff: cutoff.toISOString() };
   }
 
   private toDeadLetterRow(row: {

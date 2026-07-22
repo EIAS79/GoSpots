@@ -1,8 +1,8 @@
 # Locora — Pack + add-ons vs legacy `SubscriptionTier` collapse
 
-**Date:** 2026-07-21  
-**Status:** Phase 1 **shipped** (pack-only authz + runtime synthesis + backfill script). Optional DROP `tier` deferred.  
-**Bible:** P1 **#12** — **DONE** (Lane **FFFFFF**).  
+**Date:** 2026-07-22 (operator checklist lane **PACK15-tier-docs**)  
+**Status:** Phase 1 **shipped** (pack-only `resolveModules` + runtime add-on synthesis + backfill script). Optional DROP `Subscription.tier` remains **operator / future app+migration lane** — **no DROP migration folder on disk**.  
+**Bible:** P1 **#12 / §15** — **DONE** (PARTIAL residual). Lane **FFFFFF** ship bar met.  
 **Audit:** [`GO_SPOTS_DEEP_AUDIT.md`](./GO_SPOTS_DEEP_AUDIT.md) §2.12.  
 **Related (do not conflate):** CSV add-on/permission cutover — [`GO_SPOTS_CSV_CUTOVER.md`](./GO_SPOTS_CSV_CUTOVER.md); product bundle positioning — [`GO_SPOTS_PRODUCT_FOCUS.md`](./GO_SPOTS_PRODUCT_FOCUS.md).  
 **Ship timing:** Phase 1 code complete without Neon. Keep writing derived `tier` via `tierForPack`. DROP column only after soak + CSV confidence.
@@ -18,9 +18,32 @@
 | **After CSV verification window** ([`GO_SPOTS_CSV_CUTOVER.md`](./GO_SPOTS_CSV_CUTOVER.md)) | Prefer rows-only add-ons before optional DROP of `tier`. |
 | **Phase 2–3 residual** | Derived-only `tier` polish; optional DROP; dedicated catalog add-ons for `multi_shop`/`integrations`. |
 
-**Why defer:** Authz touches every gated route, Lemon webhook, trial/pending plan apply, web `plan.ts` mirror, and marketing feature matrices. Mid-ship collapse risks shrinking paid access for STANDARD+ shops still on empty stored add-ons with legacy `tier` synthesis.
+**Why defer DROP (not Phase 1 authz):** Module authz is already pack-only in `resolveModules`, but `Subscription.tier` is still **read** for empty-add-on synthesis, `billedTier`, and pack-less fallback — and **written** on Lemon/plan apply. Dropping the column before those reads stop and rows are backfilled risks boot/runtime failures and analytics drift.
 
 **Out of scope for this doc:** Removing venue packs from the catalog; changing Lemon variant SKUs; marketplace free-directory entitlement split ([`GO_SPOTS_MARKETPLACE.md`](./GO_SPOTS_MARKETPLACE.md)).
+
+---
+
+## Shipped vs residual (honest)
+
+| Item | State | Evidence |
+|------|--------|----------|
+| Pack-only `resolveModules` (no `legacyModulesFromTier` belt union when `packId` set) | **DONE** | Lane **FFFFFF**; `subscription-tier.ts` |
+| `effectiveAddOnsForSubscription` synthesizes from legacy `tier` when CSV+rows empty + STANDARD+ | **DONE** (intentional bridge) | Same file; web `plan.ts` parity |
+| Pack-less fallback `legacyModulesFromTier(tier)` only | **DONE** (expect ~0 rows) | Default `packId` = `"gaming"` |
+| Derived `tier` write on pack/webhook/plan apply (`tierForPack`) | **DONE** | `billing.service.ts` (+ trial/pending paths) |
+| `menu_orders` includes `bar`; ENTERPRISE `multi_shop`/`integrations` catalog gap preserved | **DONE** | `venue-packs.ts` |
+| Web `plan.ts` pack-only module path (no legacy module union) | **DONE** | Lane **DDDDDD** parity with API |
+| Backfill empty-add-on STANDARD+ → explicit add-ons | **DONE** (script) | `pnpm backfill:legacy-addon-tier` dry-run/`--apply` |
+| Operator runs backfill `--apply` after smoke | **OPERATOR** | [`DEPLOY_CHECKLIST.md`](./DEPLOY_CHECKLIST.md) when scheduled |
+| Phase 2 derived-only (`tier` cache / stop authoritative `billedTier`) | **RESIDUAL** (app lane) | Not deployed |
+| Stop reading `tier` for synthesis / authz helpers | **RESIDUAL** (app lane) | Requires zero empty-add-on paid rows + grep gate |
+| Stop writing `Subscription.tier` | **RESIDUAL** (app lane) | After reads removed; prefer one release with synthetic-only API fields |
+| DROP `Subscription.tier` (+ optional enum) | **RESIDUAL** (operator + migration lane) | **No migration on disk** — illustrative SQL only |
+| Dedicated catalog add-ons for `multi_shop` / `integrations` | **RESIDUAL** (product) | ENTERPRISE gap bridged via synthesis today |
+| Full pack × add-on CI matrix | **RESIDUAL** | Expand [`GO_SPOTS_TEST_MATRIX.md`](./GO_SPOTS_TEST_MATRIX.md) |
+
+**Unlike §11/§13:** there is no hash/plaintext dual-read — residual risk is **mis-read empty add-ons** and **SQL/reporting** that filter on stored `tier`, not broken tenant bind.
 
 ---
 
@@ -41,12 +64,12 @@ Central engine: `getVenueEntitlements` → `resolveSubscriptionAccess` (`subscri
 
 | Case | Modules come from |
 |------|-------------------|
-| `packId` set | `modulesForPackAndAddOns(packId, effectiveAddOns)` |
-| Pack + **empty** stored add-ons + legacy `tier` ∈ {STANDARD, PRO, ENTERPRISE} | Pack modules **∪** `legacyModulesFromTier(tier)` (belt-and-suspenders — never shrink access) |
-| No `packId` | `legacyModulesFromTier(tier)` only |
+| `packId` set | `modulesForPackAndAddOns(packId, effectiveAddOns)` only — **no** `legacyModulesFromTier` belt union (Phase 1 / **FFFFFF**) |
+| Pack + **empty** stored add-ons + legacy `tier` ∈ {STANDARD, PRO, ENTERPRISE} | Same pack path; access preserved via **synthesized add-ons** in `effectiveAddOnsForSubscription`, not module union |
+| No `packId` | `legacyModulesFromTier(tier)` only (pack-less residual) |
 | Locked (CANCELED / PAST_DUE / expired TRIAL) | Empty modules; `effectiveTier = FREE` |
 
-Effective add-ons: CSV∪rows; if still empty and legacy paid tier → `legacyAddOnsFromTier(tier)`.
+Effective add-ons: CSV∪rows; if still empty and legacy paid tier → `legacyAddOnsFromTier(tier)` (runtime bridge until backfill + Phase 2).
 
 Derived displays:
 
@@ -119,15 +142,15 @@ Drift modes:
 | Empty-add-on paid | Count ACTIVE shops with empty CSV+rows and `tier` ∈ STANDARD/PRO/ENTERPRISE — these still need synthesis until backfill |
 | Web vs API | Fixture matrix: pack-only, pack+addOns, pack+empty+legacy tier, tier-only, locked statuses |
 
-### Phase 1 — Authz pack-only (expand behavior, keep column)
+### Phase 1 — Authz pack-only (expand behavior, keep column) — **SHIPPED (FFFFFF)**
 
-1. Backfill empty-add-on STANDARD+ shops: write explicit add-on CSV/rows from `legacyAddOnsFromTier(tier)` (expand-only; idempotent).  
-2. Remove belt-and-suspenders union in `resolveModules` once backfill verified (modules = pack+addOns only when `packId` set).  
-3. Align web `plan.ts` with API (same empty-add-on rules **or** rely on backfill so both sides never need the union).  
-4. Migrate residual `tierHasFeature` call sites → entitlements/`hasFeature`.  
-5. Keep writing `tier = tierForPack(...)` so `billedTier` / reporting stay populated.
+1. Backfill empty-add-on STANDARD+ shops: write explicit add-on CSV/rows from `legacyAddOnsFromTier(tier)` (expand-only; idempotent) — script on disk; **OPERATOR** `--apply` optional.  
+2. ~~Remove belt-and-suspenders union in `resolveModules`~~ **DONE** — modules = pack + `effectiveAddOns` only when `packId` set.  
+3. Align web `plan.ts` with API — **DONE** (pack-only module path + shared empty-add-on synthesis).  
+4. Migrate residual `tierHasFeature` call sites → entitlements/`hasFeature` — **DONE** on authz path; grep gate still required before DROP.  
+5. Keep writing `tier = tierForPack(...)` so `billedTier` / reporting stay populated — **still active**.
 
-**Exit:** No production authz path reads `FEATURE_MATRIX` or `legacyModulesFromTier` except deprecated helpers used by backfill scripts.
+**Exit (met):** No production **module authz** path reads `FEATURE_MATRIX` or `legacyModulesFromTier` belt union on the pack path. `tier` still read for synthesis/display and pack-less fallback.
 
 ### Phase 2 — Derived tier only
 
@@ -147,7 +170,98 @@ Then: migration drops `Subscription.tier` **or** keeps column as non-authz denor
 
 ---
 
-## Migration sketch (illustrative — do not run pre-Friday)
+## Operator cutover checklist (optional DROP `Subscription.tier`)
+
+Use after Phase 1 (**FFFFFF**) is live and entitlement smoke passes. **Do not skip gates** — DROP is irreversible without PITR. **Do not combine** with §16 CSV DROP in the same migration.
+
+### Gate 0 — Phase 1 pack-only authz shipped
+
+- [ ] Lane **FFFFFF** deployed: `resolveModules` uses pack + `effectiveAddOnsForSubscription` only when `packId` set (no belt union).
+- [ ] Jest venue-entitlements + pack-tier-backfill suite green (29 cases at ship time).
+- [ ] Smoke: paid shop module gates match pack + effective add-ons; trial/locked statuses unchanged.
+
+### Gate 1 — Inventory (read-only SQL)
+
+Pack-less subscriptions (expect **0** after default `"gaming"`):
+
+```sql
+SELECT COUNT(*) FROM "Subscription"
+WHERE "packId" IS NULL OR TRIM("packId") = '';
+```
+
+Empty-add-on **paid** rows still relying on runtime `tier` synthesis (backfill targets):
+
+```sql
+SELECT COUNT(*) FROM "Subscription" s
+WHERE s."status" IN ('ACTIVE', 'TRIAL')
+  AND s."tier" IN ('STANDARD', 'PRO', 'ENTERPRISE')
+  AND COALESCE(NULLIF(TRIM(s."addOns"), ''), '') = ''
+  AND NOT EXISTS (SELECT 1 FROM "SubscriptionAddOn" sa WHERE sa."subscriptionId" = s."id");
+```
+
+Record counts; Gate 2 should drive empty-add-on paid → **0** (or accept residual runtime synthesis until Phase 2 app lane).
+
+### Gate 2 — Persist synthesized add-ons (operator CLI)
+
+From `apps/api` against the target database:
+
+```bash
+# Default dry-run — JSON counts only, no writes
+pnpm backfill:legacy-addon-tier
+
+# Apply when dry-run counts look expected (expand-only; idempotent)
+pnpm backfill:legacy-addon-tier -- --apply
+```
+
+- [ ] Dry-run reviewed.
+- [ ] `--apply` run (or consciously deferred with documented empty-add-on count).
+- [ ] Re-run Gate 1 empty-add-on query → **0** (target).
+
+### Gate 3 — §16 CSV add-on confidence
+
+- [ ] Relational `SubscriptionAddOn` rows authoritative for entitled shops ([`GO_SPOTS_CSV_CUTOVER.md`](./GO_SPOTS_CSV_CUTOVER.md)).
+- [ ] Neon CSV DROP applied **or** app rows-only cutover verified — pack resolution must not depend on CSV alone.
+
+### Gate 4 — Soak (recommended ≥ 7 days)
+
+- [ ] No “module disappeared” support tickets after backfill.
+- [ ] Lemon webhook + trial/pending plan apply still write pack + add-ons + derived `tier` together.
+- [ ] Spot-check ENTERPRISE shops: `multi_shop` / `integrations` access matches pre-backfill (catalog gap bridged until dedicated add-ons exist).
+
+### Gate 5 — Stop `tier` reads (future **app** lane; not in repo yet)
+
+Deploy releases that remove **all runtime reads** of stored `Subscription.tier` except optional analytics export:
+
+- [ ] `effectiveAddOnsForSubscription` no longer calls `legacyAddOnsFromTier(tier)` (all paid rows have explicit add-ons).
+- [ ] Pack-less path removed or backfilled (`legacyModulesFromTier` unused in prod).
+- [ ] API prefers `effectiveTier` (synthetic) over `billedTier`; new fields omit stored tier.
+- [ ] Grep gate: no `tierHasFeature`, `FEATURE_MATRIX[`, or `legacyModulesFromTier` outside backfill/deprecated helpers.
+- [ ] Jest + web `plan.ts` fixtures updated.
+
+### Gate 6 — Stop `tier` writes (future **app** lane; after Gate 5)
+
+- [ ] Lemon webhook, trial/pending apply, and admin pack updates stop persisting `Subscription.tier`.
+- [ ] Optional one-release window: keep writing synthetic tier for BI only, with zero authz/synthesis reads (product choice).
+
+### Gate 7 — Contract DROP (operator + migration lane)
+
+**No migration folder on disk yet.** Only after Gates 0–6 green:
+
+```sql
+-- Illustrative only — run only after Gate 6 app is live and grep gate passes
+-- ALTER TABLE "Subscription" DROP COLUMN "tier";
+-- DROP TYPE "SubscriptionTier";  -- only if no other columns use the enum
+```
+
+- [ ] Expand migration authored + reviewed (separate PR from §16 CSV DROP).
+- [ ] Staging DROP + full API/web typecheck + entitlement matrix smoke.
+- [ ] Production DROP during maintenance window; PITR confirmed.
+
+**Product alternative (valid):** skip Gate 7 — keep `tier` as non-authz denormalized cache forever (`tierForPack` on write only). Document in runbooks so operators do not treat stored tier as SoT.
+
+---
+
+## Migration sketch (illustrative — do not run until Gate 7)
 
 ```sql
 -- Phase 1 backfill idea (pseudo): for ACTIVE/TRIAL with empty addOns + paid tier,
@@ -200,4 +314,4 @@ Then: migration drops `Subscription.tier` **or** keeps column as non-authz denor
 
 **Verify:** jest venue-entitlements + pack-tier-backfill **29** PASS; `tsc` PASS.
 
-**Residual:** optional DROP `tier`; pack-less `legacyModulesFromTier`; OPERATOR `backfill:legacy-addon-tier -- --apply`; dedicated multi_shop/integrations add-ons; full pack×add-on CI matrix.
+**Residual:** Gates 5–7 optional DROP checklist above; Phase 2 derived-only polish; pack-less `legacyModulesFromTier`; OPERATOR `backfill:legacy-addon-tier -- --apply`; dedicated multi_shop/integrations add-ons; full pack×add-on CI matrix.

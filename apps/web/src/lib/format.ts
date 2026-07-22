@@ -1,3 +1,4 @@
+import { isValidIanaTimeZone } from "./iana-timezone";
 import { coerceMoney, type MoneyWire } from "./money";
 
 export function formatMoney(
@@ -17,11 +18,16 @@ export function formatMoney(
   }
 }
 
-export function formatDate(iso: string, locale = "en") {
-  return new Date(iso).toLocaleString(locale, {
+export function formatDate(iso: string, locale = "en", timeZone?: string) {
+  const opts: Intl.DateTimeFormatOptions = {
     month: "short",
     day: "numeric",
     hour: "2-digit",
     minute: "2-digit",
-  });
+  };
+  const tz = timeZone?.trim();
+  if (tz && isValidIanaTimeZone(tz)) {
+    opts.timeZone = tz;
+  }
+  return new Date(iso).toLocaleString(locale, opts);
 }

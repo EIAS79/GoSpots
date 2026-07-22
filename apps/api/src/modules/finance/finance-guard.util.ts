@@ -1,14 +1,24 @@
-import { ForbiddenException } from '@nestjs/common';
+import { ApiDomainErrorCode } from '../../common/api-error.codes';
+import { apiForbiddenException } from '../../common/api-error.util';
 import { assertShopFeature } from '../../common/subscription-feature.util';
 import { serializeMoney, type MoneyInput } from '../../common/money.util';
 import type { PrismaService } from '../../prisma/prisma.service';
 import type { JwtAccessPayload } from '../auth/auth.types';
 
 export function assertFinancePerm(actor: JwtAccessPayload, perm: string) {
-  if (!actor.shopId) throw new ForbiddenException();
+  if (!actor.shopId) {
+    throw apiForbiddenException(
+      ApiDomainErrorCode.VENUE_ACCESS_DENIED,
+      'Open a venue dashboard first, then try again.',
+    );
+  }
   const p = actor.perms ?? '';
   if (p !== '*' && !p.split(',').includes(perm)) {
-    throw new ForbiddenException(`Missing ${perm}`);
+    throw apiForbiddenException(
+      ApiDomainErrorCode.PERMISSION_DENIED,
+      `Missing ${perm}`,
+      { permission: perm },
+    );
   }
 }
 

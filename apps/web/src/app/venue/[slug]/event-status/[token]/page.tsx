@@ -17,6 +17,7 @@ import {
   fetchPublicEventRequestStatus,
   type PublicEventRequestStatus,
 } from "@/lib/event-requests-client";
+import { resolveGuestTokenApiErrorDisplay } from "@/lib/guest-token-error-display";
 import { usePublicPrefs } from "@/lib/public-prefs-context";
 import { useLiveData } from "@/lib/use-live-data";
 
@@ -85,7 +86,11 @@ export default function EventRequestStatusPage() {
         if (!opts.silent) {
           setData(null);
           setError(
-            e instanceof Error ? e.message : t("guestStatus.event.loadError"),
+            resolveGuestTokenApiErrorDisplay(
+              e,
+              locale,
+              t("guestStatus.event.loadError"),
+            ),
           );
         }
         return false;
@@ -93,7 +98,7 @@ export default function EventRequestStatusPage() {
         if (!opts.silent) setLoading(false);
       }
     },
-    [slug, token, t],
+    [slug, token, t, locale],
   );
 
   useEffect(() => {
@@ -119,7 +124,11 @@ export default function EventRequestStatusPage() {
       await loadStatus({ silent: true });
     } catch (e) {
       setCancelError(
-        e instanceof Error ? e.message : t("guestStatus.event.cancelError"),
+        resolveGuestTokenApiErrorDisplay(
+          e,
+          locale,
+          t("guestStatus.event.cancelError"),
+        ),
       );
     } finally {
       setCancelBusy(false);

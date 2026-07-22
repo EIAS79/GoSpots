@@ -1,9 +1,30 @@
 # Locora — `offeringConfig` typed models
 
-**Date:** 2026-07-21  
-**Status:** **Bible #15 DONE** (Lane **EEEEEE**) for Phase 0 ship bar — versioned JSON stamp + typed TS contract + inventory CLI + existing validators/string prices. Relational rate de-duplication / column promote = Phase 1–3 residual (no DDL in this lane).  
-**Bible:** P1 **#15** — stable business rules live in generic JSON on `ResourceCategory.offeringConfig`.  
+**Date:** 2026-07-21 (Phase 0 ship bar) / 2026-07-22 (residual docs lane **OFFER18-residual-docs**)  
+**Status:** **Bible #15 / §18 DONE** (ship bar) — validators + `schemaVersion: 1` + 4dp string prices + inventory CLI **shipped** (Lane **EEEEEE** + money wire **XXXXX**). Optional relational rate de-duplication / `{ rateId }` pointers / column promote = Phase 1–3 **residual** (**no Phase 1 DDL on disk**).  
+**Bible:** P1 **#15** / original prompt **§18** — stable business rules live in generic JSON on `ResourceCategory.offeringConfig`.  
 **Ship timing:** Write validation + price normalize + Phase 0 `schemaVersion` **shipped**. Typed relational money cutover **defers** until after soak.
+
+---
+
+## Shipped vs residual (honest)
+
+| Item | State | Evidence |
+|------|--------|----------|
+| `@IsOfferingConfig()` / `validateOfferingConfig` on category writes | **DONE** | rejects garbage payloads; human-readable errors |
+| `normalizeOfferingConfigPrices` (known keys → 4dp strings) | **DONE** | Lane **XXXXX** money wire; dual-read `number \| string` |
+| `prepareOfferingConfigForWrite` / `schemaVersion: 1` stamp | **DONE** | Lane **EEEEEE**; category create/update + API emit + FX reprice plan |
+| Typed `OfferingConfigV1` / `BowlingModeV1` contract | **DONE** | exported from `offering-config.util.ts` |
+| `pnpm inventory:offering-config` (read-only scan) | **DONE** | invalid / missing-version rows reported |
+| `mapOfferingConfigPrices` in atomic FX reprice txn | **DONE** | with `ResourceRate` + `Resource.hourlyRate` + menu |
+| `ResourceRate` + `Resource.hourlyRate` (relational Decimal) | **DONE** (parallel) | already canonical for many tariffs; **not replaced by JSON** |
+| JSON behavioral overlay (`bowlingModes`, `noShowMinutes`, …) | **SHIPPED as-is** | intentional until Phase 1–3; not a ship blocker |
+| Three-surface price duplication (JSON vs rates vs hourly) | **RESIDUAL** | same tariff may exist in multiple places |
+| Phase 1 rate de-duplication / `{ rateId }` pointers | **RESIDUAL (optional)** | prefer `ResourceRate`; **no DDL on disk** |
+| Phase 3 column promote (`noShowMinutes`, …) | **RESIDUAL (optional)** | illustrative SQL only; defer unless reporting needs |
+| Legacy rows missing `schemaVersion` / dirty prices | **RESIDUAL (operator)** | until next edit, reprice, or inventory-driven backfill |
+
+**§18 classification:** **DONE** ship bar (validators + version stamp close the “untyped bag” gap); deeper relational normalize is **optional post-soak**, documented here, not hidden.
 
 ---
 
@@ -26,7 +47,7 @@
 
 | Surface | Storage | Money type | Validated on write | Primary use |
 |---------|---------|------------|-------------------|-------------|
-| `ResourceCategory.offeringConfig` | `Json?` JSONB | JSON **numbers** (rounded via `normalizeOfferingConfigPrices`) | `@IsOfferingConfig()` → `validateOfferingConfig` | Bowling modes + nested rates; dining `noShowMinutes`; legacy flat keys (`pricePerHour`, `pricePerGame`, …) |
+| `ResourceCategory.offeringConfig` | `Json?` JSONB | 4dp decimal **strings** on write/emit (dual-read `number \| string`) | `@IsOfferingConfig()` → `validateOfferingConfig` | Bowling modes + nested rates; dining `noShowMinutes`; legacy flat keys (`pricePerHour`, `pricePerGame`, …) |
 | `ResourceRate` | relational rows | `Decimal(19,4)` | `ResourceRateDto` class-validator | Timed block tariffs per category (`label`, `durationMinutes`, `price`) |
 | `Resource.hourlyRate` | column per unit | `Decimal(19,4)` | `UpdateResourceDto` | Per-seat/table/lane override |
 
@@ -54,13 +75,13 @@ Runtime readers (still tolerate partial legacy):
 - `bowling-modes.util.ts` / web `bowling-modes.ts` — parse modes for billing + public booking
 - `dining-reservation.util.ts` / web `dining-reservation.ts` — `parseNoShowMinutes` with default fallback
 
-### Residual risks (Phase 1–3 after DONE ship bar)
+### Residual risks (Phase 1–3 after DONE ship bar — optional)
 
 | Risk | Detail |
 |------|--------|
-| JSON float prices | Not `Decimal` in DB; IEEE float in JSON + JS billing math |
+| JSON not a Decimal column | Money lives in JSONB strings, not `Decimal(19,4)` columns — weaker for SQL reporting than `ResourceRate` |
 | Duplication | Same tariff may exist in `ResourceRate` **and** inside `bowlingModes[].rates` or top-level keys |
-| No schema version | Unknown future keys silently ignored on read; no migration path for shape changes |
+| Legacy rows | Pre-validation / pre-`schemaVersion` rows until next edit, reprice, or inventory-driven cleanup |
 | Type-specific rules in one bag | Bowling + dining + generic keys share one blob — no DB constraint per `ResourceType` |
 
 Deep audit §2.15 “unvalidated JSON” is **partially closed**: writes are validated; reads still fallback on legacy/garbage rows predating validation.
@@ -210,13 +231,15 @@ Do **not** revert DTOs to `@IsObject()` only. Specs in `offering-config.util.spe
 3. One-time backfill: copy JSON prices → missing `ResourceRate` rows **or** strip JSON duplicates after verify.
 4. Optional expand: `ResourceRate.bowlingModeId String?` + index — only if nested mode↔rate linkage needed.
 
-### Phase 2 — String decimals in JSON (pairs with [`GO_SPOTS_MONEY_WIRE.md`](./GO_SPOTS_MONEY_WIRE.md))
+### Phase 2 — String decimals in JSON (pairs with [`GO_SPOTS_MONEY_WIRE.md`](./GO_SPOTS_MONEY_WIRE.md)) — **mostly DONE**
 
-1. Client dual-read `number \| string` in `mapOfferingConfigPrices` / billing parsers.
-2. Write path: emit strings for known keys when `MONEY_WIRE_FORMAT` ≥ dual.
-3. FX reprice: map strings through `parseMoneyString` → `convertMoney` → string out.
+1. Write path + API emit: known keys as 4dp strings — **DONE** (Lane **XXXXX**).
+2. Client dual-read `number \| string` in billing parsers — **DONE** where wired.
+3. FX reprice: `mapOfferingConfigPrices` through string money helpers — **DONE** (atomic txn with rates).
 
-### Phase 3 — Promote scalars (contract migration, later)
+**Residual:** strip remaining legacy numeric JSON in DB until rows are touched; optional Phase 1 de-duplication before dropping JSON price keys entirely.
+
+### Phase 3 — Promote scalars (contract migration, later — optional)
 
 Only if analytics or SQL filters need it:
 
@@ -277,4 +300,4 @@ Bowling modes as child table (`BowlingMode`, `BowlingModeRate`) is **optional Ph
 
 ---
 
-*Lane **EEEEEE** — Phase 0 shipped (#15 DONE). Verify: `pnpm exec jest src/common/offering-config.util.spec.ts` · `pnpm inventory:offering-config`.*
+*Lane **EEEEEE** — Phase 0 shipped (#15 DONE). Lane **OFFER18-residual-docs** — honest §18 shipped vs residual. Verify: `pnpm exec jest src/common/offering-config.util.spec.ts` · `pnpm inventory:offering-config`.*

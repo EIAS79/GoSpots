@@ -32,6 +32,7 @@ import {
   getBookingUnitLabels,
   bookingCollectsPartySize,
 } from "@/lib/booking-unit-kind";
+import { ApiError, resolveApiErrorDisplay } from "@/lib/api";
 import type { Reservation, ReservationStatus } from "@/lib/reservations-client";
 import type { ResourceCatalog } from "@/lib/resources-client";
 import { RESOURCE_TYPE_LABELS } from "@/lib/resource-types";
@@ -47,6 +48,7 @@ export function ReservationDialog({
   onSave,
   onCancelBooking,
   onDelete,
+  onServerOverlap,
   saving,
 }: {
   catalog: ResourceCatalog;
@@ -75,6 +77,8 @@ export function ReservationDialog({
   }) => Promise<void>;
   onCancelBooking?: () => Promise<void>;
   onDelete?: () => Promise<void>;
+  /** Refresh schedule when server rejects with RESERVATION_OVERLAP (§36 W2). */
+  onServerOverlap?: () => void;
   saving: boolean;
 }) {
   const vs = useVenueSettingsOptional();
@@ -407,11 +411,24 @@ export function ReservationDialog({
               }).catch((err) => {
                 setFeedback({
                   variant: "error",
-                  message:
-                    err instanceof Error
-                      ? err.message
-                      : t("reservationDialog.saveFailed"),
+                  message: resolveApiErrorDisplay(
+                    err,
+                    {
+                      RESERVATION_OVERLAP: isDining
+                        ? t("reservationDialog.overlapTable")
+                        : t("reservationDialog.overlapUnit"),
+                      PERMISSION_DENIED: t("common.permissionDenied"),
+                      VENUE_ACCESS_DENIED: t("common.venueAccessDenied"),
+                    },
+                    t("reservationDialog.saveFailed"),
+                  ),
                 });
+                if (
+                  err instanceof ApiError &&
+                  err.code === "RESERVATION_OVERLAP"
+                ) {
+                  onServerOverlap?.();
+                }
               });
             }}
           >

@@ -20,6 +20,7 @@ export type SeatingTableGroup = {
   eventEndsAt: string | null;
   isCustom: boolean;
   sortOrder: number;
+  sourceDiningTableGroupId?: string | null;
 };
 
 export type SeatingTablesSummary = {
@@ -35,6 +36,11 @@ export type SeatingTablesResponse = {
   byZone: Record<SeatingZone, SeatingTablesSummary>;
   floorCount: number;
 };
+
+/** Linked non-custom row mirrored from Dining layout (read-only in Phase 3 UI). */
+export function isAdvisoryDiningMirror(group: SeatingTableGroup): boolean {
+  return !group.isCustom && Boolean(group.sourceDiningTableGroupId);
+}
 
 export function recalcSeatingSummary(
   groups: SeatingTableGroup[],
@@ -72,6 +78,8 @@ export function normalizeSeatingTablesResponse(
       floor: normalizeFloor(g.floor, floorCount),
       eventStartsAt: g.eventStartsAt ?? null,
       eventEndsAt: g.eventEndsAt ?? null,
+      isCustom: Boolean(g.isCustom),
+      sourceDiningTableGroupId: g.sourceDiningTableGroupId ?? null,
     }),
   );
   const summary =

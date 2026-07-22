@@ -7,7 +7,8 @@
  * Frontend mirror call site (keep in sync):
  *   apps/web/src/lib/use-venue-access.ts → resolveSubscriptionAccess (@/lib/plan)
  */
-import { ForbiddenException } from '@nestjs/common';
+import { ApiDomainErrorCode } from './api-error.codes';
+import { apiForbiddenException } from './api-error.util';
 import type { PrismaService } from '../prisma/prisma.service';
 import {
   resolveAddOnsCsv,
@@ -99,8 +100,10 @@ export async function assertShopHasFeature(
 ): Promise<VenueEntitlements> {
   const entitlements = await getVenueEntitlementsForShop(prisma, shopId);
   if (!hasFeature(entitlements, feature)) {
-    throw new ForbiddenException(
+    throw apiForbiddenException(
+      ApiDomainErrorCode.SUBSCRIPTION_REQUIRED,
       `This feature is not included in your venue pack. Add it from Subscription to unlock ${feature}.`,
+      { feature },
     );
   }
   return entitlements;
@@ -127,8 +130,10 @@ export async function assertOwnerMayAddVenue(
     return e.trialActive || hasFeature(e, 'multi_shop');
   });
   if (!allowed) {
-    throw new ForbiddenException(
+    throw apiForbiddenException(
+      ApiDomainErrorCode.SUBSCRIPTION_REQUIRED,
       'This feature is not included in your venue pack. Add it from Subscription to unlock multi_shop.',
+      { feature: 'multi_shop' },
     );
   }
 }
@@ -148,8 +153,10 @@ export function assertMultiVenueEntitlement(
     return e.trialActive || hasFeature(e, 'multi_shop');
   });
   if (!allowed) {
-    throw new ForbiddenException(
+    throw apiForbiddenException(
+      ApiDomainErrorCode.SUBSCRIPTION_REQUIRED,
       'This feature is not included in your venue pack. Add it from Subscription to unlock multi_shop.',
+      { feature: 'multi_shop' },
     );
   }
 }
@@ -164,16 +171,20 @@ export function assertStaffSeatCapacity(
   usedSeats: number,
 ): void {
   if (!hasFeature(entitlements, 'roles')) {
-    throw new ForbiddenException(
+    throw apiForbiddenException(
+      ApiDomainErrorCode.SUBSCRIPTION_REQUIRED,
       'Enable Team accounts on Subscription and buy at least one employee seat.',
+      { feature: 'roles' },
     );
   }
   const limit = entitlements.staffSeatLimit;
   if (limit === 0 || usedSeats >= limit) {
-    throw new ForbiddenException(
+    throw apiForbiddenException(
+      ApiDomainErrorCode.SUBSCRIPTION_REQUIRED,
       limit === 0
         ? 'No employee seats purchased yet. Add seats on Subscription, then create accounts.'
         : `Employee limit reached (${usedSeats}/${limit}). Buy more seats on Subscription.`,
+      { feature: 'roles', staffSeatLimit: limit, usedSeats },
     );
   }
 }

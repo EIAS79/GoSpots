@@ -1,5 +1,9 @@
-import { BadRequestException } from '@nestjs/common';
-import { adjustMenuItemStockBy } from './menu-stock-db.util';
+import { BadRequestException, ConflictException } from '@nestjs/common';
+import { ApiDomainErrorCode } from './api-error.codes';
+import {
+  adjustMenuItemStockBy,
+  adjustMenuItemStockByOrThrow,
+} from './menu-stock-db.util';
 
 describe('adjustMenuItemStockBy', () => {
   it('returns false when conditional decrement updates 0 rows', async () => {
@@ -11,6 +15,32 @@ describe('adjustMenuItemStockBy', () => {
     };
     const ok = await adjustMenuItemStockBy(prisma as never, 'item', 1, 'shop');
     expect(ok).toBe(false);
+  });
+
+  it('adjustMenuItemStockByOrThrow maps failed decrement to MENU_STOCK_INSUFFICIENT', async () => {
+    const prisma = {
+      $queryRaw: jest
+        .fn()
+        .mockResolvedValue([{ stock: 0, trackStock: true }]),
+      $executeRaw: jest.fn(),
+    };
+    try {
+      await adjustMenuItemStockByOrThrow(
+        prisma as never,
+        'item',
+        2,
+        'shop',
+        'Not enough stock for this item.',
+      );
+      throw new Error('expected ConflictException');
+    } catch (err) {
+      expect(err).toBeInstanceOf(ConflictException);
+      expect((err as ConflictException).getResponse()).toMatchObject({
+        code: ApiDomainErrorCode.MENU_STOCK_INSUFFICIENT,
+        message: 'Not enough stock for this item.',
+        details: { menuItemId: 'item', delta: 2, shopId: 'shop' },
+      });
+    }
   });
 
   it('decrements when stock is sufficient', async () => {

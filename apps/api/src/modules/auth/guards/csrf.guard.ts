@@ -1,12 +1,9 @@
-import {
-  CanActivate,
-  ExecutionContext,
-  ForbiddenException,
-  Injectable,
-} from '@nestjs/common';
+import { CanActivate, ExecutionContext, Injectable } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { Reflector } from '@nestjs/core';
 import type { Request } from 'express';
+import { ApiDomainErrorCode } from '../../../common/api-error.codes';
+import { apiForbiddenException } from '../../../common/api-error.util';
 import { CSRF_COOKIE } from '../../../common/csrf.constants';
 import {
   csrfTokensMatch,
@@ -66,7 +63,8 @@ export class CsrfGuard implements CanActivate {
     );
 
     if (!csrfTokensMatch(cookieToken, headerToken)) {
-      throw new ForbiddenException(
+      throw apiForbiddenException(
+        ApiDomainErrorCode.CSRF_INVALID,
         'CSRF token missing or invalid. Send matching X-CSRF-Token header.',
       );
     }

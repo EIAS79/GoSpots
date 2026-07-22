@@ -14,6 +14,7 @@ import {
 import { ConfigService } from '@nestjs/config';
 import { Throttle } from '@nestjs/throttler';
 import { ApiTags } from '@nestjs/swagger';
+import { ApiStandardErrorResponses } from '../../common/dto/api-error-responses.decorator';
 import type { Request, Response } from 'express';
 import { AuthService } from './auth.service';
 import type {
@@ -186,6 +187,7 @@ export class AuthController {
   @Throttle(authThrottle('login'))
   @HttpCode(200)
   @Post('login')
+  @ApiStandardErrorResponses(400, 401)
   async login(
     @Body() dto: LoginDto,
     @Req() req: Request,
@@ -258,6 +260,7 @@ export class AuthController {
   @Throttle(authThrottle('login'))
   @HttpCode(200)
   @Post('mfa/verify')
+  @ApiStandardErrorResponses(400, 401)
   async verifyMfa(
     @Body() dto: MfaVerifyDto,
     @Req() req: Request,
@@ -306,6 +309,7 @@ export class AuthController {
   @Throttle(authThrottle('refresh'))
   @HttpCode(200)
   @Post('refresh')
+  @ApiStandardErrorResponses(401)
   async refresh(
     @Req() req: Request,
     @Res({ passthrough: true }) res: Response,

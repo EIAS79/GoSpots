@@ -1,11 +1,65 @@
-# Locora — Live Postgres concurrency test suite (design only)
+# Locora — Live Postgres concurrency test suite
 
-**Date:** 2026-07-21  
-**Status:** Design + **Lane XXX scaffold** + Neon-refuse gate (**WWWWWW**) + **Lane HHHHHH live util/lock C1–C3 bodies**. Exclusion DDL **shipped** — see [`GO_SPOTS_EXCLUSION_CONSTRAINT.md`](./GO_SPOTS_EXCLUSION_CONSTRAINT.md) (`20260721060000_*`).  
-**Bible:** **#2** (automated testing — **DONE** via Lane **GGGGGG** + live bodies **HHHHHH**), **#4** (booking concurrency — **DONE**), **#5** (inventory oversell — **DONE**; C3 util body shipped).
-**Ship timing:** Run with local Docker / ephemeral only (`RUN_CONCURRENCY_TESTS=1`; **not** Neon from `.env`).
-**#2 ship bar (Lane GGGGGG + HHHHHH):** API unit suite + CI + opt-in concurrency scaffold + util/lock C1–C3 bodies. Nest service wrappers optional residual.
-**#5 ship bar (Lane BBBBBB + HHHHHH):** conditional stock SQL + atomic SALE + claim-before-delete/cancel + unit race specs + live C3 util body.
+**Date:** 2026-07-21 (design + scaffold) / 2026-07-22 (operator checklist **CONCUR7-residual-docs**)  
+**Status:** **Ship bar met** — app lock + GiST exclusion (#4 **DONE**); stock atomic paths (#5 **DONE**); opt-in harness + Neon-refuse + **live C1–C3 util/lock bodies on disk** (Lanes **XXX**, **HHHHHH**). **Live proof = operator residual** (local Docker only).  
+**Bible:** **#2** (automated testing — **DONE** via Lane **GGGGGG** + live bodies **HHHHHH**), **#4** (booking concurrency — **DONE**), **#5** (inventory oversell — **DONE**).  
+**Ship timing:** Run with local Docker / ephemeral only (`RUN_CONCURRENCY_TESTS=1`; **not** Neon from `.env`).  
+**#2 ship bar (Lane GGGGGG + HHHHHH):** API unit suite + CI + opt-in concurrency scaffold + util/lock C1–C3 bodies. Nest service wrappers optional residual.  
+**#5 ship bar (Lane BBBBBB + HHHHHH):** conditional stock SQL + atomic SALE + claim-before-delete/cancel + unit race specs + live C3 util body.  
+**Exclusion DDL:** [`GO_SPOTS_EXCLUSION_CONSTRAINT.md`](./GO_SPOTS_EXCLUSION_CONSTRAINT.md) — applied on Neon 2026-07-21.
+
+---
+
+## Shipped vs residual (honest)
+
+| Item | State | Evidence |
+|------|--------|----------|
+| App booking lock (`FOR UPDATE`) + overlap asserts | **DONE** | `booking-lock.util.ts`, `booking-overlap.util.ts` (+specs) |
+| GiST EXCLUDE on active reservations | **DONE** on disk + Neon | `20260721060000_reservation_resource_exclusion` |
+| Conditional stock decrement + claim-before-delete | **DONE** | `menu-stock-db.util.ts`, `shop-order-stock.util.ts` (+specs) |
+| Concurrency skip gate + Neon-refuse harness | **DONE** | `test/concurrency/concurrency.harness.ts`, gate unit specs |
+| Live C1/C2/C3 util/lock bodies (`Promise.allSettled`) | **DONE** on disk | `booking-double-book.spec.ts`, `stock-last-unit.spec.ts`, fixtures |
+| Default `pnpm test` unchanged (mock-only) | **DONE** | Dedicated `jest-concurrency.json` |
+| Operator live Docker run (C1–C3 green) | **OPERATOR** | Gates 0–3 below — **not started** until local Postgres up |
+| Nest service-level C1–C3 wrappers | **RESIDUAL** (optional) | Util path sufficient for ship bar |
+| Walk-in PlaySession ↔ reservation (C4) | **RESIDUAL** (optional) | Exclusion does not cover walk-ins |
+| CI Postgres concurrency job | **RESIDUAL** | Not wired; optional post-ship |
+
+**Verify (no local Docker):** `pnpm test:concurrency` → gate **6** PASS; live describes **skipped**.
+
+**Verify (with local Docker):** Gates 0–3 below → C1 + C2 + C3 all **PASS**.
+
+---
+
+## Operator cutover checklist (live Docker C1–C3)
+
+Use when you want **proactive** proof that two real Postgres connections cannot double-book or oversell last unit. **Not required** for §37 code ship bar (unit specs + exclusion on Neon already met). **Never** run against production Neon — harness refuses Neon URLs from `.env`.
+
+### Gate 0 — Local Postgres + migrations
+
+- [ ] Local Docker Postgres (or throwaway ephemeral DB) — **not** Neon production/branch from committed `.env`.
+- [ ] `DATABASE_URL` points at local instance (e.g. `postgresql://gospots:gospots_dev@127.0.0.1:5432/gospots?schema=public`).
+- [ ] `pnpm --filter @gospots/api migrate:deploy` applied once on that DB (includes exclusion migration).
+
+### Gate 1 — Opt-in flag
+
+- [ ] `export RUN_CONCURRENCY_TESTS=1` (or set in `apps/api/.env` — do not commit).
+- [ ] Confirm harness does **not** refuse URL (Neon hostnames are blocked).
+
+### Gate 2 — Run suite
+
+```bash
+cd apps/api
+export RUN_CONCURRENCY_TESTS=1
+export DATABASE_URL='postgresql://…local…'
+pnpm test:concurrency
+```
+
+Expect: gate specs **PASS**; C1 public double-book **PASS**; C2 staff double-book **PASS**; C3 last-unit stock **PASS**.
+
+### Gate 3 — Post-run sanity (long-lived dev DB only)
+
+- [ ] `pnpm detect:reservation-overlaps` exit **0** after C1/C2 runs (see [`GO_SPOTS_EXCLUSION_CONSTRAINT.md`](./GO_SPOTS_EXCLUSION_CONSTRAINT.md)).
 
 ---
 
@@ -22,7 +76,7 @@ Today:
 
 - **51 Jest suites / 352 unit tests** — including mocked lock ordering (`booking-lock.util.spec.ts`) and conditional stock SQL (`menu-stock-db.util.spec.ts`).
 - **Zero** tests hit a live Postgres with concurrent writers.
-- Overlap **detection** exists (`pnpm detect:reservation-overlaps`); exclusion constraint migration **on disk** ([`GO_SPOTS_EXCLUSION_CONSTRAINT.md`](./GO_SPOTS_EXCLUSION_CONSTRAINT.md)) — Neon deploy after clean detect.
+- Overlap **detection** exists (`pnpm detect:reservation-overlaps`); exclusion constraint migration **applied on Neon**.
 
 This suite closes the gap between “lock helper unit tests pass” and “two HTTP clients cannot corrupt prod data.”
 
@@ -64,12 +118,12 @@ apps/api/
       setup-env.ts                # TZ only
       concurrency.harness.ts      # skip gate + describeConcurrency
       concurrency-gate.spec.ts    # unit tests for the gate (no DB)
-      booking-double-book.spec.ts # C1 + C2 it.todo (skipped unless opted in)
-      stock-last-unit.spec.ts     # C3 it.todo (skipped unless opted in)
+      booking-double-book.spec.ts # C1 + C2 live util/lock (skipped unless opted in)
+      stock-last-unit.spec.ts     # C3 live util/lock (skipped unless opted in)
   package.json                    # script: test:concurrency
 ```
 
-**Still missing for live recipes:** Nest service-level wrappers (optional). Util/lock C1–C3 + fixtures shipped (**HHHHHH**).
+**Live recipes shipped (Lane HHHHHH):** fixtures + C1–C3 util/lock `Promise.allSettled` bodies. Nest service-level wrappers remain **optional** residual.
 
 **Naming:** specs under `test/concurrency/**/*.spec.ts` with a dedicated Jest config so default `pnpm test` (`rootDir: src`) stays mock-only and fast.
 
@@ -317,16 +371,16 @@ concurrency-tests:
 
 ## Phased implementation checklist
 
-1. ~~Add `test/concurrency/concurrency.harness.ts` (skip gate) + `test:concurrency`.~~ **Done (Lane XXX)** — gate + todos; fixtures/cleanup still open.
-2. Implement **C3** first (smaller surface, no opening-hours calendar) — post-Friday / Neon branch.
-3. Implement **C1** public double-book.
-4. Add **C2** staff create (validates dashboard path).
-5. Document operator run in README / deploy checklist when live recipes land.
-6. Run on Neon **branch** before enabling CI job.
+1. ~~Add `test/concurrency/concurrency.harness.ts` (skip gate) + `test:concurrency`.~~ **Done (Lane XXX)** — gate + live bodies (**HHHHHH**).
+2. ~~Implement **C3** first~~ **Done (util path)** — operator Gate 2 above.
+3. ~~Implement **C1** public double-book.~~ **Done (util path)**.
+4. ~~Add **C2** staff create.~~ **Done (util path)**.
+5. Document operator run — **Done (CONCUR7-residual-docs)** — Gates 0–3 above.
+6. Optional: Neon **branch** (not prod) before enabling CI job.
 7. Optional **C4** walk-in vs reservation.
 8. Optional Supertest variant for public HTTP + throttle disabled in test env only.
 
-**Overnight bar:** scaffold + skip path green without Neon. **#2 DONE ship bar:** unit suite + CI + opt-in scaffold (Lane **GGGGGG**). Live C1–C3 bodies remain post-ship residual (not CI-gated).
+**Ship bar:** unit specs + exclusion on Neon + opt-in harness + util bodies on disk. **Operator residual:** Gate 2 green on local Docker. **Not CI-gated.**
 
 ---
 
@@ -334,7 +388,8 @@ concurrency-tests:
 
 | Path | Role |
 |------|------|
-| `docs/audit/GO_SPOTS_CONCURRENCY_TESTS.md` | Design + scaffold notes |
+| `docs/audit/GO_SPOTS_CONCURRENCY_TESTS.md` | Design + operator Gates 0–3 + shipped vs residual |
+| `docs/audit/GO_SPOTS_EXCLUSION_CONSTRAINT.md` | GiST exclusion DDL + operator verify Gates 0–3 |
 | `apps/api/test/concurrency/**` | Lane XXX harness + gate; Lane **HHHHHH** fixtures + C1–C3 util/lock bodies |
 | `apps/api/test/jest-concurrency.json` | Dedicated Jest config |
 | `apps/api/package.json` | `test:concurrency` script |
@@ -351,4 +406,4 @@ pnpm test:concurrency
 # expect: concurrency-gate.spec PASS; booking/stock describes skipped
 ```
 
-*Board: [`AGENT_COORDINATION.md`](./AGENT_COORDINATION.md) · Status: [`BIBLE_STATUS.md`](./BIBLE_STATUS.md) #2 #4 #5 · Finished log: [`BIBLE_FINISHED.md`](./BIBLE_FINISHED.md) · Exclusion prep: [`GO_SPOTS_EXCLUSION_CONSTRAINT.md`](./GO_SPOTS_EXCLUSION_CONSTRAINT.md)*
+*Board: [`AGENT_COORDINATION.md`](./AGENT_COORDINATION.md) · Status: [`BIBLE_STATUS.md`](./BIBLE_STATUS.md) #2 #4 #5 · Finished log: [`BIBLE_FINISHED.md`](./BIBLE_FINISHED.md) · Operator: [`docs/PRODUCTION_STATUS.md`](../PRODUCTION_STATUS.md)*

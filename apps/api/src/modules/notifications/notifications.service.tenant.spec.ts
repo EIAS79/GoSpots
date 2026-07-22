@@ -94,17 +94,10 @@ describe('NotificationsService tenant-scoped mutations', () => {
     );
   });
 
-  it('markReservationTabRead updateMany includes shopId', async () => {
+  it('markReservationTabRead updateMany includes shopId and tab filter without prefetch', async () => {
     const updateMany = jest.fn().mockResolvedValue({ count: 1 });
     const prisma = {
       notification: {
-        findMany: jest.fn().mockResolvedValue([
-          {
-            id: 'n_dining',
-            href: '/sessions?tab=dining',
-            title: 'New dining reservation',
-          },
-        ]),
         updateMany,
       },
     };
@@ -120,10 +113,41 @@ describe('NotificationsService tenant-scoped mutations', () => {
       expect.objectContaining({
         where: expect.objectContaining({
           shopId: 'shop_a',
-          id: { in: ['n_dining'] },
+          section: 'reservation',
+          readAt: null,
+          AND: expect.arrayContaining([
+            {
+              OR: [{ userId: null }, { userId: 'user_1' }],
+            },
+            expect.objectContaining({ OR: expect.any(Array) }),
+          ]),
         }),
+        data: { readAt: expect.any(Date) },
       }),
     );
+    expect(prisma.notification).not.toHaveProperty('findMany');
+  });
+
+  it('reservationBadges uses count queries instead of findMany', async () => {
+    const count = jest
+      .fn()
+      .mockResolvedValueOnce(2)
+      .mockResolvedValueOnce(3)
+      .mockResolvedValueOnce(1);
+    const prisma = {
+      notification: { count },
+    };
+    const service = new NotificationsService(
+      prisma as never,
+      audit as never,
+      sseHub,
+    );
+
+    const result = await service.reservationBadges(actor);
+
+    expect(count).toHaveBeenCalledTimes(3);
+    expect(result).toEqual({ dining: 2, gaming: 3, events: 1, total: 6 });
+    expect(prisma.notification).not.toHaveProperty('findMany');
   });
 
   it('archive by ids scopes to shopId', async () => {

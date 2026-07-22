@@ -3,7 +3,11 @@ import { ConfigService } from '@nestjs/config';
 import { JwtService } from '@nestjs/jwt';
 import { hashToken } from '../../common/security/token';
 import { AuthService } from './auth.service';
+import { AuthSessionService } from './auth-session.service';
 
+// Bible #11 auth split: session API surface was extracted into
+// AuthSessionService. These specs still drive AuthService (facade) so
+// controller-facing behavior is what's under test.
 describe('AuthService session list/revoke', () => {
   const notifications = {} as never;
   const audit = {} as never;
@@ -20,6 +24,7 @@ describe('AuthService session list/revoke', () => {
         throw new Error(`missing ${key}`);
       },
     } as unknown as ConfigService;
+    const sessions = new AuthSessionService(prisma as never);
     return new AuthService(
       prisma as never,
       jwt,
@@ -27,6 +32,7 @@ describe('AuthService session list/revoke', () => {
       notifications,
       audit,
       mail,
+      sessions,
     );
   }
 

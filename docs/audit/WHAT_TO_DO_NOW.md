@@ -1,8 +1,10 @@
 # What to do now
 
-**Status:** Bible **35/35 DONE**. Migrations **applied** to Neon and host env **set** (Render + Vercel). Custom domains live: **www.gospots.eu** / **www.gospots.pl** on Vercel. Remaining work is **manual smoke** — not more feature waves. Optional later phases can wait. See [`docs/PRODUCTION_STATUS.md`](../PRODUCTION_STATUS.md) for the operator summary.
+**Status:** Code ship bars largely met; **§37 acceptance NOT DONE** until **Render resume → manual smoke → flag soaks**. Migrations **applied** on Neon; host env **set** (Render + Vercel); custom domains **www.gospots.eu** / **www.gospots.pl** live. Agent board **clear** (no in-progress lanes). **Render API is suspended** — smoke blocked. Optional later phases can wait. See [`docs/PRODUCTION_STATUS.md`](../PRODUCTION_STATUS.md) and [`ORIGINAL_AUDIT_BIBLE.md`](./ORIGINAL_AUDIT_BIBLE.md) §37.
 
-Full deploy detail: [`DEPLOY_CHECKLIST.md`](./DEPLOY_CHECKLIST.md) · Preflight: [`MIGRATION_PREFLIGHT.md`](./MIGRATION_PREFLIGHT.md) · Friday gate list: [`REMAINING_P0_FRIDAY.md`](./REMAINING_P0_FRIDAY.md)
+**Credits pause (2026-07-22):** Agent chaining paused — see [`MONTH_END_HANDOFF.md`](./MONTH_END_HANDOFF.md) for operator resume steps + next-month code residuals.
+
+Full deploy detail: [`DEPLOY_CHECKLIST.md`](./DEPLOY_CHECKLIST.md) · Preflight: [`MIGRATION_PREFLIGHT.md`](./MIGRATION_PREFLIGHT.md) · Operator summary: [`docs/PRODUCTION_STATUS.md`](../PRODUCTION_STATUS.md)
 
 ---
 
@@ -77,14 +79,18 @@ Defaults are safe off. Flip when ready:
 | Flag | When |
 |------|------|
 | `IDEMPOTENCY_REQUIRE_MONEY_KEYS=true` | After smoke confirms clients send keys (prod example already `true`) |
-| `TENANT_RLS=on` | After RLS migrate soak |
-| `LEDGER_DUAL_WRITE=on` | After ledger migrate soak |
-| CAPTCHA (`CAPTCHA_PROVIDER` + `NEXT_PUBLIC_CAPTCHA_*`) | When site+secret keys are set |
+| `TENANT_RLS=on` | After migrate + smoke — [`GO_SPOTS_RLS.md`](./GO_SPOTS_RLS.md) Gates 0–4 |
+| `LEDGER_DUAL_WRITE=on` | After ledger migrate + smoke — see [`GO_SPOTS_LEDGER.md`](./GO_SPOTS_LEDGER.md) Gate 2 |
+| `LEDGER_READS=on` | After dual-write soak + `backfill:ledger --apply` — Gate 6 |
+| CAPTCHA (`CAPTCHA_PROVIDER` + `NEXT_PUBLIC_CAPTCHA_*`) | When site+secret keys are set — [`GO_SPOTS_PUBLIC_ABUSE.md`](./GO_SPOTS_PUBLIC_ABUSE.md) Gates 0–4 |
 | `LEGACY_UPLOADS_STATIC=false` | Only when `inventory:legacy-uploads` total = **0** |
 
 ---
 
 ## 2. Manual smoke
+
+**Blocked 2026-07-22 until Render Resume:** API returns `503` + `x-render-routing: suspend-by-user`.  
+Partial probe: `https://gospots.vercel.app` → **200**; direct API `/live` → **503 suspended**. Complete the list after Resume (see [`PRODUCTION_STATUS.md`](../PRODUCTION_STATUS.md)).
 
 From [`DEPLOY_CHECKLIST.md`](./DEPLOY_CHECKLIST.md) §3:
 
@@ -106,18 +112,36 @@ After guest-token smoke: optional `pnpm run clear:guest-plaintext` (dry-run, the
 |----------|------|
 | GuestCheck settle (#10 P3) | Phase 0–2 shipped; single-settle later |
 | Resource/dining UI cutover + DROP (#14 Phases 3–4) | Expand dual-write shipped |
-| Deeper service splits (#11 Phases 2–9) | Auth/reservations + remaining finance still monolith |
-| Ledger reads / backfill (#6 Phase 3–5) | Dual-write on disk; `LEDGER_READS` later |
-| Staff MFA / WebAuthn | Owner TOTP shipped |
+| Deeper service splits (#11) | **DONE** (ship bar) — finance/auth/reservations facades; login/register/activate on `AuthService` by design |
+| Ledger reads / backfill (#6 Phase 3–5) | Phase 3–4 **shipped**; operator Gates 0–7 [`GO_SPOTS_LEDGER.md`](./GO_SPOTS_LEDGER.md) |
+| Live concurrency C1–C3 (#4/#5) | Util bodies + exclusion **shipped**; operator Gates 0–3 local Docker [`GO_SPOTS_CONCURRENCY_TESTS.md`](./GO_SPOTS_CONCURRENCY_TESTS.md) |
+| Staff MFA / WebAuthn / org require-MFA | Owner TOTP shipped — phased plan [`GO_SPOTS_MFA.md`](./GO_SPOTS_MFA.md) |
 | Redis multi-instance SSE, OTel, signed media, marketplace live cohort | Scale / product later |
 
 Acknowledge known limitations in submit notes ([`DEPLOY_CHECKLIST.md`](./DEPLOY_CHECKLIST.md) §4).
 
 ---
 
-## 4. Do not
+## 4. §37 acceptance gates (honest)
+
+| Gate | State |
+|------|-------|
+| Code + §14 service split | **DONE** (ship bar) — board complete |
+| Neon migrate (18 folders) | **DONE** |
+| Host env + domains | **DONE** |
+| Safety flags (`TENANT_RLS`, `LEDGER_*`) | **OFF** — soak after smoke |
+| Render API | **SUSPENDED** — operator must Resume |
+| Manual smoke | **BLOCKED** until Resume |
+| Flag soak + optional backfill | **NOT STARTED** |
+| PITR restore drill | **OPEN** (non-blocker) |
+
+**Ship is not DONE** until Resume + smoke + soaks. Full gate table: [`ORIGINAL_AUDIT_BIBLE.md`](./ORIGINAL_AUDIT_BIBLE.md) §37.
+
+---
+
+## 5. Do not
 
 - **Never** `prisma migrate reset`, `db push`, or reorder migration folders against Neon
 - **Never** run `migrate deploy` from a workstation whose `.env` points at prod Neon
-- **Never** claim bible / ship **DONE** without migrate + smoke (code DONE ≠ production applied)
+- **Never** claim bible / ship **DONE** without Resume + smoke + soaks (code DONE ≠ production accepted)
 - **Never** set `THROTTLE_DISABLED=true` in production

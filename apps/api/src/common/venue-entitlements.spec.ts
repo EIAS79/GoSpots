@@ -1,5 +1,6 @@
 import { ForbiddenException } from '@nestjs/common';
 import { SubscriptionStatus, SubscriptionTier } from '@prisma/client';
+import { ApiDomainErrorCode } from './api-error.codes';
 import {
   assertMultiVenueEntitlement,
   assertStaffSeatCapacity,
@@ -26,6 +27,13 @@ import {
   resolveStaffSeatLimit,
   resolveSubscriptionAccess,
 } from './subscription-tier';
+
+function expectSubscriptionRequired(err: unknown) {
+  expect(err).toBeInstanceOf(ForbiddenException);
+  expect((err as ForbiddenException).getResponse()).toMatchObject({
+    code: ApiDomainErrorCode.SUBSCRIPTION_REQUIRED,
+  });
+}
 
 function sub(partial: {
   tier?: SubscriptionTier;
@@ -145,13 +153,19 @@ describe('assertMultiVenueEntitlement', () => {
   });
 
   it('403 for second venue without multi_shop after trial', () => {
-    expect(() =>
+    try {
       assertMultiVenueEntitlement(
         [sub({ addOns: 'gaming_suite', status: SubscriptionStatus.ACTIVE })],
         1,
         1,
-      ),
-    ).toThrow(ForbiddenException);
+      );
+      throw new Error('expected ForbiddenException');
+    } catch (err) {
+      expectSubscriptionRequired(err);
+      expect((err as ForbiddenException).getResponse()).toMatchObject({
+        details: { feature: 'multi_shop' },
+      });
+    }
   });
 
   it('allows second venue when multi_shop unlocked (ENTERPRISE legacy)', () => {
@@ -194,11 +208,18 @@ describe('assertStaffSeatCapacity', () => {
     const e = getVenueEntitlements(
       sub({ addOns: 'gaming_suite', staffSeatQuantity: 5 }),
     );
-    expect(() => assertStaffSeatCapacity(e, 0)).toThrow(ForbiddenException);
     try {
       assertStaffSeatCapacity(e, 0);
+      throw new Error('expected ForbiddenException');
     } catch (err) {
-      expect((err as ForbiddenException).message).toMatch(/Team accounts/i);
+      expectSubscriptionRequired(err);
+      const body = (err as ForbiddenException).getResponse() as {
+        message: string;
+      };
+      expect(body.message).toMatch(/Team accounts/i);
+      expect((err as ForbiddenException).getResponse()).toMatchObject({
+        details: { feature: 'roles' },
+      });
     }
   });
 
@@ -210,11 +231,15 @@ describe('assertStaffSeatCapacity', () => {
         status: SubscriptionStatus.ACTIVE,
       }),
     );
-    expect(() => assertStaffSeatCapacity(e, 0)).toThrow(ForbiddenException);
     try {
       assertStaffSeatCapacity(e, 0);
+      throw new Error('expected ForbiddenException');
     } catch (err) {
-      expect((err as ForbiddenException).message).toMatch(/No employee seats/i);
+      expectSubscriptionRequired(err);
+      const body = (err as ForbiddenException).getResponse() as {
+        message: string;
+      };
+      expect(body.message).toMatch(/No employee seats/i);
     }
   });
 
@@ -226,13 +251,18 @@ describe('assertStaffSeatCapacity', () => {
         status: SubscriptionStatus.ACTIVE,
       }),
     );
-    expect(() => assertStaffSeatCapacity(e, 2)).toThrow(ForbiddenException);
     try {
       assertStaffSeatCapacity(e, 2);
+      throw new Error('expected ForbiddenException');
     } catch (err) {
-      expect((err as ForbiddenException).message).toMatch(
-        /Employee limit reached \(2\/2\)/,
-      );
+      expectSubscriptionRequired(err);
+      const body = (err as ForbiddenException).getResponse() as {
+        message: string;
+      };
+      expect(body.message).toMatch(/Employee limit reached \(2\/2\)/);
+      expect((err as ForbiddenException).getResponse()).toMatchObject({
+        details: { feature: 'roles', staffSeatLimit: 2, usedSeats: 2 },
+      });
     }
   });
 

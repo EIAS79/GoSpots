@@ -2,6 +2,7 @@
 
 import { Loader2, Plus, Receipt, RotateCcw } from "lucide-react";
 import { useCallback, useEffect, useState } from "react";
+import { resolveApiErrorDisplay } from "@/lib/api";
 import { cn } from "@/lib/cn";
 import {
   createTransaction,
@@ -97,7 +98,15 @@ export function FinanceTransactionsPanel({ canWrite }: { canWrite: boolean }) {
       await load({ silent: true });
     } catch (err) {
       setError(
-        err instanceof Error ? err.message : t("finance.txRecordFailed"),
+        resolveApiErrorDisplay(
+          err,
+          {
+            MENU_STOCK_INSUFFICIENT: t("orders.stockInsufficient"),
+            PERMISSION_DENIED: t("common.permissionDenied"),
+            VENUE_ACCESS_DENIED: t("common.venueAccessDenied"),
+          },
+          t("finance.txRecordFailed"),
+        ),
       );
     } finally {
       setBusy(false);

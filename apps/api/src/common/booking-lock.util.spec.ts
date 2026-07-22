@@ -1,15 +1,22 @@
 import { ConflictException } from '@nestjs/common';
+import { ApiDomainErrorCode } from './api-error.codes';
 import {
   isReservationExclusionViolation,
   rethrowIfReservationExclusion,
   withResourceBookingLock,
 } from './booking-lock.util';
 import {
+  assertNoActiveWalkIn,
   assertNoReservationOverlap,
   assertNoWalkInOverlap,
   assertBookingSlotFree,
   assertResourceBookable,
 } from './booking-overlap.util';
+
+function expectConflictWithCode(err: unknown, code: string) {
+  expect(err).toBeInstanceOf(ConflictException);
+  expect((err as ConflictException).getResponse()).toMatchObject({ code });
+}
 
 describe('booking lock + overlap helpers', () => {
   it('isReservationExclusionViolation detects 23P01 / constraint name', () => {
@@ -25,9 +32,11 @@ describe('booking lock + overlap helpers', () => {
   });
 
   it('rethrowIfReservationExclusion maps to ConflictException', () => {
-    expect(() =>
-      rethrowIfReservationExclusion({ code: '23P01' }),
-    ).toThrow(ConflictException);
+    try {
+      rethrowIfReservationExclusion({ code: '23P01' });
+    } catch (err) {
+      expectConflictWithCode(err, ApiDomainErrorCode.RESERVATION_OVERLAP);
+    }
     expect(() => rethrowIfReservationExclusion(new Error('other'))).toThrow(
       'other',
     );
@@ -41,7 +50,9 @@ describe('booking lock + overlap helpers', () => {
     };
     await expect(
       withResourceBookingLock(prisma as never, 'res_1', async () => 'ok'),
-    ).rejects.toBeInstanceOf(ConflictException);
+    ).rejects.toMatchObject({
+      response: { code: ApiDomainErrorCode.RESERVATION_OVERLAP },
+    });
   });
 
   it('withResourceBookingLock runs FOR UPDATE then callback', async () => {
@@ -169,7 +180,87 @@ describe('booking lock + overlap helpers', () => {
         new Date('2030-01-01T10:00:00Z'),
         new Date('2030-01-01T11:00:00Z'),
       ),
-    ).rejects.toBeInstanceOf(ConflictException);
+    ).rejects.toMatchObject({
+      response: { code: ApiDomainErrorCode.RESERVATION_OVERLAP },
+    });
+  });
+
+  it('assertResourceBookable throws domain codes for missing and maintenance', async () => {
+    await expect(
+      assertResourceBookable(
+        { resource: { findFirst: jest.fn().mockResolvedValue(null) } } as never,
+        'shop',
+        'res',
+      ),
+    ).rejects.toMatchObject({
+      response: { code: ApiDomainErrorCode.RESOURCE_NOT_BOOKABLE },
+    });
+    await expect(
+      assertResourceBookable(
+        {
+          resource: {
+            findFirst: jest.fn().mockResolvedValue({
+              id: 'res',
+              shopId: 'shop',
+              status: 'MAINTENANCE',
+            }),
+          },
+        } as never,
+        'shop',
+        'res',
+      ),
+    ).rejects.toMatchObject({
+      response: { code: ApiDomainErrorCode.RESOURCE_MAINTENANCE },
+    });
+  });
+
+  it('assertNoActiveWalkIn throws WALK_IN_ACTIVE', async () => {
+    await expect(
+      assertNoActiveWalkIn(
+        {
+          playSession: {
+            findFirst: jest.fn().mockResolvedValue({
+              id: 'ps_1',
+              startedAt: new Date('2030-01-01T09:00:00Z'),
+              endedAt: null,
+              durationMinutes: 120,
+              status: 'ACTIVE',
+            }),
+          },
+        } as never,
+        'shop',
+        'res',
+        new Date('2030-01-01T10:00:00Z'),
+      ),
+    ).rejects.toMatchObject({
+      response: { code: ApiDomainErrorCode.WALK_IN_ACTIVE },
+    });
+  });
+
+  it('assertNoWalkInOverlap throws WALK_IN_OVERLAP', async () => {
+    await expect(
+      assertNoWalkInOverlap(
+        {
+          playSession: {
+            findMany: jest.fn().mockResolvedValue([
+              {
+                id: 'ps_1',
+                startedAt: new Date('2030-01-01T10:30:00Z'),
+                endedAt: null,
+                durationMinutes: 60,
+                status: 'ACTIVE',
+              },
+            ]),
+          },
+        } as never,
+        'shop',
+        'res',
+        new Date('2030-01-01T10:00:00Z'),
+        new Date('2030-01-01T11:00:00Z'),
+      ),
+    ).rejects.toMatchObject({
+      response: { code: ApiDomainErrorCode.WALK_IN_OVERLAP },
+    });
   });
 
   it('assertBookingSlotFree checks resource then overlaps', async () => {

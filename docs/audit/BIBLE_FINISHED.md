@@ -8,6 +8,76 @@ Links: [`BIBLE_STATUS.md`](./BIBLE_STATUS.md) · [`AGENT_COORDINATION.md`](./AGE
 
 ---
 
+## 2026-07-22
+
+### §16 CSV permissions/add-ons — operator DROP checklist (docs-only)
+
+- Lane **CSV16-residual-docs**: expanded [`GO_SPOTS_CSV_CUTOVER.md`](./GO_SPOTS_CSV_CUTOVER.md) with Gates 0–6 (app cutover shipped, expand migrate, inventory SQL, pre-DROP app gate, contract DROP on disk, post-DROP verify, soak). Synced `ORIGINAL_AUDIT_BIBLE.md` §16 + `BIBLE_PROGRESS.md` + `BIBLE_RESIDUAL_INVENTORY.md`.
+- **Shipped (unchanged):** rows SoT + stop dual-write (Lane **IIIIII**); contract `20260721090000_*` **on disk**.
+- **Residual:** operator Gates 0–6 verification ([`WHAT_TO_DO_NOW.md`](./WHAT_TO_DO_NOW.md) records **18/18 applied 2026-07-21**); optional API arrays-only polish.
+- **No** `apps/**`. Verify: docs-only.
+
+### #11 Service split — §14 ship bar DONE (SPLIT14-final)
+
+- Lane **DOCS-split14-final** (docs-only): synced §14 completion across bible docs after auth MFA + reservations Phases 7–9 extracts on disk. **Extracted:** finance all domain services (`FinanceService` facade ~223 lines); auth `AuthSessionService`, `AuthRefreshService`, `AuthLogoutService`, `AuthPasswordService` (owner+staff), `AuthVenueService`, `AuthMfaService`; reservations `ReservationsPublicService`, `ReservationsScheduleService`, `ReservationsStaffService` (facade ~109 lines). **By design residual:** login/register/activate/me/`issueTokens` on `AuthService` (~1 170 lines); `ReservationRemindersService` cron may remain outside facade.
+- Files: [`GO_SPOTS_SERVICE_SPLIT.md`](./GO_SPOTS_SERVICE_SPLIT.md), [`ORIGINAL_AUDIT_BIBLE.md`](./ORIGINAL_AUDIT_BIBLE.md) §14, [`BIBLE_PROGRESS.md`](./BIBLE_PROGRESS.md), [`BIBLE_STATUS.md`](./BIBLE_STATUS.md) #11 + C6, [`WHAT_TO_DO_NOW.md`](./WHAT_TO_DO_NOW.md), [`AGENT_COORDINATION.md`](./AGENT_COORDINATION.md).
+- **No** `apps/**`. Verify: docs-only.
+
+### §11 Guest tokens — operator Clear→DROP checklist (docs-only)
+
+- Lane **GUEST11-plaintext-docs**: expanded [`GO_SPOTS_GUEST_TOKEN.md`](./GO_SPOTS_GUEST_TOKEN.md) with Gates 0–6 (inventory SQL, `clear:guest-plaintext` dry-run/apply, soak, hash-only app deploy, illustrative DROP — **no migration folder on disk**). Synced `ORIGINAL_AUDIT_BIBLE.md` §11 + `BIBLE_PROGRESS.md`.
+- **Shipped (unchanged):** hash+expiry migration, util, clear CLI.
+- **Residual:** operator clear run; dual-read stop; contract DROP; statusPath mail (Phase 3).
+- **No** `apps/**`. Verify: docs-only.
+
+### #10 Guest check settle gate — Phase 3a
+
+- Lane **BIBLE10-guest-check-settle**: `POST /guest-checks/:id/settle` marks OPEN→SETTLED after attached orders are COMPLETED/CANCELED, walk-in play COMPLETED/CANCELED, reservations billed (or canceled/no-show). Does **not** post a second revenue/ledger stamp (Option A ops close-out). Staff Settle button + en/pl.
+- Files: `guest-check.service/controller/dto`, web `guest-check-client` + panel + i18n.
+- Verify: jest guest-check **8** PASS; i18n **1992**+**1020**.
+- Residual: Option B/C settle-as-revenue-root (finance-contract rewrite).
+
+### #6 Ledger Phase 3–4 — backfill + prefer-reads
+
+- Lane **LEDGER6-backfill** + **LEDGER6-reads**: `backfill:ledger` force-post CLI; `LEDGER_READS` analytics prefer SALE-by-channel (`computeRevenueSince` / `buildFinanceAnalytics`); env documented; defaults off.
+- Verify: jest ledger-post+backfill+analytics PASS.
+- Residual: Phase 5 freeze; OPERATOR dual-write soak → backfill → `LEDGER_READS=on`.
+
+### #11 Service split Phase 2 — quick sales extract
+
+- Lane **SPLIT11-finance-tx**: `FinanceTransactionService` owns `listTransactions` / `createTransaction`; `FinanceService` facade; characterization suite.
+- Verify: finance characterization + play/tenant suites **25** PASS; nest build PASS.
+- Residual: Phases 3–9 (orders, play, auth, reservations).
+
+### #11 Service split — auth sessions API extract
+
+- Lane **SPLIT11-auth-sessions**: new `AuthSessionService` owns `listAuthSessions` / `revokeAuthSession` / `revokeOtherAuthSessions` + private `resolveCurrentSessionFamilyId` (moved). `AuthService` facade-delegates the three methods. Private `revokeSessionFamily` intentionally duplicated (identical body) because `AuthService.refresh` still needs it — move-only, same behavior.
+- DI: the 7th `AuthService` constructor arg is `@Optional() sessions?: AuthSessionService` so sibling unit specs that construct `AuthService` with the legacy 6-arg signature still work (fallback wraps the same prisma). `AuthModule` registers `AuthSessionService` before `AuthService`.
+- Files: `apps/api/src/modules/auth/auth-session.service.ts` (new); surgical `auth.service.ts` (imports + ctor + 3 delegating methods, removed `resolveCurrentSessionFamilyId`); `auth.module.ts` (provider); `auth.service.sessions.spec.ts` (constructor args).
+- Verify: `jest src/modules/auth/auth.service.sessions.spec.ts` **6** PASS; full `jest src/modules/auth` **8 suites / 42** PASS; `nest build` PASS. **No** schema/migrations/Neon.
+- Residual: `refresh` / `logout` / MFA / password-reset / venue-bind still on `AuthService` (Phases 4–9).
+
+### #11 Shop-order characterization (Phase 3 prep)
+
+- Lane **SPLIT11-orders-char**: `finance.shop-orders.characterization.spec.ts` — list/create/add-line/complete/delete + denies; **10** PASS. No `finance.service` move (extract = `SPLIT11-shop-orders`).
+
+### #11 Service split Phase 3 — shop-order lifecycle extract
+
+- Lane **SPLIT11-shop-orders**: move-only extract of shop-order lifecycle from `FinanceService` → new `ShopOrderService` (`apps/api/src/modules/finance/shop-order.service.ts`), matching `FinanceTransactionService` / `ShopLossService` pattern.
+- Moved public methods: `listShopOrders`, `getShopOrder`, `createShopOrder`, `updateShopOrder`, `addShopOrderLine`, `patchShopOrderLine`, `deleteShopOrderLine`, `deleteShopOrder`, `archiveShopOrders`, `unarchiveShopOrders`.
+- Moved private helpers (shop-order-only): `serializeShopOrder`, `shopOrderInclude`, `loadShopOrder`, `recalcShopOrderTotal`, `describeLinePatch`, `notifyShopOrderCreated`, `notifyShopOrderCompleted`, `auditShopOrder`, `ensureMenuItemStock`, `adjustMenuStock`. Shared `assert` / `requireFeature` stay on `FinanceService` (still called by play-billing / play-session code); `ShopOrderService` uses `assertFinancePerm` / `requireFinanceFeature` from `finance-guard.util`.
+- `FinanceService` now facade-delegates the 10 shop-order methods (constructor gains `ShopOrderService` as the 7th arg); `finance.module.ts` registers `ShopOrderService` before `FinanceService`. Six finance specs updated in `makeService` factories to construct + pass the new service (`finance.shop-orders.characterization.spec.ts`, `finance.transactions.characterization.spec.ts`, `finance.reports-losses.characterization.spec.ts`, `finance.service.tenant.spec.ts`, `finance-play-billing.spec.ts`, `finance-play-session.spec.ts`).
+- No aborts: every private helper flagged for move was verified single-consumer (shop-order code only) via grep of `this.<helper>(` inside `finance.service.ts`. Dead local variable `nextTableReserved` in `updateShopOrder`'s `hasMeta` branch preserved verbatim (pre-existing; move-only invariant).
+- Files: `apps/api/src/modules/finance/shop-order.service.ts` (new); surgical `apps/api/src/modules/finance/finance.service.ts` (imports cleanup + ctor + 10 delegating methods + removed shop-order helpers + no product-behavior change); `apps/api/src/modules/finance/finance.module.ts`; 6 spec files under `apps/api/src/modules/finance/`.
+- Verify: `jest src/modules/finance/finance.shop-orders.characterization.spec.ts` **10** PASS; `jest src/modules/finance/finance.transactions.characterization.spec.ts src/modules/finance/finance.reports-losses.characterization.spec.ts src/modules/finance/finance.service.tenant.spec.ts src/modules/finance/finance-play-billing.spec.ts src/modules/finance/finance-play-session.spec.ts` → 5 suites / **25** PASS; `pnpm --filter @gospots/api exec nest build` PASS. **No** controller / DTO / schema / migrations / auth / reservations / web edits.
+- Residual: play-billing / play-session extract (still on `FinanceService`); auth / reservations Phase 4+.
+
+### Audit bible remake (original §§1–40)
+
+- Lane **AUDIT40-bible-remap**: canonical [`ORIGINAL_AUDIT_BIBLE.md`](./ORIGINAL_AUDIT_BIBLE.md); recreated DEEP_AUDIT / FIX_PLAN / TEST_MATRIX / MIGRATION_PLAN; privacy DATA_MAP + RETENTION_POLICY; progress/production pointers. **Full mega-prompt is not complete.**
+
+---
+
 ## 2026-07-21
 
 ### #14 Resource / dining model merge — DONE (Phase 0–2 Option C)
@@ -22,7 +92,7 @@ Links: [`BIBLE_STATUS.md`](./BIBLE_STATUS.md) · [`AGENT_COORDINATION.md`](./AGE
 - Lane **NNNNNN-guest-check-done**: Phase 0 **Option A** (ops container) locked in [`GO_SPOTS_UNIFIED_TICKET.md`](./GO_SPOTS_UNIFIED_TICKET.md). Phase 1: `GuestCheck` + optional `guestCheckId` on `ShopOrder` / `PlaySession` / `Reservation`; migration `20260721110000_guest_check` on disk; `LedgerEntry.guestCheckId` FK. Phase 2: `GET/POST /guest-checks`, attach/detach/void; staff `/guest-checks` open-tabs board with running total; en/pl. Anti-double-count: linked play excluded; order `reservationFee` not double-added.
 - Files: `guest-check-total.util.ts`(+spec), `modules/guest-check/**`, schema + migration, web panel/page/nav/i18n; status docs.
 - Verify: jest guest-check **12** PASS; nest build PASS; web typecheck PASS; i18n **1989**+**1020**. **No Neon.**
-- Residual: Phase 3 single-settle + finance-contract update; Phase 4–5 identity/contract drop. OPERATOR Neon migrate.
+- Residual: Phase 3a settle gate shipped 2026-07-22; Phase 3b Option B/C revenue-root + Phase 4–5 identity/contract drop. OPERATOR Neon migrate.
 
 ### Hotfix — web typecheck (`offline-banner` import)
 
@@ -170,7 +240,7 @@ Links: [`BIBLE_STATUS.md`](./BIBLE_STATUS.md) · [`AGENT_COORDINATION.md`](./AGE
 - Lane **ZZZZZ**: Ship bar = audited app `shopId` mutators + two-venue unit matrix **and** Postgres RLS on disk for 28 Tier A `shopId` tables (`20260721050000_tenant_rls_core`: ENABLE+FORCE + `app_tenant_rls_ok`) plus app `SET LOCAL` (`tenant-rls.util` / Prisma ALS proxy / `TenantRlsInterceptor` after venue bind; SSE skipped). Opt-in `TENANT_RLS` (default off; policies fail-open when mode unset).
 - Files: `prisma/migrations/20260721050000_tenant_rls_core/migration.sql`; `tenant-rls.util.ts`(+spec); `tenant-rls.interceptor.ts`(+spec); `prisma.service.ts`; `app.module.ts`; `.env.example` / `.env.production.example`; [`GO_SPOTS_RLS.md`](./GO_SPOTS_RLS.md); status docs. **No** `schema.prisma` / finance money-wire / Neon deploy.
 - Verify: jest `tenant-rls` **14** PASS; all `--testPathPatterns=tenant` **16 suites / 81** PASS.
-- Residual (operator): Neon migrate + `TENANT_RLS=on` soak; DB role split; Tier B child policies; `public_insert` guest wrap; live pooled suite; opaque media GET accepted.
+- Residual (operator): **`TENANT_RLS=on` soak Gates 0–4** [`GO_SPOTS_RLS.md`](./GO_SPOTS_RLS.md) (Neon migrate **applied**); DB role split (Gate 5); Tier B child policies; `public_insert` guest wrap; live pooled suite; opaque media GET accepted.
 
 ### #30 Internationalization — DONE (en/pl product UI ship bar)
 
@@ -905,14 +975,15 @@ Links: [`BIBLE_STATUS.md`](./BIBLE_STATUS.md) · [`AGENT_COORDINATION.md`](./AGE
 - Lane **EE** (2026-07-21): middleware Location strip; activate / legacy redirects / billing success / login `next=` sanitized.
 - **Not finished:** key rotation UI; eliminate capability-URL model entirely.
 
-### #20 Currency change safety — DONE (Lane YYYYY)
+### #20 Currency change safety — PARTIAL (ship bar met; Lane YYYYY + FX20-residual-docs)
 
 - Atomic catalog FX reprice all-or-nothing (Lane D).
 - Preview + confirm (Lane CC): `POST /shop/currency/preview` proposed price table; apply requires `confirm: true` on settings PATCH; historical money rows untouched.
 - Lane **MM** (2026-07-21): settings currency select → preview → before/after summary modal → PATCH with `confirm: true` only (no `window.confirm`).
-- Lane **YYYYY** (2026-07-21): M6 stamps — `20260721040000_currency_stamp_monetary_rows` on disk; dual-write on Transaction/ShopOrder/PlaySession/ShopLoss/Reservation; analytics group by effective currency; `GET /shop/currency/history` + settings history list; dedicated audit `venue.currency.change`. Design: [`GO_SPOTS_CURRENCY_STAMPS.md`](./GO_SPOTS_CURRENCY_STAMPS.md).
+- Lane **YYYYY** (2026-07-21): M6 stamps — `20260721040000_currency_stamp_monetary_rows` on disk; dual-write on Transaction/ShopOrder/PlaySession/ShopLoss/Reservation; analytics group by effective currency; `GET /shop/currency/history` + settings history list; dedicated audit `venue.currency.change`.
+- Lane **FX20-residual-docs** (2026-07-22): honest shipped vs residual + operator Gates 0–4 — [`GO_SPOTS_CURRENCY_STAMPS.md`](./GO_SPOTS_CURRENCY_STAMPS.md).
 - Verify: jest currency-stamp + finance-analytics + reprice **17** PASS; `tsc` + `nest build` PASS; `i18n:check` **1823**+**972**. OPERATOR: Neon migrate stamp migration.
-- **Not finished (operator / other lanes):** Neon deploy; money-wire JSON string dual-read on web (#1) is sibling-owned.
+- **Not finished:** operator Gates 0–4; nullable NOT NULL contract; pre-stamp backfill honesty; optional report-currency FX display in UI.
 
 ### #22 Email / jobs reliability — completed slice (parent remains PARTIAL)
 
@@ -949,10 +1020,12 @@ Links: [`BIBLE_STATUS.md`](./BIBLE_STATUS.md) · [`AGENT_COORDINATION.md`](./AGE
 - #10 unified ticket — [`GO_SPOTS_UNIFIED_TICKET.md`](./GO_SPOTS_UNIFIED_TICKET.md)
 - ~~#14 resource/dining merge~~ → **DONE** Phase 0–2 (**OOOOOO** / **OOOOOO-p2**); Phases 3–4 residual — [`GO_SPOTS_RESOURCE_MODEL_MERGE.md`](./GO_SPOTS_RESOURCE_MODEL_MERGE.md)
 - #18 2FA design — [`GO_SPOTS_2FA.md`](./GO_SPOTS_2FA.md)
-- #20 currency stamps design — [`GO_SPOTS_CURRENCY_STAMPS.md`](./GO_SPOTS_CURRENCY_STAMPS.md) → **implemented** Lane YYYYY (parent #20 DONE)
+- #20 currency stamps — [`GO_SPOTS_CURRENCY_STAMPS.md`](./GO_SPOTS_CURRENCY_STAMPS.md) → **implemented** Lane YYYYY; **PARTIAL** residual docs Lane **FX20-residual-docs**
 - #28 realtime design — [`GO_SPOTS_REALTIME.md`](./GO_SPOTS_REALTIME.md)
-- #29/#30 a11y/i18n design — [`GO_SPOTS_A11Y_I18N.md`](./GO_SPOTS_A11Y_I18N.md)
-- ~~#11 oversized services split~~ → **DONE** Phase 0+1 (**SPLIT11**); Phases 2–9 residual — [`GO_SPOTS_SERVICE_SPLIT.md`](./GO_SPOTS_SERVICE_SPLIT.md)
+- #29 a11y residual — [`GO_SPOTS_A11Y.md`](./GO_SPOTS_A11Y.md)  
+- #30 i18n residual — [`GO_SPOTS_I18N.md`](./GO_SPOTS_I18N.md)  
+- #29/#30 combined design (historical) — [`GO_SPOTS_A11Y_I18N.md`](./GO_SPOTS_A11Y_I18N.md)
+- ~~#11 oversized services split~~ → **DONE** (ship bar — SPLIT11 + SPLIT14; Phases 0–9 complete) — [`GO_SPOTS_SERVICE_SPLIT.md`](./GO_SPOTS_SERVICE_SPLIT.md). Residual by design: login/register/activate on `AuthService`; reminders cron may remain
 - #31 onboarding design — [`GO_SPOTS_ONBOARDING.md`](./GO_SPOTS_ONBOARDING.md) → **implemented** Lane LLLLLL (parent #31 DONE)
 - #32 offline / degraded ops design — [`GO_SPOTS_OFFLINE.md`](./GO_SPOTS_OFFLINE.md) (Lane RR later shipped staff connectivity banner → PARTIAL)
 - #33 product scope / narrow focus — [`GO_SPOTS_PRODUCT_FOCUS.md`](./GO_SPOTS_PRODUCT_FOCUS.md)
@@ -968,5 +1041,5 @@ Links: [`BIBLE_STATUS.md`](./BIBLE_STATUS.md) · [`AGENT_COORDINATION.md`](./AGE
 - Full financial ledger (#6)
 - ~~Postgres exclusion constraint (#4)~~ → **DONE** (WWWWWW; Neon deploy residual)
 - Owner 2FA (#18)
-- Durable mail outbox (#22) — table + worker + dead-letter API + owner dashboard UI shipped; **prod retry proof** / alerting / system-mail ops still open
+- Durable mail outbox (#22) — table + worker + dead-letter API + owner + SUPER_ADMIN UI **shipped**; **prod retry proof** / outbox alerting / SENT retention **residual** — [`GO_SPOTS_MAIL_OUTBOX.md`](./GO_SPOTS_MAIL_OUTBOX.md) Gates 0–5
 - Neon migrate deploy / CORS / smoke (operator — see [`REMAINING_P0_FRIDAY.md`](./REMAINING_P0_FRIDAY.md))

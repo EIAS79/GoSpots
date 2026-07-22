@@ -17,6 +17,12 @@ export function isLedgerDualWriteEnabled(): boolean {
   return v === '1' || v === 'true' || v === 'on' || v === 'yes';
 }
 
+/** Phase 4 analytics prefer-ledger gate — default off until backfill + soak. */
+export function isLedgerReadsEnabled(): boolean {
+  const v = process.env.LEDGER_READS?.trim().toLowerCase();
+  return v === '1' || v === 'true' || v === 'on' || v === 'yes';
+}
+
 export type LedgerPostInput = {
   shopId: string;
   currency: string;
@@ -32,13 +38,15 @@ export type LedgerPostInput = {
 
 /**
  * Idempotent ledger post (unique shopId+sourceType+sourceId+kind).
- * No-ops when LEDGER_DUAL_WRITE is off. Swallows P2002 races.
+ * No-ops when LEDGER_DUAL_WRITE is off unless `opts.force` (backfill).
+ * Swallows P2002 races.
  */
 export async function postLedgerEntry(
   db: DbClient,
   input: LedgerPostInput,
+  opts?: { force?: boolean },
 ): Promise<'posted' | 'duplicate' | 'skipped'> {
-  if (!isLedgerDualWriteEnabled()) return 'skipped';
+  if (!opts?.force && !isLedgerDualWriteEnabled()) return 'skipped';
 
   const currency =
     effectiveMoneyCurrency(input.currency, input.currency) || 'EUR';
@@ -84,18 +92,23 @@ export async function postShopOrderCompleted(
     completedAt: Date;
     createdById?: string | null;
   },
+  opts?: { force?: boolean },
 ): Promise<'posted' | 'duplicate' | 'skipped'> {
-  return postLedgerEntry(db, {
-    shopId: args.shopId,
-    currency: args.currency,
-    amount: args.total,
-    kind: 'SALE',
-    channel: 'MENU_ORDERS',
-    sourceType: 'SHOP_ORDER',
-    sourceId: args.orderId,
-    occurredAt: args.completedAt,
-    createdById: args.createdById,
-  });
+  return postLedgerEntry(
+    db,
+    {
+      shopId: args.shopId,
+      currency: args.currency,
+      amount: args.total,
+      kind: 'SALE',
+      channel: 'MENU_ORDERS',
+      sourceType: 'SHOP_ORDER',
+      sourceId: args.orderId,
+      occurredAt: args.completedAt,
+      createdById: args.createdById,
+    },
+    opts,
+  );
 }
 
 export function ledgerKindForTransaction(
@@ -126,21 +139,26 @@ export async function postTransactionCreated(
     createdAt: Date;
     createdById?: string | null;
   },
+  opts?: { force?: boolean },
 ): Promise<'posted' | 'duplicate' | 'skipped'> {
   const ledgerKind = ledgerKindForTransaction(args.kind);
   const channel: LedgerChannel | null =
     ledgerKind === 'SALE' || ledgerKind === 'REFUND' ? 'QUICK_SALES' : null;
-  return postLedgerEntry(db, {
-    shopId: args.shopId,
-    currency: args.currency,
-    amount: args.amount,
-    kind: ledgerKind,
-    channel,
-    sourceType: 'TRANSACTION',
-    sourceId: args.transactionId,
-    occurredAt: args.createdAt,
-    createdById: args.createdById,
-  });
+  return postLedgerEntry(
+    db,
+    {
+      shopId: args.shopId,
+      currency: args.currency,
+      amount: args.amount,
+      kind: ledgerKind,
+      channel,
+      sourceType: 'TRANSACTION',
+      sourceId: args.transactionId,
+      occurredAt: args.createdAt,
+      createdById: args.createdById,
+    },
+    opts,
+  );
 }
 
 export async function postReservationBilled(
@@ -155,18 +173,23 @@ export async function postReservationBilled(
     resourceId: string | null;
     createdById?: string | null;
   },
+  opts?: { force?: boolean },
 ): Promise<'posted' | 'duplicate' | 'skipped'> {
-  return postLedgerEntry(db, {
-    shopId: args.shopId,
-    currency: args.currency,
-    amount: args.billedAmount,
-    kind: 'SALE',
-    channel: args.resourceId ? 'PLAY_SESSIONS' : 'RESERVATIONS',
-    sourceType: 'RESERVATION',
-    sourceId: args.reservationId,
-    occurredAt: args.billedAt,
-    createdById: args.createdById,
-  });
+  return postLedgerEntry(
+    db,
+    {
+      shopId: args.shopId,
+      currency: args.currency,
+      amount: args.billedAmount,
+      kind: 'SALE',
+      channel: args.resourceId ? 'PLAY_SESSIONS' : 'RESERVATIONS',
+      sourceType: 'RESERVATION',
+      sourceId: args.reservationId,
+      occurredAt: args.billedAt,
+      createdById: args.createdById,
+    },
+    opts,
+  );
 }
 
 export async function postWalkInPlaySessionPaid(
@@ -181,19 +204,24 @@ export async function postWalkInPlaySessionPaid(
     reservationId: string | null | undefined;
     createdById?: string | null;
   },
+  opts?: { force?: boolean },
 ): Promise<'posted' | 'duplicate' | 'skipped'> {
   if (args.reservationId) return 'skipped';
-  return postLedgerEntry(db, {
-    shopId: args.shopId,
-    currency: args.currency,
-    amount: args.amount,
-    kind: 'SALE',
-    channel: 'PLAY_SESSIONS',
-    sourceType: 'PLAY_SESSION',
-    sourceId: args.sessionId,
-    occurredAt: args.completedAt,
-    createdById: args.createdById,
-  });
+  return postLedgerEntry(
+    db,
+    {
+      shopId: args.shopId,
+      currency: args.currency,
+      amount: args.amount,
+      kind: 'SALE',
+      channel: 'PLAY_SESSIONS',
+      sourceType: 'PLAY_SESSION',
+      sourceId: args.sessionId,
+      occurredAt: args.completedAt,
+      createdById: args.createdById,
+    },
+    opts,
+  );
 }
 
 export async function postShopLossCreated(
@@ -206,16 +234,21 @@ export async function postShopLossCreated(
     occurredAt: Date;
     createdById?: string | null;
   },
+  opts?: { force?: boolean },
 ): Promise<'posted' | 'duplicate' | 'skipped'> {
-  return postLedgerEntry(db, {
-    shopId: args.shopId,
-    currency: args.currency,
-    amount: args.amount,
-    kind: 'LOSS',
-    channel: null,
-    sourceType: 'SHOP_LOSS',
-    sourceId: args.lossId,
-    occurredAt: args.occurredAt,
-    createdById: args.createdById,
-  });
+  return postLedgerEntry(
+    db,
+    {
+      shopId: args.shopId,
+      currency: args.currency,
+      amount: args.amount,
+      kind: 'LOSS',
+      channel: null,
+      sourceType: 'SHOP_LOSS',
+      sourceId: args.lossId,
+      occurredAt: args.occurredAt,
+      createdById: args.createdById,
+    },
+    opts,
+  );
 }

@@ -234,6 +234,7 @@ export type PublicVenue = {
   description: string | null;
   coverImage: string | null;
   locale: string;
+  timezone?: string;
   currency: string;
   gameOfferingCount?: number;
   averageRating?: number | null;
