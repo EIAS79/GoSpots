@@ -2,7 +2,7 @@
  * Phase 1 observability for resource vs seating inventory drift (bible #14 / Option C).
  *
  * Read-only: never mutates seating counts or resources.
- * See docs/audit/GO_SPOTS_RESOURCE_MODEL_MERGE.md.
+ * Detect resource ↔ dining seating drift.
  */
 
 import type { Prisma, PrismaClient } from '@prisma/client';

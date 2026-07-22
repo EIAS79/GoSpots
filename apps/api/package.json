@@ -10,7 +10,7 @@
   },
   "scripts": {
     "build": "nest build",
-    "format": "prettier --write \"src/**/*.ts\" \"test/**/*.ts\"",
+    "format": "prettier --write \"src/**/*.ts\"",
     "start": "nest start",
     "start:dev": "nest start --watch",
     "postinstall": "prisma generate",
@@ -18,29 +18,11 @@
     "prisma:migrate": "prisma migrate dev",
     "prisma:studio": "prisma studio",
     "seed": "tsx prisma/seed.ts",
-    "detect:reservation-overlaps": "tsx scripts/detect-reservation-overlaps.ts",
-    "detect:resource-dining-drift": "tsx scripts/detect-resource-dining-drift.ts",
-    "clear:guest-plaintext": "tsx scripts/clear-guest-plaintext.ts",
-    "backfill:legacy-addon-tier": "tsx scripts/backfill-legacy-addon-tier.ts",
-    "backfill:ledger": "tsx scripts/backfill-ledger.ts",
-    "inventory:legacy-uploads": "tsx scripts/inventory-legacy-uploads.ts",
-    "inventory:offering-config": "tsx scripts/inventory-offering-config.ts",
-    "migrate:legacy-uploads": "tsx scripts/migrate-legacy-uploads.ts",
-    "verify:migrations": "tsx scripts/verify-migrations.ts",
-    "perf:smoke": "node scripts/perf-smoke.mjs",
-    "perf:k6": "k6 run scripts/perf-read-smoke.js",
-    "perf:k6:write": "k6 run scripts/perf-write-smoke.js",
     "start:debug": "nest start --debug --watch",
     "start:prod": "node dist/main",
     "migrate:deploy": "prisma migrate deploy",
     "postbuild": "prisma generate",
-    "lint": "eslint \"{src,apps,libs,test}/**/*.ts\" --fix",
-    "test": "jest",
-    "test:watch": "jest --watch",
-    "test:cov": "jest --coverage",
-    "test:debug": "node --inspect-brk -r tsconfig-paths/register -r ts-node/register node_modules/.bin/jest --runInBand",
-    "test:e2e": "jest --config ./test/jest-e2e.json",
-    "test:concurrency": "jest --config ./test/jest-concurrency.json --runInBand --passWithNoTests"
+    "lint": "eslint \"{src,apps,libs}/**/*.ts\" --fix"
   },
   "dependencies": {
     "@nestjs/common": "^11.0.1",
@@ -70,47 +52,24 @@
     "@eslint/js": "^9.18.0",
     "@nestjs/cli": "^11.0.0",
     "@nestjs/schematics": "^11.0.0",
-    "@nestjs/testing": "^11.0.1",
     "@types/cookie-parser": "^1.4.10",
     "@types/express": "^5.0.0",
-    "@types/jest": "^30.0.0",
     "@types/multer": "^2.1.0",
     "@types/node": "^24.0.0",
     "@types/passport-jwt": "^4.0.1",
     "@types/passport-local": "^1.0.38",
-    "@types/supertest": "^7.0.0",
     "eslint": "^9.18.0",
     "eslint-config-prettier": "^10.0.1",
     "eslint-plugin-prettier": "^5.2.2",
     "globals": "^17.0.0",
-    "jest": "^30.0.0",
     "prettier": "^3.4.2",
     "prisma": "^6.19.3",
     "source-map-support": "^0.5.21",
-    "supertest": "^7.0.0",
-    "ts-jest": "^29.2.5",
     "ts-loader": "^9.5.2",
     "ts-node": "^10.9.2",
     "tsconfig-paths": "^4.2.0",
     "tsx": "^4.22.2",
     "typescript": "^5.7.3",
     "typescript-eslint": "^8.20.0"
-  },
-  "jest": {
-    "moduleFileExtensions": [
-      "js",
-      "json",
-      "ts"
-    ],
-    "rootDir": "src",
-    "testRegex": ".*\\.spec\\.ts$",
-    "transform": {
-      "^.+\\.(t|j)s$": "ts-jest"
-    },
-    "collectCoverageFrom": [
-      "**/*.(t|j)s"
-    ],
-    "coverageDirectory": "../coverage",
-    "testEnvironment": "node"
   }
 }

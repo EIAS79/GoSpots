@@ -1,5 +1,5 @@
 /**
- * Optional Sentry init — see docs/audit/GO_SPOTS_OBSERVABILITY.md.
+ * Optional Sentry init.
  * No-op when SENTRY_DSN is unset; fail-open if init throws.
  */
 import { Logger } from '@nestjs/common';

@@ -2,7 +2,7 @@ import { AsyncLocalStorage } from 'async_hooks';
 import type { Prisma, PrismaClient } from '@prisma/client';
 
 /**
- * Postgres RLS session context (bible #3 / GO_SPOTS_RLS.md).
+ * Postgres RLS session context.
  *
  * When TENANT_RLS=on, venue-bound HTTP handlers run inside an interactive
  * transaction with SET LOCAL app.current_shop_id + app.rls_mode. PrismaService

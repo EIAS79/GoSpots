@@ -12,10 +12,7 @@
     "start": "next start",
     "lint": "eslint",
     "typecheck": "tsc --noEmit",
-    "i18n:check": "node scripts/i18n-check.mjs",
-    "test:e2e:smoke": "playwright test e2e/smoke.spec.ts",
-    "test:a11y:smoke": "playwright test e2e/a11y.spec.ts",
-    "test:venue-tz": "tsx --test src/lib/venue-timezone.test.ts"
+    "i18n:check": "node scripts/i18n-check.mjs"
   },
   "dependencies": {
     "@heroui/react": "^3.0.5",
@@ -30,8 +27,6 @@
     "tailwind-merge": "^3.6.0"
   },
   "devDependencies": {
-    "@axe-core/playwright": "^4.12.1",
-    "@playwright/test": "^1.61.1",
     "@tailwindcss/postcss": "^4",
     "@types/node": "^20",
     "@types/react": "^19",

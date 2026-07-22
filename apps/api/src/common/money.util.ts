@@ -3,7 +3,7 @@ import { Prisma } from '@prisma/client';
 /**
  * Shared money helpers for Prisma `Decimal(19,4)` commercial amounts.
  * Convert at calculation / JSON boundaries; prefer `toPrismaDecimal` on writes.
- * API wire: fixed-scale decimal **strings** via `serializeMoney` (see GO_SPOTS_MONEY_WIRE.md).
+ * API wire: fixed-scale decimal **strings** via `serializeMoney`.
  */
 
 /** Values Prisma may return or accept for Decimal money columns. */

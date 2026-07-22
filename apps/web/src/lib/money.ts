@@ -1,5 +1,5 @@
 /**
- * Dual-read money helpers for API decimal-string wire (GO_SPOTS_MONEY_WIRE).
+ * Dual-read money helpers for API decimal-string wire.
  * Prefer coerceMoney at client boundaries; formatMoney accepts string | number.
  */
 

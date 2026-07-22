@@ -4,9 +4,8 @@ import { filter, Observable, Subject } from 'rxjs';
 /**
  * In-process fan-out for staff notification SSE.
  *
- * Multi-instance / Redis / Postgres NOTIFY push is intentionally deferred
- * (see docs/audit/GO_SPOTS_REALTIME.md). Until then, clients on other API
- * instances still rely on polling `/notifications/recent`.
+ * Multi-instance / Redis / Postgres NOTIFY push is deferred. Until then,
+ * clients on other API instances still rely on polling `/notifications/recent`.
  */
 export type NotificationSsePayload = {
   shopId: string;

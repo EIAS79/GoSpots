@@ -48,7 +48,7 @@ export type DailyCloseSummary = {
   total: MoneyWire;
 };
 
-/** Four mutually exclusive revenue channels — see docs/audit/GO_SPOTS_FINANCE_CONTRACT.md */
+/** Four mutually exclusive revenue channels. */
 export type RevenueChannels = {
   menuOrders: number;
   quickSales: number;

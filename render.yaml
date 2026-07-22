@@ -10,7 +10,8 @@ services:
       npm install -g pnpm@10.12.1 &&
       pnpm install --frozen-lockfile &&
       pnpm --filter @gospots/api exec prisma generate &&
-      pnpm --filter @gospots/api run build
+      pnpm --filter @gospots/api run build &&
+      test -f apps/api/dist/main.js
     startCommand: >-
       cd apps/api &&
       npx prisma migrate deploy &&

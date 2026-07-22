@@ -2,7 +2,7 @@
  * Phase 2 dual-write: mirror DiningTableGroup inventory onto advisory SeatingTableGroup
  * (bible #14 / Option C). Does not auto-sync availableCount from reservations.
  *
- * See docs/audit/GO_SPOTS_RESOURCE_MODEL_MERGE.md.
+ * Resource ↔ dining seating dual-write helpers.
  */
 
 import type { Prisma, PrismaClient, SeatingZone } from '@prisma/client';

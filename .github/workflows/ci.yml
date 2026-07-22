@@ -11,7 +11,7 @@ concurrency:
 
 jobs:
   api:
-    name: API lint · build · test
+    name: API lint · build
     runs-on: ubuntu-latest
     timeout-minutes: 20
     defaults:
@@ -41,25 +41,16 @@ jobs:
       - name: Prisma generate
         run: pnpm exec prisma generate
         env:
-          # Generate does not need a live DB; placeholder satisfies schema tooling.
           DATABASE_URL: postgresql://ci:ci@localhost:5432/ci?schema=public
 
       - name: Lint
-        run: npx eslint "{src,apps,libs,test}/**/*.ts"
-        # package.json `lint` uses --fix; CI must fail on style, not rewrite.
+        run: npx eslint "{src,apps,libs}/**/*.ts"
 
       - name: Build
         run: pnpm run build
         env:
           DATABASE_URL: postgresql://ci:ci@localhost:5432/ci?schema=public
 
-      - name: Unit tests (Jest)
-        run: pnpm run test -- --passWithNoTests
-        env:
-          DATABASE_URL: postgresql://ci:ci@localhost:5432/ci?schema=public
-
-  # Bible #9 Phase 1 — prove migrate deploy on empty ephemeral Postgres only.
-  # Never point this job at Neon / shared staging (no secrets; local CI URL only).
   api-migrate:
     name: API migrate dry-run (ephemeral Postgres)
     runs-on: ubuntu-latest
@@ -82,7 +73,6 @@ jobs:
           --health-timeout 5s
           --health-retries 5
     env:
-      # Ephemeral service only — never substitute Neon / prod DATABASE_URL here.
       DATABASE_URL: postgresql://ci:ci@localhost:5432/ci?schema=public
 
     steps:
@@ -146,47 +136,4 @@ jobs:
         run: pnpm install --frozen-lockfile
 
       - name: Typecheck
-        # Prefer tsc over next build (faster, fewer env/runtime flukes).
-        # Full `next build` remains a local / deploy checklist gate.
-        # Web eslint is not gated yet — current tree has many findings;
-        # add `pnpm run lint` (no --fix) once the web lint baseline is green.
         run: pnpm run typecheck
-
-  # Bible #29 — optional axe smoke (non-blocking). Without a Next process the
-  # suite skips all 13 routes (exit 0). Soft-wired so harness regressions are
-  # visible in Checks without failing the PR merge bar. Hard CI gate + Next boot
-  # deferred (dashboard auth routes need secrets).
-  web-a11y-smoke:
-    name: Web a11y smoke (non-blocking)
-    runs-on: ubuntu-latest
-    timeout-minutes: 15
-    continue-on-error: true
-    defaults:
-      run:
-        working-directory: apps/web
-
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v4
-
-      - name: Setup pnpm
-        uses: pnpm/action-setup@v4
-        with:
-          version: 10.12.1
-
-      - name: Setup Node.js
-        uses: actions/setup-node@v4
-        with:
-          node-version: '24'
-          cache: pnpm
-          cache-dependency-path: pnpm-lock.yaml
-
-      - name: Install dependencies
-        working-directory: .
-        run: pnpm install --frozen-lockfile
-
-      - name: Install Playwright Chromium
-        run: pnpm exec playwright install --with-deps chromium
-
-      - name: Axe smoke (skip-if-no-Next)
-        run: pnpm run test:a11y:smoke

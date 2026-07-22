@@ -2,7 +2,7 @@
  * Phase 3 guardrails: block staff manual CRUD on non-custom advisory seating mirrors
  * when the shop has a DINING layout (Option C). Dual-write util bypasses this path.
  *
- * See docs/audit/GO_SPOTS_RESOURCE_MODEL_MERGE.md §4.4.
+ * Seating mirror API guardrails during resource/dining dual-write.
  */
 
 import type { Prisma, PrismaClient } from '@prisma/client';

@@ -1,5 +1,5 @@
 /**
- * Public-abuse CAPTCHA verify (bible #26 / GO_SPOTS_PUBLIC_ABUSE.md).
+ * Public-abuse CAPTCHA verify.
  *
  * Default: CAPTCHA_PROVIDER=off → no-op (rate limits only).
  * When turnstile|hcaptcha + secret are set, callers can require a token

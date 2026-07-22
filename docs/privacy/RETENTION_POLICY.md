@@ -1,7 +1,7 @@
 # Retention policy (draft operational)
 
 **As of:** 2026-07-22  
-**Related:** [`DATA_MAP.md`](./DATA_MAP.md), GDPR module + retention processor, [`GO_SPOTS_GDPR_RETENTION.md`](../audit/GO_SPOTS_GDPR_RETENTION.md)
+**Related:** [`DATA_MAP.md`](./DATA_MAP.md), GDPR module + retention processor
 
 Draft operator policy — align with counsel before public legal claims.
 
@@ -16,7 +16,7 @@ Draft operator policy — align with counsel before public legal claims.
 
 | Data class | Suggested retention | Action at expiry |
 |------------|---------------------|------------------|
-| Guest plaintext contact on closed bookings | Short dual-read window | Clear / hash-only (`clear:guest-plaintext`) |
+| Guest plaintext contact on closed bookings | Short dual-read window | Prefer hash-only guest tokens |
 | Guest management tokens | Event end + grace | Expire / revoke |
 | Auth sessions | Until revoke or TTL | Rotate refresh; revoke UI |
 | Mail outbox dead letters | Ops review window | Retry or drop after review |

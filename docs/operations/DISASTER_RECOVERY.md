@@ -52,7 +52,7 @@ Typical Neon flows — confirm UI labels on the live project:
 1. Set Render `DATABASE_URL` to the restored connection string (`?sslmode=require`).
 2. Restart / redeploy the API so pools pick up the new URL.
 3. Run `pnpm --filter @gospots/api migrate:deploy` **only if** the restored DB is behind migrations. **Never** `prisma migrate reset` in production.
-4. Optionally run `pnpm --filter @gospots/api run verify:migrations` (read-only disk ↔ `_prisma_migrations`).
+4. Optionally run `pnpm --filter @gospots/api exec prisma migrate status`.
 5. Hit **`GET /api/v1/ready`** until `database: up`. Do **not** trust `/live` or `/health` alone (liveness OK while Postgres is down).
 6. Smoke: owner login + CSRF, one book path, guest status link, one stock+sale if time allows (see [`DEPLOY_CHECKLIST.md`](../audit/DEPLOY_CHECKLIST.md)).
 
@@ -112,9 +112,6 @@ App UX modes (bible #32): **A** browser offline · **B** API unreachable · **C*
 
 ## Related
 
-- [`docs/audit/DEPLOY_CHECKLIST.md`](../audit/DEPLOY_CHECKLIST.md) — Friday migrate + smoke
 - [`docs/PRODUCTION_STATUS.md`](../PRODUCTION_STATUS.md) — operator blockers / live status
-- [`docs/audit/GO_SPOTS_OFFLINE.md`](../audit/GO_SPOTS_OFFLINE.md) — failure taxonomy + UX modes
-- [`docs/audit/BIBLE_STATUS.md`](../audit/BIBLE_STATUS.md) — bible #24
-- `docs/DEPLOYMENT.md` — Neon + Render setup
-- `docs/DATABASE.md` — schema / migration notes
+- [`docs/DEPLOYMENT.md`](../DEPLOYMENT.md) — Neon + Render setup
+- [`docs/DATABASE.md`](../DATABASE.md) — schema / migration notes

@@ -1,5 +1,5 @@
 /**
- * In-memory after_throttle CAPTCHA escalation (bible #26 / GO_SPOTS_PUBLIC_ABUSE.md Phase 2).
+ * In-memory after_throttle CAPTCHA escalation.
  *
  * On public-create 429: mark (ip, surface) → requireCaptchaUntil.
  * Cross-surface: ≥2 distinct create kinds 429'd for same IP in TTL → escalate all creates.

@@ -1,7 +1,7 @@
 # Data map (GDPR / privacy inventory)
 
 **As of:** 2026-07-22  
-**Related:** API `apps/api/src/modules/gdpr/**`, [`GO_SPOTS_GDPR_RETENTION.md`](../audit/GO_SPOTS_GDPR_RETENTION.md), [`RETENTION_POLICY.md`](./RETENTION_POLICY.md)
+**Related:** API `apps/api/src/modules/gdpr/**`, [`RETENTION_POLICY.md`](./RETENTION_POLICY.md)
 
 This is an inventory of personal / operational data categories stored by Locora/GoSpots. It is not legal advice.
 

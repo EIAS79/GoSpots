@@ -71,8 +71,7 @@ async function bootstrap() {
   app.setGlobalPrefix('api/v1');
   /**
    * Legacy disk images (`/uploads/…`) — gated by LEGACY_UPLOADS_STATIC (default on).
-   * New uploads are StoredImage rows served at GET /media/:id. Flip the flag off
-   * only after inventory:legacy-uploads reports zero DB refs (Phase 1).
+   * New uploads are StoredImage rows served at GET /media/:id.
    */
   const legacyUploadsStatic = isLegacyUploadsStaticEnabled({
     LEGACY_UPLOADS_STATIC:

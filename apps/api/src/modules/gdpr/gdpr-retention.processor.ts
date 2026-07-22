@@ -7,7 +7,7 @@ import { PrismaService } from '../../prisma/prisma.service';
 const REDACTED = '[redacted]';
 const DAY_MS = 24 * 60 * 60 * 1000;
 
-/** Retention windows from GO_SPOTS_GDPR_RETENTION.md (operator-reviewed defaults). */
+/** Retention windows (operator-reviewed defaults). */
 export const GDPR_RETENTION = {
   reservationMonths: 24,
   contactMonths: 12,
