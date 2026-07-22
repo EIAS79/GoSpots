@@ -71,6 +71,7 @@ export class ReservationsScheduleService {
               floor: true,
               isVip: true,
               seatsPerRow: true,
+              zone: true,
             },
           },
           tableGroup: {
@@ -93,6 +94,7 @@ export class ReservationsScheduleService {
           isVip: true,
           seatsPerRow: true,
           sortOrder: true,
+          zone: true,
         },
         orderBy: { sortOrder: 'asc' },
       },
@@ -308,6 +310,7 @@ export class ReservationsScheduleService {
             isVip: s.isVip,
             seatsPerRow: s.seatsPerRow,
             sortOrder: s.sortOrder,
+            zone: s.zone ?? null,
           })),
           units: cat.resources.map((unit) => {
             const resBookings = byResource.get(unit.id) ?? [];
@@ -351,6 +354,7 @@ export class ReservationsScheduleService {
                     floor: unit.section.floor,
                     isVip: unit.section.isVip,
                     seatsPerRow: unit.section.seatsPerRow,
+                    zone: unit.section.zone ?? null,
                   }
                 : null,
               bookings: mergedBookings.map((b) => {

@@ -94,6 +94,30 @@ const en: DictTree = {
       "Pick features for {pack} and save — matching dashboard sections unlock. You can change them freely during the trial.",
     setupPaid:
       "Choose the features below for {pack}, save, then start billing when you’re ready. Nothing is charged until then.",
+    gettingStartedTitle: "Getting started",
+    gettingStartedBodyTrial:
+      "Pick the features you need for {pack} below and save — matching sidebar sections unlock. You can change them freely during the trial.",
+    gettingStartedBodyPaid:
+      "Pick the features you need for {pack} below and save, then start billing when you’re ready. Nothing is charged until then.",
+    optionalSetupChecklist: "Optional setup checklist",
+    step1: "Choose your venue type — always {price}",
+    step2: "Switch on the bundles you need",
+    suggested: "Suggested",
+    estimate: "Your estimated plan",
+    afterTrial: "/month after trial",
+    planSummary: "{pack} ({price}) · {features} {featureLabel}{seatsPart}",
+    bundleOne: "bundle",
+    bundleMany: "bundles",
+    seatOne: "seat",
+    seatsWord: "seats",
+    teamPart: " · {count} team {seatLabel}",
+    seatHint:
+      "{price} per employee seat / month — during the trial you get {trialSeats} seats free.",
+    planFootnote:
+      "Change bundles anytime — during the trial, saving unlocks matching dashboard sections immediately. Data is kept if you turn a bundle off.",
+    seatsLabel: "seats",
+    perMonth: "/month",
+    perMonthShort: "/mo",
     trialHeadline: "{days}-day free trial · {left} {dayWord} left",
     day: "day",
     days: "days",
@@ -124,7 +148,6 @@ const en: DictTree = {
       "Choose what you’ll pay for. Nothing is charged until you start billing below.",
     suggestedBanner:
       "Suggested for your venue type — save to unlock matching dashboard sections.",
-    suggested: "Suggested",
     perMo: "/mo",
     perSeat: "/seat",
     payToUnlockTitle: "Pay to unlock modules",
@@ -201,6 +224,20 @@ const en: DictTree = {
       tagline: "Gaming floor and dining under one roof.",
     },
   },
+  bundle: {
+    ops_trust: {
+      name: "Ops & trust",
+      tagline: "Notifications, activity log, and guest review inbox.",
+    },
+    gaming_floor: {
+      name: "Gaming floor",
+      tagline: "Layout, bookings, live sessions, and play billing.",
+    },
+    food_dining: {
+      name: "Food & dining",
+      tagline: "Menu, kitchen tickets, and restaurant table bookings.",
+    },
+  },
   addon: {
     ops_alerts: {
       name: "Ops alerts, audit & reviews",
@@ -230,7 +267,7 @@ const en: DictTree = {
       name: "Venue page & discovery",
       tagline: "Public venue page plus directory placement.",
       details:
-        "Publish your venue on Locora with a dedicated public page, and unlock advertising / promoted placement in the venues directory so more guests can find you.",
+        "Publish your venue on GoSpots with a dedicated public page, and unlock advertising / promoted placement in the venues directory so more guests can find you.",
     },
     guest_chat: {
       name: "Guest messaging",
@@ -381,10 +418,10 @@ const en: DictTree = {
     eraseByEmailPlaceholder: "guest@example.com",
     eraseAccount: "Delete my account",
     eraseAccountHint:
-      "Soft-wipes your Locora account, unpublishes venues you own, and redacts guest PII there. Finance rows stay for accounting. Cancel Lemon billing in the provider portal (operator).",
+      "Soft-wipes your GoSpots account, unpublishes venues you own, and redacts guest PII there. Finance rows stay for accounting. Cancel Lemon billing in the provider portal (operator).",
     eraseAccountPhrase: "Type DELETE MY ACCOUNT",
     eraseAccountConfirm: "Delete account",
-    eraseAccountConfirmTitle: "Delete your Locora account?",
+    eraseAccountConfirmTitle: "Delete your GoSpots account?",
     eraseAccountConfirmDesc:
       "This signs you out everywhere, tombstones your login, and redacts owned venues. Money and Lemon records are kept until an operator purge.",
     eraseAccountSuccess: "Account wiped. Sign in is no longer possible with this login.",
@@ -720,6 +757,10 @@ const en: DictTree = {
     mapLabelLanes: "Live lane map",
     mapLabelStations: "Live station map",
     mainArea: "Main area",
+    zoneIndoor: "Indoors",
+    zoneOutdoor: "Outdoors",
+    nTopTables: "{n}-top tables",
+    diningLayoutMeta: "{tables} tables · {seats} seats each",
     /** Secondary schedule / unit-card action chrome */
     actionBook: "Book",
     actionRestore: "Restore to service",
@@ -1082,6 +1123,9 @@ const en: DictTree = {
     statusOpenHint: "Live chat",
     statusPausedHint: "Paused",
     statusEndedHint: "Ended",
+    notified: "Notified",
+    notifiedPing: "Guest notified staff",
+    waitingNotifiedSummary: "{waiting} waiting · {notified} notified",
     contactLoadFailed: "Could not load messages.",
     contactEmpty: "No contact form messages yet.",
     contactCountOne: "{total} message from the public contact form",
@@ -1460,11 +1504,11 @@ const en: DictTree = {
     show: "Show runbook",
     hide: "Hide runbook",
     modesIntro:
-      "Locora shows a global banner for browser offline (A), unreachable servers (B), temporary unavailability / DB down (C), and stale live polls (F). Money and public booking stay fail-closed — no offline queue.",
+      "GoSpots shows a global banner for browser offline (A), unreachable servers (B), temporary unavailability / DB down (C), and stale live polls (F). Money and public booking stay fail-closed — no offline queue.",
     modeA: "Mode A",
     modeADesc: "No internet — changes won’t save until back online.",
     modeB: "Mode B",
-    modeBDesc: "Can’t reach Locora servers — try again shortly.",
+    modeBDesc: "Can’t reach GoSpots servers — try again shortly.",
     modeC: "Mode C",
     modeCDesc: "Temporarily unavailable — data is safe; retry in a minute.",
     modeF: "Mode F",
@@ -1671,7 +1715,7 @@ const en: DictTree = {
     invDocNote: "Note:",
     invDocSubtotal: "Subtotal",
     invDocTotalDue: "Total due",
-    invDocFooter: "Thank you for your visit · Generated with Locora",
+    invDocFooter: "Thank you for your visit · Generated with GoSpots",
     invDocTitleFallback: "Invoice",
     playGateTitle: "Game billing",
     playIntroBefore: "Bookings from",
@@ -1884,6 +1928,11 @@ const en: DictTree = {
     postNote: "Post note",
     posting: "Posting…",
     emptyState: "No active notes yet. Leave a handoff for the next shift.",
+    listHeading: "Active notes",
+    listCount: "{count} note",
+    listCountPlural: "{count} notes",
+    clickToRead: "Click to read",
+    closeNote: "Close",
     forWhen: "For",
     byAuthor: "by",
     posted: "posted",
@@ -2491,10 +2540,10 @@ const en: DictTree = {
     saveContinue: "Save & continue",
     finishedTitle: "You’re ready",
     finishedBody:
-      "Setup is complete. You can reopen this checklist anytime from the resume banner until you dismiss it.",
-    goDashboard: "Go to dashboard",
-    banner: "Setup incomplete — {done} of {total} steps",
-    bannerResume: "Resume setup",
+      "Checklist complete. Reopen it anytime from the resume banner until you dismiss it.",
+    goDashboard: "Continue to overview",
+    banner: "Optional setup — {done} of {total} steps done",
+    bannerResume: "Open checklist",
     bannerDismiss: "Dismiss",
     step: {
       details: "Venue details",
@@ -2661,6 +2710,30 @@ const pl: DictTree = {
       "Wybierz funkcje dla {pack} i zapisz — pasujące sekcje panelu się odblokują. W okresie próbnym możesz zmieniać je swobodnie.",
     setupPaid:
       "Wybierz funkcje poniżej dla {pack}, zapisz, a potem uruchom rozliczenia, gdy będziesz gotowy. Nic nie jest obciążane wcześniej.",
+    gettingStartedTitle: "Na start",
+    gettingStartedBodyTrial:
+      "Wybierz potrzebne funkcje dla {pack} poniżej i zapisz — pasujące sekcje menu się odblokują. W okresie próbnym możesz je swobodnie zmieniać.",
+    gettingStartedBodyPaid:
+      "Wybierz potrzebne funkcje dla {pack} poniżej i zapisz, a potem uruchom rozliczenia, gdy będziesz gotowy. Nic nie jest obciążane wcześniej.",
+    optionalSetupChecklist: "Opcjonalna checklista konfiguracji",
+    step1: "Wybierz typ lokalu — zawsze {price}",
+    step2: "Włącz pakiety, których potrzebujesz",
+    suggested: "Sugerowane",
+    estimate: "Twój szacowany plan",
+    afterTrial: "/mies. po okresie próbnym",
+    planSummary: "{pack} ({price}) · {features} {featureLabel}{seatsPart}",
+    bundleOne: "pakiet",
+    bundleMany: "pakiety",
+    seatOne: "miejsce",
+    seatsWord: "miejsc",
+    teamPart: " · {count} miejsca zespołu ({seatLabel})",
+    seatHint:
+      "{price} za miejsce pracownika / mies. — w okresie próbnym masz {trialSeats} miejsca gratis.",
+    planFootnote:
+      "Zmieniaj pakiety w dowolnej chwili — w okresie próbnym zapis od razu odblokowuje sekcje panelu. Dane zostają, gdy wyłączysz pakiet.",
+    seatsLabel: "miejsca",
+    perMonth: "/mies.",
+    perMonthShort: "/mies.",
     trialHeadline: "{days}-dniowy okres próbny · zostało {left} {dayWord}",
     day: "dzień",
     days: "dni",
@@ -2691,7 +2764,6 @@ const pl: DictTree = {
       "Wybierz, za co zapłacisz. Nic nie jest obciążane, dopóki nie uruchomisz rozliczeń poniżej.",
     suggestedBanner:
       "Sugerowane dla Twojego typu lokalu — zapisz, aby odblokować pasujące sekcje panelu.",
-    suggested: "Sugerowane",
     perMo: "/mies.",
     perSeat: "/miejsce",
     payToUnlockTitle: "Zapłać, aby odblokować moduły",
@@ -2768,6 +2840,20 @@ const pl: DictTree = {
       tagline: "Strefa gier i gastronomia pod jednym dachem.",
     },
   },
+  bundle: {
+    ops_trust: {
+      name: "Ops i zaufanie",
+      tagline: "Powiadomienia, dziennik aktywności i skrzynka opinii gości.",
+    },
+    gaming_floor: {
+      name: "Sala gier",
+      tagline: "Układ, rezerwacje, sesje na żywo i rozliczenia gry.",
+    },
+    food_dining: {
+      name: "Jedzenie i dining",
+      tagline: "Menu, bilety kuchenne i rezerwacje stolików.",
+    },
+  },
   addon: {
     ops_alerts: {
       name: "Alerty, audyt i opinie",
@@ -2797,7 +2883,7 @@ const pl: DictTree = {
       name: "Strona lokalu i odkrywanie",
       tagline: "Publiczna strona oraz obecność w katalogu.",
       details:
-        "Opublikuj lokal na Locora z dedykowaną stroną i odblokuj promocję w katalogu lokali.",
+        "Opublikuj lokal na GoSpots z dedykowaną stroną i odblokuj promocję w katalogu lokali.",
     },
     guest_chat: {
       name: "Wiadomości gości",
@@ -2948,10 +3034,10 @@ const pl: DictTree = {
     eraseByEmailPlaceholder: "gosc@example.com",
     eraseAccount: "Usuń moje konto",
     eraseAccountHint:
-      "Miękkie wymazanie konta Locora, odpublikowanie lokali i redakcja PII gości. Finanse zostają. Anuluj Lemon w portalu dostawcy (operator).",
+      "Miękkie wymazanie konta GoSpots, odpublikowanie lokali i redakcja PII gości. Finanse zostają. Anuluj Lemon w portalu dostawcy (operator).",
     eraseAccountPhrase: "Wpisz DELETE MY ACCOUNT",
     eraseAccountConfirm: "Usuń konto",
-    eraseAccountConfirmTitle: "Usunąć konto Locora?",
+    eraseAccountConfirmTitle: "Usunąć konto GoSpots?",
     eraseAccountConfirmDesc:
       "Wyloguje wszędzie, ztombstonuje login i zredaguje lokale. Pieniądze i Lemon zostają do purge operatora.",
     eraseAccountSuccess: "Konto wymazane. Logowanie tym loginem nie jest już możliwe.",
@@ -3285,6 +3371,10 @@ const pl: DictTree = {
     mapLabelLanes: "Mapa torów na żywo",
     mapLabelStations: "Mapa stanowisk na żywo",
     mainArea: "Główna strefa",
+    zoneIndoor: "Wewnątrz",
+    zoneOutdoor: "Na zewnątrz",
+    nTopTables: "Stoliki {n}-os.",
+    diningLayoutMeta: "{tables} stolików · {seats} miejsc każde",
     actionBook: "Rezerwuj",
     actionRestore: "Przywróć do użytku",
     actionOpenBooking: "Otwórz rezerwację",
@@ -3645,6 +3735,9 @@ const pl: DictTree = {
     statusOpenHint: "Czat na żywo",
     statusPausedHint: "Wstrzymany",
     statusEndedHint: "Zakończony",
+    notified: "Powiadomiono",
+    notifiedPing: "Gość powiadomił obsługę",
+    waitingNotifiedSummary: "{waiting} oczekujących · {notified} powiadomień",
     contactLoadFailed: "Nie udało się wczytać wiadomości.",
     contactEmpty: "Brak wiadomości z formularza kontaktowego.",
     contactCountOne: "{total} wiadomość z publicznego formularza kontaktowego",
@@ -4024,11 +4117,11 @@ const pl: DictTree = {
     show: "Pokaż runbook",
     hide: "Ukryj runbook",
     modesIntro:
-      "Locora pokazuje globalny baner przy braku internetu (A), niedostępnych serwerach (B), tymczasowej niedostępności / DB (C) oraz przestarzałych odpytywaniach (F). Pieniądze i publiczne rezerwacje są fail-closed — bez kolejki offline.",
+      "GoSpots pokazuje globalny baner przy braku internetu (A), niedostępnych serwerach (B), tymczasowej niedostępności / DB (C) oraz przestarzałych odpytywaniach (F). Pieniądze i publiczne rezerwacje są fail-closed — bez kolejki offline.",
     modeA: "Tryb A",
     modeADesc: "Brak internetu — zmiany nie zapiszą się, dopóki nie wrócisz online.",
     modeB: "Tryb B",
-    modeBDesc: "Nie można dotrzeć do serwerów Locora — spróbuj wkrótce.",
+    modeBDesc: "Nie można dotrzeć do serwerów GoSpots — spróbuj wkrótce.",
     modeC: "Tryb C",
     modeCDesc: "Tymczasowo niedostępne — dane są bezpieczne; spróbuj za minutę.",
     modeF: "Tryb F",
@@ -4237,7 +4330,7 @@ const pl: DictTree = {
     invDocNote: "Uwaga:",
     invDocSubtotal: "Suma częściowa",
     invDocTotalDue: "Do zapłaty",
-    invDocFooter: "Dziękujemy za wizytę · Wygenerowano w Locora",
+    invDocFooter: "Dziękujemy za wizytę · Wygenerowano w GoSpots",
     invDocTitleFallback: "Faktura",
     playGateTitle: "Rozliczenia gier",
     playIntroBefore: "Rezerwacje z",
@@ -4452,6 +4545,11 @@ const pl: DictTree = {
     postNote: "Opublikuj notatkę",
     posting: "Publikowanie…",
     emptyState: "Brak aktywnych notatek. Zostaw wiadomość dla następnej zmiany.",
+    listHeading: "Aktywne notatki",
+    listCount: "{count} notatka",
+    listCountPlural: "{count} notatek",
+    clickToRead: "Kliknij, aby przeczytać",
+    closeNote: "Zamknij",
     forWhen: "Na",
     byAuthor: "od",
     posted: "opublikowano",
@@ -5066,10 +5164,10 @@ const pl: DictTree = {
     saveContinue: "Zapisz i kontynuuj",
     finishedTitle: "Gotowe",
     finishedBody:
-      "Konfiguracja zakończona. Możesz wrócić do checklisty z banera, dopóki go nie zamkniesz.",
-    goDashboard: "Przejdź do panelu",
-    banner: "Konfiguracja nieukończona — {done} z {total} kroków",
-    bannerResume: "Wznów konfigurację",
+      "Checklista ukończona. Możesz wrócić do niej z banera, dopóki go nie zamkniesz.",
+    goDashboard: "Przejdź do przeglądu",
+    banner: "Opcjonalna konfiguracja — {done} z {total} kroków",
+    bannerResume: "Otwórz checklistę",
     bannerDismiss: "Zamknij",
     step: {
       details: "Dane lokalu",

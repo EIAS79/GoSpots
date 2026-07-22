@@ -1,6 +1,7 @@
 "use client";
 
 import { AlertTriangle, Clock, Crown, Loader2, Sparkles } from "lucide-react";
+import Link from "next/link";
 import { Suspense, useEffect, useState } from "react";
 import { useSearchParams } from "next/navigation";
 import { TenantPage } from "@/components/layout/tenant-page";
@@ -13,12 +14,14 @@ import {
 import { TRIAL_DURATION_DAYS } from "@/lib/plan";
 import { useDashboardGuide } from "@/lib/use-dashboard-guide";
 import { useAuth } from "@/lib/use-auth";
+import { useVenueHref } from "@/lib/venue-context";
 import { useVenueSettings } from "@/lib/venue-settings-context";
 import type { VenuePackId } from "@/lib/venue-packs";
 
 function SubscriptionPageInner() {
   const { reload } = useAuth();
   const { formatFromEur, t } = useVenueSettings();
+  const onboardingHref = useVenueHref("/onboarding");
   const guide = useDashboardGuide("subscription");
   const searchParams = useSearchParams();
   const [data, setData] = useState<SubscriptionResponse | null>(null);
@@ -55,16 +58,23 @@ function SubscriptionPageInner() {
             </p>
           ) : null}
 
-          {needsFeatureSetup && trialActive ? (
-            <p className="rounded-xl border border-sky-400/25 bg-sky-500/10 px-4 py-3 text-sm text-sky-100">
-              {t("subscription.setupTrial", { pack: packName })}
-            </p>
-          ) : null}
-
-          {needsFeatureSetup && !trialActive ? (
-            <p className="rounded-xl border border-sky-400/25 bg-sky-500/10 px-4 py-3 text-sm text-sky-100">
-              {t("subscription.setupPaid", { pack: packName })}
-            </p>
+          {needsFeatureSetup ? (
+            <div className="rounded-xl border border-sky-400/25 bg-sky-500/10 px-4 py-3 text-sm text-sky-100">
+              <p className="font-medium">
+                {t("subscription.gettingStartedTitle")}
+              </p>
+              <p className="mt-1 text-xs text-sky-200/80">
+                {trialActive
+                  ? t("subscription.gettingStartedBodyTrial", { pack: packName })
+                  : t("subscription.gettingStartedBodyPaid", { pack: packName })}
+              </p>
+              <Link
+                href={onboardingHref}
+                className="mt-2 inline-block text-xs text-sky-200/90 underline-offset-2 hover:underline"
+              >
+                {t("subscription.optionalSetupChecklist")}
+              </Link>
+            </div>
           ) : null}
 
           {trialActive ? (

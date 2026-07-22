@@ -119,13 +119,21 @@ export function fetchMe() {
   });
 }
 
-export function createVenue(input: { shopName: string; shopSlug: string }) {
+export function createVenue(input: {
+  shopName: string;
+  shopSlug: string;
+  /** Explicit empty = CORE only until Subscription save. */
+  addOns?: string[];
+}) {
   return api<{
     venuePath: string;
     shop: { id: string; slug: string; name: string };
   }>("/auth/venues", {
     method: "POST",
-    body: JSON.stringify(input),
+    body: JSON.stringify({
+      ...input,
+      addOns: input.addOns ?? [],
+    }),
   });
 }
 

@@ -31,7 +31,7 @@ const en: Dict = {
   "hero.play.titleA": "Find venues,",
   "hero.play.titleB": "hosts, and nights out.",
   "hero.play.subtitle":
-    "Browse gaming centers, restaurants, and venues — reserve, read reviews, and contact hosts when they publish on Locora.",
+    "Browse gaming centers, restaurants, and venues — reserve, read reviews, and contact hosts when they publish on GoSpots.",
   "hero.play.ctaPrimary": "Browse venues",
   "hero.play.ctaSecondary": "I run a venue",
   "hero.play.pillar1": "Gaming, dining, and nightlife — one directory",
@@ -47,7 +47,7 @@ const en: Dict = {
   "venues.searching": "Searching…",
   "venues.found": "{total} venues found",
   "venues.foundOne": "{total} venue found",
-  "venues.showingAll": "Showing all published venues on Locora",
+  "venues.showingAll": "Showing all published venues on GoSpots",
   "venues.filters": "Filters: {summary}",
   "venues.pricesIn": "Prices in {currency}",
   "venues.browse": "Browse venues",
@@ -55,11 +55,11 @@ const en: Dict = {
   "venues.games": "{count} games",
   "venues.gameOne": "{count} game",
   "venues.emptyTitle": "No spots match yet",
-  "venues.emptyBody": "Try another city or category — or list your venue on Locora.",
+  "venues.emptyBody": "Try another city or category — or list your venue on GoSpots.",
   "venues.emptyBodyPilot":
     "We're filling {city} first — join the local directory, or try another search.",
   "venues.getListed": "Get listed",
-  "venues.pilotHint": "Locora launches city by city. Pilot:",
+  "venues.pilotHint": "GoSpots launches city by city. Pilot:",
   "venues.pilotLink": "{city} directory",
 
   "pilotCity.eyebrow": "City-first launch",
@@ -71,11 +71,11 @@ const en: Dict = {
   "cityLanding.badge": "Pilot city · {city}, {country}",
   "cityLanding.title": "Gaming venues in {city}",
   "cityLanding.subtitle":
-    "Locora is building the local directory for billiard halls, PC cafés, console lounges, and bowling in {city} — supply first, then guest traffic.",
+    "GoSpots is building the local directory for billiard halls, PC cafés, console lounges, and bowling in {city} — supply first, then guest traffic.",
   "cityLanding.supplyNote":
     "Guest promo waits until enough quality listings are live. Owners: claim your spot now.",
   "cityLanding.ctaOwner": "List my venue in {city}",
-  "cityLanding.ctaBrowse": "Browse {city} on Locora",
+  "cityLanding.ctaBrowse": "Browse {city} on GoSpots",
   "cityLanding.pillar1": "Cover photo, hours, and a clear description — no ghost listings.",
   "cityLanding.pillar2": "Publish + list on the venues page when your trial includes marketing.",
   "cityLanding.pillar3": "Local guest traffic and promo only after the city page looks alive.",
@@ -100,7 +100,7 @@ const en: Dict = {
 
   "homeVenues.play.eyebrow": "Live directory",
   "homeVenues.play.title": "Spots already on",
-  "homeVenues.play.titleAccent": "Locora",
+  "homeVenues.play.titleAccent": "GoSpots",
   "homeVenues.play.subtitle":
     "Real listings straight from the venues themselves — each with its own photos, prices, currency, and reservation rules. Use the search above or open the full directory.",
   "homeVenues.manage.eyebrow": "Your public listing",
@@ -324,12 +324,17 @@ const en: Dict = {
   "pricing.title": "Your venue type is free.",
   "pricing.titleAccent": "Pay for the ops you run.",
   "pricing.subtitle":
-    "Gaming-first self-serve. Pick gaming or mixed, switch on a few outcome bundles, and see your monthly price after a {days}-day free trial.",
+    "Pick your venue type free, switch on the features you need, and see your monthly price after a {days}-day free trial.",
   "pricing.step1": "Choose your venue type — always {price}",
-  "pricing.step2": "Switch on the bundles you need",
+  "pricing.step2": "Switch on the features you need",
+  "pricing.featuresHint": "{count} selected for your plan",
+  "pricing.useSuggested": "Use suggested",
+  "pricing.trialBanner": "{days}-day free trial — change features anytime",
+  "pricing.noneSelected": "No features selected yet — pick what you run.",
   "pricing.suggested": "Suggested",
   "pricing.perMonth": "/month",
   "pricing.perMonthShort": "/mo",
+  "pricing.perSeat": "/seat",
   "pricing.seats": "seats",
   "pricing.seatHint":
     "{price} per employee seat / month — during the trial you get 3 seats free.",
@@ -365,6 +370,7 @@ const en: Dict = {
   "addon.guest_chat.name": "Guest messaging",
   "addon.guest_chat.tagline": "Live chat with guests on your venue page.",
   "addon.team_accounts.name": "Team accounts",
+  "addon.team_accounts.tagline": "Employee seats — priced per seat / month.",
 
   "pack.gaming.name": "Gaming venue",
   "pack.gaming.tagline": "Stations, live map bookings, and play billing.",
@@ -389,16 +395,16 @@ const en: Dict = {
 
   "who.eyebrow": "Who it's for",
   "who.title": "Built for",
-  "who.titleAccent": "gaming venue operators.",
+  "who.titleAccent": "every venue operator.",
   "who.subtitle":
-    "Win tonight's floor first — who's booked, what's free, what you charged. Mixed entertainment venues are welcome; full-service restaurants and hotel F&B start with a conversation.",
-  "who.cta": "Start gaming trial free",
+    "Gaming floors, restaurants, bars, hotel F&B, and mixed entertainment — pick your type free and switch on the features you need.",
+  "who.cta": "Start free trial",
   "who.noteLead":
-    "90-day trial · no card required. Need restaurant or hotel F&B tooling?",
+    "90-day trial · no card required. Questions about setup?",
   "who.talkToUs": "talk to us",
   "who.contact.title": "Restaurant / hotel",
   "who.contact.body":
-    "Not self-serve yet. We onboard dining and hotel F&B manually so gaming stays the wedge.",
+    "Restaurant, bar, and hotel F&B are available at signup — choose your type and turn on Food & dining.",
   "who.ex.gaming.1": "Billiard & snooker halls",
   "who.ex.gaming.2": "Gaming lounges",
   "who.ex.gaming.3": "Esports cafés",
@@ -441,7 +447,7 @@ const en: Dict = {
     "Lock your reservation, get a confirmation, and show up ready — table, station, or booth waiting.",
   "guest.promise1.title": "Always free for guests",
   "guest.promise1.body":
-    "Venues pay for their tools — you never pay Locora to browse, discover, or reserve.",
+    "Venues pay for their tools — you never pay GoSpots to browse, discover, or reserve.",
   "guest.promise2.title": "Real venues, real info",
   "guest.promise2.body":
     "Every listing is managed by the venue itself: its own photos, hours, prices, and rules.",
@@ -451,7 +457,7 @@ const en: Dict = {
 
   "pain.eyebrow": "Product scenarios",
   "pain.title": "The messy nights",
-  "pain.titleAccent": "Locora is built for.",
+  "pain.titleAccent": "GoSpots is built for.",
   "pain.subtitle":
     "Illustrative problems operators describe — not quotes from customers.",
   "pain.1.title": "Forgotten timers",
@@ -475,7 +481,7 @@ const en: Dict = {
 
   "gallery.eyebrow": "Atmosphere · not a venue list",
   "gallery.title": "The kinds of nights",
-  "gallery.titleAccent": "Locora is for.",
+  "gallery.titleAccent": "GoSpots is for.",
   "gallery.subtitle":
     "Stock photography for mood only — it does not represent partner venues or live availability.",
   "gallery.tag.1": "Billiard",
@@ -489,7 +495,7 @@ const en: Dict = {
   "gallery.tag.9": "Bowling",
 
   "finder.openDirectory": "Open full directory",
-  "finder.published": "Published on Locora",
+  "finder.published": "Published on GoSpots",
   "finder.preview": "Directory preview",
   "finder.seeAll": "See all",
   "finder.empty":
@@ -544,7 +550,7 @@ const en: Dict = {
   "faq.titleAccent": "ask first.",
   "faq.owner.1.q": "Do I need to install anything in my venue?",
   "faq.owner.1.a":
-    "No. Locora runs in the browser on the device you already have — laptop, tablet, or counter PC. Updates push automatically.",
+    "No. GoSpots runs in the browser on the device you already have — laptop, tablet, or counter PC. Updates push automatically.",
   "faq.owner.2.q": "Can I try it before I pay?",
   "faq.owner.2.a":
     "Yes. New venues get a 90-day free trial — no card required. Pick any features you want and change them freely during the trial. Nothing is ever charged without your consent.",
@@ -563,10 +569,10 @@ const en: Dict = {
   "faq.owner.7.q": "What about my staff making mistakes?",
   "faq.owner.7.a":
     "Every important action — discount, cancel, refund, price change — goes into an immutable audit log tied to the user.",
-  "faq.player.1.q": "Is Locora free for guests?",
+  "faq.player.1.q": "Is GoSpots free for guests?",
   "faq.player.1.a":
     "Completely. Browsing venues, checking details, and reserving a spot never costs you anything — venues pay for their tools, not you.",
-  "faq.player.2.q": "What kinds of places are on Locora?",
+  "faq.player.2.q": "What kinds of places are on GoSpots?",
   "faq.player.2.a":
     "Way more than gaming. Billiard halls, gaming lounges, and esports cafés — plus restaurants, cafés, bars, pubs, karaoke rooms, bowling alleys, night clubs, and family entertainment venues.",
   "faq.player.3.q": "How do I find a spot near me?",
@@ -580,7 +586,7 @@ const en: Dict = {
     "No account needed to browse and discover venues. You only sign in when a venue's booking flow requires it.",
   "faq.player.6.q": "Why don't I see many venues yet?",
   "faq.player.6.a":
-    "Locora is in private beta and onboarding operators first. The public directory grows with every venue that turns on publishing.",
+    "GoSpots is in private beta and onboarding operators first. The public directory grows with every venue that turns on publishing.",
 
   "cta.manage.titleA": "Never lose money to",
   "cta.manage.titleB": "forgotten timers.",
@@ -619,7 +625,7 @@ const en: Dict = {
   "footer.privacy": "Privacy",
   "footer.terms": "Terms",
 
-  "marquee.owner.title": "What Locora is designed to handle",
+  "marquee.owner.title": "What GoSpots is designed to handle",
   "marquee.owner.1": "Live floor status",
   "marquee.owner.2": "Session timers that stay attached to the table",
   "marquee.owner.3": "Walk-ins + reservations in one view",
@@ -628,7 +634,7 @@ const en: Dict = {
   "marquee.owner.6": "Immutable audit trail",
   "marquee.owner.7": "Per-table and per-shift revenue",
   "marquee.owner.8": "Built for billiard · snooker · lounges · game cafés",
-  "marquee.player.title": "What you can find on Locora",
+  "marquee.player.title": "What you can find on GoSpots",
   "marquee.player.1": "Billiard halls and snooker clubs",
   "marquee.player.2": "Gaming lounges and esports cafés",
   "marquee.player.3": "Restaurants, cafés and bars",
@@ -707,7 +713,7 @@ const en: Dict = {
   "auth.login.venueOrOwnerName": "Venue or owner name",
   "auth.login.venuePlaceholder": "e.g. Zuzu Arcade",
   "auth.login.staffLoginId": "Staff login ID",
-  "auth.login.staffIdPlaceholder": "anna@your-venue.locora",
+  "auth.login.staffIdPlaceholder": "anna@your-venue.gospots",
   "auth.login.sending": "Sending…",
   "auth.login.notifyOwner": "Notify owner",
   "auth.login.requestFailed": "Request failed.",
@@ -747,12 +753,12 @@ const en: Dict = {
   "auth.register.venueName": "Venue name",
   "auth.register.venuePlaceholder": "Neon Billiards",
   "auth.register.slug": "Public URL slug",
-  "auth.register.slugPreview": "Locora.com/venue/{slug}",
+  "auth.register.slugPreview": "gospots.eu/venue/{slug}",
   "auth.register.cityOptional": "City (optional)",
   "auth.register.countryOptional": "Country (optional)",
   "auth.register.phoneOptional": "Phone (optional)",
   "auth.register.packHint":
-    "Gaming or mixed venue? No pricing here — pick paid bundles after your account is created.",
+    "Choose your venue type — gaming, restaurant, bar, hotel F&B, or mixed. Paid feature bundles come after signup.",
   "auth.register.contactSalesLead": "Restaurant or hotel F&B?",
   "auth.register.contactSales": "Contact us",
   "auth.register.trialNote":
@@ -1083,9 +1089,9 @@ const en: Dict = {
   "venuePage.booking.outageOffline":
     "No internet — changes won’t save until you’re back online.",
   "venuePage.booking.outageUnreachable":
-    "Can’t reach Locora servers — try again shortly.",
+    "Can’t reach GoSpots servers — try again shortly.",
   "venuePage.booking.outageUnavailable":
-    "Locora is temporarily unavailable — your data is safe; retry in a minute.",
+    "GoSpots is temporarily unavailable — your data is safe; retry in a minute.",
 
   "venuePage.captcha.label": "Security check",
   "venuePage.captcha.required": "Complete the security check before submitting.",
@@ -1194,9 +1200,9 @@ const en: Dict = {
   "venuePage.guestChat.outageOffline":
     "No internet — changes won’t save until you’re back online.",
   "venuePage.guestChat.outageUnreachable":
-    "Can’t reach Locora servers — try again shortly.",
+    "Can’t reach GoSpots servers — try again shortly.",
   "venuePage.guestChat.outageUnavailable":
-    "Locora is temporarily unavailable — your data is safe; retry in a minute.",
+    "GoSpots is temporarily unavailable — your data is safe; retry in a minute.",
 
   "venuePage.floor.floor": "Floor",
   "venuePage.floor.floorN": "Floor {n}",
@@ -1218,6 +1224,12 @@ const en: Dict = {
   "venuePage.floor.loadFloorFailed": "Could not load floor map.",
   "venuePage.floor.loadTableFailed": "Could not load table map.",
   "venuePage.floor.layoutZone": "Layout / zone",
+  "venuePage.floor.mainArea": "Main area",
+  "venuePage.floor.zoneIndoor": "Indoors",
+  "venuePage.floor.zoneOutdoor": "Outdoors",
+  "venuePage.floor.nTopTables": "{n}-top tables",
+  "venuePage.floor.diningLayoutMeta":
+    "{tables} tables · {seats} seats each",
   "venuePage.floor.noStationsInLayout": "No stations in this layout.",
   "venuePage.floor.prev": "Prev",
   "venuePage.floor.next": "Next",
@@ -1298,7 +1310,7 @@ const pl: Dict = {
   "hero.play.titleA": "Znajdź lokale,",
   "hero.play.titleB": "hostów i wieczór poza domem.",
   "hero.play.subtitle":
-    "Przeglądaj centra gier, restauracje i lokale — rezerwuj, czytaj opinie i kontaktuj się z hostami, gdy publikują na Locora.",
+    "Przeglądaj centra gier, restauracje i lokale — rezerwuj, czytaj opinie i kontaktuj się z hostami, gdy publikują na GoSpots.",
   "hero.play.ctaPrimary": "Przeglądaj lokale",
   "hero.play.ctaSecondary": "Prowadzę lokal",
   "hero.play.pillar1": "Gry, gastronomia i nightlife — jeden katalog",
@@ -1314,7 +1326,7 @@ const pl: Dict = {
   "venues.searching": "Szukam…",
   "venues.found": "Znaleziono {total} lokali",
   "venues.foundOne": "Znaleziono {total} lokal",
-  "venues.showingAll": "Wszystkie opublikowane lokale na Locora",
+  "venues.showingAll": "Wszystkie opublikowane lokale na GoSpots",
   "venues.filters": "Filtry: {summary}",
   "venues.pricesIn": "Ceny w {currency}",
   "venues.browse": "Przeglądaj lokale",
@@ -1323,11 +1335,11 @@ const pl: Dict = {
   "venues.gameOne": "{count} gra",
   "venues.emptyTitle": "Brak pasujących miejsc",
   "venues.emptyBody":
-    "Spróbuj innego miasta lub kategorii — albo dodaj swój lokal na Locora.",
+    "Spróbuj innego miasta lub kategorii — albo dodaj swój lokal na GoSpots.",
   "venues.emptyBodyPilot":
     "Najpierw wypełniamy {city} — dołącz do lokalnego katalogu albo zmień wyszukiwanie.",
   "venues.getListed": "Dodaj lokal",
-  "venues.pilotHint": "Locora startuje miasto po mieście. Pilot:",
+  "venues.pilotHint": "GoSpots startuje miasto po mieście. Pilot:",
   "venues.pilotLink": "Katalog {city}",
 
   "pilotCity.eyebrow": "Start od miasta",
@@ -1339,11 +1351,11 @@ const pl: Dict = {
   "cityLanding.badge": "Miasto pilotażowe · {city}, {country}",
   "cityLanding.title": "Lokale gamingowe w {city}",
   "cityLanding.subtitle":
-    "Locora buduje lokalny katalog bilardów, kafejek PC, lounge'y konsolowych i bowlingów w {city} — najpierw podaż, potem ruch gości.",
+    "GoSpots buduje lokalny katalog bilardów, kafejek PC, lounge'y konsolowych i bowlingów w {city} — najpierw podaż, potem ruch gości.",
   "cityLanding.supplyNote":
     "Promocja dla gości czeka, aż będzie wystarczająco dobrych listingów. Właściciele: zajmijcie miejsce teraz.",
   "cityLanding.ctaOwner": "Dodaj mój lokal w {city}",
-  "cityLanding.ctaBrowse": "Przeglądaj {city} na Locora",
+  "cityLanding.ctaBrowse": "Przeglądaj {city} na GoSpots",
   "cityLanding.pillar1": "Zdjęcie okładki, godziny i jasny opis — bez pustych listingów.",
   "cityLanding.pillar2": "Opublikuj i dodaj do strony lokali, gdy trial obejmuje marketing.",
   "cityLanding.pillar3": "Lokalny ruch gości i promo dopiero gdy strona miasta wygląda na żywą.",
@@ -1368,7 +1380,7 @@ const pl: Dict = {
 
   "homeVenues.play.eyebrow": "Katalog na żywo",
   "homeVenues.play.title": "Miejsca już na",
-  "homeVenues.play.titleAccent": "Locora",
+  "homeVenues.play.titleAccent": "GoSpots",
   "homeVenues.play.subtitle":
     "Prawdziwe oferty prosto od lokali — każde ze swoimi zdjęciami, cenami, walutą i zasadami rezerwacji. Użyj wyszukiwarki powyżej lub otwórz pełny katalog.",
   "homeVenues.manage.eyebrow": "Twoja publiczna wizytówka",
@@ -1592,12 +1604,17 @@ const pl: Dict = {
   "pricing.title": "Typ lokalu jest darmowy.",
   "pricing.titleAccent": "Płacisz za operacje, które prowadzisz.",
   "pricing.subtitle":
-    "Self-serve pod gaming. Wybierz gaming lub mixed, włącz kilka pakietów wynikowych i zobacz miesięczną cenę po {days}-dniowym okresie próbnym.",
+    "Wybierz typ lokalu za darmo, włącz pakiety funkcji i zobacz miesięczną cenę po {days}-dniowym okresie próbnym.",
   "pricing.step1": "Wybierz typ lokalu — zawsze {price}",
-  "pricing.step2": "Włącz potrzebne pakiety",
+  "pricing.step2": "Włącz potrzebne funkcje",
+  "pricing.featuresHint": "{count} wybrane w planie",
+  "pricing.useSuggested": "Użyj sugerowanych",
+  "pricing.trialBanner": "{days} dni za darmo — zmieniaj funkcje w każdej chwili",
+  "pricing.noneSelected": "Brak wybranych funkcji — włącz to, czego używasz.",
   "pricing.suggested": "Sugerowane",
   "pricing.perMonth": "/miesiąc",
   "pricing.perMonthShort": "/mies.",
+  "pricing.perSeat": "/miejsce",
   "pricing.seats": "miejsc",
   "pricing.seatHint":
     "{price} za stanowisko pracownika / miesiąc — w okresie próbnym 3 miejsca gratis.",
@@ -1633,6 +1650,7 @@ const pl: Dict = {
   "addon.guest_chat.name": "Wiadomości gości",
   "addon.guest_chat.tagline": "Czat na żywo z gośćmi na stronie lokalu.",
   "addon.team_accounts.name": "Konta zespołu",
+  "addon.team_accounts.tagline": "Miejsca pracowników — cena za miejsce / mies.",
 
   "pack.gaming.name": "Lokal gamingowy",
   "pack.gaming.tagline": "Stanowiska, rezerwacje na mapie i rozliczenia gry.",
@@ -1657,16 +1675,16 @@ const pl: Dict = {
 
   "who.eyebrow": "Dla kogo",
   "who.title": "Dla",
-  "who.titleAccent": "operatorów lokali gamingowych.",
+  "who.titleAccent": "każdego operatora lokalu.",
   "who.subtitle":
-    "Najpierw wygraj dzisiejszą salę — kto zarezerwował, co wolne, ile naliczyłeś. Lokale mixed mile widziane; pełne restauracje i hotel F&B zaczynamy rozmową.",
-  "who.cta": "Zacznij darmowy trial gamingowy",
+    "Sale gamingowe, restauracje, bary, hotel F&B i lokale mixed — wybierz typ za darmo i włącz potrzebne funkcje.",
+  "who.cta": "Zacznij darmowy trial",
   "who.noteLead":
-    "90 dni trialu · bez karty. Potrzebujesz narzędzi restauracji lub hotel F&B?",
+    "90 dni trialu · bez karty. Pytania o wdrożenie?",
   "who.talkToUs": "napisz do nas",
   "who.contact.title": "Restauracja / hotel",
   "who.contact.body":
-    "Jeszcze nie self-serve. Dining i hotel F&B wdrażamy ręcznie, żeby gaming został klinem.",
+    "Restauracja, bar i hotel F&B są dostępne przy rejestracji — wybierz typ i włącz Jedzenie i dining.",
   "who.ex.gaming.1": "Sale bilardowe i snooker",
   "who.ex.gaming.2": "Gaming lounge",
   "who.ex.gaming.3": "Kawiarnie esportowe",
@@ -1709,7 +1727,7 @@ const pl: Dict = {
     "Zablokuj rezerwację, otrzymaj potwierdzenie i pojaw się gotowy — miejsce czeka.",
   "guest.promise1.title": "Zawsze darmowe dla gości",
   "guest.promise1.body":
-    "Lokale płacą za narzędzia — Ty nigdy nie płacisz Locora za przeglądanie, odkrywanie czy rezerwację.",
+    "Lokale płacą za narzędzia — Ty nigdy nie płacisz GoSpots za przeglądanie, odkrywanie czy rezerwację.",
   "guest.promise2.title": "Prawdziwe lokale, prawdziwe info",
   "guest.promise2.body":
     "Każda wizytówka jest prowadzona przez lokal: własne zdjęcia, godziny, ceny i zasady.",
@@ -1719,7 +1737,7 @@ const pl: Dict = {
 
   "pain.eyebrow": "Scenariusze produktu",
   "pain.title": "Chaotyczne noce,",
-  "pain.titleAccent": "dla których powstał Locora.",
+  "pain.titleAccent": "dla których powstał GoSpots.",
   "pain.subtitle":
     "Ilustracyjne problemy opisywane przez operatorów — nie cytaty klientów.",
   "pain.1.title": "Zapomniane timery",
@@ -1743,7 +1761,7 @@ const pl: Dict = {
 
   "gallery.eyebrow": "Atmosfera · nie lista lokali",
   "gallery.title": "Takie noce,",
-  "gallery.titleAccent": "dla których jest Locora.",
+  "gallery.titleAccent": "dla których jest GoSpots.",
   "gallery.subtitle":
     "Zdjęcia stockowe tylko dla klimatu — nie przedstawiają partnerów ani dostępności na żywo.",
   "gallery.tag.1": "Bilard",
@@ -1757,7 +1775,7 @@ const pl: Dict = {
   "gallery.tag.9": "Bowling",
 
   "finder.openDirectory": "Otwórz pełny katalog",
-  "finder.published": "Opublikowane na Locora",
+  "finder.published": "Opublikowane na GoSpots",
   "finder.preview": "Podgląd katalogu",
   "finder.seeAll": "Zobacz wszystkie",
   "finder.empty": "Brak opublikowanych lokali — bądź wśród pierwszych.",
@@ -1811,7 +1829,7 @@ const pl: Dict = {
   "faq.titleAccent": "zapytać najpierw.",
   "faq.owner.1.q": "Czy muszę coś instalować w lokalu?",
   "faq.owner.1.a":
-    "Nie. Locora działa w przeglądarce na urządzeniu, które już masz — laptop, tablet lub komputer przy ladzie. Aktualizacje przychodzą automatycznie.",
+    "Nie. GoSpots działa w przeglądarce na urządzeniu, które już masz — laptop, tablet lub komputer przy ladzie. Aktualizacje przychodzą automatycznie.",
   "faq.owner.2.q": "Czy mogę wypróbować przed płatnością?",
   "faq.owner.2.a":
     "Tak. Nowe lokale dostają 90-dniowy okres próbny — bez karty. Wybierz dowolne funkcje i zmieniaj je swobodnie w trakcie. Nic nie jest obciążane bez Twojej zgody.",
@@ -1830,10 +1848,10 @@ const pl: Dict = {
   "faq.owner.7.q": "A co z błędami personelu?",
   "faq.owner.7.a":
     "Każda ważna akcja — zniżka, anulowanie, zwrot, zmiana ceny — trafia do niezmiennego dziennika audytu powiązanego z użytkownikiem.",
-  "faq.player.1.q": "Czy Locora jest darmowy dla gości?",
+  "faq.player.1.q": "Czy GoSpots jest darmowy dla gości?",
   "faq.player.1.a":
     "Całkowicie. Przeglądanie lokali, szczegóły i rezerwacja nic Cię nie kosztują — lokale płacą za swoje narzędzia, nie Ty.",
-  "faq.player.2.q": "Jakie miejsca są na Locora?",
+  "faq.player.2.q": "Jakie miejsca są na GoSpots?",
   "faq.player.2.a":
     "Dużo więcej niż gaming. Bilardy, strefy gier i kawiarnie esportowe — plus restauracje, kawiarnie, bary, puby, karaoke, kręgielnie, kluby i lokale rodzinnej rozrywki.",
   "faq.player.3.q": "Jak znaleźć miejsce w pobliżu?",
@@ -1847,7 +1865,7 @@ const pl: Dict = {
     "Nie — przeglądanie i odkrywanie lokali bez konta. Logujesz się tylko, gdy proces rezerwacji lokalu tego wymaga.",
   "faq.player.6.q": "Dlaczego widzę jeszcze mało lokali?",
   "faq.player.6.a":
-    "Locora jest w prywatnej becie i najpierw wdraża operatorów. Katalog publiczny rośnie z każdym lokalem, który włączy publikację.",
+    "GoSpots jest w prywatnej becie i najpierw wdraża operatorów. Katalog publiczny rośnie z każdym lokalem, który włączy publikację.",
 
   "cta.manage.titleA": "Nigdy nie trać pieniędzy na",
   "cta.manage.titleB": "zapomniane timery.",
@@ -1886,7 +1904,7 @@ const pl: Dict = {
   "footer.privacy": "Prywatność",
   "footer.terms": "Regulamin",
 
-  "marquee.owner.title": "Do czego Locora jest stworzony",
+  "marquee.owner.title": "Do czego GoSpots jest stworzony",
   "marquee.owner.1": "Status sali na żywo",
   "marquee.owner.2": "Timery sesji przypięte do stołu",
   "marquee.owner.3": "Walk-iny i rezerwacje w jednym widoku",
@@ -1895,7 +1913,7 @@ const pl: Dict = {
   "marquee.owner.6": "Niezmienny dziennik audytu",
   "marquee.owner.7": "Przychody per stół i per zmiana",
   "marquee.owner.8": "Pod bilard · snooker · lounge · game café",
-  "marquee.player.title": "Co znajdziesz na Locora",
+  "marquee.player.title": "Co znajdziesz na GoSpots",
   "marquee.player.1": "Sale bilardowe i snooker",
   "marquee.player.2": "Lounge gamingowe i esports café",
   "marquee.player.3": "Restauracje, kawiarnie i bary",
@@ -1973,7 +1991,7 @@ const pl: Dict = {
   "auth.login.venueOrOwnerName": "Nazwa lokalu lub właściciela",
   "auth.login.venuePlaceholder": "np. Zuzu Arcade",
   "auth.login.staffLoginId": "ID logowania personelu",
-  "auth.login.staffIdPlaceholder": "anna@twoj-lokal.locora",
+  "auth.login.staffIdPlaceholder": "anna@twoj-lokal.gospots",
   "auth.login.sending": "Wysyłanie…",
   "auth.login.notifyOwner": "Powiadom właściciela",
   "auth.login.requestFailed": "Żądanie nie powiodło się.",
@@ -2013,12 +2031,12 @@ const pl: Dict = {
   "auth.register.venueName": "Nazwa lokalu",
   "auth.register.venuePlaceholder": "Neon Billiards",
   "auth.register.slug": "Publiczny slug URL",
-  "auth.register.slugPreview": "Locora.com/venue/{slug}",
+  "auth.register.slugPreview": "gospots.eu/venue/{slug}",
   "auth.register.cityOptional": "Miasto (opcjonalnie)",
   "auth.register.countryOptional": "Kraj (opcjonalnie)",
   "auth.register.phoneOptional": "Telefon (opcjonalnie)",
   "auth.register.packHint":
-    "Lokal gamingowy czy mixed? Bez cen — płatne pakiety wybierzesz po utworzeniu konta.",
+    "Wybierz typ lokalu — gaming, restauracja, bar, hotel F&B lub mixed. Płatne pakiety funkcji po utworzeniu konta.",
   "auth.register.contactSalesLead": "Restauracja lub hotel F&B?",
   "auth.register.contactSales": "Napisz do nas",
   "auth.register.trialNote":
@@ -2350,9 +2368,9 @@ const pl: Dict = {
   "venuePage.booking.outageOffline":
     "Brak internetu — zmiany nie zapiszą się, dopóki nie wrócisz online.",
   "venuePage.booking.outageUnreachable":
-    "Nie można połączyć się z serwerami Locora — spróbuj wkrótce.",
+    "Nie można połączyć się z serwerami GoSpots — spróbuj wkrótce.",
   "venuePage.booking.outageUnavailable":
-    "Locora jest chwilowo niedostępna — Twoje dane są bezpieczne; spróbuj za minutę.",
+    "GoSpots jest chwilowo niedostępna — Twoje dane są bezpieczne; spróbuj za minutę.",
 
   "venuePage.captcha.label": "Weryfikacja bezpieczeństwa",
   "venuePage.captcha.required":
@@ -2462,9 +2480,9 @@ const pl: Dict = {
   "venuePage.guestChat.outageOffline":
     "Brak internetu — zmiany nie zapiszą się, dopóki nie wrócisz online.",
   "venuePage.guestChat.outageUnreachable":
-    "Nie można połączyć się z serwerami Locora — spróbuj wkrótce.",
+    "Nie można połączyć się z serwerami GoSpots — spróbuj wkrótce.",
   "venuePage.guestChat.outageUnavailable":
-    "Locora jest chwilowo niedostępna — Twoje dane są bezpieczne; spróbuj za minutę.",
+    "GoSpots jest chwilowo niedostępna — Twoje dane są bezpieczne; spróbuj za minutę.",
 
   "venuePage.floor.floor": "Piętro",
   "venuePage.floor.floorN": "Piętro {n}",
@@ -2486,6 +2504,12 @@ const pl: Dict = {
   "venuePage.floor.loadFloorFailed": "Nie udało się wczytać mapy sali.",
   "venuePage.floor.loadTableFailed": "Nie udało się wczytać mapy stolików.",
   "venuePage.floor.layoutZone": "Układ / strefa",
+  "venuePage.floor.mainArea": "Główna strefa",
+  "venuePage.floor.zoneIndoor": "Wewnątrz",
+  "venuePage.floor.zoneOutdoor": "Na zewnątrz",
+  "venuePage.floor.nTopTables": "Stoliki {n}-os.",
+  "venuePage.floor.diningLayoutMeta":
+    "{tables} stolików · {seats} miejsc każde",
   "venuePage.floor.noStationsInLayout": "Brak stanowisk w tym układzie.",
   "venuePage.floor.prev": "Wstecz",
   "venuePage.floor.next": "Dalej",
@@ -2566,7 +2590,7 @@ const de: Dict = {
   "hero.play.titleA": "Finde Venues,",
   "hero.play.titleB": "Hosts und Abende raus.",
   "hero.play.subtitle":
-    "Gaming-Center, Restaurants und Venues durchstöbern — reservieren, Reviews lesen und Hosts kontaktieren, wenn sie auf Locora publizieren.",
+    "Gaming-Center, Restaurants und Venues durchstöbern — reservieren, Reviews lesen und Hosts kontaktieren, wenn sie auf GoSpots publizieren.",
   "hero.play.ctaPrimary": "Venues durchsuchen",
   "hero.play.ctaSecondary": "Ich betreibe eine Venue",
   "hero.play.pillar1": "Gaming, Dining und Nightlife — ein Verzeichnis",
@@ -2582,7 +2606,7 @@ const de: Dict = {
   "venues.searching": "Suche…",
   "venues.found": "{total} Venues gefunden",
   "venues.foundOne": "{total} Venue gefunden",
-  "venues.showingAll": "Alle veröffentlichten Venues auf Locora",
+  "venues.showingAll": "Alle veröffentlichten Venues auf GoSpots",
   "venues.filters": "Filter: {summary}",
   "venues.pricesIn": "Preise in {currency}",
   "venues.browse": "Venues durchsuchen",
@@ -2591,7 +2615,7 @@ const de: Dict = {
   "venues.gameOne": "{count} Spiel",
   "venues.emptyTitle": "Noch keine Treffer",
   "venues.emptyBody":
-    "Andere Stadt oder Kategorie versuchen — oder dein Venue auf Locora eintragen.",
+    "Andere Stadt oder Kategorie versuchen — oder dein Venue auf GoSpots eintragen.",
   "venues.getListed": "Eintragen lassen",
 
   "how.eyebrow": "So funktioniert’s",
@@ -2613,7 +2637,7 @@ const de: Dict = {
 
   "homeVenues.play.eyebrow": "Live-Verzeichnis",
   "homeVenues.play.title": "Spots schon auf",
-  "homeVenues.play.titleAccent": "Locora",
+  "homeVenues.play.titleAccent": "GoSpots",
   "homeVenues.play.subtitle":
     "Echte Einträge direkt von den Venues — jeweils mit eigenen Fotos, Preisen, Währung und Reservierungsregeln. Nutze die Suche oben oder öffne das volle Verzeichnis.",
   "homeVenues.manage.eyebrow": "Dein öffentlicher Eintrag",
@@ -2817,9 +2841,14 @@ const de: Dict = {
     "Keine Pakete, die du nicht brauchst. Wähle den Venue-Typ, schalte Features ein und sieh den Monatspreis — nach {days} Tagen kostenloser Testphase.",
   "pricing.step1": "Venue-Typ wählen — immer {price}",
   "pricing.step2": "Benötigte Features einschalten",
+  "pricing.featuresHint": "{count} für deinen Plan gewählt",
+  "pricing.useSuggested": "Empfohlene nutzen",
+  "pricing.trialBanner": "{days} Tage kostenlos — Features jederzeit ändern",
+  "pricing.noneSelected": "Noch keine Features — wähle, was du nutzt.",
   "pricing.suggested": "Empfohlen",
   "pricing.perMonth": "/Monat",
   "pricing.perMonthShort": "/Mon.",
+  "pricing.perSeat": "/Platz",
   "pricing.seats": "Plätze",
   "pricing.seatHint":
     "{price} pro Mitarbeiterplatz / Monat — in der Testphase 3 Plätze gratis.",
@@ -2851,6 +2880,8 @@ const de: Dict = {
   "addon.guest_chat.name": "Gästenachrichten",
   "addon.guest_chat.tagline": "Live-Chat mit Gästen auf der Venue-Seite.",
   "addon.team_accounts.name": "Team-Konten",
+  "addon.team_accounts.tagline":
+    "Mitarbeiterplätze — Preis pro Platz / Monat.",
 
   "pack.gaming.name": "Gaming-Venue",
   "pack.gaming.tagline": "Stationen, Live-Map-Buchungen und Spielabrechnung.",
@@ -2867,7 +2898,7 @@ const de: Dict = {
   "who.title": "Für Hosts —",
   "who.titleAccent": "Gaming-Center, Restaurants und Venues.",
   "who.subtitle":
-    "Locora gibt Betreibern ein Dashboard für Venue-Daten, Publishing und Werbung sowie eine öffentliche Seite mit Reservierungen, Reviews und Kontakt. Wähle deinen Typ kostenlos, schalte nur die Features ein, die du brauchst.",
+    "GoSpots gibt Betreibern ein Dashboard für Venue-Daten, Publishing und Werbung sowie eine öffentliche Seite mit Reservierungen, Reviews und Kontakt. Wähle deinen Typ kostenlos, schalte nur die Features ein, die du brauchst.",
   "who.cta": "Venue kostenlos listen",
   "who.noteLead":
     "90 Tage Trial · keine Karte nötig. Etwas anderes? Starte mit Mixed und baue dein Feature-Set — oder",
@@ -2914,7 +2945,7 @@ const de: Dict = {
     "Reservierung sichern, Bestätigung erhalten und bereit erscheinen — dein Platz wartet.",
   "guest.promise1.title": "Immer kostenlos für Gäste",
   "guest.promise1.body":
-    "Venues zahlen für ihre Tools — du zahlst Locora nie fürs Stöbern, Entdecken oder Reservieren.",
+    "Venues zahlen für ihre Tools — du zahlst GoSpots nie fürs Stöbern, Entdecken oder Reservieren.",
   "guest.promise2.title": "Echte Venues, echte Infos",
   "guest.promise2.body":
     "Jeder Eintrag wird vom Venue selbst gepflegt: eigene Fotos, Öffnungszeiten, Preise und Regeln.",
@@ -2924,7 +2955,7 @@ const de: Dict = {
 
   "pain.eyebrow": "Produktszenarien",
   "pain.title": "Die chaotischen Nächte,",
-  "pain.titleAccent": "für die Locora gebaut ist.",
+  "pain.titleAccent": "für die GoSpots gebaut ist.",
   "pain.subtitle":
     "Illustrative Probleme von Betreibern — keine Kundenstimmen.",
   "pain.1.title": "Vergessene Timer",
@@ -2948,7 +2979,7 @@ const de: Dict = {
 
   "gallery.eyebrow": "Atmosphäre · keine Venue-Liste",
   "gallery.title": "Solche Nächte,",
-  "gallery.titleAccent": "für die Locora da ist.",
+  "gallery.titleAccent": "für die GoSpots da ist.",
   "gallery.subtitle":
     "Stockfotos nur für die Stimmung — sie stellen keine Partner-Venues oder Live-Verfügbarkeit dar.",
   "gallery.tag.1": "Billard",
@@ -2962,7 +2993,7 @@ const de: Dict = {
   "gallery.tag.9": "Bowling",
 
   "finder.openDirectory": "Volles Verzeichnis öffnen",
-  "finder.published": "Auf Locora veröffentlicht",
+  "finder.published": "Auf GoSpots veröffentlicht",
   "finder.preview": "Verzeichnis-Vorschau",
   "finder.seeAll": "Alle ansehen",
   "finder.empty": "Noch keine veröffentlichten Venues — sei unter den Ersten.",
@@ -3016,7 +3047,7 @@ const de: Dict = {
   "faq.titleAccent": "fragen könntest.",
   "faq.owner.1.q": "Muss ich etwas in meiner Venue installieren?",
   "faq.owner.1.a":
-    "Nein. Locora läuft im Browser auf dem Gerät, das du schon hast — Laptop, Tablet oder Tresen-PC. Updates kommen automatisch.",
+    "Nein. GoSpots läuft im Browser auf dem Gerät, das du schon hast — Laptop, Tablet oder Tresen-PC. Updates kommen automatisch.",
   "faq.owner.2.q": "Kann ich es vor dem Bezahlen testen?",
   "faq.owner.2.a":
     "Ja. Neue Venues bekommen 90 Tage kostenlos — ohne Karte. Wähle beliebige Features und ändere sie frei in der Testphase. Nichts wird ohne Zustimmung belastet.",
@@ -3035,10 +3066,10 @@ const de: Dict = {
   "faq.owner.7.q": "Was ist mit Fehlern meines Teams?",
   "faq.owner.7.a":
     "Jede wichtige Aktion — Rabatt, Storno, Erstattung, Preisänderung — landet in einem unveränderlichen Audit-Log am Nutzer.",
-  "faq.player.1.q": "Ist Locora für Gäste kostenlos?",
+  "faq.player.1.q": "Ist GoSpots für Gäste kostenlos?",
   "faq.player.1.a":
     "Vollständig. Venues browsen, Details prüfen und reservieren kostet dich nichts — Venues zahlen für ihre Tools, nicht du.",
-  "faq.player.2.q": "Welche Orte gibt es auf Locora?",
+  "faq.player.2.q": "Welche Orte gibt es auf GoSpots?",
   "faq.player.2.a":
     "Viel mehr als Gaming. Billard, Gaming-Lounges und Esports-Cafés — plus Restaurants, Cafés, Bars, Pubs, Karaoke, Bowling, Clubs und Familien-Entertainment.",
   "faq.player.3.q": "Wie finde ich einen Spot in der Nähe?",
@@ -3052,7 +3083,7 @@ const de: Dict = {
     "Kein Konto nötig zum Entdecken. Du meldest dich nur an, wenn der Buchungsflow der Venue es verlangt.",
   "faq.player.6.q": "Warum sehe ich noch wenige Venues?",
   "faq.player.6.a":
-    "Locora ist in privater Beta und onboardet zuerst Betreiber. Das öffentliche Verzeichnis wächst mit jeder Venue, die Publishing einschaltet.",
+    "GoSpots ist in privater Beta und onboardet zuerst Betreiber. Das öffentliche Verzeichnis wächst mit jeder Venue, die Publishing einschaltet.",
 
   "cta.manage.titleA": "Verliere nie Geld durch",
   "cta.manage.titleB": "vergessene Timer.",
@@ -3091,7 +3122,7 @@ const de: Dict = {
   "footer.privacy": "Datenschutz",
   "footer.terms": "AGB",
 
-  "marquee.owner.title": "Wofür Locora gebaut ist",
+  "marquee.owner.title": "Wofür GoSpots gebaut ist",
   "marquee.owner.1": "Live-Floor-Status",
   "marquee.owner.2": "Session-Timer am Tisch",
   "marquee.owner.3": "Walk-ins + Reservierungen in einer Ansicht",
@@ -3100,7 +3131,7 @@ const de: Dict = {
   "marquee.owner.6": "Unveränderliches Audit-Log",
   "marquee.owner.7": "Umsatz pro Tisch und Schicht",
   "marquee.owner.8": "Für Billard · Snooker · Lounges · Game Cafés",
-  "marquee.player.title": "Was Sie auf Locora finden",
+  "marquee.player.title": "Was Sie auf GoSpots finden",
   "marquee.player.1": "Billardhallen und Snookerclubs",
   "marquee.player.2": "Gaming-Lounges und Esports-Cafés",
   "marquee.player.3": "Restaurants, Cafés und Bars",
@@ -3174,7 +3205,7 @@ const fr: Dict = {
   "hero.play.titleA": "Trouvez lieux,",
   "hero.play.titleB": "hôtes et soirées.",
   "hero.play.subtitle":
-    "Parcourez centres de jeux, restaurants et lieux — réservez, lisez les avis et contactez les hôtes quand ils publient sur Locora.",
+    "Parcourez centres de jeux, restaurants et lieux — réservez, lisez les avis et contactez les hôtes quand ils publient sur GoSpots.",
   "hero.play.ctaPrimary": "Parcourir les lieux",
   "hero.play.ctaSecondary": "Je gère un lieu",
   "hero.play.pillar1": "Jeux, resto et nightlife — un annuaire",
@@ -3190,7 +3221,7 @@ const fr: Dict = {
   "venues.searching": "Recherche…",
   "venues.found": "{total} lieux trouvés",
   "venues.foundOne": "{total} lieu trouvé",
-  "venues.showingAll": "Tous les lieux publiés sur Locora",
+  "venues.showingAll": "Tous les lieux publiés sur GoSpots",
   "venues.filters": "Filtres : {summary}",
   "venues.pricesIn": "Prix en {currency}",
   "venues.browse": "Parcourir les lieux",
@@ -3199,7 +3230,7 @@ const fr: Dict = {
   "venues.gameOne": "{count} jeu",
   "venues.emptyTitle": "Aucun lieu ne correspond",
   "venues.emptyBody":
-    "Essayez une autre ville ou catégorie — ou inscrivez votre lieu sur Locora.",
+    "Essayez une autre ville ou catégorie — ou inscrivez votre lieu sur GoSpots.",
   "venues.getListed": "Être listé",
 
   "how.eyebrow": "Comment ça marche",
@@ -3221,7 +3252,7 @@ const fr: Dict = {
 
   "homeVenues.play.eyebrow": "Annuaire live",
   "homeVenues.play.title": "Des spots déjà sur",
-  "homeVenues.play.titleAccent": "Locora",
+  "homeVenues.play.titleAccent": "GoSpots",
   "homeVenues.play.subtitle":
     "Annonces réelles venues des lieux — chacun avec ses photos, prix, devise et règles de réservation. Utilisez la recherche ci-dessus ou ouvrez l’annuaire complet.",
   "homeVenues.manage.eyebrow": "Votre fiche publique",
@@ -3425,9 +3456,14 @@ const fr: Dict = {
     "Pas de packs inutiles. Choisissez le type, activez les fonctions et voyez le prix mensuel — après {days} jours d’essai gratuit.",
   "pricing.step1": "Choisissez le type de lieu — toujours {price}",
   "pricing.step2": "Activez les fonctions dont vous avez besoin",
+  "pricing.featuresHint": "{count} sélectionnées pour votre plan",
+  "pricing.useSuggested": "Utiliser les suggestions",
+  "pricing.trialBanner": "{days} jours gratuits — modifiez les fonctions à tout moment",
+  "pricing.noneSelected": "Aucune fonction encore — choisissez ce que vous utilisez.",
   "pricing.suggested": "Suggéré",
   "pricing.perMonth": "/mois",
   "pricing.perMonthShort": "/mois",
+  "pricing.perSeat": "/place",
   "pricing.seats": "places",
   "pricing.seatHint":
     "{price} par place employé / mois — 3 places gratuites pendant l’essai.",
@@ -3459,6 +3495,8 @@ const fr: Dict = {
   "addon.guest_chat.name": "Messages clients",
   "addon.guest_chat.tagline": "Chat en direct avec les clients sur la page.",
   "addon.team_accounts.name": "Comptes équipe",
+  "addon.team_accounts.tagline":
+    "Places employés — tarif par place / mois.",
 
   "pack.gaming.name": "Lieu gaming",
   "pack.gaming.tagline": "Stations, réservations live map et facturation jeu.",
@@ -3475,7 +3513,7 @@ const fr: Dict = {
   "who.title": "Pour les hôtes —",
   "who.titleAccent": "centres de jeux, restaurants et lieux.",
   "who.subtitle":
-    "Locora offre aux opérateurs un tableau de bord pour contrôler les données, publier et annoncer, et un site public avec réservations, avis et contact. Choisissez votre type gratuitement, puis activez seulement les fonctions dont vous avez besoin.",
+    "GoSpots offre aux opérateurs un tableau de bord pour contrôler les données, publier et annoncer, et un site public avec réservations, avis et contact. Choisissez votre type gratuitement, puis activez seulement les fonctions dont vous avez besoin.",
   "who.cta": "Lister mon lieu gratuitement",
   "who.noteLead":
     "90 jours d’essai · sans carte. Autre chose ? Commencez par Mixed et composez vos fonctions — ou",
@@ -3522,7 +3560,7 @@ const fr: Dict = {
     "Verrouillez la réservation, recevez une confirmation et arrivez prêt — votre place attend.",
   "guest.promise1.title": "Toujours gratuit pour les invités",
   "guest.promise1.body":
-    "Les lieux paient leurs outils — vous ne payez jamais Locora pour parcourir, découvrir ou réserver.",
+    "Les lieux paient leurs outils — vous ne payez jamais GoSpots pour parcourir, découvrir ou réserver.",
   "guest.promise2.title": "Vrais lieux, vraies infos",
   "guest.promise2.body":
     "Chaque fiche est gérée par le lieu : ses photos, horaires, tarifs et règles.",
@@ -3532,7 +3570,7 @@ const fr: Dict = {
 
   "pain.eyebrow": "Scénarios produit",
   "pain.title": "Les soirées chaotiques",
-  "pain.titleAccent": "pour lesquelles Locora est fait.",
+  "pain.titleAccent": "pour lesquelles GoSpots est fait.",
   "pain.subtitle":
     "Problèmes illustratifs décrits par les opérateurs — pas des citations clients.",
   "pain.1.title": "Timers oubliés",
@@ -3556,7 +3594,7 @@ const fr: Dict = {
 
   "gallery.eyebrow": "Atmosphère · pas une liste de lieux",
   "gallery.title": "Les soirées",
-  "gallery.titleAccent": "pour lesquelles Locora existe.",
+  "gallery.titleAccent": "pour lesquelles GoSpots existe.",
   "gallery.subtitle":
     "Photos stock pour l’ambiance seulement — elles ne représentent pas des partenaires ni la dispo live.",
   "gallery.tag.1": "Billard",
@@ -3570,7 +3608,7 @@ const fr: Dict = {
   "gallery.tag.9": "Bowling",
 
   "finder.openDirectory": "Ouvrir l’annuaire complet",
-  "finder.published": "Publié sur Locora",
+  "finder.published": "Publié sur GoSpots",
   "finder.preview": "Aperçu de l’annuaire",
   "finder.seeAll": "Voir tout",
   "finder.empty": "Aucun lieu publié — soyez parmi les premiers.",
@@ -3624,7 +3662,7 @@ const fr: Dict = {
   "faq.titleAccent": "demander d’abord.",
   "faq.owner.1.q": "Dois-je installer quelque chose dans mon lieu ?",
   "faq.owner.1.a":
-    "Non. Locora tourne dans le navigateur sur l’appareil que vous avez déjà — laptop, tablette ou PC de comptoir. Les mises à jour arrivent automatiquement.",
+    "Non. GoSpots tourne dans le navigateur sur l’appareil que vous avez déjà — laptop, tablette ou PC de comptoir. Les mises à jour arrivent automatiquement.",
   "faq.owner.2.q": "Puis-je essayer avant de payer ?",
   "faq.owner.2.a":
     "Oui. Les nouveaux lieux ont 90 jours d’essai gratuit — sans carte. Choisissez les fonctions et changez-les librement pendant l’essai. Rien n’est facturé sans votre accord.",
@@ -3643,10 +3681,10 @@ const fr: Dict = {
   "faq.owner.7.q": "Et si mon équipe fait des erreurs ?",
   "faq.owner.7.a":
     "Chaque action importante — remise, annulation, remboursement, changement de prix — va dans un journal d’audit immuable lié à l’utilisateur.",
-  "faq.player.1.q": "Locora est-il gratuit pour les clients ?",
+  "faq.player.1.q": "GoSpots est-il gratuit pour les clients ?",
   "faq.player.1.a":
     "Totalement. Parcourir les lieux, voir les détails et réserver ne vous coûte rien — les lieux paient leurs outils, pas vous.",
-  "faq.player.2.q": "Quels types de lieux sont sur Locora ?",
+  "faq.player.2.q": "Quels types de lieux sont sur GoSpots ?",
   "faq.player.2.a":
     "Bien plus que le gaming. Billards, salles de jeux et cafés esport — plus restaurants, cafés, bars, pubs, karaoke, bowling, clubs et lieux familiaux.",
   "faq.player.3.q": "Comment trouver un spot près de moi ?",
@@ -3660,7 +3698,7 @@ const fr: Dict = {
     "Pas de compte pour découvrir les lieux. Vous vous connectez seulement si le flux de réservation du lieu l’exige.",
   "faq.player.6.q": "Pourquoi je vois encore peu de lieux ?",
   "faq.player.6.a":
-    "Locora est en bêta privée et onboard d’abord les opérateurs. L’annuaire public grandit avec chaque lieu qui active la publication.",
+    "GoSpots est en bêta privée et onboard d’abord les opérateurs. L’annuaire public grandit avec chaque lieu qui active la publication.",
 
   "cta.manage.titleA": "Ne perdez plus d’argent à cause de",
   "cta.manage.titleB": "timers oubliés.",
@@ -3699,7 +3737,7 @@ const fr: Dict = {
   "footer.privacy": "Confidentialité",
   "footer.terms": "Conditions",
 
-  "marquee.owner.title": "Ce que Locora est conçu pour gérer",
+  "marquee.owner.title": "Ce que GoSpots est conçu pour gérer",
   "marquee.owner.1": "Statut live du floor",
   "marquee.owner.2": "Timers de session liés à la table",
   "marquee.owner.3": "Walk-ins + réservations en une vue",
@@ -3708,7 +3746,7 @@ const fr: Dict = {
   "marquee.owner.6": "Journal d’audit immuable",
   "marquee.owner.7": "Revenus par table et par shift",
   "marquee.owner.8": "Pour billard · snooker · lounges · game cafés",
-  "marquee.player.title": "Ce que vous trouvez sur Locora",
+  "marquee.player.title": "Ce que vous trouvez sur GoSpots",
   "marquee.player.1": "Salles de billard et clubs de snooker",
   "marquee.player.2": "Lounges gaming et cafés esport",
   "marquee.player.3": "Restaurants, cafés et bars",
@@ -3782,7 +3820,7 @@ const es: Dict = {
   "hero.play.titleA": "Encuentra locales,",
   "hero.play.titleB": "anfitriones y planes.",
   "hero.play.subtitle":
-    "Explora centros de juegos, restaurantes y locales — reserva, lee reseñas y contacta anfitriones cuando publican en Locora.",
+    "Explora centros de juegos, restaurantes y locales — reserva, lee reseñas y contacta anfitriones cuando publican en GoSpots.",
   "hero.play.ctaPrimary": "Ver locales",
   "hero.play.ctaSecondary": "Tengo un local",
   "hero.play.pillar1": "Juegos, comida y nightlife — un directorio",
@@ -3798,7 +3836,7 @@ const es: Dict = {
   "venues.searching": "Buscando…",
   "venues.found": "{total} locales encontrados",
   "venues.foundOne": "{total} local encontrado",
-  "venues.showingAll": "Todos los locales publicados en Locora",
+  "venues.showingAll": "Todos los locales publicados en GoSpots",
   "venues.filters": "Filtros: {summary}",
   "venues.pricesIn": "Precios en {currency}",
   "venues.browse": "Ver locales",
@@ -3807,7 +3845,7 @@ const es: Dict = {
   "venues.gameOne": "{count} juego",
   "venues.emptyTitle": "Ningún sitio coincide aún",
   "venues.emptyBody":
-    "Prueba otra ciudad o categoría — o lista tu local en Locora.",
+    "Prueba otra ciudad o categoría — o lista tu local en GoSpots.",
   "venues.getListed": "Aparecer en el directorio",
 
   "how.eyebrow": "Cómo funciona",
@@ -3829,7 +3867,7 @@ const es: Dict = {
 
   "homeVenues.play.eyebrow": "Directorio en vivo",
   "homeVenues.play.title": "Sitios ya en",
-  "homeVenues.play.titleAccent": "Locora",
+  "homeVenues.play.titleAccent": "GoSpots",
   "homeVenues.play.subtitle":
     "Listados reales de los propios locales — cada uno con sus fotos, precios, moneda y reglas de reserva. Usa la búsqueda de arriba o abre el directorio completo.",
   "homeVenues.manage.eyebrow": "Tu ficha pública",
@@ -4034,9 +4072,14 @@ const es: Dict = {
     "Sin packs que no necesitas. Elige el tipo, activa funciones y ve el precio mensual — tras {days} días de prueba gratis.",
   "pricing.step1": "Elige el tipo de local — siempre {price}",
   "pricing.step2": "Activa las funciones que necesitas",
+  "pricing.featuresHint": "{count} seleccionadas en tu plan",
+  "pricing.useSuggested": "Usar sugeridas",
+  "pricing.trialBanner": "{days} días gratis — cambia funciones cuando quieras",
+  "pricing.noneSelected": "Aún sin funciones — elige lo que usas.",
   "pricing.suggested": "Sugerido",
   "pricing.perMonth": "/mes",
   "pricing.perMonthShort": "/mes",
+  "pricing.perSeat": "/puesto",
   "pricing.seats": "puestos",
   "pricing.seatHint":
     "{price} por puesto de empleado / mes — 3 puestos gratis en la prueba.",
@@ -4068,6 +4111,8 @@ const es: Dict = {
   "addon.guest_chat.name": "Mensajes de huéspedes",
   "addon.guest_chat.tagline": "Chat en vivo con huéspedes en la página.",
   "addon.team_accounts.name": "Cuentas de equipo",
+  "addon.team_accounts.tagline":
+    "Puestos de empleados — precio por puesto / mes.",
 
   "pack.gaming.name": "Local gaming",
   "pack.gaming.tagline": "Estaciones, reservas en mapa y facturación de juego.",
@@ -4084,7 +4129,7 @@ const es: Dict = {
   "who.title": "Para anfitriones —",
   "who.titleAccent": "centros de juegos, restaurantes y locales.",
   "who.subtitle":
-    "Locora da a los operadores un panel para controlar datos del local, publicar y anunciar, y un sitio público con reservas, reseñas y contacto. Elige tu tipo gratis y activa solo las funciones que necesitas.",
+    "GoSpots da a los operadores un panel para controlar datos del local, publicar y anunciar, y un sitio público con reservas, reseñas y contacto. Elige tu tipo gratis y activa solo las funciones que necesitas.",
   "who.cta": "Publica tu local gratis",
   "who.noteLead":
     "90 días de prueba · sin tarjeta. ¿Otra cosa? Empieza con Mixed y arma tu set de funciones — o",
@@ -4131,7 +4176,7 @@ const es: Dict = {
     "Bloquea la reserva, recibe confirmación y llega listo — tu sitio espera.",
   "guest.promise1.title": "Siempre gratis para invitados",
   "guest.promise1.body":
-    "Los locales pagan sus herramientas — tú nunca pagas a Locora por explorar, descubrir o reservar.",
+    "Los locales pagan sus herramientas — tú nunca pagas a GoSpots por explorar, descubrir o reservar.",
   "guest.promise2.title": "Locales reales, info real",
   "guest.promise2.body":
     "Cada ficha la gestiona el local: sus fotos, horarios, precios y reglas.",
@@ -4141,7 +4186,7 @@ const es: Dict = {
 
   "pain.eyebrow": "Escenarios de producto",
   "pain.title": "Las noches caóticas",
-  "pain.titleAccent": "para las que Locora está hecho.",
+  "pain.titleAccent": "para las que GoSpots está hecho.",
   "pain.subtitle":
     "Problemas ilustrativos que describen operadores — no citas de clientes.",
   "pain.1.title": "Temporizadores olvidados",
@@ -4165,7 +4210,7 @@ const es: Dict = {
 
   "gallery.eyebrow": "Ambiente · no una lista de locales",
   "gallery.title": "Las noches",
-  "gallery.titleAccent": "para las que es Locora.",
+  "gallery.titleAccent": "para las que es GoSpots.",
   "gallery.subtitle":
     "Fotos de stock solo para el mood — no representan partners ni disponibilidad en vivo.",
   "gallery.tag.1": "Billar",
@@ -4179,7 +4224,7 @@ const es: Dict = {
   "gallery.tag.9": "Bowling",
 
   "finder.openDirectory": "Abrir directorio completo",
-  "finder.published": "Publicado en Locora",
+  "finder.published": "Publicado en GoSpots",
   "finder.preview": "Vista previa del directorio",
   "finder.seeAll": "Ver todos",
   "finder.empty": "Aún no hay locales publicados — sé de los primeros.",
@@ -4233,7 +4278,7 @@ const es: Dict = {
   "faq.titleAccent": "preguntar primero.",
   "faq.owner.1.q": "¿Necesito instalar algo en mi local?",
   "faq.owner.1.a":
-    "No. Locora funciona en el navegador del dispositivo que ya tienes — portátil, tablet o PC de barra. Las actualizaciones llegan solas.",
+    "No. GoSpots funciona en el navegador del dispositivo que ya tienes — portátil, tablet o PC de barra. Las actualizaciones llegan solas.",
   "faq.owner.2.q": "¿Puedo probarlo antes de pagar?",
   "faq.owner.2.a":
     "Sí. Los locales nuevos tienen 90 días de prueba gratis — sin tarjeta. Elige las funciones que quieras y cámbialas libremente durante la prueba. Nada se cobra sin tu consentimiento.",
@@ -4252,10 +4297,10 @@ const es: Dict = {
   "faq.owner.7.q": "¿Y si mi personal comete errores?",
   "faq.owner.7.a":
     "Cada acción importante — descuento, cancelación, reembolso, cambio de precio — entra en un registro de auditoría inmutable ligado al usuario.",
-  "faq.player.1.q": "¿Locora es gratis para los huéspedes?",
+  "faq.player.1.q": "¿GoSpots es gratis para los huéspedes?",
   "faq.player.1.a":
     "Por completo. Ver locales, detalles y reservar no te cuesta nada — los locales pagan sus herramientas, no tú.",
-  "faq.player.2.q": "¿Qué tipos de sitios hay en Locora?",
+  "faq.player.2.q": "¿Qué tipos de sitios hay en GoSpots?",
   "faq.player.2.a":
     "Mucho más que gaming. Billares, lounges y cafés esport — más restaurantes, cafés, bares, pubs, karaoke, bolera, clubs y ocio familiar.",
   "faq.player.3.q": "¿Cómo encuentro un sitio cerca de mí?",
@@ -4269,7 +4314,7 @@ const es: Dict = {
     "No hace falta cuenta para descubrir locales. Solo inicias sesión si el flujo de reserva del local lo exige.",
   "faq.player.6.q": "¿Por qué aún veo pocos locales?",
   "faq.player.6.a":
-    "Locora está en beta privada y primero incorpora operadores. El directorio público crece con cada local que activa la publicación.",
+    "GoSpots está en beta privada y primero incorpora operadores. El directorio público crece con cada local que activa la publicación.",
 
   "cta.manage.titleA": "No pierdas dinero por",
   "cta.manage.titleB": "temporizadores olvidados.",
@@ -4308,7 +4353,7 @@ const es: Dict = {
   "footer.privacy": "Privacidad",
   "footer.terms": "Términos",
 
-  "marquee.owner.title": "Para lo que está hecho Locora",
+  "marquee.owner.title": "Para lo que está hecho GoSpots",
   "marquee.owner.1": "Estado en vivo del salón",
   "marquee.owner.2": "Temporizadores de sesión en la mesa",
   "marquee.owner.3": "Walk-ins + reservas en una vista",
@@ -4317,7 +4362,7 @@ const es: Dict = {
   "marquee.owner.6": "Registro de auditoría inmutable",
   "marquee.owner.7": "Ingresos por mesa y por turno",
   "marquee.owner.8": "Para billar · snooker · lounges · game cafés",
-  "marquee.player.title": "Lo que encuentras en Locora",
+  "marquee.player.title": "Lo que encuentras en GoSpots",
   "marquee.player.1": "Billares y clubes de snooker",
   "marquee.player.2": "Lounges gaming y cafés esports",
   "marquee.player.3": "Restaurantes, cafés y bares",
@@ -4391,7 +4436,7 @@ const ar: Dict = {
   "hero.play.titleA": "اعثر على أماكن،",
   "hero.play.titleB": "مضيفين وخرجات.",
   "hero.play.subtitle":
-    "تصفح مراكز الألعاب والمطاعم والأماكن — احجز واقرأ التقييمات وتواصل مع المضيفين عندما ينشرون على Locora.",
+    "تصفح مراكز الألعاب والمطاعم والأماكن — احجز واقرأ التقييمات وتواصل مع المضيفين عندما ينشرون على GoSpots.",
   "hero.play.ctaPrimary": "تصفح الأماكن",
   "hero.play.ctaSecondary": "أدير مكانًا",
   "hero.play.pillar1": "ألعاب ومطاعم وحياة ليلية — دليل واحد",
@@ -4407,7 +4452,7 @@ const ar: Dict = {
   "venues.searching": "جارٍ البحث…",
   "venues.found": "تم العثور على {total} أماكن",
   "venues.foundOne": "تم العثور على {total} مكان",
-  "venues.showingAll": "كل الأماكن المنشورة على Locora",
+  "venues.showingAll": "كل الأماكن المنشورة على GoSpots",
   "venues.filters": "عوامل التصفية: {summary}",
   "venues.pricesIn": "الأسعار بـ {currency}",
   "venues.browse": "تصفح الأماكن",
@@ -4416,7 +4461,7 @@ const ar: Dict = {
   "venues.gameOne": "{count} لعبة",
   "venues.emptyTitle": "لا أماكن مطابقة بعد",
   "venues.emptyBody":
-    "جرّب مدينة أو فئة أخرى — أو أدرج مكانك على Locora.",
+    "جرّب مدينة أو فئة أخرى — أو أدرج مكانك على GoSpots.",
   "venues.getListed": "احصل على إدراج",
 
   "how.eyebrow": "كيف يعمل",
@@ -4438,7 +4483,7 @@ const ar: Dict = {
 
   "homeVenues.play.eyebrow": "دليل مباشر",
   "homeVenues.play.title": "أماكن موجودة على",
-  "homeVenues.play.titleAccent": "Locora",
+  "homeVenues.play.titleAccent": "GoSpots",
   "homeVenues.play.subtitle":
     "إعلانات حقيقية من الأماكن نفسها — كل منها بصوره وأسعاره وعملته وقواعد الحجز. استخدم البحث أعلاه أو افتح الدليل الكامل.",
   "homeVenues.manage.eyebrow": "قائمتك العامة",
@@ -4641,9 +4686,14 @@ const ar: Dict = {
     "بدون حزم لا تحتاجها. اختر النوع وفعّل الميزات وشاهد السعر الشهري — بعد {days} يومًا تجربة مجانية.",
   "pricing.step1": "اختر نوع المكان — دائمًا {price}",
   "pricing.step2": "فعّل الميزات التي تحتاجها",
+  "pricing.featuresHint": "{count} مختارة في خطتك",
+  "pricing.useSuggested": "استخدم المقترحة",
+  "pricing.trialBanner": "{days} يومًا مجانًا — غيّر الميزات في أي وقت",
+  "pricing.noneSelected": "لم تُختر ميزات بعد — اختر ما تستخدمه.",
   "pricing.suggested": "مقترح",
   "pricing.perMonth": "/شهر",
   "pricing.perMonthShort": "/شهر",
+  "pricing.perSeat": "/مقعد",
   "pricing.seats": "مقاعد",
   "pricing.seatHint":
     "{price} لكل مقعد موظف / شهر — 3 مقاعد مجانًا أثناء التجربة.",
@@ -4675,6 +4725,7 @@ const ar: Dict = {
   "addon.guest_chat.name": "رسائل الضيوف",
   "addon.guest_chat.tagline": "دردشة مباشرة مع الضيوف على صفحة المكان.",
   "addon.team_accounts.name": "حسابات الفريق",
+  "addon.team_accounts.tagline": "مقاعد الموظفين — السعر لكل مقعد / شهر.",
 
   "pack.gaming.name": "مكان ألعاب",
   "pack.gaming.tagline": "محطات وحجوزات على الخريطة وفوترة اللعب.",
@@ -4691,7 +4742,7 @@ const ar: Dict = {
   "who.title": "للمضيفين —",
   "who.titleAccent": "مراكز ألعاب ومطاعم وأماكن.",
   "who.subtitle":
-    "Locora يمنح المشغّلين لوحة للتحكم ببيانات المكان والنشر والإعلان، وموقعًا عامًا للحجوزات والتقييمات والتواصل. اختر نوعك مجانًا ثم فعّل الميزات التي تحتاجها فقط.",
+    "GoSpots يمنح المشغّلين لوحة للتحكم ببيانات المكان والنشر والإعلان، وموقعًا عامًا للحجوزات والتقييمات والتواصل. اختر نوعك مجانًا ثم فعّل الميزات التي تحتاجها فقط.",
   "who.cta": "أضف مكانك مجانًا",
   "who.noteLead":
     "تجربة 90 يومًا · بدون بطاقة. شيء آخر؟ ابدأ بـ Mixed وابنِ مجموعة ميزاتك — أو",
@@ -4738,7 +4789,7 @@ const ar: Dict = {
     "اقفل الحجز واحصل على تأكيد واحضر جاهزًا — مكانك ينتظر.",
   "guest.promise1.title": "مجاني دائمًا للضيوف",
   "guest.promise1.body":
-    "الأماكن تدفع مقابل أدواتها — أنت لا تدفع لـ Locora مقابل التصفح أو الاكتشاف أو الحجز.",
+    "الأماكن تدفع مقابل أدواتها — أنت لا تدفع لـ GoSpots مقابل التصفح أو الاكتشاف أو الحجز.",
   "guest.promise2.title": "أماكن حقيقية ومعلومات حقيقية",
   "guest.promise2.body":
     "كل قائمة يديرها المكان نفسه: صوره وساعاته وأسعاره وقواعده.",
@@ -4748,7 +4799,7 @@ const ar: Dict = {
 
   "pain.eyebrow": "سيناريوهات المنتج",
   "pain.title": "الليالي الفوضوية",
-  "pain.titleAccent": "التي بُني Locora من أجلها.",
+  "pain.titleAccent": "التي بُني GoSpots من أجلها.",
   "pain.subtitle":
     "مشكلات توضيحية يصفها المشغّلون — وليست اقتباسات من العملاء.",
   "pain.1.title": "مؤقتات منسية",
@@ -4772,7 +4823,7 @@ const ar: Dict = {
 
   "gallery.eyebrow": "أجواء · وليست قائمة أماكن",
   "gallery.title": "أنواع الليالي",
-  "gallery.titleAccent": "التي من أجلها Locora.",
+  "gallery.titleAccent": "التي من أجلها GoSpots.",
   "gallery.subtitle":
     "صور جاهزة للمزاج فقط — لا تمثّل أماكن شريكة ولا التوفر المباشر.",
   "gallery.tag.1": "بلياردو",
@@ -4786,7 +4837,7 @@ const ar: Dict = {
   "gallery.tag.9": "بولينغ",
 
   "finder.openDirectory": "افتح الدليل الكامل",
-  "finder.published": "منشور على Locora",
+  "finder.published": "منشور على GoSpots",
   "finder.preview": "معاينة الدليل",
   "finder.seeAll": "عرض الكل",
   "finder.empty": "لا أماكن منشورة بعد — كن من الأوائل.",
@@ -4840,7 +4891,7 @@ const ar: Dict = {
   "faq.titleAccent": "سؤاله أولًا.",
   "faq.owner.1.q": "هل أحتاج لتثبيت شيء في مكاني؟",
   "faq.owner.1.a":
-    "لا. يعمل Locora في المتصفح على الجهاز الذي لديك بالفعل — لابتوب أو تابلت أو جهاز الكاونتر. التحديثات تصل تلقائيًا.",
+    "لا. يعمل GoSpots في المتصفح على الجهاز الذي لديك بالفعل — لابتوب أو تابلت أو جهاز الكاونتر. التحديثات تصل تلقائيًا.",
   "faq.owner.2.q": "هل يمكنني التجربة قبل الدفع؟",
   "faq.owner.2.a":
     "نعم. الأماكن الجديدة تحصل على تجربة مجانية لمدة 90 يومًا — بدون بطاقة. اختر أي ميزات وغيّرها بحرية أثناء التجربة. لا يُخصم شيء دون موافقتك.",
@@ -4859,10 +4910,10 @@ const ar: Dict = {
   "faq.owner.7.q": "ماذا عن أخطاء الموظفين؟",
   "faq.owner.7.a":
     "كل إجراء مهم — خصم أو إلغاء أو استرداد أو تغيير سعر — يدخل سجل تدقيق غير قابل للتغيير مرتبطًا بالمستخدم.",
-  "faq.player.1.q": "هل Locora مجاني للضيوف؟",
+  "faq.player.1.q": "هل GoSpots مجاني للضيوف؟",
   "faq.player.1.a":
     "تمامًا. تصفح الأماكن والتفاصيل والحجز لا يكلفك شيئًا — الأماكن تدفع مقابل أدواتها، لا أنت.",
-  "faq.player.2.q": "ما أنواع الأماكن على Locora؟",
+  "faq.player.2.q": "ما أنواع الأماكن على GoSpots؟",
   "faq.player.2.a":
     "أكثر بكثير من الألعاب. قاعات بلياردو وصالات ألعاب ومقاهي إسبورتس — بالإضافة إلى مطاعم ومقاهٍ وبارات وحانات وكاريوكي وبولينغ ونوادي وترفيه عائلي.",
   "faq.player.3.q": "كيف أجد مكانًا قريبًا مني؟",
@@ -4876,7 +4927,7 @@ const ar: Dict = {
     "لا حاجة لحساب للتصفح واكتشاف الأماكن. تسجّل الدخول فقط إذا تطلّب مسار الحجز ذلك.",
   "faq.player.6.q": "لماذا لا أرى أماكن كثيرة بعد؟",
   "faq.player.6.a":
-    "Locora في نسخة تجريبية خاصة ويبدأ بضم المشغّلين. ينمو الدليل العام مع كل مكان يفعّل النشر.",
+    "GoSpots في نسخة تجريبية خاصة ويبدأ بضم المشغّلين. ينمو الدليل العام مع كل مكان يفعّل النشر.",
 
   "cta.manage.titleA": "لا تخسر المال بسبب",
   "cta.manage.titleB": "مؤقتات منسية.",
@@ -4915,7 +4966,7 @@ const ar: Dict = {
   "footer.privacy": "الخصوصية",
   "footer.terms": "الشروط",
 
-  "marquee.owner.title": "ما صُمم Locora لإدارته",
+  "marquee.owner.title": "ما صُمم GoSpots لإدارته",
   "marquee.owner.1": "حالة الصالة مباشرة",
   "marquee.owner.2": "مؤقتات الجلسة مربوطة بالطاولة",
   "marquee.owner.3": "زوار وحجوزات في عرض واحد",
@@ -4924,7 +4975,7 @@ const ar: Dict = {
   "marquee.owner.6": "سجل تدقيق غير قابل للتغيير",
   "marquee.owner.7": "إيراد لكل طاولة ولكل وردية",
   "marquee.owner.8": "للبلياردو · سنوكر · صالات · مقاهي ألعاب",
-  "marquee.player.title": "ما تجده على Locora",
+  "marquee.player.title": "ما تجده على GoSpots",
   "marquee.player.1": "قاعات بلياردو ونوادي سنوكر",
   "marquee.player.2": "صالات ألعاب ومقاهي إسبورتس",
   "marquee.player.3": "مطاعم ومقاهٍ وبارات",

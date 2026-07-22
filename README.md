@@ -1,8 +1,8 @@
-# Locora
+# GoSpots
 
 Multi-tenant SaaS for gaming centers, restaurants, and venues — host dashboard, public site, reservations, reviews, and contact.
 
-Product name: **Locora**. Tagline: **Host every location.** npm package filters remain `@gospots/*` for now.
+Product name: **GoSpots**. Tagline: **Host every location.** npm package filters remain `@gospots/*` for now.
 
 ## Stack
 

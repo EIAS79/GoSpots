@@ -219,7 +219,7 @@ export const VENUE_ADD_ONS: Record<AddOnId, VenueAddOn> = {
     name: 'Venue page & discovery',
     tagline: 'Public venue page plus directory placement.',
     details:
-      'Publish your venue on Locora with a dedicated public page, and unlock advertising / promoted placement in the venues directory so more guests can find you.',
+      'Publish your venue on GoSpots with a dedicated public page, and unlock advertising / promoted placement in the venues directory so more guests can find you.',
     monthlyPrice: 10,
     currency: 'EUR',
     modules: ['marketing'],
@@ -446,20 +446,16 @@ export function featuresMonthlyTotal(
 }
 
 export function showsGamingUi(
-  packId: string | null | undefined,
+  _packId: string | null | undefined,
   addOnsRaw: string | null | undefined,
 ): boolean {
-  const pack = VENUE_PACKS[resolvePackId(packId)];
-  if (pack.showsGaming) return true;
   return parseAddOns(addOnsRaw).some((id) => VENUE_ADD_ONS[id].unlocksGaming);
 }
 
 export function showsDiningUi(
-  packId: string | null | undefined,
+  _packId: string | null | undefined,
   addOnsRaw?: string | null,
 ): boolean {
-  const pack = VENUE_PACKS[resolvePackId(packId)];
-  if (pack.showsDining) return true;
   return parseAddOns(addOnsRaw).some((id) => VENUE_ADD_ONS[id].unlocksDining);
 }
 

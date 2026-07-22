@@ -344,7 +344,7 @@ export default function MenuPage() {
                 {t("menu.live")}
               </span>
             ) : null}
-            {!hasSections ? (
+            {hasSections ? (
               <button
                 type="button"
                 onClick={() => setSectionDialog("new")}

@@ -1,4 +1,16 @@
-import { Injectable, NotFoundException } from '@nestjs/common';
+import {
+  Injectable,
+  NotFoundException,
+} from '@nestjs/common';
+import { PrismaService } from '../../prisma/prisma.service';
+import {
+  parseAddOns,
+  recommendedFeaturesForPack,
+  resolveAddOnsCsv,
+  serializeAddOns,
+  syncSubscriptionAddOnRows,
+  type AddOnId,
+} from '../../common/venue-packs';
 import type { JwtAccessPayload } from '../auth/auth.service';
 import { ResourcesService } from '../resources/resources.service';
 import { ShopService } from '../shop/shop.service';
@@ -13,9 +25,37 @@ export type ApplyOnboardingTemplateResult = {
 @Injectable()
 export class OnboardingService {
   constructor(
+    private readonly prisma: PrismaService,
     private readonly resources: ResourcesService,
     private readonly shop: ShopService,
   ) {}
+
+  /**
+   * Trials that registered with empty add-ons can't create resources.
+   * Merge the pack's recommended features so starter templates can seed.
+   */
+  private async ensureRecommendedFeaturesForShop(shopId: string): Promise<void> {
+    const shop = await this.prisma.shop.findUnique({
+      where: { id: shopId },
+      include: {
+        subscription: { include: { addOnRows: true } },
+      },
+    });
+    const sub = shop?.subscription;
+    if (!sub || sub.status !== 'TRIAL') return;
+
+    const current = parseAddOns(
+      resolveAddOnsCsv({
+        addOnRows: sub.addOnRows,
+      }),
+    );
+    const recommended = recommendedFeaturesForPack(sub.packId);
+    const merged = Array.from(new Set<AddOnId>([...current, ...recommended]));
+    if (merged.length === current.length) return;
+
+    const csv = serializeAddOns(merged);
+    await syncSubscriptionAddOnRows(this.prisma, sub.id, csv);
+  }
 
   /**
    * Seed resource categories + directory tags via existing category APIs.
@@ -29,6 +69,11 @@ export class OnboardingService {
     if (!template) {
       throw new NotFoundException(`Unknown onboarding template: ${dto.templateId}`);
     }
+
+    if (!actor.shopId) {
+      throw new NotFoundException('No venue bound to this session.');
+    }
+    await this.ensureRecommendedFeaturesForShop(actor.shopId);
 
     if (dto.replace && dto.previousCategoryIds?.length) {
       for (const id of dto.previousCategoryIds) {

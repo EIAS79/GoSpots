@@ -34,9 +34,9 @@ export function buildNewDeviceSignInMail(input: {
   const ua =
     normalizeSessionUserAgent(input.userAgent) || '(unknown device)';
   const when = input.signedInAt.toISOString();
-  const subject = 'New sign-in to your Locora account';
+  const subject = 'New sign-in to your GoSpots account';
   const text = [
-    'We noticed a new sign-in to your Locora account.',
+    'We noticed a new sign-in to your GoSpots account.',
     '',
     `Time (UTC): ${when}`,
     `Browser / device: ${ua}`,
@@ -45,7 +45,7 @@ export function buildNewDeviceSignInMail(input: {
     'If you did not sign in, revoke other sessions in Settings → Sessions and change your password.',
   ].join('\n');
   const html = [
-    '<p>We noticed a <strong>new sign-in</strong> to your Locora account.</p>',
+    '<p>We noticed a <strong>new sign-in</strong> to your GoSpots account.</p>',
     `<p><strong>Time (UTC):</strong> ${escapeHtml(when)}<br/>`,
     `<strong>Browser / device:</strong> ${escapeHtml(ua)}</p>`,
     '<p>If this was you, you can ignore this email.</p>',

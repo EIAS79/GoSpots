@@ -163,7 +163,7 @@ export async function downloadNotificationsCsv(q: NotificationQuery = {}) {
   const url = URL.createObjectURL(blob);
   const a = document.createElement("a");
   a.href = url;
-  a.download = `Locora-notifications-${new Date().toISOString().slice(0, 10)}.csv`;
+  a.download = `GoSpots-notifications-${new Date().toISOString().slice(0, 10)}.csv`;
   a.click();
   URL.revokeObjectURL(url);
 }

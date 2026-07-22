@@ -362,7 +362,7 @@ export class AuthMfaService {
 
         accountName: user.email,
 
-        issuer: 'Locora',
+        issuer: 'GoSpots',
 
       }),
 

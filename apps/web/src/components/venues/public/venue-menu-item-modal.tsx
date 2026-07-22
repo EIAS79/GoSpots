@@ -69,7 +69,7 @@ export function VenueMenuItemModal({
           <button
             type="button"
             aria-label="Close"
-            className="absolute inset-0 bg-black/75 backdrop-blur-md"
+            className="absolute inset-0 bg-black/50 backdrop-blur-md dark:bg-black/70"
             onClick={onClose}
           />
           <motion.article
@@ -80,7 +80,7 @@ export function VenueMenuItemModal({
             animate={{ opacity: 1, y: 0, scale: 1 }}
             exit={{ opacity: 0, y: 20, scale: 0.98 }}
             transition={{ duration: 0.28, ease: [0.22, 1, 0.36, 1] }}
-            className="relative z-10 flex max-h-[90dvh] w-full max-w-2xl flex-col overflow-hidden rounded-t-3xl border border-stone-200/90 bg-[#faf8f5] text-stone-900 shadow-2xl sm:max-h-[min(94vh,820px)] sm:rounded-3xl"
+            className="relative z-10 flex max-h-[90dvh] w-full max-w-2xl flex-col overflow-hidden rounded-t-3xl border border-[var(--color-border)] bg-[var(--color-surface)] text-[var(--color-foreground)] shadow-2xl dark:border-white/10 dark:bg-zinc-950 sm:max-h-[min(94vh,820px)] sm:rounded-3xl"
           >
             <div className="relative aspect-[16/10] max-h-[40vh] w-full shrink-0 overflow-hidden bg-zinc-900 sm:aspect-[16/9] sm:max-h-none">
               {images.length > 0 ? (
@@ -135,12 +135,12 @@ export function VenueMenuItemModal({
                 <div className="min-w-0">
                   <h2
                     id="menu-item-title"
-                    className="font-serif text-2xl font-semibold tracking-tight text-stone-900 sm:text-3xl"
+                    className="font-serif text-2xl font-semibold tracking-tight text-[var(--color-foreground)] sm:text-3xl"
                   >
                     {item.name}
                   </h2>
                   {section ? (
-                    <p className="mt-1 text-sm text-stone-500">{section.name}</p>
+                    <p className="mt-1 text-sm text-zinc-600 dark:text-zinc-400">{section.name}</p>
                   ) : null}
                 </div>
                 <p className="shrink-0 text-2xl font-bold tabular-nums text-amber-600 sm:text-3xl">
@@ -150,12 +150,11 @@ export function VenueMenuItemModal({
 
               <AvailabilityBlock
                 availability={availability}
-                variant="light"
                 className="mt-5"
               />
 
               {item.description ? (
-                <p className="mt-5 text-base leading-relaxed text-stone-600">
+                <p className="mt-5 text-base leading-relaxed text-zinc-600 dark:text-zinc-400">
                   {item.description}
                 </p>
               ) : null}
@@ -165,7 +164,7 @@ export function VenueMenuItemModal({
                   {item.tags.map((tag) => (
                     <span
                       key={tag.id}
-                      className="rounded-full border border-stone-200 bg-white px-3 py-1 text-xs font-medium text-stone-700 shadow-sm"
+                      className="rounded-full border border-[var(--color-border)] bg-[var(--color-background)] px-3 py-1 text-xs font-medium text-[var(--color-foreground)] shadow-sm dark:border-white/10"
                       style={{
                         borderColor: tag.color ? `${tag.color}55` : undefined,
                         color: tag.color ?? undefined,
@@ -178,14 +177,14 @@ export function VenueMenuItemModal({
               ) : null}
 
               {reviewsMode !== "DISABLED" ? (
-                <div className="mt-6 rounded-2xl border border-dashed border-stone-300 bg-stone-100/80 px-4 py-5">
+                <div className="mt-6 rounded-2xl border border-dashed border-[var(--color-border)] bg-[var(--color-background)]/80 px-4 py-5 dark:border-white/10">
                   <div className="flex items-center gap-2">
                     <Star size={18} className="text-amber-500/70" />
-                    <p className="text-sm font-medium text-stone-800">
+                    <p className="text-sm font-medium text-[var(--color-foreground)]">
                       Venue reviews
                     </p>
                   </div>
-                  <p className="mt-1 text-sm text-stone-500">
+                  <p className="mt-1 text-sm text-zinc-600 dark:text-zinc-400">
                     Guest ratings for the venue are on the Reviews tab — not
                     per menu item.
                   </p>
@@ -224,7 +223,7 @@ export function MenuAvailabilityPill({
           "border-rose-400/35 bg-rose-950/80 text-rose-300",
         !light &&
           availability.tone === "closed" &&
-          "border-white/10 bg-zinc-950/80 text-zinc-400",
+          "border-[var(--color-border)] bg-[var(--color-background)]/80 text-zinc-600 dark:border-white/10 dark:text-zinc-400",
         light &&
           availability.tone === "available" &&
           "border-emerald-300 bg-emerald-50 text-emerald-800",
@@ -279,7 +278,7 @@ function AvailabilityBlock({
           "border-rose-400/20 bg-rose-500/[0.07]",
         !light &&
           availability.tone === "closed" &&
-          "border-white/10 bg-zinc-900/50",
+          "border-[var(--color-border)] bg-[var(--color-background)]/50 dark:border-white/10",
         light &&
           availability.tone === "available" &&
           "border-emerald-200 bg-emerald-50",
@@ -314,7 +313,7 @@ function AvailabilityBlock({
           <p
             className={cn(
               "text-sm font-semibold",
-              light ? "text-stone-900" : "text-zinc-100",
+              light ? "text-[var(--color-foreground)]" : "text-[var(--color-foreground)]",
             )}
           >
             {availability.headline}
@@ -322,7 +321,7 @@ function AvailabilityBlock({
           <p
             className={cn(
               "mt-1 text-sm",
-              light ? "text-stone-600" : "text-zinc-400",
+              light ? "text-zinc-600 dark:text-zinc-400" : "text-zinc-600 dark:text-zinc-400",
             )}
           >
             {availability.schedule}

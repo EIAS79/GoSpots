@@ -17,6 +17,7 @@ import {
   layoutLabel,
 } from "@/lib/gaming-floor-groups";
 import type { FloorMapVisualType } from "@/lib/gaming-floor-visual";
+import { normalizeSeatingZone } from "@/lib/seating-zone";
 import type {
   ScheduleBooking,
   ScheduleCategorySection,
@@ -24,13 +25,14 @@ import type {
 } from "@/lib/reservations-client";
 
 const DEFAULT_STATIONS_PER_PAGE = 12;
+const DINING_TABLES_PER_PAGE = 6;
 
 export function GamingFloorLayoutExplorer({
   units,
   sections = [],
   categoryLabel,
   visualType,
-  stationsPerPage = DEFAULT_STATIONS_PER_PAGE,
+  stationsPerPage: stationsPerPageProp,
   canWrite = false,
   nowMs,
   highlightedUnitId,
@@ -41,6 +43,7 @@ export function GamingFloorLayoutExplorer({
   onInspectBlocked,
   displayOnly = false,
   floorTabsSlot,
+  hideFloorTabs = false,
   onToggleNotWorking,
   mapVariant = "full",
   chromeLabels,
@@ -62,6 +65,8 @@ export function GamingFloorLayoutExplorer({
   displayOnly?: boolean;
   /** Render floor tabs elsewhere (e.g. inside map controls header). */
   floorTabsSlot?: (tabs: ReactNode) => ReactNode;
+  /** When true, skip floor UI here (parent already filters by floor / shows tabs). */
+  hideFloorTabs?: boolean;
   onToggleNotWorking?: (unitId: string, notWorking: boolean) => void;
   /** Compact seats for narrow public screens. */
   mapVariant?: "full" | "compact";
@@ -78,19 +83,33 @@ export function GamingFloorLayoutExplorer({
     stationsRange?: (from: number, to: number, total: number) => string;
     mainArea?: string;
     staffStationHint?: string;
+    zoneIndoor?: string;
+    zoneOutdoor?: string;
   };
   guestStatusLabels?: Record<
     "AVAILABLE" | "UNAVAILABLE" | "NOT_WORKING",
     string
   >;
 }) {
+  const stationsPerPage =
+    stationsPerPageProp ??
+    (visualType === "dining" ? DINING_TABLES_PER_PAGE : DEFAULT_STATIONS_PER_PAGE);
+  const mainArea = chromeLabels?.mainArea ?? "Main area";
+  const zoneLabelFn = (zone: string) => {
+    const normalized = normalizeSeatingZone(zone);
+    if (normalized === "OUTDOOR") {
+      return chromeLabels?.zoneOutdoor ?? "Outdoors";
+    }
+    return chromeLabels?.zoneIndoor ?? "Indoors";
+  };
+
   const [activeFloor, setActiveFloor] = useState(1);
   const [activeLayoutKey, setActiveLayoutKey] = useState("");
   const [page, setPage] = useState(0);
 
   const sectionGroups = useMemo(
-    () => buildFloorSectionGroups(units, sections),
-    [units, sections],
+    () => buildFloorSectionGroups(units, sections, mainArea),
+    [units, sections, mainArea],
   );
 
   const floorMap = useMemo(
@@ -160,7 +179,7 @@ export function GamingFloorLayoutExplorer({
     }
   }, [layoutsOnFloor, activeLayoutKey]);
 
-  const floorTabs = multiFloor ? (
+  const floorTabs = multiFloor && !hideFloorTabs ? (
     <div className="flex flex-wrap gap-1">
       {floors.map((floor) => {
         const groups = floorMap.get(floor) ?? [];
@@ -217,12 +236,12 @@ export function GamingFloorLayoutExplorer({
         </div>
       ) : null}
 
-      {multiLayout ? (
-        <div className="border-b border-white/10 bg-zinc-900/20 px-3 py-2">
-          <p className="mb-1.5 flex items-center gap-1 text-[9px] font-semibold uppercase tracking-widest text-zinc-600">
-            <LayoutGrid size={10} className="text-amber-400/70" />
-            {chromeLabels?.layoutZone ?? "Layout / zone"}
-          </p>
+      <div className="border-b border-white/10 bg-zinc-900/20 px-3 py-2">
+        <p className="mb-1.5 flex items-center gap-1 text-[9px] font-semibold uppercase tracking-widest text-zinc-600">
+          <LayoutGrid size={10} className="text-amber-400/70" />
+          {chromeLabels?.layoutZone ?? "Layout / zone"}
+        </p>
+        {multiLayout ? (
           <div className="flex flex-wrap gap-1">
             {layoutsOnFloor.map((group, index) => {
               const key = layoutKey(group, index);
@@ -245,7 +264,10 @@ export function GamingFloorLayoutExplorer({
                   {group.section?.isVip ? (
                     <Crown size={9} className="text-amber-400" />
                   ) : null}
-                  {layoutLabel(group)}
+                  {layoutLabel(group, {
+                    mainAreaLabel: mainArea,
+                    zoneLabel: zoneLabelFn,
+                  })}
                   <span className="opacity-70">
                     · {free}/{group.units.length}
                   </span>
@@ -253,8 +275,30 @@ export function GamingFloorLayoutExplorer({
               );
             })}
           </div>
-        </div>
-      ) : null}
+        ) : activeLayout ? (
+          <div className="inline-flex flex-wrap items-center gap-2 rounded-md border border-amber-400/25 bg-amber-500/10 px-2.5 py-1.5 text-[11px] font-medium text-amber-100">
+            {activeLayout.section?.isVip ? (
+              <Crown size={9} className="text-amber-400" />
+            ) : null}
+            <span>
+              {layoutLabel(activeLayout, {
+                mainAreaLabel: mainArea,
+                zoneLabel: zoneLabelFn,
+              })}
+            </span>
+            <span className="text-zinc-500">
+              ·{" "}
+              {chromeLabels?.floorN
+                ? chromeLabels.floorN(activeLayout.section?.floor ?? activeFloor)
+                : `Floor ${activeLayout.section?.floor ?? activeFloor}`}
+            </span>
+            <span className="opacity-70">
+              · {unitsInLayout.filter((u) => u.floorStatus === "AVAILABLE").length}/
+              {unitsInLayout.length}
+            </span>
+          </div>
+        ) : null}
+      </div>
 
       <div className="min-w-0 p-2 md:p-3">
         {pageUnits.length > 0 ? (
@@ -270,6 +314,7 @@ export function GamingFloorLayoutExplorer({
                       isVip: activeSection.isVip,
                       seatsPerRow: activeSection.seatsPerRow,
                       sortOrder: activeSection.sortOrder,
+                      zone: activeSection.zone ?? null,
                     },
                   ]
                 : []
@@ -289,6 +334,8 @@ export function GamingFloorLayoutExplorer({
             onEditBooking={onEditBooking}
             onToggleNotWorking={onToggleNotWorking}
             showScreenHeader={false}
+            showSectionLabels
+            disablePagination
             guestStatusLabels={guestStatusLabels}
             mainAreaLabel={chromeLabels?.mainArea}
             staffStationHint={chromeLabels?.staffStationHint}

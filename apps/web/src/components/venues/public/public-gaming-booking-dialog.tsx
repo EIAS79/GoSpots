@@ -449,26 +449,30 @@ export function PublicGamingBookingDialog({
     ? safeStatusPathHref(success.statusPath)
     : null;
 
+  const fieldClass =
+    "mt-1 w-full rounded-lg border border-[var(--color-border)] bg-[var(--color-background)] px-3 py-2.5 text-base text-[var(--color-foreground)] sm:text-sm dark:border-white/10";
+  const labelClass = "block text-xs text-zinc-600 dark:text-zinc-400";
+
   return (
     <ModalPortal>
       <div
-        className="fixed inset-0 z-50 flex items-end justify-center bg-black/70 p-0 sm:items-center sm:p-4"
+        className="fixed inset-0 z-50 flex items-end justify-center bg-black/50 p-0 dark:bg-black/70 sm:items-center sm:p-4"
         onClick={onClose}
         role="presentation"
       >
         <div
-          className="max-h-[min(92vh,100dvh)] w-full max-w-lg overflow-y-auto rounded-t-2xl border border-white/10 bg-zinc-950 pb-[env(safe-area-inset-bottom)] shadow-2xl sm:rounded-2xl"
+          className="max-h-[min(92vh,100dvh)] w-full max-w-lg overflow-y-auto rounded-t-2xl border border-[var(--color-border)] bg-[var(--color-surface)] pb-[env(safe-area-inset-bottom)] text-[var(--color-foreground)] shadow-2xl dark:border-white/10 dark:bg-zinc-950 sm:rounded-2xl"
           onClick={(e) => e.stopPropagation()}
           role="dialog"
           aria-modal="true"
           aria-labelledby="gaming-book-title"
         >
-          <div className="sticky top-0 z-10 flex items-center justify-between border-b border-white/10 bg-zinc-950/95 px-5 py-4 backdrop-blur">
+          <div className="sticky top-0 z-10 flex items-center justify-between border-b border-[var(--color-border)] bg-[var(--color-surface)]/95 px-5 py-4 backdrop-blur dark:border-white/10 dark:bg-zinc-950/95">
             <div>
-              <p className="text-[10px] font-semibold uppercase tracking-widest text-amber-500/90">
+              <p className="text-[10px] font-semibold uppercase tracking-widest text-amber-600 dark:text-amber-500/90">
                 {category.name}
               </p>
-              <h2 id="gaming-book-title" className="text-lg font-semibold text-white">
+              <h2 id="gaming-book-title" className="text-lg font-semibold text-[var(--color-foreground)]">
                 {t(
                   isDining
                     ? "venuePage.booking.reserveTitle"
@@ -480,7 +484,7 @@ export function PublicGamingBookingDialog({
             <button
               type="button"
               onClick={onClose}
-              className="rounded-lg p-2 text-zinc-400 hover:bg-white/5 hover:text-white"
+              className="rounded-lg p-2 text-zinc-600 hover:bg-black/5 hover:text-[var(--color-foreground)] dark:text-zinc-400 dark:hover:bg-white/5 dark:hover:text-white"
               aria-label={t("venuePage.booking.close")}
             >
               <X size={18} />
@@ -490,7 +494,7 @@ export function PublicGamingBookingDialog({
           {success ? (
             <div className="p-6 text-center">
               <CheckCircle2 className="mx-auto text-emerald-400" size={36} />
-              <p className="mt-3 text-sm font-medium text-emerald-100">
+              <p className="mt-3 text-sm font-medium text-emerald-800 dark:text-emerald-100">
                 {success.message}
               </p>
               {success.emailSent === false ? (
@@ -511,7 +515,7 @@ export function PublicGamingBookingDialog({
               <button
                 type="button"
                 onClick={onClose}
-                className="mt-4 block w-full text-xs text-zinc-500 underline"
+                className="mt-4 block w-full text-xs text-zinc-600 underline dark:text-zinc-500"
               >
                 {t("venuePage.booking.close")}
               </button>
@@ -528,10 +532,10 @@ export function PublicGamingBookingDialog({
                 </p>
               ) : null}
 
-              <div className="rounded-xl border border-emerald-500/20 bg-emerald-500/[0.06] px-4 py-3 text-sm text-zinc-300">
+              <div className="rounded-xl border border-emerald-500/20 bg-emerald-500/[0.06] px-4 py-3 text-sm text-zinc-700 dark:text-zinc-300">
                 <div className="flex flex-col gap-0.5 leading-snug">
-                  <span className="font-medium text-emerald-200">{unit.name}</span>
-                  <span className="text-xs text-zinc-400">
+                  <span className="font-medium text-emerald-800 dark:text-emerald-200">{unit.name}</span>
+                  <span className="text-xs text-zinc-600 dark:text-zinc-400">
                     {new Date(`${date}T12:00:00`).toLocaleDateString(locale, {
                       weekday: "short",
                       month: "short",
@@ -551,7 +555,7 @@ export function PublicGamingBookingDialog({
               </div>
 
               {error ? (
-                <p className="rounded-lg border border-rose-500/30 bg-rose-500/10 px-3 py-2 text-xs text-rose-200">
+                <p className="rounded-lg border border-rose-500/30 bg-rose-500/10 px-3 py-2 text-xs text-rose-700 dark:text-rose-200">
                   {error}
                 </p>
               ) : null}
@@ -562,13 +566,13 @@ export function PublicGamingBookingDialog({
                   value={selectedBowlingModeId}
                   onChange={onBowlingModeChange}
                   label={t("venuePage.booking.howToBook")}
-                  labelClassName="block text-xs text-zinc-400"
-                  className="mt-1 w-full rounded-lg border border-white/10 bg-zinc-900 px-3 py-2.5 text-base text-white sm:text-sm"
+                  labelClassName={labelClass}
+                  className={fieldClass}
                 />
               ) : null}
 
               {isBowling && chargeMode === "GAME" ? (
-                <label className="block text-xs text-zinc-400">
+                <label className={labelClass}>
                   {t("venuePage.booking.numberOfGames")}
                   <input
                     type="number"
@@ -576,51 +580,51 @@ export function PublicGamingBookingDialog({
                     required
                     value={gameCount}
                     onChange={(e) => setGameCount(e.target.value)}
-                    className="mt-1 w-full rounded-lg border border-white/10 bg-zinc-900 px-3 py-2.5 text-base text-white sm:text-sm"
+                    className={fieldClass}
                   />
                 </label>
               ) : null}
 
-              <label className="block text-xs text-zinc-400">
+              <label className={labelClass}>
                 {t("venuePage.booking.yourName")}
                 <input
                   required
                   autoFocus
                   value={guestName}
                   onChange={(e) => setGuestName(e.target.value)}
-                  className="mt-1 w-full rounded-lg border border-white/10 bg-zinc-900 px-3 py-2.5 text-base text-white sm:text-sm"
+                  className={fieldClass}
                 />
               </label>
 
               <div className="grid gap-3 sm:grid-cols-2">
-                <label className="block text-xs text-zinc-400">
+                <label className={labelClass}>
                   {t("venuePage.booking.email")}
                   <input
                     type="email"
                     required
                     value={guestEmail}
                     onChange={(e) => setGuestEmail(e.target.value)}
-                    className="mt-1 w-full rounded-lg border border-white/10 bg-zinc-900 px-3 py-2.5 text-base text-white sm:text-sm"
+                    className={fieldClass}
                   />
                 </label>
-                <label className="block text-xs text-zinc-400">
+                <label className={labelClass}>
                   {t("venuePage.booking.phoneOptional")}
                   <input
                     type="tel"
                     value={guestPhone}
                     onChange={(e) => setGuestPhone(e.target.value)}
-                    className="mt-1 w-full rounded-lg border border-white/10 bg-zinc-900 px-3 py-2.5 text-base text-white sm:text-sm"
+                    className={fieldClass}
                   />
                 </label>
               </div>
 
               {showPartySize ? (
-                <label className="block text-xs text-zinc-400">
+                <label className={labelClass}>
                   {isDining ? (
                     <>
                       {t("venuePage.booking.partySize")}
                       {unit.capacity != null ? (
-                        <span className="text-zinc-600">
+                        <span className="text-zinc-500 dark:text-zinc-600">
                           {" "}
                           {t("venuePage.booking.tableCapacity", {
                             capacity: unit.capacity,
@@ -649,14 +653,14 @@ export function PublicGamingBookingDialog({
                     required
                     value={partySize}
                     onChange={(e) => setPartySize(e.target.value)}
-                    className="mt-1 w-full rounded-lg border border-white/10 bg-zinc-900 px-3 py-2.5 text-base text-white sm:text-sm"
+                    className={fieldClass}
                   />
                   {isDining ? (
-                    <span className="mt-1 block text-[10px] text-zinc-600">
+                    <span className="mt-1 block text-[10px] text-zinc-600 dark:text-zinc-500">
                       {t("venuePage.booking.diningPartyHint")}
                     </span>
                   ) : (
-                    <span className="mt-1 block text-[10px] text-zinc-600">
+                    <span className="mt-1 block text-[10px] text-zinc-600 dark:text-zinc-500">
                       {t("venuePage.booking.perPersonPricing", {
                         minutes:
                           selectedBowlingMode?.slotMinutes ??
@@ -666,12 +670,12 @@ export function PublicGamingBookingDialog({
                   )}
                 </label>
               ) : isBowling && chargeMode === "TIME" ? (
-                <p className="rounded-lg border border-white/10 bg-zinc-900/50 px-3 py-2 text-[11px] text-zinc-500">
+                <p className="rounded-lg border border-[var(--color-border)] bg-[var(--color-background)]/50 px-3 py-2 text-[11px] text-zinc-600 dark:border-white/10 dark:text-zinc-500">
                   {t("venuePage.booking.laneRental")}
                 </p>
               ) : null}
 
-              <label className="block text-xs text-zinc-400">
+              <label className={labelClass}>
                 {t(
                   isDining
                     ? "venuePage.booking.arrivalTime"
@@ -681,24 +685,24 @@ export function PublicGamingBookingDialog({
                   type="time"
                   value={startTime}
                   onChange={(e) => setStartTime(e.target.value)}
-                  className="mt-1 w-full rounded-lg border border-white/10 bg-zinc-900 px-3 py-2.5 text-base text-white sm:text-sm"
+                  className={fieldClass}
                 />
               </label>
-              <p className="text-[10px] text-zinc-600">
+              <p className="text-[10px] text-zinc-600 dark:text-zinc-500">
                 {t("venuePage.booking.holdHint", {
                   unitKind,
                   minutes: noShowMinutes,
                 })}
               </p>
 
-              <label className="block text-xs text-zinc-400">
+              <label className={labelClass}>
                 {t("venuePage.booking.notesOptional")}
                 <textarea
                   value={notes}
                   onChange={(e) => setNotes(e.target.value)}
                   rows={2}
                   placeholder={t("venuePage.booking.notesPlaceholder")}
-                  className="mt-1 w-full rounded-lg border border-white/10 bg-zinc-900 px-3 py-2.5 text-base text-white sm:text-sm"
+                  className={fieldClass}
                 />
               </label>
 
@@ -723,7 +727,7 @@ export function PublicGamingBookingDialog({
                 {t("venuePage.booking.confirmBooking")}
               </button>
 
-              <p className="text-center text-[11px] text-zinc-600">
+              <p className="text-center text-[11px] text-zinc-600 dark:text-zinc-500">
                 {t("venuePage.booking.confirmEmailHint", { unitKind })}
               </p>
             </form>

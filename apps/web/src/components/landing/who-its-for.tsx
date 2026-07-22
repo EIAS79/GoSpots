@@ -4,8 +4,10 @@ import { motion } from "framer-motion";
 import {
   ArrowRight,
   Gamepad2,
+  Hotel,
   Layers,
   UtensilsCrossed,
+  Wine,
   type LucideIcon,
 } from "lucide-react";
 import Link from "next/link";
@@ -21,28 +23,37 @@ const EASE = [0.22, 1, 0.36, 1] as const;
 
 const PACK_ICONS: Record<SelfServePackId, LucideIcon> = {
   gaming: Gamepad2,
+  dining: UtensilsCrossed,
+  bar: Wine,
+  hotel_fb: Hotel,
   mixed: Layers,
 };
 
 const PACK_GLOW: Record<SelfServePackId, string> = {
   gaming: "from-cyan-500/25 to-cyan-500/0",
+  dining: "from-amber-500/25 to-amber-500/0",
+  bar: "from-rose-500/25 to-rose-500/0",
+  hotel_fb: "from-sky-500/25 to-sky-500/0",
   mixed: "from-violet-500/25 to-violet-500/0",
 };
 
 const PACK_ICON_TONE: Record<SelfServePackId, string> = {
   gaming: "text-cyan-700 dark:text-cyan-300",
+  dining: "text-amber-700 dark:text-amber-300",
+  bar: "text-rose-700 dark:text-rose-300",
+  hotel_fb: "text-sky-700 dark:text-sky-300",
   mixed: "text-violet-700 dark:text-violet-300",
 };
 
 const PACK_EXAMPLE_COUNTS: Record<SelfServePackId, number> = {
   gaming: 5,
+  dining: 4,
+  bar: 4,
+  hotel_fb: 3,
   mixed: 3,
 };
 
-/**
- * Owner view — gaming-first ICP (#33). Self-serve: gaming + mixed.
- * Restaurant / hotel → contact sales (not co-equal product tiles).
- */
+/** Owner view — all venue types self-serve. */
 export function WhoItsFor() {
   const { t, formatMoney } = usePublicPrefs();
   return (
@@ -61,12 +72,11 @@ export function WhoItsFor() {
           </p>
         </Reveal>
 
-        <div className="mt-12 grid auto-rows-fr grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-5">
+        <div className="mt-12 grid auto-rows-fr grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5">
           {SELF_SERVE_PACK_LIST.map((pack, i) => {
             const id = pack.id as SelfServePackId;
             const Icon = PACK_ICONS[id];
             const exampleCount = PACK_EXAMPLE_COUNTS[id];
-            const hero = id === "gaming";
 
             return (
               <motion.article
@@ -75,10 +85,7 @@ export function WhoItsFor() {
                 whileInView={{ opacity: 1, y: 0 }}
                 viewport={{ once: true, margin: "-40px" }}
                 transition={{ duration: 0.45, delay: i * 0.06, ease: EASE }}
-                className={cn(
-                  "group relative flex h-full flex-col overflow-hidden rounded-2xl border border-[var(--color-border)] bg-[var(--color-surface)]/60 p-5 backdrop-blur transition-all duration-300 hover:-translate-y-0.5 hover:border-emerald-400/30 dark:border-white/10 dark:bg-white/[0.03] sm:p-6",
-                  hero ? "sm:col-span-2 lg:col-span-2" : "lg:col-span-2",
-                )}
+                className="group relative flex h-full flex-col overflow-hidden rounded-2xl border border-[var(--color-border)] bg-[var(--color-surface)]/60 p-5 backdrop-blur transition-all duration-300 hover:-translate-y-0.5 hover:border-emerald-400/30 dark:border-white/10 dark:bg-white/[0.03] sm:p-6"
               >
                 <div
                   aria-hidden
@@ -128,33 +135,6 @@ export function WhoItsFor() {
               </motion.article>
             );
           })}
-
-          <motion.article
-            initial={{ opacity: 0, y: 18 }}
-            whileInView={{ opacity: 1, y: 0 }}
-            viewport={{ once: true, margin: "-40px" }}
-            transition={{ duration: 0.45, delay: 0.12, ease: EASE }}
-            className="group relative flex h-full flex-col overflow-hidden rounded-2xl border border-dashed border-[var(--color-border)] bg-[var(--color-surface)]/40 p-5 backdrop-blur dark:border-white/15 dark:bg-white/[0.02] sm:col-span-2 sm:p-6 lg:col-span-1"
-          >
-            <div className="relative flex flex-1 flex-col">
-              <span className="grid h-11 w-11 shrink-0 place-items-center rounded-xl border border-[var(--color-border)] bg-[var(--color-surface-2)]/80 text-rose-700 dark:border-white/10 dark:bg-zinc-900/80 dark:text-rose-300">
-                <UtensilsCrossed size={20} />
-              </span>
-              <h3 className="mt-4 text-lg font-semibold text-[var(--color-foreground)] dark:text-white sm:text-xl">
-                {t("who.contact.title")}
-              </h3>
-              <p className="mt-1.5 text-sm leading-relaxed text-zinc-600 dark:text-zinc-400">
-                {t("who.contact.body")}
-              </p>
-              <a
-                href="mailto:hello@locora.app"
-                className="mt-auto inline-flex items-center gap-1.5 pt-5 text-sm font-medium text-emerald-700 underline-offset-2 hover:underline dark:text-emerald-400"
-              >
-                {t("who.talkToUs")}
-                <ArrowRight size={14} />
-              </a>
-            </div>
-          </motion.article>
         </div>
 
         <Reveal delay={0.1} className="mt-10 flex flex-col items-center gap-3">
@@ -171,7 +151,7 @@ export function WhoItsFor() {
           <p className="max-w-md text-center text-xs text-zinc-500">
             {t("who.noteLead")}{" "}
             <a
-              href="mailto:hello@locora.app"
+              href="mailto:hello@gospots.eu"
               className="text-emerald-700 underline-offset-2 hover:underline dark:text-emerald-400"
             >
               {t("who.talkToUs")}

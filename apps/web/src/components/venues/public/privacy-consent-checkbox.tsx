@@ -22,7 +22,7 @@ export function PrivacyConsentCheckbox({
   return (
     <label
       htmlFor={id}
-      className="flex cursor-pointer items-start gap-2.5 text-xs leading-snug text-zinc-400"
+      className="flex cursor-pointer items-start gap-2.5 text-xs leading-snug text-zinc-600 dark:text-zinc-400"
     >
       <input
         id={id}
@@ -30,7 +30,7 @@ export function PrivacyConsentCheckbox({
         checked={checked}
         disabled={disabled}
         onChange={(e) => onChange(e.target.checked)}
-        className="mt-0.5 size-4 shrink-0 rounded border-white/20 bg-zinc-900 text-amber-500 focus:ring-amber-500/40"
+        className="mt-0.5 size-4 shrink-0 rounded border-[var(--color-border)] bg-[var(--color-background)] text-amber-500 focus:ring-amber-500/40 dark:border-white/20 dark:bg-zinc-900"
       />
       <span>{label}</span>
     </label>

@@ -148,7 +148,7 @@ export class StaffService {
         (actor.shopRole === 'MANAGER' &&
           (actor.perms === '*' ||
             parsePermissions(actor.perms ?? '').has(PERMISSIONS.STAFF_WRITE))),
-      loginSuffix: '.locora',
+      loginSuffix: '.gospots',
       venueSlug: shop.slug,
       seatPolicy: trialActive
         ? `Free trial: up to ${TRIAL_STAFF_SEAT_LIMIT} employee logins while Team accounts is on. After trial, buy seats on Subscription — turning features off never deletes your data.`

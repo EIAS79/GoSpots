@@ -75,7 +75,7 @@ export class RegisterDto {
 }
 
 export class LoginDto {
-  /** Owner: real email · Staff: username@venue-slug.locora */
+  /** Owner: real email · Staff: username@venue-slug.gospots */
   @IsString()
   @IsNotEmpty()
   @MaxLength(200)
@@ -117,7 +117,7 @@ export class StaffForgotPasswordDto {
   @MaxLength(120)
   venueName!: string;
 
-  /** Staff login ID, e.g. anna@venue.locora */
+  /** Staff login ID, e.g. anna@venue.gospots */
   @IsString()
   @IsNotEmpty()
   @MaxLength(200)

@@ -52,7 +52,7 @@ export function PublicVenueClient({
 
   if (loading) {
     return (
-      <div className="flex min-h-screen items-center justify-center bg-[var(--color-background)]">
+      <div className="relative flex min-h-screen items-center justify-center text-[var(--color-foreground)]">
         <Loader2 className="size-8 animate-spin text-amber-400" />
       </div>
     );
@@ -60,7 +60,7 @@ export function PublicVenueClient({
 
   if (error || !venue) {
     return (
-      <div className="flex min-h-screen flex-col items-center justify-center gap-4 bg-[var(--color-background)] px-4 text-center text-[var(--color-foreground)]">
+      <div className="relative flex min-h-screen flex-col items-center justify-center gap-4 px-4 text-center text-[var(--color-foreground)]">
         <p className="text-zinc-600 dark:text-zinc-400">
           {error ?? t("venuePage.notFound")}
         </p>

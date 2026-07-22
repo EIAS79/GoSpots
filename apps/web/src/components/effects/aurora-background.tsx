@@ -1,23 +1,30 @@
 "use client";
 
 import { usePathname } from "next/navigation";
-import { cn } from "@/lib/cn";
 
 /**
  * Full-viewport painted atmosphere — layered radial/linear/conic washes,
  * brush smears, and soft glows. Not a flat fill.
+ *
+ * Dashboard routes stay mounted but inert: flat zinc canvas only (see `.dashboard-aurora`).
  */
 export function AuroraBackground() {
   const pathname = usePathname();
   const isDashboard = pathname?.startsWith("/dashboard") ?? false;
 
+  if (isDashboard) {
+    return (
+      <div
+        aria-hidden
+        className="dashboard-aurora pointer-events-none fixed inset-0 -z-20 overflow-hidden bg-background"
+      />
+    );
+  }
+
   return (
     <div
       aria-hidden
-      className={cn(
-        "pointer-events-none fixed inset-0 -z-20 overflow-hidden",
-        isDashboard && "dashboard-aurora",
-      )}
+      className="pointer-events-none fixed inset-0 -z-20 overflow-hidden"
     >
       {/* Canvas base — already a multi-stop painted wash */}
       <div className="paint-canvas absolute inset-0" />

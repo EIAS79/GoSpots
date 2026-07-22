@@ -44,7 +44,9 @@ export function TenantPage({
           className,
         )}
       >
-        <DashboardPageBody>{children}</DashboardPageBody>
+        <DashboardPageBody className="flex h-full min-h-0 flex-col">
+          {children}
+        </DashboardPageBody>
       </div>
     </div>
   );

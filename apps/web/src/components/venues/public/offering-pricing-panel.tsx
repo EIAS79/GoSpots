@@ -122,10 +122,10 @@ function RatesPricingDropdown({
         aria-expanded={open}
       >
         <div>
-          <p className="text-[10px] font-semibold uppercase tracking-wider text-amber-400/80">
+          <p className="text-[10px] font-semibold uppercase tracking-wider text-amber-700 dark:text-amber-400/80">
             {t("pricing.pricing")}
           </p>
-          <p className="mt-0.5 text-sm font-medium text-amber-50">
+          <p className="mt-0.5 text-sm font-medium text-amber-950 dark:text-amber-50">
             {t("pricing.from", { price: formatPrice(fromPrice) })}
             <span className="ml-1.5 font-normal text-zinc-500">
               ·{" "}
@@ -138,7 +138,7 @@ function RatesPricingDropdown({
         <ChevronDown
           size={16}
           className={cn(
-            "shrink-0 text-amber-200/70 transition-transform",
+            "shrink-0 text-amber-700 transition-transform dark:text-amber-200/70",
             open && "rotate-180",
           )}
         />
@@ -156,7 +156,7 @@ function RatesPricingDropdown({
                 className="flex items-center justify-between gap-3 rounded-lg border border-[var(--color-border)] bg-[var(--color-background)]/60 px-3 py-2"
               >
                 <div className="min-w-0">
-                  <p className="truncate text-sm text-zinc-200">{rate.label}</p>
+                  <p className="truncate text-sm text-[var(--color-foreground)]">{rate.label}</p>
                   {rate.durationMinutes != null ? (
                     <p className="text-[10px] text-zinc-500">
                       {t("pricing.minutes", { count: rate.durationMinutes })}
@@ -223,10 +223,10 @@ function BowlingPricingDropdown({
   return (
     <div className="mt-3 space-y-3">
       <div className="rounded-xl border border-violet-500/25 bg-violet-500/[0.07] px-3.5 py-3">
-        <p className="text-[10px] font-semibold uppercase tracking-wider text-violet-300/90">
+        <p className="text-[10px] font-semibold uppercase tracking-wider text-violet-700 dark:text-violet-300/90">
           {t("pricing.bowlingTitle")}
         </p>
-        <p className="mt-1 text-[11px] leading-relaxed text-zinc-400">
+        <p className="mt-1 text-[11px] leading-relaxed text-zinc-600 dark:text-zinc-400">
           {t("pricing.bowlingBody", {
             modes: t(
               modes.length === 1
@@ -246,8 +246,8 @@ function BowlingPricingDropdown({
                 className={cn(
                   "rounded-full border px-2.5 py-0.5 text-[10px] font-medium",
                   available
-                    ? "border-violet-400/35 bg-violet-500/15 text-violet-100"
-                    : "border-white/5 bg-white/[0.02] text-zinc-600 line-through",
+                    ? "border-violet-400/35 bg-violet-500/15 text-violet-800 dark:text-violet-100"
+                    : "border-[var(--color-border)] bg-[var(--color-background)]/30 text-zinc-500 line-through dark:border-white/5 dark:bg-white/[0.02] dark:text-zinc-600",
                 )}
               >
                 {m.label}
@@ -292,7 +292,7 @@ function BowlingPricingDropdown({
               <MetaIcon size={14} />
             </span>
             <div className="min-w-0">
-              <p className="truncate text-sm font-medium text-amber-50">
+              <p className="truncate text-sm font-medium text-amber-950 dark:text-amber-50">
                 {selected.name}
               </p>
               <p className="text-[11px] text-zinc-500">{meta.label}</p>
@@ -301,7 +301,7 @@ function BowlingPricingDropdown({
           <ChevronDown
             size={16}
             className={cn(
-              "shrink-0 text-amber-200/70 transition-transform",
+              "shrink-0 text-amber-700 transition-transform dark:text-amber-200/70",
               listOpen && "rotate-180",
             )}
           />
@@ -366,7 +366,7 @@ function BowlingPricingDropdown({
                       className="flex items-center justify-between gap-3 rounded-lg border border-[var(--color-border)] bg-[var(--color-background)]/60 px-3 py-2"
                     >
                       <div className="min-w-0">
-                        <p className="truncate text-sm text-zinc-200">
+                        <p className="truncate text-sm text-[var(--color-foreground)]">
                           {rate.label}
                         </p>
                         {rate.durationMinutes != null ? (
@@ -421,7 +421,7 @@ function BowlingPricingDropdown({
               </div>
             ) : null}
 
-            <p className="mt-3 text-[10px] text-zinc-600">
+            <p className="mt-3 text-[10px] text-zinc-600 dark:text-zinc-500">
               {t("pricing.chooseMode")}
             </p>
           </div>

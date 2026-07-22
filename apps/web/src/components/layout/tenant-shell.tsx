@@ -43,6 +43,7 @@ import { VenueSwitcher } from "@/components/layout/venue-switcher";
 import { NotificationHeaderActions } from "@/components/notifications/notification-header-actions";
 import { NotificationToasts } from "@/components/notifications/notification-toasts";
 import { fetchNotificationUnreadCount, fetchReservationNotificationBadges } from "@/lib/notifications-client";
+import { fetchGuestChatBadge } from "@/lib/staff-guest-chat-client";
 import { cn } from "@/lib/cn";
 import { hasPermission } from "@/lib/auth-client";
 import { useVenueHref } from "@/lib/venue-context";
@@ -275,6 +276,7 @@ export function TenantShell({ children }: { children: ReactNode }) {
   const { state, signOut } = useAuth();
   const [unreadNotifications, setUnreadNotifications] = useState(0);
   const [reservationBadgeTotal, setReservationBadgeTotal] = useState(0);
+  const [messagesBadgeTotal, setMessagesBadgeTotal] = useState(0);
   const [mobileNavOpen, setMobileNavOpen] = useState(false);
 
   useEffect(() => {
@@ -292,6 +294,12 @@ export function TenantShell({ children }: { children: ReactNode }) {
     state.status === "authed" &&
     (currentMembership?.role === "OWNER" ||
       hasPermission(currentMembership?.permissions ?? "", "reservation.read"));
+  const canSeeMessagesBadges =
+    state.status === "authed" &&
+    (currentMembership?.role === "OWNER" ||
+      hasPermission(currentMembership?.permissions ?? "", "messaging.read") ||
+      hasPermission(currentMembership?.permissions ?? "", "shop.manage") ||
+      hasPermission(currentMembership?.permissions ?? "", "notifications.read"));
 
   useEffect(() => {
     if (state.status !== "authed" || !canUseNotifications) {
@@ -320,6 +328,20 @@ export function TenantShell({ children }: { children: ReactNode }) {
     const id = setInterval(load, 20_000);
     return () => clearInterval(id);
   }, [state.status, pathname, canSeeReservationBadges]);
+
+  useEffect(() => {
+    if (state.status !== "authed" || !canSeeMessagesBadges) {
+      setMessagesBadgeTotal(0);
+      return;
+    }
+    const load = () =>
+      fetchGuestChatBadge()
+        .then((r) => setMessagesBadgeTotal(r.total))
+        .catch(() => setMessagesBadgeTotal(0));
+    load();
+    const id = setInterval(load, 15_000);
+    return () => clearInterval(id);
+  }, [state.status, pathname, canSeeMessagesBadges]);
 
   useEffect(() => {
     setMobileNavOpen(false);
@@ -414,7 +436,9 @@ export function TenantShell({ children }: { children: ReactNode }) {
                             ? unreadNotifications
                             : item.segment === "/sessions"
                               ? reservationBadgeTotal
-                              : undefined
+                              : item.segment === "/messages"
+                                ? messagesBadgeTotal
+                                : undefined
                         }
                       />
                     </li>

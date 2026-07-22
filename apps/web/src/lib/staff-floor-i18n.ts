@@ -39,6 +39,8 @@ export type StaffFloorChromeLabels = {
   stationsRange: (from: number, to: number, total: number) => string;
   mainArea: string;
   staffStationHint: string;
+  zoneIndoor: string;
+  zoneOutdoor: string;
 };
 
 export function staffFloorChromeLabels(
@@ -57,6 +59,8 @@ export function staffFloorChromeLabels(
       t("floor.stationsRange", { from, to, total }),
     mainArea: t("floor.mainArea"),
     staffStationHint: t("floor.staffStationHint"),
+    zoneIndoor: t("floor.zoneIndoor"),
+    zoneOutdoor: t("floor.zoneOutdoor"),
   };
 }
 

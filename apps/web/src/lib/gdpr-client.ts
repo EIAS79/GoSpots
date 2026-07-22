@@ -73,7 +73,7 @@ export async function downloadGdprExportJson(): Promise<void> {
   const pack = await fetchGdprExport();
   const stamp = new Date().toISOString().slice(0, 10);
   downloadTextFile(
-    `Locora-data-export-${stamp}.json`,
+    `GoSpots-data-export-${stamp}.json`,
     `${JSON.stringify(pack, null, 2)}\n`,
     "application/json;charset=utf-8",
   );

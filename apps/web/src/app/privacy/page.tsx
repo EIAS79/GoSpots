@@ -1,18 +1,18 @@
 import type { Metadata } from "next";
 import Link from "next/link";
-import { LocoraLogo } from "@/components/brand/locora-logo";
+import { LocoraLogo as GoSpotsLogo } from "@/components/brand/locora-logo";
 
 export const metadata: Metadata = {
   title: "Privacy Policy",
   description:
-    "How Locora collects, uses, and protects account, venue, booking, and payment data.",
+    "How GoSpots collects, uses, and protects account, venue, booking, and payment data.",
 };
 
 export default function PrivacyPage() {
   return (
     <main className="min-h-full bg-zinc-950 text-zinc-200">
       <div className="mx-auto max-w-3xl px-4 py-12 md:px-8 md:py-16">
-        <LocoraLogo href="/" size="md" showTagline />
+        <GoSpotsLogo href="/" size="md" showTagline />
         <p className="mt-6">
           <Link
             href="/"
@@ -31,9 +31,9 @@ export default function PrivacyPage() {
 
         <div className="prose-invert mt-10 space-y-8 text-sm leading-relaxed text-zinc-300">
           <p>
-            Locora (&quot;we&quot;, &quot;us&quot;, or &quot;our&quot;) operates
+            GoSpots (&quot;we&quot;, &quot;us&quot;, or &quot;our&quot;) operates
             a venue operations and discovery platform. This Privacy Policy
-            explains what information we process when you use locora.app and
+            explains what information we process when you use gospots.eu and
             related services, and why. It is informational only and is not legal
             advice.
           </p>
@@ -95,7 +95,7 @@ export default function PrivacyPage() {
             </h2>
             <p>We use personal and venue data to:</p>
             <ul className="list-disc space-y-2 pl-5 text-zinc-400">
-              <li>Provide, maintain, and improve the Locora platform</li>
+              <li>Provide, maintain, and improve the GoSpots platform</li>
               <li>Authenticate users and enforce tenant isolation between venues</li>
               <li>Process bookings, sessions, and operational workflows</li>
               <li>Bill venue subscriptions via Lemon Squeezy</li>
@@ -113,7 +113,7 @@ export default function PrivacyPage() {
               4. Sharing &amp; processors
             </h2>
             <p>
-              We share data with service providers only as needed to run Locora,
+              We share data with service providers only as needed to run GoSpots,
               including hosting, email delivery, and Lemon Squeezy for payments.
               Venue staff you invite can access operational data for that venue
               according to their roles. We may disclose information if required
@@ -143,10 +143,10 @@ export default function PrivacyPage() {
               marketing emails. Venue owners control what appears on their public
               listing. For privacy requests, contact{" "}
               <a
-                href="mailto:hello@locora.app"
+                href="mailto:hello@gospots.eu"
                 className="text-emerald-400 hover:text-emerald-300"
               >
-                hello@locora.app
+                hello@gospots.eu
               </a>
               .
             </p>
@@ -155,7 +155,7 @@ export default function PrivacyPage() {
           <section className="space-y-3">
             <h2 className="text-lg font-semibold text-white">7. Children</h2>
             <p>
-              Locora is intended for business operators and adult guests. We do
+              GoSpots is intended for business operators and adult guests. We do
               not knowingly collect personal information from children under 16.
             </p>
           </section>
@@ -175,10 +175,10 @@ export default function PrivacyPage() {
             <p>
               Questions about privacy:{" "}
               <a
-                href="mailto:hello@locora.app"
+                href="mailto:hello@gospots.eu"
                 className="text-emerald-400 hover:text-emerald-300"
               >
-                hello@locora.app
+                hello@gospots.eu
               </a>
               .
             </p>

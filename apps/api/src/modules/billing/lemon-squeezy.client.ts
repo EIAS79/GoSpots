@@ -79,7 +79,7 @@ export class LemonSqueezyClient {
           custom_price: Math.max(100, Math.round(input.customPriceCents)),
           product_options: {
             redirect_url: input.redirectUrl,
-            receipt_button_text: 'Back to Locora',
+            receipt_button_text: 'Back to GoSpots',
             receipt_thank_you_note:
               'Your venue pack is active. Manage modules anytime in Subscription.',
           },

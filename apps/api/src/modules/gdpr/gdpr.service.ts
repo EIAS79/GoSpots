@@ -799,8 +799,8 @@ export class GdprService {
     if (ownerInbox) {
       const subject =
         dto.type === 'ACCESS'
-          ? `[Locora] Guest data access request — ${venueLabel}`
-          : `[Locora] Guest erasure request — ${venueLabel}`;
+          ? `[GoSpots] Guest data access request — ${venueLabel}`
+          : `[GoSpots] Guest erasure request — ${venueLabel}`;
       const text = [
         `A guest submitted a ${dto.type} request for ${venueLabel}.`,
         `Email: ${email}`,

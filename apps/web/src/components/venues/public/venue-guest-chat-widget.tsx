@@ -368,13 +368,13 @@ export function VenueGuestChatWidget({
       </button>
 
       {open ? (
-        <div className="fixed bottom-[max(5.5rem,calc(env(safe-area-inset-bottom)+4.5rem))] right-[max(1.25rem,env(safe-area-inset-right))] z-40 flex h-[min(32rem,calc(100dvh-6rem))] w-[min(22rem,calc(100vw-2.5rem))] flex-col overflow-hidden rounded-2xl border border-white/15 bg-zinc-950 shadow-2xl">
-          <header className="flex items-start justify-between gap-2 border-b border-white/10 bg-zinc-900/80 px-4 py-3">
+        <div className="fixed bottom-[max(5.5rem,calc(env(safe-area-inset-bottom)+4.5rem))] right-[max(1.25rem,env(safe-area-inset-right))] z-40 flex h-[min(32rem,calc(100dvh-6rem))] w-[min(22rem,calc(100vw-2.5rem))] flex-col overflow-hidden rounded-2xl border border-[var(--color-border)] bg-[var(--color-surface)] text-[var(--color-foreground)] shadow-2xl dark:border-white/10 dark:bg-zinc-950">
+          <header className="flex items-start justify-between gap-2 border-b border-[var(--color-border)] bg-[var(--color-background)]/80 px-4 py-3 dark:border-white/10 dark:bg-zinc-900/80">
             <div className="min-w-0">
-              <p className="truncate text-sm font-semibold text-white">
+              <p className="truncate text-sm font-semibold text-[var(--color-foreground)]">
                 {venueName}
               </p>
-              <p className="text-[11px] text-zinc-400">
+              <p className="text-[11px] text-zinc-600 dark:text-zinc-400">
                 {bootstrapping
                   ? t("venuePage.guestChat.loading")
                   : chat
@@ -385,7 +385,7 @@ export function VenueGuestChatWidget({
             <button
               type="button"
               onClick={() => setOpen(false)}
-              className="rounded-lg p-1 text-zinc-500 hover:bg-white/5 hover:text-zinc-200"
+              className="rounded-lg p-1 text-zinc-600 hover:bg-black/5 hover:text-[var(--color-foreground)] dark:text-zinc-500 dark:hover:bg-white/5 dark:hover:text-zinc-200"
               aria-label={t("venuePage.guestChat.close")}
             >
               <X size={16} />
@@ -409,53 +409,53 @@ export function VenueGuestChatWidget({
               </div>
             ) : !chat ? (
               <form onSubmit={startChat} className="space-y-3">
-                <p className="text-xs leading-relaxed text-zinc-400">
+                <p className="text-xs leading-relaxed text-zinc-600 dark:text-zinc-400">
                   {t("venuePage.guestChat.intro")}
                 </p>
                 <label className="block space-y-1">
-                  <span className="text-[11px] text-zinc-500">
+                  <span className="text-[11px] text-zinc-600 dark:text-zinc-500">
                     {t("venuePage.guestChat.yourName")}
                   </span>
                   <input
                     required
                     value={guestName}
                     onChange={(e) => setGuestName(e.target.value)}
-                    className="w-full rounded-lg border border-white/10 bg-zinc-900 px-3 py-2 text-sm text-white outline-none focus:border-emerald-400/50"
+                    className="w-full rounded-lg border border-[var(--color-border)] bg-[var(--color-background)] px-3 py-2 text-sm text-[var(--color-foreground)] outline-none focus:border-emerald-400/50 dark:border-white/10"
                     maxLength={120}
                   />
                 </label>
                 <label className="block space-y-1">
-                  <span className="text-[11px] text-zinc-500">
+                  <span className="text-[11px] text-zinc-600 dark:text-zinc-500">
                     {t("venuePage.guestChat.emailOptional")}
                   </span>
                   <input
                     type="email"
                     value={guestEmail}
                     onChange={(e) => setGuestEmail(e.target.value)}
-                    className="w-full rounded-lg border border-white/10 bg-zinc-900 px-3 py-2 text-sm text-white outline-none focus:border-emerald-400/50"
+                    className="w-full rounded-lg border border-[var(--color-border)] bg-[var(--color-background)] px-3 py-2 text-sm text-[var(--color-foreground)] outline-none focus:border-emerald-400/50 dark:border-white/10"
                     maxLength={200}
                   />
                 </label>
                 <label className="block space-y-1">
-                  <span className="text-[11px] text-zinc-500">
+                  <span className="text-[11px] text-zinc-600 dark:text-zinc-500">
                     {t("venuePage.guestChat.phoneOptional")}
                   </span>
                   <input
                     value={guestPhone}
                     onChange={(e) => setGuestPhone(e.target.value)}
-                    className="w-full rounded-lg border border-white/10 bg-zinc-900 px-3 py-2 text-sm text-white outline-none focus:border-emerald-400/50"
+                    className="w-full rounded-lg border border-[var(--color-border)] bg-[var(--color-background)] px-3 py-2 text-sm text-[var(--color-foreground)] outline-none focus:border-emerald-400/50 dark:border-white/10"
                     maxLength={40}
                   />
                 </label>
                 <label className="block space-y-1">
-                  <span className="text-[11px] text-zinc-500">
+                  <span className="text-[11px] text-zinc-600 dark:text-zinc-500">
                     {t("venuePage.guestChat.firstMessageOptional")}
                   </span>
                   <textarea
                     value={firstMessage}
                     onChange={(e) => setFirstMessage(e.target.value)}
                     rows={3}
-                    className="w-full resize-none rounded-lg border border-white/10 bg-zinc-900 px-3 py-2 text-sm text-white outline-none focus:border-emerald-400/50"
+                    className="w-full resize-none rounded-lg border border-[var(--color-border)] bg-[var(--color-background)] px-3 py-2 text-sm text-[var(--color-foreground)] outline-none focus:border-emerald-400/50 dark:border-white/10"
                     maxLength={2000}
                     placeholder={t("venuePage.guestChat.firstMessagePlaceholder")}
                   />
@@ -510,7 +510,7 @@ export function VenueGuestChatWidget({
                           "max-w-[85%] rounded-2xl px-3 py-2 text-sm",
                           mine
                             ? "rounded-br-md bg-emerald-600 text-white"
-                            : "rounded-bl-md bg-zinc-800 text-zinc-100",
+                            : "rounded-bl-md bg-zinc-200 text-zinc-900 dark:bg-zinc-800 dark:text-zinc-100",
                         )}
                       >
                         <p className="whitespace-pre-wrap break-words">
@@ -519,7 +519,7 @@ export function VenueGuestChatWidget({
                         <p
                           className={cn(
                             "mt-1 text-[10px]",
-                            mine ? "text-emerald-100/70" : "text-zinc-500",
+                            mine ? "text-emerald-100/70" : "text-zinc-500 dark:text-zinc-500",
                           )}
                         >
                           {mine
@@ -532,7 +532,7 @@ export function VenueGuestChatWidget({
                   );
                 })}
                 {chat.messages.length === 0 ? (
-                  <p className="py-6 text-center text-xs text-zinc-500">
+                  <p className="py-6 text-center text-xs text-zinc-600 dark:text-zinc-500">
                     {t("venuePage.guestChat.noMessages")}
                   </p>
                 ) : null}
@@ -541,25 +541,25 @@ export function VenueGuestChatWidget({
           </div>
 
           {error ? (
-            <p className="border-t border-rose-500/20 bg-rose-950/40 px-3 py-2 text-xs text-rose-200">
+            <p className="border-t border-rose-500/20 bg-rose-500/10 px-3 py-2 text-xs text-rose-700 dark:bg-rose-950/40 dark:text-rose-200">
               {error}
             </p>
           ) : null}
           {notice ? (
-            <p className="border-t border-emerald-500/20 bg-emerald-950/30 px-3 py-2 text-xs text-emerald-200">
+            <p className="border-t border-emerald-500/20 bg-emerald-500/10 px-3 py-2 text-xs text-emerald-800 dark:bg-emerald-950/30 dark:text-emerald-200">
               {notice}
             </p>
           ) : null}
 
           {chat ? (
-            <div className="border-t border-white/10 bg-zinc-900/60 p-2">
+            <div className="border-t border-[var(--color-border)] bg-[var(--color-background)]/60 p-2 dark:border-white/10 dark:bg-zinc-900/60">
               <div className="mb-2 flex flex-wrap gap-1.5">
                 {canPing ? (
                   <button
                     type="button"
                     disabled={outage || busy}
                     onClick={() => void pingStaff()}
-                    className="inline-flex items-center gap-1 rounded-md border border-white/10 px-2 py-1 text-[11px] text-zinc-300 hover:border-amber-400/40 hover:text-amber-200 disabled:opacity-50"
+                    className="inline-flex items-center gap-1 rounded-md border border-[var(--color-border)] px-2 py-1 text-[11px] text-zinc-700 hover:border-amber-400/40 hover:text-amber-800 disabled:opacity-50 dark:border-white/10 dark:text-zinc-300 dark:hover:text-amber-200"
                   >
                     <Bell size={12} />
                     {t("venuePage.guestChat.notifyStaff")}
@@ -570,7 +570,7 @@ export function VenueGuestChatWidget({
                     type="button"
                     disabled={outage || busy}
                     onClick={() => void endChat()}
-                    className="inline-flex items-center gap-1 rounded-md border border-white/10 px-2 py-1 text-[11px] text-zinc-300 hover:text-zinc-100 disabled:opacity-50"
+                    className="inline-flex items-center gap-1 rounded-md border border-[var(--color-border)] px-2 py-1 text-[11px] text-zinc-700 hover:text-[var(--color-foreground)] disabled:opacity-50 dark:border-white/10 dark:text-zinc-300 dark:hover:text-zinc-100"
                   >
                     {t("venuePage.guestChat.end")}
                   </button>
@@ -579,7 +579,7 @@ export function VenueGuestChatWidget({
                   type="button"
                   disabled={outage || busy}
                   onClick={() => void removeChat()}
-                  className="inline-flex items-center gap-1 rounded-md border border-white/10 px-2 py-1 text-[11px] text-zinc-400 hover:border-rose-400/40 hover:text-rose-300 disabled:opacity-50"
+                  className="inline-flex items-center gap-1 rounded-md border border-[var(--color-border)] px-2 py-1 text-[11px] text-zinc-600 hover:border-rose-400/40 hover:text-rose-700 disabled:opacity-50 dark:border-white/10 dark:text-zinc-400 dark:hover:text-rose-300"
                 >
                   <Trash2 size={12} />
                   {t("venuePage.guestChat.delete")}
@@ -595,7 +595,7 @@ export function VenueGuestChatWidget({
                         ? t("venuePage.guestChat.placeholderWaiting")
                         : t("venuePage.guestChat.placeholderTyping")
                     }
-                    className="min-w-0 flex-1 rounded-lg border border-white/10 bg-zinc-950 px-3 py-2 text-sm text-white outline-none focus:border-emerald-400/50"
+                    className="min-w-0 flex-1 rounded-lg border border-[var(--color-border)] bg-[var(--color-background)] px-3 py-2 text-sm text-[var(--color-foreground)] outline-none focus:border-emerald-400/50 dark:border-white/10 dark:bg-zinc-950"
                     maxLength={2000}
                     disabled={busy}
                   />
@@ -613,7 +613,7 @@ export function VenueGuestChatWidget({
                   </button>
                 </form>
               ) : (
-                <p className="px-1 py-1 text-[11px] text-zinc-500">
+                <p className="px-1 py-1 text-[11px] text-zinc-600 dark:text-zinc-500">
                   {t("venuePage.guestChat.endedHint")}
                 </p>
               )}

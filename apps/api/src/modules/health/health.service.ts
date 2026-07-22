@@ -9,7 +9,7 @@ export class HealthService {
     return {
       status: 'ok' as const,
       check: 'live',
-      service: 'Locora-api',
+      service: 'GoSpots-api',
       timestamp: new Date().toISOString(),
     };
   }
@@ -21,7 +21,7 @@ export class HealthService {
       return {
         status: 'ok' as const,
         check: 'ready',
-        service: 'Locora-api',
+        service: 'GoSpots-api',
         database: 'up' as const,
         latencyMs: Date.now() - started,
         timestamp: new Date().toISOString(),
@@ -32,7 +32,7 @@ export class HealthService {
       return {
         status: 'error' as const,
         check: 'ready',
-        service: 'Locora-api',
+        service: 'GoSpots-api',
         database: 'down' as const,
         latencyMs: Date.now() - started,
         error: message,

@@ -15,6 +15,7 @@ import { isRtlPublicLocale, translatePublic } from "./public-i18n";
 import {
   isPublicCurrency,
   isPublicLocale,
+  LEGACY_PUBLIC_PREFS_STORAGE_KEY,
   PUBLIC_PREFS_STORAGE_KEY,
   type PublicCurrency,
   type PublicLocale,
@@ -54,7 +55,9 @@ export function PublicPrefsProvider({ children }: { children: ReactNode }) {
 
   useEffect(() => {
     try {
-      const raw = localStorage.getItem(PUBLIC_PREFS_STORAGE_KEY);
+      const raw =
+        localStorage.getItem(PUBLIC_PREFS_STORAGE_KEY) ||
+        localStorage.getItem(LEGACY_PUBLIC_PREFS_STORAGE_KEY);
       if (raw) {
         const parsed = JSON.parse(raw) as { locale?: string; currency?: string };
         if (parsed.locale && isPublicLocale(parsed.locale)) {

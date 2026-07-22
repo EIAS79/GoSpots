@@ -167,7 +167,7 @@ export function VenueReviewsTab({
       />
 
       {error ? (
-        <p className="rounded-lg border border-rose-500/30 bg-rose-500/10 px-3 py-2 text-sm text-rose-200">
+        <p className="rounded-lg border border-rose-500/30 bg-rose-500/10 px-3 py-2 text-sm text-rose-700 dark:text-rose-200">
           {error}
         </p>
       ) : null}
@@ -210,7 +210,7 @@ export function VenueReviewsTab({
                   </p>
                 </div>
                 {r.comment ? (
-                  <p className="mt-2 text-sm leading-relaxed text-zinc-300">
+                  <p className="mt-2 text-sm leading-relaxed text-zinc-700 dark:text-zinc-300">
                     {r.comment}
                   </p>
                 ) : null}

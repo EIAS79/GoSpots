@@ -47,7 +47,7 @@ services:
       - key: MAIL_FROM
         sync: false
       - key: MAIL_FROM_NAME
-        value: Locora
+        value: GoSpots
       - key: LEMON_SQUEEZY_API_KEY
         sync: false
       - key: LEMON_SQUEEZY_STORE_ID

@@ -34,7 +34,7 @@ export function buildOtpAuthUri(input: {
   accountName: string;
   issuer?: string;
 }): string {
-  const issuer = (input.issuer ?? 'Locora').trim() || 'Locora';
+  const issuer = (input.issuer ?? 'GoSpots').trim() || 'GoSpots';
   const account = input.accountName.trim() || 'owner';
   const label = encodeURIComponent(`${issuer}:${account}`);
   const params = new URLSearchParams({

@@ -4,15 +4,15 @@ import { Loader2 } from "lucide-react";
 import { VenuesDiscovery } from "@/components/venues/venues-discovery";
 
 export const metadata: Metadata = {
-  title: "Find venues — Locora",
+  title: "Find venues — GoSpots",
   description:
-    "Browse gaming centers, restaurants, and venues on Locora. Search by city and category, then reserve when hosts enable it.",
+    "Browse gaming centers, restaurants, and venues on GoSpots. Search by city and category, then reserve when hosts enable it.",
 };
 
 function VenuesLoading() {
   return (
-    <div className="flex min-h-screen items-center justify-center bg-zinc-950">
-      <Loader2 className="size-8 animate-spin text-amber-400" />
+    <div className="flex min-h-screen items-center justify-center text-[var(--color-foreground)]">
+      <Loader2 className="size-8 animate-spin text-amber-500 dark:text-amber-400" />
     </div>
   );
 }

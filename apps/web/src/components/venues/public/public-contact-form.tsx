@@ -103,11 +103,11 @@ export function PublicContactForm({
         )}
       >
         <CheckCircle2 className="mx-auto text-emerald-400" size={32} />
-        <p className="mt-3 text-sm font-medium text-emerald-100">{success}</p>
+        <p className="mt-3 text-sm font-medium text-emerald-800 dark:text-emerald-100">{success}</p>
         <button
           type="button"
           onClick={() => setSuccess(null)}
-          className="mt-4 text-xs text-emerald-300 underline"
+          className="mt-4 text-xs text-emerald-700 underline dark:text-emerald-300"
         >
           {t("venuePage.contact.sendAnother")}
         </button>
@@ -132,7 +132,7 @@ export function PublicContactForm({
           <h3 className="text-lg font-semibold text-[var(--color-foreground)]">
             {t("venuePage.contact.title")}
           </h3>
-          <p className="mt-1 text-sm text-zinc-500">
+          <p className="mt-1 text-sm text-zinc-600 dark:text-zinc-400">
             {t("venuePage.contact.subtitle")}
           </p>
         </div>

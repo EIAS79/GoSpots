@@ -33,4 +33,5 @@ export function isPublicCurrency(code: string): code is PublicCurrency {
   return (PUBLIC_CURRENCY_CODES as readonly string[]).includes(code);
 }
 
-export const PUBLIC_PREFS_STORAGE_KEY = "Locora-public-prefs";
+export const PUBLIC_PREFS_STORAGE_KEY = "gospots-public-prefs";
+export const LEGACY_PUBLIC_PREFS_STORAGE_KEY = "Locora-public-prefs";

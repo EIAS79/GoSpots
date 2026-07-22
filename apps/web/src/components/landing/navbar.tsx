@@ -35,19 +35,19 @@ export function Navbar() {
           : "border-transparent bg-gradient-to-b from-zinc-950/72 via-zinc-950/35 to-transparent",
       )}
     >
-      <div className="mx-auto flex max-w-7xl items-center justify-between gap-2 px-4 py-2.5 sm:px-6 sm:py-3 md:px-8">
+      <div className="mx-auto flex max-w-7xl items-center justify-between gap-3 px-4 py-3 sm:px-6 sm:py-3.5 md:px-8">
         <LocoraLogo
           href="/"
           size="md"
           showTagline
           tone={scrolled ? "auto" : "onDark"}
-          className="hidden min-w-0 lg:inline-flex"
+          className="hidden shrink-0 lg:inline-flex"
         />
         <LocoraLogo
           href="/"
           size="sm"
           tone={scrolled ? "auto" : "onDark"}
-          className="min-w-0 lg:hidden"
+          className="shrink-0 lg:hidden"
         />
 
         <nav

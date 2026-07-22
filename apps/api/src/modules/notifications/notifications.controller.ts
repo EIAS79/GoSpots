@@ -77,7 +77,7 @@ export class NotificationsController {
     const stamp = new Date().toISOString().slice(0, 10);
     res.setHeader(
       'Content-Disposition',
-      `attachment; filename="Locora-notifications-${stamp}.csv"`,
+      `attachment; filename="GoSpots-notifications-${stamp}.csv"`,
     );
     res.send(csv);
   }

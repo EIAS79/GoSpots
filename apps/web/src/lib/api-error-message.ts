@@ -33,7 +33,7 @@ export function networkUnreachableMessage(apiBaseUrl: string): string {
   if (isLocalDevApiBase(apiBaseUrl)) {
     return `Cannot reach the API at ${apiBaseUrl}. The backend is probably not running (check terminal for PostgreSQL errors). From repo root run: pnpm db:setup then pnpm dev — then open http://localhost:4000/api/v1/health`;
   }
-  return "Can’t reach Locora servers — try again shortly.";
+  return "Can’t reach GoSpots servers — try again shortly.";
 }
 
 /** Parsed API error envelope `{ code, message }` (bible §36). */
@@ -121,10 +121,10 @@ export function httpFailureMessage(
   }
 
   if (status === 502 || status === 504) {
-    return "Can’t reach Locora servers — try again shortly.";
+    return "Can’t reach GoSpots servers — try again shortly.";
   }
   if (status === 503) {
-    return "Locora is temporarily unavailable — your data is safe; retry in a minute.";
+    return "GoSpots is temporarily unavailable — your data is safe; retry in a minute.";
   }
   return `Request failed: ${status}`;
 }

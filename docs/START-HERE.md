@@ -1,4 +1,4 @@
-# Locora / GoSpots — production
+# GoSpots / GoSpots — production
 
 **Operator status:** [`docs/PRODUCTION_STATUS.md`](./PRODUCTION_STATUS.md)
 

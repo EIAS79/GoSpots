@@ -134,7 +134,7 @@ export function buildGamingReservationEmail(
     <tr><td align="center">
       <table width="100%" style="max-width:520px;background:#ffffff;border-radius:16px;overflow:hidden;border:1px solid #e4e4e7;">
         <tr><td style="background:linear-gradient(135deg,#f59e0b,#d97706);padding:24px 28px;">
-          <p style="margin:0;font-size:12px;letter-spacing:0.12em;text-transform:uppercase;color:rgba(255,255,255,0.85);">Locora booking</p>
+          <p style="margin:0;font-size:12px;letter-spacing:0.12em;text-transform:uppercase;color:rgba(255,255,255,0.85);">GoSpots booking</p>
           <h1 style="margin:8px 0 0;font-size:22px;color:#ffffff;">${details.venueName}</h1>
         </td></tr>
         <tr><td style="padding:28px;">

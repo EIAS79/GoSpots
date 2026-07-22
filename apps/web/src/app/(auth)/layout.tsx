@@ -10,9 +10,9 @@ export default function AuthLayout({ children }: { children: ReactNode }) {
 
       <LocoraLogo
         href="/"
-        size="sm"
+        size="md"
         showTagline
-        className="absolute left-6 top-6 text-zinc-400 transition hover:opacity-90"
+        className="absolute left-6 top-6 z-10 transition hover:opacity-90"
       />
 
       {children}

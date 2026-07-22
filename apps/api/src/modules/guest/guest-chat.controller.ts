@@ -62,6 +62,11 @@ export class GuestChatController {
     });
   }
 
+  @Get('badge')
+  badge(@CurrentUser() user: JwtAccessPayload) {
+    return this.chats.badgeForShop(user);
+  }
+
   @Get(':id')
   get(@CurrentUser() user: JwtAccessPayload, @Param('id') id: string) {
     return this.chats.getForStaff(user, id);

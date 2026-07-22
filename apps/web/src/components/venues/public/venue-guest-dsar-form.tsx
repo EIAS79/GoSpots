@@ -54,13 +54,13 @@ export function VenueGuestDsarForm({ slug }: { slug: string }) {
   }
 
   return (
-    <section className="rounded-xl border border-white/10 bg-zinc-950/40 p-4">
-      <h3 className="text-sm font-semibold text-zinc-100">
+    <section className="rounded-xl border border-[var(--color-border)] bg-[var(--color-surface)] p-4 dark:border-white/10">
+      <h3 className="text-sm font-semibold text-[var(--color-foreground)]">
         {t("venuePage.dsar.title")}
       </h3>
-      <p className="mt-1 text-xs text-zinc-500">{t("venuePage.dsar.hint")}</p>
+      <p className="mt-1 text-xs text-zinc-600 dark:text-zinc-500">{t("venuePage.dsar.hint")}</p>
       <form className="mt-3 space-y-3" onSubmit={(e) => void onSubmit(e)}>
-        <div className="flex flex-wrap gap-3 text-xs text-zinc-300">
+        <div className="flex flex-wrap gap-3 text-xs text-zinc-700 dark:text-zinc-300">
           <label className="inline-flex items-center gap-1.5">
             <input
               type="radio"
@@ -86,21 +86,21 @@ export function VenueGuestDsarForm({ slug }: { slug: string }) {
           value={guestEmail}
           onChange={(e) => setGuestEmail(e.target.value)}
           placeholder="you@example.com"
-          className="w-full rounded-lg border border-white/10 bg-zinc-900 px-3 py-2 text-sm text-white"
+          className="w-full rounded-lg border border-[var(--color-border)] bg-[var(--color-background)] px-3 py-2 text-sm text-[var(--color-foreground)] dark:border-white/10"
         />
         <input
           type="text"
           value={guestName}
           onChange={(e) => setGuestName(e.target.value)}
           placeholder="Name (optional)"
-          className="w-full rounded-lg border border-white/10 bg-zinc-900 px-3 py-2 text-sm text-white"
+          className="w-full rounded-lg border border-[var(--color-border)] bg-[var(--color-background)] px-3 py-2 text-sm text-[var(--color-foreground)] dark:border-white/10"
         />
         <textarea
           value={message}
           onChange={(e) => setMessage(e.target.value)}
           rows={2}
           placeholder="Details (optional)"
-          className="w-full rounded-lg border border-white/10 bg-zinc-900 px-3 py-2 text-sm text-white"
+          className="w-full rounded-lg border border-[var(--color-border)] bg-[var(--color-background)] px-3 py-2 text-sm text-[var(--color-foreground)] dark:border-white/10"
         />
         <PrivacyConsentCheckbox
           checked={privacyConsent}
@@ -109,15 +109,15 @@ export function VenueGuestDsarForm({ slug }: { slug: string }) {
           disabled={busy}
         />
         {error ? (
-          <p className="text-xs text-rose-300">{error}</p>
+          <p className="text-xs text-rose-700 dark:text-rose-300">{error}</p>
         ) : null}
         {success ? (
-          <p className="text-xs text-emerald-300">{success}</p>
+          <p className="text-xs text-emerald-700 dark:text-emerald-300">{success}</p>
         ) : null}
         <button
           type="submit"
           disabled={busy}
-          className="inline-flex items-center gap-2 rounded-lg border border-white/15 bg-white/5 px-4 py-2 text-sm text-zinc-100 hover:bg-white/10 disabled:opacity-50"
+          className="inline-flex items-center gap-2 rounded-lg border border-[var(--color-border)] bg-[var(--color-background)] px-4 py-2 text-sm text-[var(--color-foreground)] hover:bg-[var(--color-surface)] disabled:opacity-50 dark:border-white/15 dark:hover:bg-white/10"
         >
           {busy ? <Loader2 size={14} className="animate-spin" /> : null}
           {t("venuePage.dsar.submit")}

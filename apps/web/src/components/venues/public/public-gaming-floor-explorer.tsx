@@ -1,15 +1,10 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useState, type ReactNode } from "react";
 import { BowlingLaneFloorMap } from "@/components/reservations/bowling-lane-floor-map";
 import { GamingFloorMapControls } from "@/components/venues/public/gaming-floor-map-controls";
 import { GamingFloorLayoutExplorer } from "@/components/reservations/gaming-floor-layout-explorer";
-import { cn } from "@/lib/cn";
 import { getBookingUnitKind } from "@/lib/booking-unit-kind";
-import {
-  buildFloorSectionGroups,
-  groupSectionsByFloor,
-} from "@/lib/gaming-floor-groups";
 import type { FloorMapVisualType } from "@/lib/gaming-floor-visual";
 import {
   applyWindowToUnits,
@@ -22,8 +17,6 @@ import type {
   ScheduleUnit,
 } from "@/lib/reservations-client";
 import type { UnitFloorStatus } from "@/lib/booking-floor-status";
-
-const STATIONS_PER_PAGE = 10;
 
 function useCompactMap() {
   const [compact, setCompact] = useState(true);
@@ -71,11 +64,11 @@ export function PublicGamingFloorExplorer({
   venueLocale?: string;
 }) {
   const { t } = usePublicPrefs();
-  const [activeFloor, setActiveFloor] = useState(1);
   const compactMap = useCompactMap();
 
   const unitKind = category.unitKind ?? getBookingUnitKind(category.type);
   const isLaneMap = unitKind === "LANE";
+  const isDining = visualType === "dining";
 
   const guestStatusLabels = useMemo(
     (): Record<UnitFloorStatus, string> => ({
@@ -99,6 +92,9 @@ export function PublicGamingFloorExplorer({
         t("venuePage.floor.pageOf", { page, total }),
       stationsRange: (from: number, to: number, total: number) =>
         t("venuePage.floor.stationsRange", { from, to, total }),
+      mainArea: t("venuePage.floor.mainArea"),
+      zoneIndoor: t("venuePage.floor.zoneIndoor"),
+      zoneOutdoor: t("venuePage.floor.zoneOutdoor"),
     }),
     [t],
   );
@@ -141,83 +137,26 @@ export function PublicGamingFloorExplorer({
     [category.units, scheduleDate, windowStartTime, windowEndTime],
   );
 
-  const sectionGroups = useMemo(
-    () => buildFloorSectionGroups(windowedUnits, category.sections ?? []),
-    [windowedUnits, category.sections],
+  const mapControls = (floorTabs?: ReactNode) => (
+    <GamingFloorMapControls
+      mapLabel={mapLabel}
+      scheduleDate={scheduleDate}
+      onScheduleDateChange={onScheduleDateChange}
+      windowStartTime={windowStartTime}
+      windowEndTime={windowEndTime}
+      onWindowStartTimeChange={onWindowStartTimeChange}
+      onWindowEndTimeChange={onWindowEndTimeChange}
+      windowError={windowError}
+      floorTabs={isLaneMap ? undefined : floorTabs}
+      timezone={timezone}
+      venueLocale={venueLocale}
+    />
   );
-
-  const floorMap = useMemo(
-    () => groupSectionsByFloor(sectionGroups),
-    [sectionGroups],
-  );
-
-  const floors = useMemo(() => [...floorMap.keys()], [floorMap]);
-
-  useEffect(() => {
-    setActiveFloor(floors[0] ?? 1);
-  }, [category.id, floors]);
-
-  const unitsOnFloor = useMemo(() => {
-    const groups = floorMap.get(activeFloor) ?? [];
-    return groups.flatMap((g) => g.units);
-  }, [floorMap, activeFloor]);
-
-  const sectionsOnFloor = useMemo(() => {
-    const groups = floorMap.get(activeFloor) ?? [];
-    return (category.sections ?? []).filter((s) =>
-      groups.some((g) => g.section?.id === s.id),
-    );
-  }, [floorMap, activeFloor, category.sections]);
-
-  const floorTabs =
-    floors.length > 1 ? (
-      <div className="flex flex-wrap gap-1">
-        {floors.map((floor) => {
-          const free = (floorMap.get(floor) ?? [])
-            .flatMap((g) => g.units)
-            .filter((u) => u.floorStatus === "AVAILABLE").length;
-          const count = (floorMap.get(floor) ?? []).reduce(
-            (n, g) => n + g.units.length,
-            0,
-          );
-          const selected = activeFloor === floor;
-          return (
-            <button
-              key={floor}
-              type="button"
-              onClick={() => setActiveFloor(floor)}
-              className={cn(
-                "snap-start shrink-0 rounded-md border px-2.5 py-1 text-[11px] font-medium transition",
-                selected
-                  ? "border-emerald-400/40 bg-emerald-500/15 text-emerald-200"
-                  : "border-white/10 text-zinc-500 hover:border-white/20 hover:text-zinc-300",
-              )}
-            >
-              {t("venuePage.floor.floorN", { n: floor })}
-              <span className="ml-1 opacity-70">
-                · {free}/{count}
-              </span>
-            </button>
-          );
-        })}
-      </div>
-    ) : null;
 
   if (!windowedUnits.length) {
     return (
       <div className="flex flex-col">
-        <GamingFloorMapControls
-          mapLabel={mapLabel}
-          scheduleDate={scheduleDate}
-          onScheduleDateChange={onScheduleDateChange}
-          windowStartTime={windowStartTime}
-          windowEndTime={windowEndTime}
-          onWindowStartTimeChange={onWindowStartTimeChange}
-          onWindowEndTimeChange={onWindowEndTimeChange}
-          windowError={windowError}
-          timezone={timezone}
-          venueLocale={venueLocale}
-        />
+        {mapControls()}
         <p className="px-6 py-12 text-center text-sm text-zinc-500">
           {t("venuePage.floor.noStations")}
         </p>
@@ -225,27 +164,21 @@ export function PublicGamingFloorExplorer({
     );
   }
 
-  return (
-    <div className="flex flex-col">
-      <GamingFloorMapControls
-        mapLabel={mapLabel}
-        scheduleDate={scheduleDate}
-        onScheduleDateChange={onScheduleDateChange}
-        windowStartTime={windowStartTime}
-        windowEndTime={windowEndTime}
-        onWindowStartTimeChange={onWindowStartTimeChange}
-        onWindowEndTimeChange={onWindowEndTimeChange}
-        windowError={windowError}
-        floorTabs={isLaneMap ? undefined : floorTabs}
-        timezone={timezone}
-        venueLocale={venueLocale}
-      />
-
-      {windowError ? (
+  if (windowError) {
+    return (
+      <div className="flex flex-col">
+        {mapControls()}
         <p className="py-12 text-center text-sm text-zinc-500">
           {t("venuePage.floor.fixTimeRange")}
         </p>
-      ) : isLaneMap ? (
+      </div>
+    );
+  }
+
+  if (isLaneMap) {
+    return (
+      <div className="flex flex-col">
+        {mapControls()}
         <BowlingLaneFloorMap
           units={windowedUnits}
           sections={category.sections}
@@ -262,28 +195,33 @@ export function PublicGamingFloorExplorer({
             if (unit) onBookUnit(unit);
           }}
         />
-      ) : (
-        <GamingFloorLayoutExplorer
-          key={`${category.id}-${activeFloor}-${scheduleDate}-${windowStartTime}-${windowEndTime}`}
-          units={unitsOnFloor}
-          sections={sectionsOnFloor}
-          categoryLabel={category.name}
-          visualType={visualType}
-          stationsPerPage={STATIONS_PER_PAGE}
-          canWrite
-          highlightedUnitId={highlightedUnitId}
-          precomputedStatus
-          blockingBookingsByUnitId={blockingMap}
-          mapVariant={compactMap ? "compact" : "full"}
-          onInspectBlocked={onInspectBlocked}
-          chromeLabels={chromeLabels}
-          guestStatusLabels={guestStatusLabels}
-          onBookUnit={(unitId) => {
-            const unit = unitsOnFloor.find((u) => u.id === unitId);
-            if (unit) onBookUnit(unit);
-          }}
-        />
-      )}
+      </div>
+    );
+  }
+
+  return (
+    <div className="flex flex-col">
+      <GamingFloorLayoutExplorer
+        key={`${category.id}-${scheduleDate}-${windowStartTime}-${windowEndTime}`}
+        units={windowedUnits}
+        sections={category.sections ?? []}
+        categoryLabel={category.name}
+        visualType={visualType}
+        stationsPerPage={isDining ? undefined : 10}
+        canWrite
+        highlightedUnitId={highlightedUnitId}
+        precomputedStatus
+        blockingBookingsByUnitId={blockingMap}
+        mapVariant={compactMap ? "compact" : "full"}
+        onInspectBlocked={onInspectBlocked}
+        chromeLabels={chromeLabels}
+        guestStatusLabels={guestStatusLabels}
+        floorTabsSlot={(tabs) => mapControls(tabs)}
+        onBookUnit={(unitId) => {
+          const unit = windowedUnits.find((u) => u.id === unitId);
+          if (unit) onBookUnit(unit);
+        }}
+      />
     </div>
   );
 }

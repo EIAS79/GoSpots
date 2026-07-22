@@ -138,22 +138,8 @@ export function VenuesDiscovery() {
   }, [activeQuery]);
 
   return (
-    <div className="relative min-h-screen bg-[var(--color-background)] text-[var(--color-foreground)]">
-      <div className="pointer-events-none absolute inset-0 -z-10 overflow-hidden">
-        <div className="aurora-mesh absolute inset-0 opacity-40 dark:opacity-50" />
-        <motion.div
-          className="absolute -left-32 top-20 h-96 w-96 rounded-full bg-amber-500/15 blur-[100px] dark:bg-amber-500/20"
-          animate={{ x: [0, 40, 0], y: [0, 20, 0] }}
-          transition={{ duration: 14, repeat: Infinity, ease: "easeInOut" }}
-        />
-        <motion.div
-          className="absolute -right-24 bottom-10 h-80 w-80 rounded-full bg-cyan-500/10 blur-[90px] dark:bg-cyan-500/15"
-          animate={{ x: [0, -30, 0], y: [0, -25, 0] }}
-          transition={{ duration: 11, repeat: Infinity, ease: "easeInOut" }}
-        />
-      </div>
-
-      <header className="sticky top-0 z-40 border-b border-[var(--color-border)] bg-[color-mix(in_srgb,var(--color-background)_88%,transparent)] backdrop-blur-xl dark:border-white/5">
+    <div className="relative min-h-screen text-[var(--color-foreground)]">
+      <header className="sticky top-0 z-40 border-b border-[var(--color-border)] bg-[color-mix(in_srgb,var(--color-background)_88%,transparent)] backdrop-blur-xl">
         <div className="mx-auto flex max-w-7xl items-center justify-between gap-3 px-4 py-3 sm:px-6 sm:py-4 md:px-8">
           <LocoraLogo
             href="/"
@@ -161,20 +147,20 @@ export function VenuesDiscovery() {
             showTagline
             animated
             tone="auto"
-            className="hidden min-w-0 sm:inline-flex"
+            className="hidden shrink-0 sm:inline-flex"
           />
           <LocoraLogo
             href="/"
             size="sm"
             tone="auto"
-            className="min-w-0 sm:hidden"
+            className="shrink-0 sm:hidden"
           />
           <div className="flex shrink-0 items-center gap-2 sm:gap-3">
             <LocaleCurrencySwitcher tone="auto" compact />
             <ThemeToggle />
             <Link
               href="/for-venues"
-              className="hidden rounded-full border border-[var(--color-border)] bg-[var(--color-surface)]/70 px-3 py-2 text-xs font-medium text-zinc-700 transition hover:border-amber-400/40 hover:text-zinc-950 sm:inline-flex dark:border-white/15 dark:bg-white/[0.04] dark:text-zinc-200 dark:hover:border-white/30 dark:hover:text-white sm:text-sm"
+              className="hidden rounded-full border border-[var(--color-border)] bg-[var(--color-surface)]/70 px-3 py-2 text-xs font-medium text-zinc-700 transition hover:border-amber-400/40 hover:text-zinc-950 sm:inline-flex dark:bg-white/[0.03] dark:text-zinc-200 dark:hover:border-amber-400/40 dark:hover:text-[var(--color-foreground)] sm:text-sm"
             >
               {t("nav.iOwnVenue")}
             </Link>
@@ -291,13 +277,13 @@ export function VenuesDiscovery() {
 
         {loading ? (
           <div className="flex justify-center py-24">
-            <Loader2 className="size-10 animate-spin text-amber-400" />
+            <Loader2 className="size-10 animate-spin text-amber-500 dark:text-amber-400" />
           </div>
         ) : venues.length === 0 ? (
           <motion.div
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
-            className="rounded-2xl border border-dashed border-[var(--color-border)] bg-[var(--color-surface)] py-20 text-center"
+            className="rounded-2xl border border-dashed border-[var(--color-border)] bg-[var(--color-surface)]/60 py-20 text-center dark:bg-white/[0.03]"
           >
             <Sparkles className="mx-auto size-10 text-amber-400/60" />
             <p className="mt-4 text-lg font-medium text-zinc-800 dark:text-zinc-300">
@@ -309,7 +295,7 @@ export function VenuesDiscovery() {
             <div className="mt-6 flex flex-col items-center justify-center gap-3 sm:flex-row">
               <Link
                 href={pilotCityLandingHref()}
-                className="inline-flex items-center gap-2 rounded-full border border-[var(--color-border)] bg-[var(--color-surface)] px-5 py-2.5 text-sm font-medium text-zinc-800 dark:border-white/15 dark:bg-white/[0.04] dark:text-zinc-100"
+                className="inline-flex items-center gap-2 rounded-full border border-[var(--color-border)] bg-[var(--color-surface)]/70 px-5 py-2.5 text-sm font-medium text-zinc-800 dark:bg-white/[0.03] dark:text-zinc-100"
               >
                 {t("venues.pilotLink", { city: DEFAULT_PILOT_CITY.name })}
               </Link>
@@ -372,7 +358,7 @@ function VenueCard({
       >
         <Link
           href={`/venue/${venue.slug}`}
-          className="group flex flex-col gap-4 overflow-hidden rounded-2xl border border-[var(--color-border)] bg-[var(--color-surface)] p-4 transition hover:border-amber-400/40 sm:flex-row"
+          className="group flex flex-col gap-4 overflow-hidden rounded-2xl border border-[var(--color-border)] bg-[var(--color-surface)]/60 p-4 transition hover:border-amber-400/40 dark:bg-white/[0.03] sm:flex-row"
         >
           <div className="relative h-36 w-full shrink-0 overflow-hidden rounded-xl sm:h-28 sm:w-44">
             <VenueCoverImage src={venue.coverImage} sizes="176px" />
@@ -433,7 +419,7 @@ function VenueCard({
       />
       <Link
         href={`/venue/${venue.slug}`}
-        className="relative flex h-full flex-col overflow-hidden rounded-2xl border border-[var(--color-border)] bg-[var(--color-surface)] shadow-lg backdrop-blur-sm transition-[border-color,box-shadow] duration-300 group-hover:border-amber-400/35"
+        className="relative flex h-full flex-col overflow-hidden rounded-2xl border border-[var(--color-border)] bg-[var(--color-surface)]/60 shadow-lg backdrop-blur-sm transition-[border-color,box-shadow] duration-300 group-hover:border-amber-400/35 dark:bg-white/[0.03]"
         style={{
           boxShadow: `0 20px 50px -28px ${accent}00`,
         }}
@@ -447,7 +433,7 @@ function VenueCard({
             className="transition-transform duration-700 ease-out group-hover:scale-[1.07]"
           />
           {/* Depth scrims */}
-          <div className="absolute inset-0 bg-gradient-to-t from-zinc-950/85 via-zinc-950/10 to-transparent" />
+          <div className="absolute inset-0 bg-gradient-to-t from-[var(--hero-scrim-edge)] via-[var(--color-background)]/10 to-transparent" />
           <div
             aria-hidden
             className="absolute inset-0 opacity-0 transition-opacity duration-500 group-hover:opacity-100"
@@ -465,11 +451,11 @@ function VenueCard({
 
           {/* Name + hours sit on the image for a poster feel */}
           <div className="absolute inset-x-0 bottom-0 min-w-0 p-3">
-            <h2 className="truncate text-[15px] font-bold leading-tight text-white drop-shadow-md">
+            <h2 className="truncate text-[15px] font-bold leading-tight text-zinc-900 drop-shadow-md dark:text-[var(--color-foreground)]">
               {title}
             </h2>
             {status.window ? (
-              <p className="mt-0.5 flex items-center gap-1 text-[10.5px] font-medium text-zinc-300/90">
+              <p className="mt-0.5 flex items-center gap-1 text-[10.5px] font-medium text-zinc-700 dark:text-zinc-300/90">
                 <Clock3 size={10} className="shrink-0 opacity-80" />
                 {status.window}
               </p>
@@ -552,9 +538,13 @@ function OpenStatusPill({
     <span
       className={cn(
         "inline-flex max-w-full items-center gap-1.5 truncate rounded-full border px-2 py-0.5 text-[10px] font-semibold backdrop-blur-md",
-        open && "border-emerald-400/30 bg-emerald-950/70 text-emerald-300",
-        later && "border-amber-400/30 bg-amber-950/70 text-amber-300",
-        !open && !later && "border-white/10 bg-zinc-950/70 text-zinc-400",
+        open &&
+          "border-emerald-400/30 bg-emerald-500/15 text-emerald-800 dark:bg-emerald-950/70 dark:text-emerald-300",
+        later &&
+          "border-amber-400/30 bg-amber-500/15 text-amber-800 dark:bg-amber-950/70 dark:text-amber-300",
+        !open &&
+          !later &&
+          "border-[var(--color-border)] bg-[var(--color-surface)]/80 text-zinc-600 dark:bg-[var(--color-background)]/70 dark:text-zinc-400",
         compact && "bg-transparent backdrop-blur-none",
       )}
     >
@@ -578,17 +568,17 @@ function RatingBadge({ venue }: { venue: PublicVenue }) {
 
   if (count > 0 && avg != null) {
     return (
-      <span className="inline-flex items-center gap-1 rounded-full border border-white/15 bg-black/60 px-2 py-0.5 text-[10px] font-medium text-amber-200 backdrop-blur-md">
-        <Star size={10} className="fill-amber-300 text-amber-300" />
+      <span className="inline-flex items-center gap-1 rounded-full border border-[var(--color-border)] bg-[var(--color-background)]/70 px-2 py-0.5 text-[10px] font-medium text-amber-800 backdrop-blur-md dark:text-amber-200">
+        <Star size={10} className="fill-amber-500 text-amber-600 dark:fill-amber-300 dark:text-amber-300" />
         {avg.toFixed(1)}
-        <span className="text-zinc-400">({count})</span>
+        <span className="text-zinc-600 dark:text-zinc-400">({count})</span>
       </span>
     );
   }
 
   return (
-    <span className="inline-flex items-center gap-1 rounded-full border border-white/15 bg-black/60 px-2 py-0.5 text-[10px] font-medium text-zinc-300 backdrop-blur-md">
-      <Star size={10} className="text-amber-400/70" />
+    <span className="inline-flex items-center gap-1 rounded-full border border-[var(--color-border)] bg-[var(--color-background)]/70 px-2 py-0.5 text-[10px] font-medium text-zinc-700 backdrop-blur-md dark:text-zinc-300">
+      <Star size={10} className="text-amber-600 dark:text-amber-400/70" />
       {t("venues.new")}
     </span>
   );
@@ -599,7 +589,7 @@ function VenueMetaBadges({ venue }: { venue: PublicVenue }) {
   const gameCount = venue.gameOfferingCount ?? 0;
   return (
     <div className="flex flex-wrap items-center justify-end gap-1.5">
-      <span className="inline-flex items-center gap-1 rounded-full border border-white/15 bg-black/60 px-2 py-0.5 text-[10px] text-zinc-200 backdrop-blur">
+      <span className="inline-flex items-center gap-1 rounded-full border border-[var(--color-border)] bg-[var(--color-background)]/70 px-2 py-0.5 text-[10px] text-zinc-700 backdrop-blur dark:text-zinc-200">
         <Banknote size={10} />
         {t("venues.pricesIn", { currency })}
       </span>
@@ -618,7 +608,7 @@ function VenueMetaBadges({ venue }: { venue: PublicVenue }) {
 function CategoryPill({ tag }: { tag: VenueCategoryTag }) {
   return (
     <span
-      className="rounded-full border border-white/20 bg-zinc-950/70 px-2 py-0.5 text-[10px] font-medium backdrop-blur-md"
+      className="rounded-full border border-[var(--color-border)] bg-[var(--color-background)]/70 px-2 py-0.5 text-[10px] font-medium backdrop-blur-md"
       style={{
         borderColor: tag.color ? `${tag.color}66` : undefined,
         color: tag.color ?? "#fde68a",

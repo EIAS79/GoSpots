@@ -1,6 +1,6 @@
 "use client";
 
-import { motion, useReducedMotion } from "framer-motion";
+import { motion } from "framer-motion";
 import { ArrowRight, MapPin, Sparkles, Store } from "lucide-react";
 import Link from "next/link";
 import { LocoraLogo } from "@/components/brand/locora-logo";
@@ -21,7 +21,6 @@ type Props = {
 /** SEO / GTM city landing — supply-first copy; directory browse is secondary until density. */
 export function CityLanding({ city }: Props) {
   const { t } = usePublicPrefs();
-  const reduce = useReducedMotion();
   const directoryHref = pilotCityDirectoryHref(city);
 
   const pillars = [
@@ -31,26 +30,8 @@ export function CityLanding({ city }: Props) {
   ];
 
   return (
-    <div className="relative min-h-screen bg-[var(--color-background)] text-[var(--color-foreground)]">
-      <div className="pointer-events-none absolute inset-0 -z-10 overflow-hidden">
-        <div className="aurora-mesh absolute inset-0 opacity-40 dark:opacity-50" />
-        {!reduce && (
-          <>
-            <motion.div
-              className="absolute -left-32 top-20 h-96 w-96 rounded-full bg-amber-500/15 blur-[100px] dark:bg-amber-500/20"
-              animate={{ x: [0, 40, 0], y: [0, 20, 0] }}
-              transition={{ duration: 14, repeat: Infinity, ease: "easeInOut" }}
-            />
-            <motion.div
-              className="absolute -right-24 bottom-10 h-80 w-80 rounded-full bg-emerald-500/10 blur-[90px] dark:bg-emerald-500/15"
-              animate={{ x: [0, -30, 0], y: [0, -25, 0] }}
-              transition={{ duration: 11, repeat: Infinity, ease: "easeInOut" }}
-            />
-          </>
-        )}
-      </div>
-
-      <header className="sticky top-0 z-40 border-b border-[var(--color-border)] bg-[color-mix(in_srgb,var(--color-background)_88%,transparent)] backdrop-blur-xl dark:border-white/5">
+    <div className="relative min-h-screen text-[var(--color-foreground)]">
+      <header className="sticky top-0 z-40 border-b border-[var(--color-border)] bg-[color-mix(in_srgb,var(--color-background)_88%,transparent)] backdrop-blur-xl">
         <div className="mx-auto flex max-w-7xl items-center justify-between gap-3 px-4 py-3 sm:px-6 sm:py-4 md:px-8">
           <LocoraLogo
             href="/"
@@ -58,20 +39,20 @@ export function CityLanding({ city }: Props) {
             showTagline
             animated
             tone="auto"
-            className="hidden min-w-0 sm:inline-flex"
+            className="hidden shrink-0 sm:inline-flex"
           />
           <LocoraLogo
             href="/"
             size="sm"
             tone="auto"
-            className="min-w-0 sm:hidden"
+            className="shrink-0 sm:hidden"
           />
           <div className="flex shrink-0 items-center gap-2 sm:gap-3">
             <LocaleCurrencySwitcher tone="auto" compact />
             <ThemeToggle />
             <Link
               href="/venues"
-              className="hidden rounded-full border border-[var(--color-border)] bg-[var(--color-surface)]/70 px-3 py-2 text-xs font-medium text-zinc-700 transition hover:border-amber-400/40 sm:inline-flex sm:text-sm dark:border-white/15 dark:bg-white/[0.04] dark:text-zinc-200"
+              className="hidden rounded-full border border-[var(--color-border)] bg-[var(--color-surface)]/70 px-3 py-2 text-xs font-medium text-zinc-700 transition hover:border-amber-400/40 sm:inline-flex sm:text-sm dark:bg-white/[0.03] dark:text-zinc-200"
             >
               {t("nav.allVenues")}
             </Link>
@@ -130,7 +111,7 @@ export function CityLanding({ city }: Props) {
           </Link>
           <Link
             href={directoryHref}
-            className="inline-flex items-center justify-center gap-2 rounded-full border border-[var(--color-border)] bg-[var(--color-surface)]/70 px-6 py-3 text-sm font-medium text-zinc-800 transition hover:border-amber-400/40 dark:border-white/15 dark:bg-white/[0.04] dark:text-zinc-100"
+            className="inline-flex items-center justify-center gap-2 rounded-full border border-[var(--color-border)] bg-[var(--color-surface)]/70 px-6 py-3 text-sm font-medium text-zinc-800 transition hover:border-amber-400/40 dark:bg-white/[0.03] dark:text-zinc-100"
           >
             <Store size={16} />
             {t("cityLanding.ctaBrowse", { city: city.name })}
@@ -144,7 +125,7 @@ export function CityLanding({ city }: Props) {
               initial={{ opacity: 0, y: 12 }}
               animate={{ opacity: 1, y: 0 }}
               transition={{ delay: 0.12 + i * 0.06, duration: 0.4, ease: EASE }}
-              className="rounded-2xl border border-[var(--color-border)] bg-[var(--color-surface)]/60 p-5 dark:border-white/10 dark:bg-white/[0.03]"
+              className="rounded-2xl border border-[var(--color-border)] bg-[var(--color-surface)]/60 p-5 dark:bg-white/[0.03]"
             >
               <Sparkles
                 size={18}

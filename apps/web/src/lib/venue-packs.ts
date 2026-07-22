@@ -219,7 +219,7 @@ export const VENUE_ADD_ONS: Record<AddOnId, VenueAddOn> = {
     name: 'Venue page & discovery',
     tagline: 'Public venue page plus directory placement.',
     details:
-      'Publish your venue on Locora with a dedicated public page, and unlock advertising / promoted placement in the venues directory so more guests can find you.',
+      'Publish your venue on GoSpots with a dedicated public page, and unlock advertising / promoted placement in the venues directory so more guests can find you.',
     monthlyPrice: 10,
     currency: 'EUR',
     modules: ['marketing'],
@@ -255,11 +255,15 @@ export const VENUE_PACK_LIST = Object.values(VENUE_PACKS);
 export const VENUE_ADD_ON_LIST = Object.values(VENUE_ADD_ONS);
 
 /**
- * Self-serve signup / marketing catalog (bible #33 Phase A).
- * `dining` / `bar` / `hotel_fb` stay in VENUE_PACKS for legacy + dashboard editors;
- * they are not offered as equal self-serve tiles — restaurant/hotel → contact sales.
+ * Self-serve signup / marketing catalog — all venue types.
  */
-export const SELF_SERVE_PACK_IDS = ["gaming", "mixed"] as const;
+export const SELF_SERVE_PACK_IDS = [
+  "gaming",
+  "dining",
+  "bar",
+  "hotel_fb",
+  "mixed",
+] as const;
 export type SelfServePackId = (typeof SELF_SERVE_PACK_IDS)[number];
 
 export const SELF_SERVE_PACK_LIST: VenuePack[] = SELF_SERVE_PACK_IDS.map(
@@ -309,7 +313,11 @@ export function defaultMarketingBundlesForPack(
       "food_dining",
     ]);
   }
-  return new Set<MarketingBundleId>(["ops_trust", "gaming_floor"]);
+  if (packId === "gaming") {
+    return new Set<MarketingBundleId>(["ops_trust", "gaming_floor"]);
+  }
+  // dining | bar | hotel_fb
+  return new Set<MarketingBundleId>(["ops_trust", "food_dining"]);
 }
 
 export function addOnIdsFromMarketingBundles(
@@ -322,6 +330,18 @@ export function addOnIdsFromMarketingBundles(
     for (const id of bundle.addOnIds) ids.push(id);
   }
   return ids;
+}
+
+/** Reverse map: which marketing bundles are fully covered by selected add-ons. */
+export function marketingBundlesFromAddOns(
+  ids: Iterable<AddOnId>,
+): Set<MarketingBundleId> {
+  const set = new Set(ids);
+  const out = new Set<MarketingBundleId>();
+  for (const bundle of MARKETING_BUNDLES) {
+    if (bundle.addOnIds.every((id) => set.has(id))) out.add(bundle.id);
+  }
+  return out;
 }
 
 export function parseAddOns(raw: string | null | undefined): AddOnId[] {
@@ -444,20 +464,16 @@ export function featuresMonthlyTotal(
 }
 
 export function showsGamingUi(
-  packId: string | null | undefined,
+  _packId: string | null | undefined,
   addOnsRaw: string | null | undefined,
 ): boolean {
-  const pack = VENUE_PACKS[resolvePackId(packId)];
-  if (pack.showsGaming) return true;
   return parseAddOns(addOnsRaw).some((id) => VENUE_ADD_ONS[id].unlocksGaming);
 }
 
 export function showsDiningUi(
-  packId: string | null | undefined,
+  _packId: string | null | undefined,
   addOnsRaw?: string | null,
 ): boolean {
-  const pack = VENUE_PACKS[resolvePackId(packId)];
-  if (pack.showsDining) return true;
   return parseAddOns(addOnsRaw).some((id) => VENUE_ADD_ONS[id].unlocksDining);
 }
 

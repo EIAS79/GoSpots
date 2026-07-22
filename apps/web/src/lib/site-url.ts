@@ -4,5 +4,5 @@ export function getSiteUrlString(): string {
   if (explicit) return explicit.replace(/\/$/, "");
   if (process.env.VERCEL_URL)
     return `https://${process.env.VERCEL_URL.replace(/^https?:\/\//, "")}`;
-  return "https://Locora.vercel.app";
+  return "https://www.gospots.eu";
 }

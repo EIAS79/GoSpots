@@ -127,7 +127,7 @@ export function LivePreview() {
             <span className="h-2.5 w-2.5 shrink-0 rounded-full bg-amber-400/80" />
             <span className="h-2.5 w-2.5 shrink-0 rounded-full bg-emerald-400/80" />
             <span className="ml-2 truncate text-xs text-zinc-500 sm:ml-3">
-              locora.app / operations
+              gospots.eu / operations
             </span>
           </div>
           <div className="hidden items-center gap-2 text-xs text-zinc-600 sm:flex dark:text-zinc-400">

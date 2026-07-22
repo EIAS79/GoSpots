@@ -1,7 +1,7 @@
 /** Staff login domain — not valid for public /register */
-export const VENUE_STAFF_EMAIL_SUFFIX = '.locora';
-/** Pre-rebrand logins still accepted */
-export const LEGACY_VENUE_STAFF_EMAIL_SUFFIX = '.gospots';
+export const VENUE_STAFF_EMAIL_SUFFIX = '.gospots';
+/** Pre-rebrand Locora staff logins still accepted */
+export const LEGACY_VENUE_STAFF_EMAIL_SUFFIX = '.locora';
 export const LEGACY_VENUE_STAFF_EMAIL_SUFFIX_VENUEFLOW = '.venueflow';
 
 export function buildStaffLoginEmail(handle: string, shopSlug: string): string {

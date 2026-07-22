@@ -10,7 +10,6 @@ import {
 import { TRIAL_STAFF_SEAT_LIMIT } from "@/lib/plan";
 import {
   featuresMonthlyTotal,
-  recommendedFeaturesForPack,
   serializeAddOns,
   VENUE_ADD_ONS,
   type AddOnId,
@@ -96,11 +95,7 @@ export function VenuePackPanel({
   );
 
   const [packId, setPackId] = useState<VenuePackId>(editorSource.packId);
-  const [features, setFeatures] = useState<AddOnId[]>(() =>
-    savedFeatures.length
-      ? savedFeatures
-      : recommendedFeaturesForPack(editorSource.packId),
-  );
+  const [features, setFeatures] = useState<AddOnId[]>(() => savedFeatures);
   const [seatQty, setSeatQty] = useState(
     editorSource.seats || (trialActive ? trialSeatMax : 0),
   );
@@ -111,9 +106,7 @@ export function VenuePackPanel({
   useEffect(() => {
     setPackId(editorSource.packId);
     const next = parseFeatureList(editorSource.addOns);
-    setFeatures(
-      next.length ? next : recommendedFeaturesForPack(editorSource.packId),
-    );
+    setFeatures(next);
     setSeatQty(
       editorSource.seats ||
         (trialActive && next.includes("team_accounts") ? trialSeatMax : 0),
@@ -242,11 +235,7 @@ export function VenuePackPanel({
                 key={pack.id}
                 type="button"
                 onClick={() => {
-                  const next = pack.id as VenuePackId;
-                  setPackId(next);
-                  if (neverConfigured) {
-                    setFeatures(recommendedFeaturesForPack(next));
-                  }
+                  setPackId(pack.id as VenuePackId);
                   setSaved(false);
                 }}
                 className={cn(

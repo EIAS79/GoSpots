@@ -63,7 +63,7 @@ export function VenueFinder() {
             <span className="h-2.5 w-2.5 shrink-0 rounded-full bg-amber-400/80" />
             <span className="h-2.5 w-2.5 shrink-0 rounded-full bg-emerald-400/80" />
             <span className="ml-2 truncate text-xs text-zinc-500 sm:ml-3">
-              locora.app / venues
+              gospots.eu / venues
             </span>
           </div>
           <Link

@@ -124,10 +124,10 @@ export class MailService {
 
   private fromAddress() {
     const name =
-      this.config.get<string>('MAIL_FROM_NAME')?.trim() || 'Locora';
+      this.config.get<string>('MAIL_FROM_NAME')?.trim() || 'GoSpots';
     const email =
       this.config.get<string>('MAIL_FROM')?.trim() ||
-      'bookings@notifications.locora.app';
+      'bookings@notifications.gospots.eu';
     return `${name} <${email}>`;
   }
 

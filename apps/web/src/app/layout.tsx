@@ -21,12 +21,12 @@ const siteUrl = getSiteUrlString();
 export const metadata: Metadata = {
   metadataBase: new URL(siteUrl),
   title: {
-    default: "Locora — host every location",
-    template: "%s · Locora",
+    default: "GoSpots — host every location",
+    template: "%s · GoSpots",
   },
   description:
-    "Locora is the dashboard for gaming centers, restaurants, and venues: publish your site, take reservations, collect reviews, and run day-to-day operations from one place.",
-  applicationName: "Locora",
+    "GoSpots is the dashboard for gaming centers, restaurants, and venues: publish your site, take reservations, collect reviews, and run day-to-day operations from one place.",
+  applicationName: "GoSpots",
   keywords: [
     "venue dashboard",
     "gaming center software",
@@ -36,27 +36,32 @@ export const metadata: Metadata = {
     "venue reviews and contact",
     "entertainment venue billing",
   ],
+  icons: {
+    icon: [{ url: "/brand/gospots-icon.png", type: "image/png" }],
+    shortcut: "/brand/gospots-icon.png",
+    apple: "/brand/gospots-icon.png",
+  },
   openGraph: {
     type: "website",
     locale: "en_US",
     url: siteUrl,
-    siteName: "Locora",
-    title: "Locora — host every location",
+    siteName: "GoSpots",
+    title: "GoSpots — host every location",
     description:
       "Dashboard for gaming centers, restaurants, and venues — publish your site, take reservations, collect reviews.",
     images: [
       {
-        url: "/brand/locora-og.svg",
-        alt: "Locora",
+        url: "/brand/gospots-og.png",
+        alt: "GoSpots",
       },
     ],
   },
   twitter: {
     card: "summary",
-    title: "Locora — host every location",
+    title: "GoSpots — host every location",
     description:
       "Host every location: dashboard, public venue site, bookings, reviews, and contact.",
-    images: ["/brand/locora-og.svg"],
+    images: ["/brand/gospots-og.png"],
   },
   robots: { index: true, follow: true },
 };
@@ -73,8 +78,8 @@ export default function RootLayout({
       className={`${geistSans.variable} ${geistMono.variable} relative h-full antialiased`}
     >
       <body className="relative min-h-full bg-[var(--color-background)] font-sans text-[var(--color-foreground)] transition-colors duration-300">
-        <Script id="locora-theme-init" strategy="beforeInteractive">
-          {`(function(){try{var t=localStorage.getItem('locora-theme')||localStorage.getItem('gospots-theme');var r=document.documentElement;if(t==='light'){r.classList.remove('dark');r.dataset.theme='light';}else{r.classList.add('dark');r.dataset.theme='dark';}}catch(e){document.documentElement.classList.add('dark');document.documentElement.dataset.theme='dark';}})();`}
+        <Script id="gospots-theme-init" strategy="beforeInteractive">
+          {`(function(){try{var t=localStorage.getItem('gospots-theme')||localStorage.getItem('locora-theme');var r=document.documentElement;if(t==='light'){r.classList.remove('dark');r.dataset.theme='light';}else{r.classList.add('dark');r.dataset.theme='dark';}}catch(e){document.documentElement.classList.add('dark');document.documentElement.dataset.theme='dark';}})();`}
         </Script>
         <AppProviders>
           <OfflineBanner />

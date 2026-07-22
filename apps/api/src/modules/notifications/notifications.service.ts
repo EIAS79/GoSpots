@@ -616,7 +616,7 @@ export class NotificationsService {
       dedupeKey: 'welcome',
       section: 'system',
       type: NotificationType.SYSTEM,
-      title: `Welcome to Locora, ${shopName}`,
+      title: `Welcome to GoSpots, ${shopName}`,
       body: 'Your venue dashboard is ready. Set up your menu, tables, and hours to go live.',
       href: '/settings',
     });

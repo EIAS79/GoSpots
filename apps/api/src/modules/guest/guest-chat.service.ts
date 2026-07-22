@@ -422,7 +422,14 @@ export class GuestChatService {
       ...(opts.status ? { status: opts.status } : {}),
     };
 
-    const [items, total, waitingCount] = await Promise.all([
+    const [
+      items,
+      total,
+      statusGroups,
+      notifiedCount,
+      contactCount,
+      attentionCount,
+    ] = await Promise.all([
       this.prisma.guestChat.findMany({
         where,
         orderBy: [{ status: 'asc' }, { updatedAt: 'desc' }],
@@ -433,14 +440,58 @@ export class GuestChatService {
         },
       }),
       this.prisma.guestChat.count({ where }),
+      this.prisma.guestChat.groupBy({
+        by: ['status'],
+        where: { shopId },
+        _count: { _all: true },
+      }),
       this.prisma.guestChat.count({
-        where: { shopId, status: GuestChatStatus.WAITING },
+        where: {
+          shopId,
+          status: { not: GuestChatStatus.ENDED },
+          lastGuestPingAt: { not: null },
+        },
+      }),
+      this.prisma.contactMessage.count({ where: { shopId } }),
+      this.prisma.guestChat.count({
+        where: {
+          shopId,
+          status: { not: GuestChatStatus.ENDED },
+          OR: [
+            { status: GuestChatStatus.WAITING },
+            { lastGuestPingAt: { not: null } },
+          ],
+        },
       }),
     ]);
+
+    const byStatus: Record<GuestChatStatus, number> = {
+      WAITING: 0,
+      OPEN: 0,
+      PAUSED: 0,
+      ENDED: 0,
+    };
+    for (const row of statusGroups) {
+      byStatus[row.status] = row._count._all;
+    }
+    const waitingCount = byStatus.WAITING;
+    const allCount =
+      byStatus.WAITING + byStatus.OPEN + byStatus.PAUSED + byStatus.ENDED;
 
     return {
       total,
       waitingCount,
+      notifiedCount,
+      attentionCount,
+      contactCount,
+      counts: {
+        ALL: allCount,
+        WAITING: byStatus.WAITING,
+        OPEN: byStatus.OPEN,
+        PAUSED: byStatus.PAUSED,
+        ENDED: byStatus.ENDED,
+        notified: notifiedCount,
+      },
       items: items.map((c) => ({
         id: c.id,
         guestName: c.guestName,
@@ -457,6 +508,54 @@ export class GuestChatService {
           : null,
         messageCount: undefined as number | undefined,
       })),
+    };
+  }
+
+  async badgeForShop(actor: JwtAccessPayload) {
+    this.assertStaffRead(actor);
+    const shopId = requireShopId(actor);
+    try {
+      await this.assertShopHasMessaging(shopId);
+    } catch {
+      return {
+        waiting: 0,
+        notified: 0,
+        attention: 0,
+        contact: 0,
+        total: 0,
+      };
+    }
+
+    const [waiting, notified, attention, contact] = await Promise.all([
+      this.prisma.guestChat.count({
+        where: { shopId, status: GuestChatStatus.WAITING },
+      }),
+      this.prisma.guestChat.count({
+        where: {
+          shopId,
+          status: { not: GuestChatStatus.ENDED },
+          lastGuestPingAt: { not: null },
+        },
+      }),
+      this.prisma.guestChat.count({
+        where: {
+          shopId,
+          status: { not: GuestChatStatus.ENDED },
+          OR: [
+            { status: GuestChatStatus.WAITING },
+            { lastGuestPingAt: { not: null } },
+          ],
+        },
+      }),
+      this.prisma.contactMessage.count({ where: { shopId } }),
+    ]);
+
+    return {
+      waiting,
+      notified,
+      attention,
+      contact,
+      total: attention + contact,
     };
   }
 
@@ -491,6 +590,7 @@ export class GuestChatService {
         status: GuestChatStatus.OPEN,
         staffJoinedAt: chat.staffJoinedAt ?? new Date(),
         staffUserId: actor.sub,
+        lastGuestPingAt: null,
       },
       include: { messages: { orderBy: { createdAt: 'asc' }, take: 300 } },
     });
@@ -585,6 +685,7 @@ export class GuestChatService {
           status: GuestChatStatus.OPEN,
           staffJoinedAt: new Date(),
           staffUserId: actor.sub,
+          lastGuestPingAt: null,
         },
       });
     }
@@ -599,7 +700,7 @@ export class GuestChatService {
     });
     await this.prisma.guestChat.update({
       where: { id, shopId },
-      data: { updatedAt: new Date() },
+      data: { updatedAt: new Date(), lastGuestPingAt: null },
     });
 
     return this.serializeMessage(msg);

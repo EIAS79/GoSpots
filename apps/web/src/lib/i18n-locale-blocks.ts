@@ -17,6 +17,12 @@ export const deLocaleBlocks: LocaleBlocks = {
       "Funktionen für {pack} wählen und speichern — passende Dashboard-Bereiche werden freigeschaltet. Während der Testphase können Sie sie frei ändern.",
     setupPaid:
       "Wählen Sie unten die Funktionen für {pack}, speichern Sie, und starten Sie die Abrechnung, wenn Sie bereit sind. Bis dahin wird nichts berechnet.",
+    gettingStartedTitle: "Erste Schritte",
+    gettingStartedBodyTrial:
+      "Wählen Sie unten die benötigten Funktionen für {pack} und speichern Sie — passende Seitenleisten-Bereiche werden freigeschaltet. Während der Testphase können Sie sie frei ändern.",
+    gettingStartedBodyPaid:
+      "Wählen Sie unten die benötigten Funktionen für {pack} und speichern Sie, dann starten Sie die Abrechnung, wenn Sie bereit sind. Bis dahin wird nichts berechnet.",
+    optionalSetupChecklist: "Optionale Setup-Checkliste",
     trialHeadline: "{days}-tägige kostenlose Testphase · {left} {dayWord} übrig",
     day: "Tag",
     days: "Tage",
@@ -146,7 +152,7 @@ export const deLocaleBlocks: LocaleBlocks = {
       name: "Venue-Seite & Entdeckung",
       tagline: "Öffentliche Venue-Seite plus Verzeichnisplatzierung.",
       details:
-        "Veröffentlichen Sie Ihre Venue auf Locora mit einer eigenen öffentlichen Seite und schalten Sie Werbung / prominente Platzierung im Venue-Verzeichnis frei, damit mehr Gäste Sie finden.",
+        "Veröffentlichen Sie Ihre Venue auf GoSpots mit einer eigenen öffentlichen Seite und schalten Sie Werbung / prominente Platzierung im Venue-Verzeichnis frei, damit mehr Gäste Sie finden.",
     },
     guest_chat: {
       name: "Gästenachrichten",
@@ -353,6 +359,12 @@ export const frLocaleBlocks: LocaleBlocks = {
       "Choisissez les fonctionnalités pour {pack} et enregistrez — les sections correspondantes du tableau de bord se débloquent. Vous pouvez les modifier librement pendant l’essai.",
     setupPaid:
       "Choisissez ci-dessous les fonctionnalités pour {pack}, enregistrez, puis lancez la facturation quand vous êtes prêt. Rien n’est facturé avant.",
+    gettingStartedTitle: "Pour commencer",
+    gettingStartedBodyTrial:
+      "Choisissez ci-dessous les fonctionnalités nécessaires pour {pack} et enregistrez — les sections correspondantes du menu se débloquent. Vous pouvez les modifier librement pendant l’essai.",
+    gettingStartedBodyPaid:
+      "Choisissez ci-dessous les fonctionnalités nécessaires pour {pack} et enregistrez, puis lancez la facturation quand vous êtes prêt. Rien n’est facturé avant.",
+    optionalSetupChecklist: "Checklist de configuration (optionnelle)",
     trialHeadline: "Essai gratuit de {days} jours · {left} {dayWord} restant(s)",
     day: "jour",
     days: "jours",
@@ -482,7 +494,7 @@ export const frLocaleBlocks: LocaleBlocks = {
       name: "Page du lieu et découverte",
       tagline: "Page publique du lieu plus placement dans l’annuaire.",
       details:
-        "Publiez votre lieu sur Locora avec une page publique dédiée, et débloquez la publicité / le placement promu dans l’annuaire pour que plus de clients vous trouvent.",
+        "Publiez votre lieu sur GoSpots avec une page publique dédiée, et débloquez la publicité / le placement promu dans l’annuaire pour que plus de clients vous trouvent.",
     },
     guest_chat: {
       name: "Messagerie clients",
@@ -689,6 +701,12 @@ export const esLocaleBlocks: LocaleBlocks = {
       "Elija funciones para {pack} y guarde — se desbloquean las secciones correspondientes del panel. Puede cambiarlas libremente durante la prueba.",
     setupPaid:
       "Elija abajo las funciones para {pack}, guarde y luego inicie la facturación cuando esté listo. No se cobra nada hasta entonces.",
+    gettingStartedTitle: "Primeros pasos",
+    gettingStartedBodyTrial:
+      "Elija abajo las funciones que necesita para {pack} y guarde — las secciones del menú correspondientes se desbloquean. Puede cambiarlas libremente durante la prueba.",
+    gettingStartedBodyPaid:
+      "Elija abajo las funciones que necesita para {pack} y guarde, luego inicie la facturación cuando esté listo. No se cobra nada hasta entonces.",
+    optionalSetupChecklist: "Lista de configuración opcional",
     trialHeadline: "Prueba gratuita de {days} días · quedan {left} {dayWord}",
     day: "día",
     days: "días",
@@ -818,7 +836,7 @@ export const esLocaleBlocks: LocaleBlocks = {
       name: "Página del local y descubrimiento",
       tagline: "Página pública del local más presencia en el directorio.",
       details:
-        "Publique su local en Locora con una página pública dedicada y desbloquee publicidad / colocación promocionada en el directorio para que más invitados le encuentren.",
+        "Publique su local en GoSpots con una página pública dedicada y desbloquee publicidad / colocación promocionada en el directorio para que más invitados le encuentren.",
     },
     guest_chat: {
       name: "Mensajería de invitados",
@@ -1025,6 +1043,12 @@ export const arLocaleBlocks: LocaleBlocks = {
       "اختر الميزات لـ {pack} واحفظ — تُفتح أقسام لوحة التحكم المطابقة. يمكنك تغييرها بحرية أثناء الفترة التجريبية.",
     setupPaid:
       "اختر الميزات أدناه لـ {pack}، احفظ، ثم ابدأ الفوترة عندما تكون جاهزًا. لا يُخصم شيء حتى ذلك الحين.",
+    gettingStartedTitle: "البدء",
+    gettingStartedBodyTrial:
+      "اختر الميزات التي تحتاجها لـ {pack} أدناه واحفظ — تُفتح أقسام القائمة الجانبية المطابقة. يمكنك تغييرها بحرية أثناء التجربة.",
+    gettingStartedBodyPaid:
+      "اختر الميزات التي تحتاجها لـ {pack} أدناه واحفظ، ثم ابدأ الفوترة عندما تكون جاهزًا. لا يُخصم شيء حتى ذلك الحين.",
+    optionalSetupChecklist: "قائمة إعداد اختيارية",
     trialHeadline: "تجربة مجانية لمدة {days} يومًا · متبقٍ {left} {dayWord}",
     day: "يوم",
     days: "أيام",
@@ -1154,7 +1178,7 @@ export const arLocaleBlocks: LocaleBlocks = {
       name: "صفحة المكان والاكتشاف",
       tagline: "صفحة عامة للمكان بالإضافة إلى الظهور في الدليل.",
       details:
-        "انشر مكانك على Locora بصفحة عامة مخصصة، وافتح الإعلان / الموضع المروَّج في دليل الأماكن ليجدك المزيد من الضيوف.",
+        "انشر مكانك على GoSpots بصفحة عامة مخصصة، وافتح الإعلان / الموضع المروَّج في دليل الأماكن ليجدك المزيد من الضيوف.",
     },
     guest_chat: {
       name: "مراسلة الضيوف",

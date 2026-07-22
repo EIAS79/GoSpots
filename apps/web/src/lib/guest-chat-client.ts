@@ -34,12 +34,22 @@ export type GuestChat = {
   canGuestPing?: boolean;
 };
 
-const TOKEN_KEY = (slug: string) => `Locora-guest-chat:${slug}`;
+const TOKEN_KEY = (slug: string) => `gospots-guest-chat:${slug}`;
+const LEGACY_TOKEN_KEYS = (slug: string) => [
+  `GoSpots-guest-chat:${slug}`,
+  `Locora-guest-chat:${slug}`,
+];
 
 export function readGuestChatToken(slug: string): string | null {
   if (typeof window === "undefined") return null;
   try {
-    return window.localStorage.getItem(TOKEN_KEY(slug));
+    const current = window.localStorage.getItem(TOKEN_KEY(slug));
+    if (current) return current;
+    for (const key of LEGACY_TOKEN_KEYS(slug)) {
+      const legacy = window.localStorage.getItem(key);
+      if (legacy) return legacy;
+    }
+    return null;
   } catch {
     return null;
   }
@@ -56,6 +66,9 @@ export function writeGuestChatToken(slug: string, token: string) {
 export function clearGuestChatToken(slug: string) {
   try {
     window.localStorage.removeItem(TOKEN_KEY(slug));
+    for (const key of LEGACY_TOKEN_KEYS(slug)) {
+      window.localStorage.removeItem(key);
+    }
   } catch {
     /* ignore */
   }

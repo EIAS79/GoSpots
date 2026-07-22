@@ -3,7 +3,7 @@
 **As of:** 2026-07-22  
 **Related:** API `apps/api/src/modules/gdpr/**`, [`RETENTION_POLICY.md`](./RETENTION_POLICY.md)
 
-This is an inventory of personal / operational data categories stored by Locora/GoSpots. It is not legal advice.
+This is an inventory of personal / operational data categories stored by GoSpots/GoSpots. It is not legal advice.
 
 | Category | Examples | Where stored | Typical purpose | Notes |
 |----------|----------|--------------|-----------------|-------|

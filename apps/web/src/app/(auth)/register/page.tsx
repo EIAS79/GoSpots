@@ -20,7 +20,6 @@ import { cn } from "@/lib/cn";
 import { usePublicPrefs } from "@/lib/public-prefs-context";
 import { useAuth } from "@/lib/use-auth";
 import { dashboardHref } from "@/lib/venue-dashboard";
-import { ensureOnboardingProgress } from "@/lib/onboarding-progress";
 import {
   SELF_SERVE_PACK_LIST,
   TRIAL_DURATION_DAYS,
@@ -136,8 +135,7 @@ export default function RegisterPage() {
       await reload();
       const base = session.venuePath ?? null;
       if (base) {
-        ensureOnboardingProgress(base);
-        router.replace(dashboardHref(base, "/onboarding"));
+        router.replace(dashboardHref(base, "/subscription"));
       } else {
         router.replace("/dashboard");
       }
@@ -356,16 +354,6 @@ export default function RegisterPage() {
               </button>
             );
           })}
-          <p className="pt-1 text-[11px] leading-relaxed text-zinc-500">
-            {t("auth.register.contactSalesLead")}{" "}
-            <a
-              href="mailto:hello@locora.app"
-              className="text-emerald-400 underline-offset-2 hover:underline"
-            >
-              {t("auth.register.contactSales")}
-            </a>
-            .
-          </p>
           <p className="pt-2 text-[11px] text-zinc-600">
             {t("auth.register.trialNote", { days: TRIAL_DURATION_DAYS })}
           </p>

@@ -39,18 +39,17 @@ export function OurCsiLogo({
 }
 
 /**
- * Dashboard sidebar brand strip: Locora + powered-by OUR-CS.
- * Logo sits on a light plate so the navy wordmark stays readable on dark chrome.
+ * Dashboard sidebar brand strip: GoSpots logo + powered-by OUR-CS.
  */
 export function DashboardSidebarBrand({ className }: { className?: string }) {
   return (
     <div className={cn("space-y-2", className)}>
       <LocoraLogo
         href="/"
-        size="sm"
+        size="md"
         showTagline={false}
         tone="onDark"
-        className="min-w-0"
+        className="w-full max-w-full"
       />
       <div
         className="flex items-center gap-2 rounded-xl border border-white/10 bg-white/[0.97] px-2.5 py-1.5 shadow-sm"

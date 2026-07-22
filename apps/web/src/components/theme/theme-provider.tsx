@@ -23,7 +23,7 @@ type ThemeContextValue = {
   isPublicTheme: boolean;
 };
 
-const STORAGE_KEY = "locora-theme";
+const STORAGE_KEY = "gospots-theme";
 
 const ThemeContext = createContext<ThemeContextValue | null>(null);
 

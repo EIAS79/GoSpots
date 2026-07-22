@@ -37,6 +37,7 @@ import {
 import {
   resolveAddOnsCsv,
   resolvePackId,
+  recommendedFeaturesForPack,
   serializeAddOns,
   syncSubscriptionAddOnRows,
   type AddOnId,
@@ -187,7 +188,10 @@ export class AuthService {
     if (slugTaken) throw new ConflictException('Venue URL slug already taken.');
 
     const packId = resolvePackId(dto.packId);
-    const addOnsCsv = serializeAddOns((dto.addOns ?? []) as AddOnId[]);
+    const addOnsCsv =
+      dto.addOns != null
+        ? serializeAddOns(dto.addOns as AddOnId[])
+        : serializeAddOns(recommendedFeaturesForPack(packId));
     const tier = tierForPack(packId, addOnsCsv);
 
     const { user, shop } = await this.prisma.$transaction(async (tx) => {
@@ -281,7 +285,10 @@ export class AuthService {
     if (slugTaken) throw new ConflictException('Venue URL slug already taken.');
 
     const packId = resolvePackId(dto.packId);
-    const addOnsCsv = serializeAddOns((dto.addOns ?? []) as AddOnId[]);
+    const addOnsCsv =
+      dto.addOns != null
+        ? serializeAddOns(dto.addOns as AddOnId[])
+        : serializeAddOns(recommendedFeaturesForPack(packId));
     const tier = tierForPack(packId, addOnsCsv);
 
     const shop = await this.prisma.$transaction(async (tx) => {
@@ -579,7 +586,7 @@ export class AuthService {
       !isVenueStaffLoginEmail(loginId)
     ) {
       throw new BadRequestException(
-        'Staff sign-in needs your login ID (name@venue.locora).',
+        'Staff sign-in needs your login ID (name@venue.gospots).',
       );
     }
 

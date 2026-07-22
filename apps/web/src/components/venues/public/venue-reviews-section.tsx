@@ -352,7 +352,7 @@ export function VenueReviewsSection({
                 <StarRatingDisplay rating={r.rating} size={12} />
               </div>
               {r.comment ? (
-                <p className="mt-2 text-sm leading-relaxed text-zinc-400">
+                <p className="mt-2 text-sm leading-relaxed text-zinc-600 dark:text-zinc-400">
                   {r.comment}
                 </p>
               ) : null}

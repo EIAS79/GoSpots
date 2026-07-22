@@ -1,5 +1,6 @@
 import type { ScheduleCategorySection, ScheduleUnit } from "@/lib/reservations-client";
 import type { SeatSectionMeta } from "@/components/reservations/seat-floor-map";
+import { normalizeSeatingZone } from "@/lib/seating-zone";
 
 export type FloorSectionGroup = {
   section: SeatSectionMeta | null;
@@ -9,6 +10,7 @@ export type FloorSectionGroup = {
 export function buildFloorSectionGroups(
   units: ScheduleUnit[],
   sections: ScheduleCategorySection[] = [],
+  mainAreaLabel = "Main area",
 ): FloorSectionGroup[] {
   const sectionMeta: SeatSectionMeta[] = sections.map((s) => ({
     id: s.id,
@@ -17,6 +19,7 @@ export function buildFloorSectionGroups(
     isVip: s.isVip,
     seatsPerRow: s.seatsPerRow,
     sortOrder: s.sortOrder,
+    zone: s.zone ?? null,
   }));
 
   const sorted = [...sectionMeta].sort(
@@ -43,11 +46,12 @@ export function buildFloorSectionGroups(
     groups.push({
       section: {
         id: `unassigned-${floor}`,
-        name: "Main area",
+        name: mainAreaLabel,
         floor,
         isVip: false,
         seatsPerRow: 6,
         sortOrder: 0,
+        zone: null,
       },
       units: unassigned,
     });
@@ -57,11 +61,12 @@ export function buildFloorSectionGroups(
     groups.push({
       section: {
         id: "main",
-        name: "Main area",
+        name: mainAreaLabel,
         floor: 1,
         isVip: false,
         seatsPerRow: 6,
         sortOrder: 0,
+        zone: null,
       },
       units,
     });
@@ -87,6 +92,17 @@ export function layoutKey(group: FloorSectionGroup, index: number): string {
   return group.section?.id ?? `layout-${index}`;
 }
 
-export function layoutLabel(group: FloorSectionGroup): string {
-  return group.section?.name ?? "Main area";
+export function layoutLabel(
+  group: FloorSectionGroup,
+  opts?: {
+    mainAreaLabel?: string;
+    zoneLabel?: (zone: string) => string;
+  },
+): string {
+  const name = group.section?.name ?? opts?.mainAreaLabel ?? "Main area";
+  const zone = group.section?.zone;
+  if (zone && opts?.zoneLabel) {
+    return `${name} · ${opts.zoneLabel(normalizeSeatingZone(zone))}`;
+  }
+  return name;
 }

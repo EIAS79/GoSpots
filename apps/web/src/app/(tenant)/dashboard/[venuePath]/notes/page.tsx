@@ -10,6 +10,7 @@ import {
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { FeatureGate } from "@/components/subscription/feature-gate";
 import { TenantPage } from "@/components/layout/tenant-page";
+import { ModalPortal } from "@/components/ui/modal-portal";
 import { cn } from "@/lib/cn";
 import { hasPermission } from "@/lib/auth-client";
 import {
@@ -101,6 +102,150 @@ function defaultStaffName(user: {
   );
 }
 
+function previewBody(body: string, max = 120) {
+  const trimmed = body.replace(/\s+/g, " ").trim();
+  if (trimmed.length <= max) return trimmed;
+  return `${trimmed.slice(0, max).trimEnd()}…`;
+}
+
+function NoteDetailModal({
+  note,
+  importanceLabel,
+  canWrite,
+  locale,
+  t,
+  onClose,
+  onArchive,
+}: {
+  note: ShopNote;
+  importanceLabel: string;
+  canWrite: boolean;
+  locale?: string;
+  t: NoteT;
+  onClose: () => void;
+  onArchive: (id: string) => void;
+}) {
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") onClose();
+    };
+    window.addEventListener("keydown", onKey);
+    const prev = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+    return () => {
+      window.removeEventListener("keydown", onKey);
+      document.body.style.overflow = prev;
+    };
+  }, [onClose]);
+
+  return (
+    <ModalPortal>
+      <div
+        className="fixed inset-0 z-[400] flex items-center justify-center bg-black/70 p-4 backdrop-blur-sm"
+        role="presentation"
+        onClick={onClose}
+      >
+        <div
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="note-detail-title"
+          className="flex max-h-[min(90dvh,40rem)] w-full max-w-lg flex-col overflow-hidden rounded-2xl border border-white/10 bg-zinc-900 shadow-2xl shadow-black/50"
+          onClick={(e) => e.stopPropagation()}
+        >
+          <div className="flex shrink-0 items-start justify-between gap-3 border-b border-white/10 px-5 py-4">
+            <div className="min-w-0 space-y-2">
+              <span
+                className={cn(
+                  "inline-flex rounded-full border px-2 py-0.5 text-[10px] font-medium uppercase tracking-wide",
+                  importanceStyle(note.importance),
+                )}
+              >
+                {importanceLabel}
+              </span>
+              <h2
+                id="note-detail-title"
+                className="text-lg font-semibold leading-snug text-white"
+              >
+                {note.title}
+              </h2>
+            </div>
+            <button
+              type="button"
+              onClick={onClose}
+              aria-label={t("notesPanel.closeNote")}
+              className="grid h-9 w-9 shrink-0 place-items-center rounded-lg border border-white/10 text-zinc-400 hover:bg-white/5 hover:text-white"
+            >
+              <X size={16} />
+            </button>
+          </div>
+
+          <div className="min-h-0 flex-1 space-y-4 overflow-y-auto px-5 py-4">
+            <dl className="grid gap-3 text-sm sm:grid-cols-2">
+              <div>
+                <dt className="text-[11px] uppercase tracking-wide text-zinc-500">
+                  {t("notesPanel.forWhen")}
+                </dt>
+                <dd className="mt-0.5 text-zinc-200">
+                  {formatWhen(note.relevantAt, locale)}
+                </dd>
+              </div>
+              <div>
+                <dt className="text-[11px] uppercase tracking-wide text-zinc-500">
+                  {t("notesPanel.byAuthor")}
+                </dt>
+                <dd className="mt-0.5 text-zinc-200">
+                  {note.authorName}
+                  <span className="text-zinc-500"> ({note.authorRole})</span>
+                </dd>
+              </div>
+              <div className="sm:col-span-2">
+                <dt className="text-[11px] uppercase tracking-wide text-zinc-500">
+                  {t("notesPanel.posted")}
+                </dt>
+                <dd className="mt-0.5 text-zinc-200">
+                  {formatWhen(note.createdAt, locale)}
+                </dd>
+              </div>
+            </dl>
+
+            <div>
+              <p className="mb-1.5 text-[11px] uppercase tracking-wide text-zinc-500">
+                {t("notesPanel.descriptionLabel")}
+              </p>
+              <div className="max-h-[min(40dvh,16rem)] overflow-y-auto rounded-xl border border-white/10 bg-zinc-950/80 px-3.5 py-3">
+                <p className="whitespace-pre-wrap break-words text-sm leading-relaxed text-zinc-200">
+                  {note.body}
+                </p>
+              </div>
+            </div>
+          </div>
+
+          <div className="flex shrink-0 flex-wrap items-center justify-end gap-2 border-t border-white/10 px-5 py-3">
+            {canWrite ? (
+              <button
+                type="button"
+                onClick={() => onArchive(note.id)}
+                className="inline-flex items-center gap-1.5 rounded-lg border border-white/10 px-3 py-2 text-sm text-zinc-300 hover:border-white/20 hover:text-white"
+                title={t("notesPanel.archiveTitle")}
+              >
+                <Archive size={14} />
+                {t("notesPanel.archiveButton")}
+              </button>
+            ) : null}
+            <button
+              type="button"
+              onClick={onClose}
+              className="rounded-lg bg-emerald-600 px-4 py-2 text-sm font-medium text-white hover:bg-emerald-500"
+            >
+              {t("notesPanel.closeNote")}
+            </button>
+          </div>
+        </div>
+      </div>
+    </ModalPortal>
+  );
+}
+
 function NotesContent() {
   const guide = useDashboardGuide("notes");
   const { state } = useAuth();
@@ -125,6 +270,7 @@ function NotesContent() {
   const [error, setError] = useState<string | null>(null);
   const [showForm, setShowForm] = useState(false);
   const [saving, setSaving] = useState(false);
+  const [selectedId, setSelectedId] = useState<string | null>(null);
 
   const [authorName, setAuthorName] = useState("");
   const [title, setTitle] = useState("");
@@ -165,6 +311,11 @@ function NotesContent() {
     });
   }, [notes]);
 
+  const selected = useMemo(
+    () => sorted.find((n) => n.id === selectedId) ?? null,
+    [sorted, selectedId],
+  );
+
   async function onCreate(e: React.FormEvent) {
     e.preventDefault();
     if (!title.trim() || !body.trim() || !authorName.trim()) return;
@@ -196,6 +347,7 @@ function NotesContent() {
     setError(null);
     try {
       await archiveNote(id);
+      setSelectedId((cur) => (cur === id ? null : cur));
       await load();
     } catch (err) {
       setError(
@@ -211,6 +363,11 @@ function NotesContent() {
       </TenantPage>
     );
   }
+
+  const countLabel =
+    sorted.length === 1
+      ? t("notesPanel.listCount", { count: sorted.length })
+      : t("notesPanel.listCountPlural", { count: sorted.length });
 
   return (
     <TenantPage
@@ -284,7 +441,7 @@ function NotesContent() {
               rows={4}
               maxLength={4000}
               placeholder={t("notesPanel.descriptionPlaceholder")}
-              className="mt-1 w-full resize-y rounded-lg border border-white/10 bg-zinc-950 px-3 py-2 text-sm text-white outline-none focus:border-emerald-400/40"
+              className="mt-1 max-h-64 w-full resize-y overflow-y-auto rounded-lg border border-white/10 bg-zinc-950 px-3 py-2 text-sm text-white outline-none focus:border-emerald-400/40"
             />
           </label>
 
@@ -341,70 +498,85 @@ function NotesContent() {
           {t("notesPanel.emptyState")}
         </p>
       ) : (
-        <ul className="space-y-3">
-          {sorted.map((note) => (
-            <li
-              key={note.id}
-              className={cn(
-                "rounded-xl border px-4 py-4",
-                note.importance === "URGENT"
-                  ? "border-rose-400/30 bg-rose-500/[0.06]"
-                  : note.importance === "IMPORTANT"
-                    ? "border-amber-400/25 bg-amber-500/[0.05]"
-                    : "border-white/10 bg-zinc-950/50",
-              )}
-            >
-              <div className="flex flex-wrap items-start justify-between gap-3">
-                <div className="min-w-0 flex-1">
-                  <div className="flex flex-wrap items-center gap-2">
-                    <span
-                      className={cn(
-                        "rounded-full border px-2 py-0.5 text-[10px] font-medium uppercase tracking-wide",
-                        importanceStyle(note.importance),
-                      )}
-                    >
-                      {importanceOpts.find((o) => o.id === note.importance)
-                        ?.label ?? note.importance}
-                    </span>
-                    <h3 className="text-sm font-semibold text-white">
-                      {note.title}
-                    </h3>
-                  </div>
-                  <p className="mt-2 whitespace-pre-wrap text-sm leading-relaxed text-zinc-300">
-                    {note.body}
-                  </p>
-                  <p className="mt-3 text-[11px] text-zinc-500">
-                    {t("notesPanel.forWhen")}{" "}
-                    <span className="text-zinc-300">
-                      {formatWhen(note.relevantAt, locale)}
-                    </span>
-                    {" · "}
-                    {t("notesPanel.byAuthor")}{" "}
-                    <span className="text-zinc-300">{note.authorName}</span>
-                    <span className="text-zinc-600">
-                      {" "}
-                      ({note.authorRole})
-                    </span>
-                    {" · "}
-                    {t("notesPanel.posted")} {formatWhen(note.createdAt, locale)}
-                  </p>
-                </div>
-                {canWrite ? (
+        <section className="overflow-hidden rounded-xl border border-white/10 bg-zinc-950/40">
+          <div className="flex items-center justify-between gap-3 border-b border-white/10 px-4 py-3">
+            <h3 className="text-sm font-medium text-white">
+              {t("notesPanel.listHeading")}
+            </h3>
+            <span className="text-xs text-zinc-500">{countLabel}</span>
+          </div>
+          <ul className="divide-y divide-white/5">
+            {sorted.map((note) => {
+              const label =
+                importanceOpts.find((o) => o.id === note.importance)?.label ??
+                note.importance;
+              return (
+                <li key={note.id}>
                   <button
                     type="button"
-                    onClick={() => void onArchive(note.id)}
-                    className="inline-flex items-center gap-1 rounded-lg border border-white/10 px-2.5 py-1.5 text-[11px] text-zinc-400 hover:border-white/20 hover:text-zinc-200"
-                    title={t("notesPanel.archiveTitle")}
+                    onClick={() => setSelectedId(note.id)}
+                    className={cn(
+                      "flex w-full items-start gap-3 border-l-2 bg-transparent px-4 py-3.5 text-left transition hover:bg-white/[0.03] focus-visible:bg-white/[0.04] focus-visible:outline-none",
+                      note.importance === "URGENT"
+                        ? "border-l-rose-400/70"
+                        : note.importance === "IMPORTANT"
+                          ? "border-l-amber-400/60"
+                          : "border-l-transparent",
+                    )}
                   >
-                    <Archive size={12} />
-                    {t("notesPanel.archiveButton")}
+                    <div className="min-w-0 flex-1 space-y-1.5">
+                      <div className="flex flex-wrap items-center gap-2">
+                        <span
+                          className={cn(
+                            "rounded-full border px-2 py-0.5 text-[10px] font-medium uppercase tracking-wide",
+                            importanceStyle(note.importance),
+                          )}
+                        >
+                          {label}
+                        </span>
+                        <span className="truncate text-sm font-semibold text-white">
+                          {note.title}
+                        </span>
+                      </div>
+                      <p className="line-clamp-2 text-sm leading-relaxed text-zinc-400">
+                        {previewBody(note.body)}
+                      </p>
+                      <p className="text-[11px] text-zinc-500">
+                        {t("notesPanel.forWhen")}{" "}
+                        <span className="text-zinc-400">
+                          {formatWhen(note.relevantAt, locale)}
+                        </span>
+                        {" · "}
+                        {t("notesPanel.byAuthor")}{" "}
+                        <span className="text-zinc-400">{note.authorName}</span>
+                        {" · "}
+                        <span className="text-zinc-600">
+                          {t("notesPanel.clickToRead")}
+                        </span>
+                      </p>
+                    </div>
                   </button>
-                ) : null}
-              </div>
-            </li>
-          ))}
-        </ul>
+                </li>
+              );
+            })}
+          </ul>
+        </section>
       )}
+
+      {selected ? (
+        <NoteDetailModal
+          note={selected}
+          importanceLabel={
+            importanceOpts.find((o) => o.id === selected.importance)?.label ??
+            selected.importance
+          }
+          canWrite={canWrite}
+          locale={locale}
+          t={t}
+          onClose={() => setSelectedId(null)}
+          onArchive={(id) => void onArchive(id)}
+        />
+      ) : null}
     </TenantPage>
   );
 }

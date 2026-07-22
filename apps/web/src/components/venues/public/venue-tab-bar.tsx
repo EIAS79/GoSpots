@@ -23,7 +23,7 @@ export function VenueTabBar({
 
   return (
     <nav
-      className="sticky top-0 z-30 border-b border-[var(--color-border)] bg-[color-mix(in_srgb,var(--color-background)_88%,transparent)] pt-[env(safe-area-inset-top)] backdrop-blur-xl dark:border-white/10 dark:bg-zinc-950/85 dark:supports-[backdrop-filter]:bg-zinc-950/70"
+      className="sticky top-0 z-30 border-b border-[var(--color-border)] bg-[color-mix(in_srgb,var(--color-background)_88%,transparent)] pt-[env(safe-area-inset-top)] backdrop-blur-xl"
       aria-label="Venue sections"
     >
       <div

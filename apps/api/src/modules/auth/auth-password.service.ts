@@ -79,9 +79,9 @@ export class AuthPasswordService {
 
     await this.mail.send({
       to: email,
-      subject: 'Reset your Locora owner password',
+      subject: 'Reset your GoSpots owner password',
       text: `Reset your password (valid ~1 hour):\n\n${resetUrl}\n\nIf you did not request this, ignore this email.`,
-      html: `<p>Reset your Locora owner password (link valid about 1 hour):</p><p><a href="${resetUrl}">${resetUrl}</a></p><p>If you did not request this, you can ignore this email.</p>`,
+      html: `<p>Reset your GoSpots owner password (link valid about 1 hour):</p><p><a href="${resetUrl}">${resetUrl}</a></p><p>If you did not request this, you can ignore this email.</p>`,
       required: true,
     });
 

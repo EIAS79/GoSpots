@@ -167,7 +167,7 @@ export default function EventRequestStatusPage() {
     <div className="min-h-screen bg-zinc-950 text-zinc-100">
       <header className="border-b border-white/10 bg-zinc-950/80 backdrop-blur">
         <div className="mx-auto flex max-w-lg items-center justify-between px-4 py-4">
-          <LocoraLogo href="/" size="sm" />
+          <LocoraLogo href="/" size="md" />
           <Link
             href={`/venue/${slug}`}
             className="text-xs text-zinc-500 hover:text-zinc-300"

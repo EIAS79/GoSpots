@@ -13,7 +13,7 @@ export const VENUE_PLACEHOLDER_SRC =
       <rect width="1200" height="800" fill="url(#g)"/>
       <circle cx="900" cy="180" r="120" fill="#f59e0b" opacity="0.08"/>
       <circle cx="240" cy="620" r="160" fill="#22d3ee" opacity="0.07"/>
-      <text x="600" y="390" fill="#71717a" font-family="system-ui,sans-serif" font-size="28" text-anchor="middle">Locora venue</text>
+      <text x="600" y="390" fill="#71717a" font-family="system-ui,sans-serif" font-size="28" text-anchor="middle">GoSpots venue</text>
       <text x="600" y="430" fill="#52525b" font-family="system-ui,sans-serif" font-size="16" text-anchor="middle">Cover image coming soon</text>
     </svg>`,
   );

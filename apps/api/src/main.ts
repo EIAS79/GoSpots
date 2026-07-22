@@ -146,7 +146,7 @@ async function bootstrap() {
     ].join('\n');
 
     const swaggerConfig = new DocumentBuilder()
-      .setTitle('Locora API')
+      .setTitle('GoSpots API')
       .setDescription(
         `Gaming & billiard center management SaaS\n\n${errorEnvelopeDoc}`,
       )

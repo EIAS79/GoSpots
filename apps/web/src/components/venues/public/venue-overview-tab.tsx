@@ -353,7 +353,7 @@ function GalleryCollage({
     <div className="grid grid-cols-2 gap-2 md:grid-cols-4 md:grid-rows-2 md:gap-3">
       <figure
         className={cn(
-          "group relative overflow-hidden rounded-2xl border border-white/10 bg-zinc-900",
+          "group relative overflow-hidden rounded-2xl border border-[var(--color-border)] bg-[var(--color-surface)]",
           rest.length === 0
             ? "col-span-2 aspect-[16/10] md:col-span-4 md:row-span-2 md:aspect-[21/9]"
             : "col-span-2 aspect-[4/3] md:col-span-2 md:row-span-2 md:aspect-auto md:min-h-[20rem]",
@@ -378,7 +378,7 @@ function GalleryCollage({
         <figure
           key={item.id}
           className={cn(
-            "group relative aspect-square overflow-hidden rounded-2xl border border-white/10 bg-zinc-900 md:aspect-auto",
+            "group relative aspect-square overflow-hidden rounded-2xl border border-[var(--color-border)] bg-[var(--color-surface)] md:aspect-auto",
             i === 0 && rest.length === 1 && "md:col-span-2 md:row-span-2",
             i === 0 && rest.length === 2 && "md:col-span-2",
             i === 1 && rest.length === 2 && "md:col-span-2",

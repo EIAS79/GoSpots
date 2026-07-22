@@ -2,7 +2,7 @@ import type { Metadata } from "next";
 import { LandingPage } from "@/components/landing/landing-page";
 
 export const metadata: Metadata = {
-  title: "For gaming venue owners — Locora",
+  title: "For gaming venue owners — GoSpots",
   description:
     "Floor ops for gaming venues — live map, reservations, play billing, and staff. Gaming-first signup; restaurant and hotel F&B via contact.",
 };

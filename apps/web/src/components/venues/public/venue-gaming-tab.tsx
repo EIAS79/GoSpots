@@ -294,11 +294,11 @@ export function VenueGamingTab({
               {...venueTzProps}
             />
             <div className="px-6 py-16 text-center">
-              <p className="text-sm text-rose-300">{error}</p>
+              <p className="text-sm text-rose-700 dark:text-rose-300">{error}</p>
               <button
                 type="button"
                 onClick={() => void loadSchedule()}
-                className="mt-3 text-xs text-amber-300 underline"
+                className="mt-3 text-xs text-amber-700 underline dark:text-amber-300"
               >
                 {t("gaming.tryAgain")}
               </button>
@@ -476,7 +476,7 @@ function OfferingDetailCard({
             {offering.playstationGames.map((game) => (
               <span
                 key={game}
-                className="rounded-full border border-violet-400/20 bg-violet-500/10 px-2.5 py-0.5 text-[11px] text-violet-200"
+                className="rounded-full border border-violet-400/20 bg-violet-500/10 px-2.5 py-0.5 text-[11px] text-violet-800 dark:text-violet-200"
               >
                 {game}
               </span>

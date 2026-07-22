@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { LocoraLogo } from "@/components/brand/locora-logo";
+import { LocoraLogo as GoSpotsLogo } from "@/components/brand/locora-logo";
 import { OurCsiLogo } from "@/components/brand/dashboard-sidebar-brand";
 import { BRAND_TAGLINE } from "@/lib/brand";
 import { usePublicPrefs } from "@/lib/public-prefs-context";
@@ -27,7 +27,7 @@ export function Footer() {
   const companyLinks: FooterLink[] = [
     { label: t("footer.pricing"), href: "#pricing" },
     { label: t("footer.faq"), href: "#faq" },
-    { label: t("footer.contact"), href: "mailto:hello@locora.app", external: true },
+    { label: t("footer.contact"), href: "mailto:hello@gospots.eu", external: true },
     { label: t("footer.privacy"), href: "/privacy" },
     { label: t("footer.terms"), href: "/terms" },
   ];
@@ -43,7 +43,7 @@ export function Footer() {
       <div className="mx-auto max-w-7xl px-4 py-14 sm:px-6 md:px-8">
         <div className="grid gap-10 md:grid-cols-5">
           <div className="md:col-span-2">
-            <LocoraLogo href="/" size="md" showTagline />
+            <GoSpotsLogo href="/" size="lg" showTagline />
             <p className="mt-4 max-w-xs text-sm text-zinc-600 dark:text-zinc-400">
               {BRAND_TAGLINE} — {t("footer.blurb")}
             </p>
@@ -85,7 +85,7 @@ export function Footer() {
             <OurCsiLogo className="h-3.5 max-w-[5rem] opacity-90 dark:brightness-125 dark:contrast-110" />
           </p>
           <p>
-            © {new Date().getFullYear()} Locora. {t("footer.rights")}
+            © {new Date().getFullYear()} GoSpots. {t("footer.rights")}
           </p>
           <p className="text-center md:text-right">
             {t("footer.builtWith")}{" "}

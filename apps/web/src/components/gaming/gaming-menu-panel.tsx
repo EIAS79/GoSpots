@@ -9,10 +9,10 @@ import {
   Map,
   Monitor,
   Plus,
-  UtensilsCrossed,
 } from "lucide-react";
 import type { ComponentType } from "react";
 import { useMemo, useState } from "react";
+import { DiningTableIcon } from "@/components/icons/dining-table-icon";
 import { BilliardTableIcon } from "@/components/icons/billiard-table-icon";
 import { BowlingLaneIcon } from "@/components/icons/bowling-lane-icon";
 import { ArcadeCabinetIcon } from "@/components/icons/arcade-cabinet-icon";
@@ -74,7 +74,13 @@ const TYPE_ICONS: Partial<
   ARCADE: ({ className }) => (
     <ArcadeCabinetIcon status="AVAILABLE" className={className ?? "h-6 w-5"} />
   ),
-  DINING: UtensilsCrossed,
+  DINING: ({ className }) => (
+    <DiningTableIcon
+      status="AVAILABLE"
+      seats={4}
+      className={className ?? "h-6 w-6"}
+    />
+  ),
 };
 
 function formatBookingMode(
@@ -386,7 +392,7 @@ function OfferingCard({
                 categoryLabel={o.name}
                 displayOnly
                 variant="compact"
-                pageSize={12}
+                pageSize={floorVisualType === "dining" ? 6 : 12}
                 visualType={floorVisualType}
                 guestStatusLabels={floorStatusLabels}
                 mainAreaLabel={t("floor.mainArea")}

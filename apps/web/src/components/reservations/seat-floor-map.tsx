@@ -6,6 +6,7 @@ import { BilliardTableIcon } from "@/components/icons/billiard-table-icon";
 import { ArcadeCabinetIcon } from "@/components/icons/arcade-cabinet-icon";
 import { FoosballTableIcon } from "@/components/icons/foosball-table-icon";
 import { PingPongTableIcon } from "@/components/icons/ping-pong-table-icon";
+import { DiningTableIcon } from "@/components/icons/dining-table-icon";
 import type { FloorMapVisualType } from "@/lib/gaming-floor-visual";
 import { cn } from "@/lib/cn";
 import {
@@ -87,6 +88,10 @@ const DEFAULT_SEATS_PER_ROW = 6;
 const FULL_PAGE_SIZE = 48;
 const COMPACT_PAGE_SIZE = 8;
 const COMPACT_MOBILE_PAGE_SIZE = 6;
+/** Dining maps: fewer tables per page so areas stay readable. */
+const DINING_FULL_PAGE_SIZE = 8;
+const DINING_COMPACT_PAGE_SIZE = 6;
+const DINING_COMPACT_MOBILE_PAGE_SIZE = 4;
 
 const CHAIR_FILL: Record<UnitFloorStatus, string> = {
   AVAILABLE: "fill-emerald-500/90 stroke-emerald-300",
@@ -107,6 +112,8 @@ export type SeatSectionMeta = {
   isVip: boolean;
   seatsPerRow: number;
   sortOrder?: number;
+  /** INDOOR | OUTDOOR when set (dining areas). */
+  zone?: string | null;
 };
 
 export type { FloorMapVisualType };
@@ -134,7 +141,7 @@ function SectionZoneIcon({
     return <Gamepad2 size={12} className={cn("text-emerald-400/80", className)} />;
   }
   if (visualType === "dining") {
-    return <BilliardTableIcon status="AVAILABLE" className={className ?? "h-3 w-5"} />;
+    return <DiningTableIcon status="AVAILABLE" seats={4} className={className ?? "h-3.5 w-3.5"} />;
   }
   return <Monitor size={12} className={cn("text-emerald-400/80", className)} />;
 }
@@ -142,10 +149,12 @@ function SectionZoneIcon({
 function UnitMapIcon({
   visualType,
   status,
+  seats,
   className,
 }: {
   visualType: FloorMapVisualType;
   status: UnitFloorStatus;
+  seats?: number | null;
   className?: string;
 }) {
   switch (visualType) {
@@ -160,7 +169,9 @@ function UnitMapIcon({
     case "arcade":
       return <ArcadeCabinetIcon status={status} className={className} />;
     case "dining":
-      return <BilliardTableIcon status={status} className={className} />;
+      return (
+        <DiningTableIcon status={status} seats={seats} className={className} />
+      );
     default:
       return <CinemaChairIcon status={status} className={className} />;
   }
@@ -170,7 +181,10 @@ function unitMapIconSize(
   visualType: FloorMapVisualType,
   sm: boolean,
 ): string | undefined {
-  if (visualType === "billiard" || visualType === "dining") {
+  if (visualType === "dining") {
+    return sm ? "h-7 w-7" : "h-9 w-9";
+  }
+  if (visualType === "billiard") {
     return sm ? "h-5 w-9" : "h-7 w-12";
   }
   if (visualType === "pingpong") return sm ? "h-5 w-8" : "h-7 w-11";
@@ -190,6 +204,7 @@ function legendMapIcon(
     <UnitMapIcon
       visualType={visualType}
       status={status}
+      seats={4}
       className={unitMapIconSize(visualType, sm)}
     />
   );
@@ -249,7 +264,10 @@ type DiningLayoutGroup = {
   units: ScheduleUnit[];
 };
 
-function buildDiningLayoutGroups(units: ScheduleUnit[]): DiningLayoutGroup[] {
+function buildDiningLayoutGroups(
+  units: ScheduleUnit[],
+  t?: (suffix: string, vars?: Record<string, string | number>) => string | undefined,
+): DiningLayoutGroup[] {
   const byKey = new Map<string, DiningLayoutGroup>();
 
   for (const unit of units) {
@@ -264,8 +282,8 @@ function buildDiningLayoutGroups(units: ScheduleUnit[]): DiningLayoutGroup[] {
           customName && customName !== `${capacity}-seat table`
             ? customName
             : capacity === 1
-              ? "1-top tables"
-              : `${capacity}-top tables`,
+              ? (t?.("nTopTables", { n: 1 }) ?? "1-top tables")
+              : (t?.("nTopTables", { n: capacity }) ?? `${capacity}-top tables`),
         capacity,
         seatsPerRow: unit.tableGroup?.seatsPerRow ?? 4,
         sortOrder: unit.tableGroup?.sortOrder ?? capacity * 100,
@@ -423,6 +441,10 @@ export type SeatFloorMapProps = {
   onToggleNotWorking?: (unitId: string, notWorking: boolean) => void;
   /** Hide the centered screen title (when the parent already shows the activity name). */
   showScreenHeader?: boolean;
+  /** Always show section/area name headers (even for a single section). */
+  showSectionLabels?: boolean;
+  /** When true, parent owns paging — do not render internal pagination bars. */
+  disablePagination?: boolean;
   /** Hide the bottom status legend (when the parent renders its own). */
   showLegend?: boolean;
   /** Optional status legend / tile labels (public guest or staff i18n). */
@@ -451,6 +473,8 @@ export function SeatFloorMap({
   onInspectBlocked,
   onToggleNotWorking,
   showScreenHeader = true,
+  showSectionLabels = false,
+  disablePagination = false,
   showLegend = true,
   guestStatusLabels,
   mainAreaLabel,
@@ -468,7 +492,18 @@ export function SeatFloorMap({
     guestStatusLabels ??
     (precomputedStatus ? GUEST_WINDOW_STATUS_LABELS : FLOOR_STATUS_LABELS);
   const pageSize =
-    pageSizeProp ?? (compact ? COMPACT_PAGE_SIZE : FULL_PAGE_SIZE);
+    pageSizeProp ??
+    (visualType === "dining"
+      ? compact
+        ? DINING_COMPACT_PAGE_SIZE
+        : DINING_FULL_PAGE_SIZE
+      : compact
+        ? COMPACT_PAGE_SIZE
+        : FULL_PAGE_SIZE);
+  const mobilePageSize =
+    visualType === "dining"
+      ? DINING_COMPACT_MOBILE_PAGE_SIZE
+      : COMPACT_MOBILE_PAGE_SIZE;
   const [page, setPage] = useState(0);
   const [mobilePage, setMobilePage] = useState(0);
   const [activeZoneId, setActiveZoneId] = useState<string | "all">("all");
@@ -495,6 +530,7 @@ export function SeatFloorMap({
         isVip: s.isVip,
         seatsPerRow: s.seatsPerRow,
         sortOrder: s.sortOrder,
+        zone: "zone" in s ? (s.zone ?? null) : null,
       }));
     }
     const fromUnits = new Map<string, SeatSectionMeta>();
@@ -506,6 +542,7 @@ export function SeatFloorMap({
           floor: unit.section.floor,
           isVip: unit.section.isVip,
           seatsPerRow: unit.section.seatsPerRow,
+          zone: unit.section.zone ?? null,
         });
       }
     }
@@ -522,6 +559,7 @@ export function SeatFloorMap({
   );
   const multiFloor = floorGroups.size > 1;
   const multiSection = sectionGroups.length > 1;
+  const showAreaHeaders = multiSection || showSectionLabels;
 
   const zoneTabs = useMemo(() => {
     return sectionGroups.map((g, i) => ({
@@ -563,12 +601,12 @@ export function SeatFloorMap({
 
   const mobilePageCount = Math.max(
     1,
-    Math.ceil(unitsForPaging.length / COMPACT_MOBILE_PAGE_SIZE),
+    Math.ceil(unitsForPaging.length / mobilePageSize),
   );
   const safeMobilePage = Math.min(mobilePage, mobilePageCount - 1);
 
   const pagedSectionGroups = useMemo(() => {
-    const effectivePageSize = compact ? pageSize : FULL_PAGE_SIZE;
+    const effectivePageSize = pageSize;
     if (unitsForPaging.length <= effectivePageSize) return groupsForPaging;
     const start = safePage * effectivePageSize;
     let offset = 0;
@@ -594,10 +632,10 @@ export function SeatFloorMap({
 
   const mobilePagedSectionGroups = useMemo(() => {
     if (!compact) return pagedSectionGroups;
-    if (unitsForPaging.length <= COMPACT_MOBILE_PAGE_SIZE) {
+    if (unitsForPaging.length <= mobilePageSize) {
       return compactVisibleGroups;
     }
-    const start = safeMobilePage * COMPACT_MOBILE_PAGE_SIZE;
+    const start = safeMobilePage * mobilePageSize;
     let offset = 0;
     const result: SectionGroup[] = [];
     for (const group of compactVisibleGroups) {
@@ -605,11 +643,11 @@ export function SeatFloorMap({
       const groupEnd = offset + group.units.length;
       offset = groupEnd;
       if (groupEnd <= start) continue;
-      if (groupStart >= start + COMPACT_MOBILE_PAGE_SIZE) break;
+      if (groupStart >= start + mobilePageSize) break;
       const sliceStart = Math.max(0, start - groupStart);
       const sliceEnd = Math.min(
         group.units.length,
-        start + COMPACT_MOBILE_PAGE_SIZE - groupStart,
+        start + mobilePageSize - groupStart,
       );
       const sliced = group.units.slice(sliceStart, sliceEnd);
       if (sliced.length > 0) {
@@ -623,6 +661,7 @@ export function SeatFloorMap({
     unitsForPaging.length,
     safeMobilePage,
     compactVisibleGroups,
+    mobilePageSize,
   ]);
 
   const displayFloors = useMemo(
@@ -635,9 +674,10 @@ export function SeatFloorMap({
     [mobilePagedSectionGroups],
   );
 
-  const showDesktopPagination = unitsForPaging.length > pageSize;
+  const showDesktopPagination =
+    !disablePagination && unitsForPaging.length > pageSize;
   const showMobilePagination =
-    compact && unitsForPaging.length > COMPACT_MOBILE_PAGE_SIZE;
+    !disablePagination && compact && unitsForPaging.length > mobilePageSize;
 
   const renderFloors = (
     floors: Map<number, SectionGroup[]>,
@@ -650,11 +690,11 @@ export function SeatFloorMap({
           {multiFloor && !compact ? (
             <div className="flex items-center justify-center gap-2 text-[11px] font-medium uppercase tracking-wide text-zinc-500">
               <Layers size={12} />
-              Floor {floor}
+              {t("floorN", { n: floor }) ?? `Floor ${floor}`}
             </div>
           ) : multiFloor && compact ? (
             <p className="text-center text-[9px] font-medium uppercase tracking-wide text-zinc-500">
-              Floor {floor}
+              {t("floorN", { n: floor }) ?? `Floor ${floor}`}
             </p>
           ) : null}
 
@@ -664,7 +704,7 @@ export function SeatFloorMap({
 
             const diningLayouts =
               visualType === "dining"
-                ? buildDiningLayoutGroups(group.units)
+                ? buildDiningLayoutGroups(group.units, t)
                 : [
                     {
                       id: sectionKey,
@@ -677,9 +717,16 @@ export function SeatFloorMap({
                     },
                   ];
 
+            const zoneHint =
+              group.section?.zone === "OUTDOOR"
+                ? (t("zoneOutdoor") ?? "Outdoors")
+                : group.section?.zone === "INDOOR"
+                  ? (t("zoneIndoor") ?? "Indoors")
+                  : null;
+
             return (
               <div key={sectionKey} className="space-y-2">
-                {multiSection && !compact ? (
+                {showAreaHeaders && !compact ? (
                   <div className="flex flex-col items-center gap-1.5">
                     <div className="flex w-full max-w-md items-center gap-3">
                       <div className="h-px flex-1 bg-gradient-to-r from-transparent via-zinc-600 to-transparent" />
@@ -687,6 +734,11 @@ export function SeatFloorMap({
                         <SectionZoneIcon visualType={visualType} className="h-3 w-5" />
                         {group.section?.name ??
                           (categoryLabel ? `${categoryLabel}` : fallbackZone)}
+                        {zoneHint ? (
+                          <span className="font-normal normal-case tracking-normal text-zinc-500">
+                            · {zoneHint}
+                          </span>
+                        ) : null}
                         {group.section?.isVip ? (
                           <Crown
                             size={10}
@@ -699,13 +751,15 @@ export function SeatFloorMap({
                     </div>
                     {multiFloor ? null : (
                       <span className="text-[9px] text-zinc-600">
-                        Floor {group.section?.floor ?? floor}
+                        {t("floorN", { n: group.section?.floor ?? floor }) ??
+                          `Floor ${group.section?.floor ?? floor}`}
                       </span>
                     )}
                   </div>
-                ) : multiSection && compact && activeZoneId === "all" ? (
+                ) : showAreaHeaders && compact && activeZoneId === "all" ? (
                   <p className="text-center text-[9px] font-semibold uppercase tracking-wide text-zinc-500">
                     {group.section?.name ?? fallbackZone}
+                    {zoneHint ? ` · ${zoneHint}` : ""}
                     {group.section?.isVip ? " · VIP" : ""}
                   </p>
                 ) : null}
@@ -731,10 +785,15 @@ export function SeatFloorMap({
                               {layout.label}
                             </span>
                             {" · "}
-                            {layout.units.length} table
-                            {layout.units.length === 1 ? "" : "s"} ·{" "}
-                            {layout.capacity} seat
-                            {layout.capacity === 1 ? "" : "s"} each
+                            {t("diningLayoutMeta", {
+                              tables: layout.units.length,
+                              seats: layout.capacity,
+                            }) ??
+                              `${layout.units.length} table${
+                                layout.units.length === 1 ? "" : "s"
+                              } · ${layout.capacity} seat${
+                                layout.capacity === 1 ? "" : "s"
+                              } each`}
                           </p>
                         ) : null}
                         <div className="space-y-2">
@@ -870,7 +929,7 @@ export function SeatFloorMap({
                 : tapHintFor(visualType, t)}
             </p>
           </div>
-        ) : !compact && multiSection ? (
+        ) : !compact && showAreaHeaders ? (
           <p className="mb-4 text-center text-[10px] text-zinc-600">
             {displayOnly
               ? t("liveMapByZone") ?? "Live map by zone and floor"
@@ -1059,6 +1118,7 @@ function SeatButton({
         <UnitMapIcon
           visualType={visualType}
           status={status}
+          seats={unit.capacity ?? unit.tableGroup?.capacity}
           className={unitMapIconSize(visualType, sm)}
         />
       </div>

@@ -15,6 +15,23 @@ export type StaffGuestChatListItem = {
   lastMessage: GuestChatMessage | null;
 };
 
+export type GuestChatStatusCounts = {
+  ALL: number;
+  WAITING: number;
+  OPEN: number;
+  PAUSED: number;
+  ENDED: number;
+  notified: number;
+};
+
+export type GuestChatBadge = {
+  waiting: number;
+  notified: number;
+  attention: number;
+  contact: number;
+  total: number;
+};
+
 export function fetchGuestChats(opts?: {
   status?: GuestChatStatus;
   take?: number;
@@ -28,8 +45,16 @@ export function fetchGuestChats(opts?: {
   return api<{
     total: number;
     waitingCount: number;
+    notifiedCount: number;
+    attentionCount: number;
+    contactCount: number;
+    counts: GuestChatStatusCounts;
     items: StaffGuestChatListItem[];
   }>(`/guest-chats${qs ? `?${qs}` : ""}`);
+}
+
+export function fetchGuestChatBadge() {
+  return api<GuestChatBadge>("/guest-chats/badge");
 }
 
 export function fetchGuestChat(id: string) {

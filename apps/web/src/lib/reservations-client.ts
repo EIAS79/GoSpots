@@ -75,6 +75,7 @@ export type ScheduleUnit = {
     floor: number;
     isVip: boolean;
     seatsPerRow: number;
+    zone?: string | null;
   } | null;
   bookings: ScheduleBooking[];
 };
@@ -86,6 +87,8 @@ export type ScheduleCategorySection = {
   isVip: boolean;
   seatsPerRow: number;
   sortOrder: number;
+  /** INDOOR | OUTDOOR when set (dining areas). */
+  zone?: string | null;
 };
 
 export type DaySchedule = {

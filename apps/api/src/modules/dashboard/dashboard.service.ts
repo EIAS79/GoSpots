@@ -447,8 +447,7 @@ export class DashboardService {
       !access.trialActive &&
       (access.trialExpired ||
         sub.status === 'CANCELED' ||
-        sub.status === 'PAST_DUE' ||
-        sub.status === 'TRIAL');
+        sub.status === 'PAST_DUE');
 
     if (access.trialActive && hasTeam) {
       staffSeatQuantity = Math.min(

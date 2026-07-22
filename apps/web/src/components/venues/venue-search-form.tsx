@@ -23,7 +23,7 @@ type VenueSearchFormProps = {
 };
 
 const fieldClass =
-  "w-full rounded-xl border border-[var(--color-border)] bg-[var(--color-background)] px-4 py-3 text-base text-[var(--color-foreground)] outline-none placeholder:text-zinc-500 focus:border-amber-500/50 sm:text-sm dark:bg-zinc-950/80 dark:focus:border-amber-400/50";
+  "w-full rounded-xl border border-[var(--color-border)] bg-[var(--color-surface)]/60 px-4 py-3 text-base text-[var(--color-foreground)] outline-none placeholder:text-zinc-500 focus:border-amber-500/50 sm:text-sm dark:bg-white/[0.03] dark:focus:border-amber-400/50";
 
 export function VenueSearchForm({
   values,
@@ -52,7 +52,7 @@ export function VenueSearchForm({
         onSubmit();
       }}
       className={cn(
-        "rounded-2xl border border-[var(--color-border)] bg-[var(--color-surface)]/90 shadow-xl backdrop-blur dark:border-white/10 dark:bg-zinc-900/60 dark:shadow-black/40",
+        "rounded-2xl border border-[var(--color-border)] bg-[var(--color-surface)]/60 shadow-xl backdrop-blur dark:bg-white/[0.03]",
         compact ? "p-3" : "p-4 md:p-5",
         className,
       )}
@@ -132,7 +132,7 @@ export function VenueSearchForm({
                   "shrink-0 snap-start rounded-full border px-3 py-1.5 text-xs font-medium transition",
                   on
                     ? "border-amber-400/50 bg-amber-500/15 text-amber-800 dark:text-amber-100"
-                    : "border-[var(--color-border)] bg-[var(--color-background)]/60 text-zinc-700 hover:border-amber-400/30 dark:border-white/10 dark:bg-white/[0.03] dark:text-zinc-300",
+                    : "border-[var(--color-border)] bg-[var(--color-surface)]/60 text-zinc-700 hover:border-amber-400/30 dark:bg-white/[0.03] dark:text-zinc-300",
                 )}
               >
                 {p.name}

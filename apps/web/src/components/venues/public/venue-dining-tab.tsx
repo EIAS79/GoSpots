@@ -386,11 +386,11 @@ export function VenueDiningTab({
               {...venueTzProps}
             />
             <div className="px-6 py-16 text-center">
-              <p className="text-sm text-rose-300">{error}</p>
+              <p className="text-sm text-rose-700 dark:text-rose-300">{error}</p>
               <button
                 type="button"
                 onClick={() => void loadSchedule()}
-                className="mt-3 text-xs text-amber-300 underline"
+                className="mt-3 text-xs text-amber-700 underline dark:text-amber-300"
               >
                 {t("dining.tryAgain")}
               </button>

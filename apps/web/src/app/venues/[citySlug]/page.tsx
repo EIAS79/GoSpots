@@ -20,11 +20,11 @@ export async function generateMetadata({
   const { citySlug } = await params;
   const city = getPilotCityBySlug(citySlug);
   if (!city) {
-    return { title: "City not found — Locora" };
+    return { title: "City not found — GoSpots" };
   }
   return {
-    title: `Gaming venues in ${city.name} — Locora`,
-    description: `City-first Locora directory for ${city.name}, ${city.countryName}. Venue owners: join the local launch. Guests: browse when the map is full.`,
+    title: `Gaming venues in ${city.name} — GoSpots`,
+    description: `City-first GoSpots directory for ${city.name}, ${city.countryName}. Venue owners: join the local launch. Guests: browse when the map is full.`,
   };
 }
 

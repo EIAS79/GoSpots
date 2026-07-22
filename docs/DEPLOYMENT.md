@@ -1,4 +1,4 @@
-# Locora — production preview (Vercel + hosted API + Postgres)
+# GoSpots — production preview (Vercel + hosted API + Postgres)
 
 This monorepo has **three parts** in production:
 
@@ -67,7 +67,7 @@ After Render deploy, each start runs **`prisma migrate deploy` only** (no `db pu
 | `COOKIE_SAME_SITE` | `none` (only if **not** using Vercel proxy; use `lax` with proxy) |
 | `RESEND_API_KEY` | Resend API key (required for email) |
 | `MAIL_FROM` | Verified sender, e.g. `bookings@yourdomain.com` |
-| `MAIL_FROM_NAME` | `Locora` |
+| `MAIL_FROM_NAME` | `GoSpots` |
 | `LEMON_SQUEEZY_API_KEY` | Lemon Squeezy API key (required for paid checkout) |
 | `LEMON_SQUEEZY_STORE_ID` | Store ID |
 | `LEMON_SQUEEZY_VARIANT_ID` | Subscription variant ID |

@@ -169,7 +169,7 @@ export default function DiningReservationStatusPage() {
   return (
     <div className="min-h-screen bg-zinc-950 text-zinc-100">
       <header className="border-b border-white/10 px-4 py-4">
-        <LocoraLogo href="/" size="sm" showTagline />
+        <LocoraLogo href="/" size="md" showTagline />
       </header>
 
       <main className="mx-auto max-w-lg px-4 py-12">

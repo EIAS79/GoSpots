@@ -27,23 +27,24 @@
 }
 
 html.dark {
-  --app-bg: #151311;
-  --app-fg: #f5f1eb;
-  --app-muted: #a59e94;
-  --app-surface: #1f1b17;
-  --app-surface-2: #2a2520;
-  --app-border: rgba(245, 241, 235, 0.11);
-  --app-accent: #f0a53a;
-  --app-accent-2: #f5c04a;
-  --app-accent-3: #e86b5a;
-  --app-cool: #3db8ba;
-  --app-cool-soft: rgba(61, 184, 186, 0.16);
-  --app-warm-soft: rgba(240, 165, 58, 0.18);
-  --app-rose-soft: rgba(232, 107, 90, 0.14);
-  --app-glow: 0 0 85px -12px rgba(240, 165, 58, 0.32);
-  --gradient-brand: linear-gradient(120deg, #f5c04a 0%, #f0a53a 45%, #e86b5a 100%);
-  --hero-scrim-mid: rgba(21, 19, 17, 0.84);
-  --hero-scrim-edge: rgba(21, 19, 17, 0.96);
+  /* Deeper base — multi-color atmosphere stays, but night-dark not washed out */
+  --app-bg: #0c0b0a;
+  --app-fg: #e8e4dc;
+  --app-muted: #8a847a;
+  --app-surface: #161412;
+  --app-surface-2: #1e1b17;
+  --app-border: rgba(232, 228, 220, 0.09);
+  --app-accent: #c4852e;
+  --app-accent-2: #b8942f;
+  --app-accent-3: #b85a4c;
+  --app-cool: #2a8a8c;
+  --app-cool-soft: rgba(42, 138, 140, 0.09);
+  --app-warm-soft: rgba(196, 133, 46, 0.08);
+  --app-rose-soft: rgba(184, 90, 76, 0.07);
+  --app-glow: 0 0 70px -16px rgba(196, 133, 46, 0.18);
+  --gradient-brand: linear-gradient(120deg, #b8942f 0%, #c4852e 45%, #b85a4c 100%);
+  --hero-scrim-mid: rgba(12, 11, 10, 0.88);
+  --hero-scrim-edge: rgba(12, 11, 10, 0.97);
 }
 
 @theme {
@@ -118,17 +119,17 @@ body {
 
 html.dark .paint-canvas {
   background:
-    radial-gradient(ellipse 90% 70% at 10% 15%, var(--app-cool-soft) 0%, transparent 55%),
-    radial-gradient(ellipse 70% 55% at 92% 8%, var(--app-warm-soft) 0%, transparent 50%),
+    radial-gradient(ellipse 90% 70% at 10% 15%, var(--app-cool-soft) 0%, transparent 58%),
+    radial-gradient(ellipse 70% 55% at 92% 8%, var(--app-warm-soft) 0%, transparent 52%),
     radial-gradient(ellipse 75% 70% at 85% 90%, var(--app-rose-soft) 0%, transparent 55%),
-    radial-gradient(ellipse 80% 60% at 5% 85%, var(--app-warm-soft) 0%, transparent 50%),
-    radial-gradient(ellipse 55% 45% at 48% 42%, rgba(245, 192, 74, 0.08) 0%, transparent 60%),
+    radial-gradient(ellipse 80% 60% at 5% 85%, var(--app-warm-soft) 0%, transparent 52%),
+    radial-gradient(ellipse 55% 45% at 48% 42%, rgba(180, 140, 50, 0.035) 0%, transparent 62%),
     linear-gradient(
       155deg,
-      color-mix(in srgb, var(--app-bg) 82%, var(--app-cool) 18%) 0%,
-      var(--app-bg) 36%,
-      color-mix(in srgb, var(--app-bg) 88%, var(--app-accent) 12%) 66%,
-      color-mix(in srgb, var(--app-bg) 85%, #3a1a12 15%) 100%
+      color-mix(in srgb, var(--app-bg) 94%, var(--app-cool) 6%) 0%,
+      var(--app-bg) 40%,
+      color-mix(in srgb, var(--app-bg) 95%, var(--app-accent) 5%) 68%,
+      color-mix(in srgb, var(--app-bg) 93%, #2a140f 7%) 100%
     );
 }
 
@@ -154,15 +155,15 @@ html.dark .paint-mesh {
     conic-gradient(
       from 20deg at 45% 50%,
       var(--app-cool-soft) 0deg,
-      rgba(61, 184, 186, 0.22) 80deg,
+      rgba(42, 138, 140, 0.1) 80deg,
       var(--app-warm-soft) 150deg,
       var(--app-rose-soft) 220deg,
-      rgba(240, 165, 58, 0.12) 290deg,
+      rgba(196, 133, 46, 0.06) 290deg,
       var(--app-cool-soft) 360deg
     );
-  filter: blur(80px) saturate(140%);
-  mix-blend-mode: screen;
-  opacity: 0.7;
+  filter: blur(90px) saturate(105%);
+  mix-blend-mode: soft-light;
+  opacity: 0.35;
 }
 
 @keyframes paint-mesh-spin {
@@ -179,7 +180,7 @@ html.dark .paint-mesh {
   mix-blend-mode: soft-light;
 }
 html.dark .paint-glow {
-  mix-blend-mode: screen;
+  mix-blend-mode: soft-light;
 }
 .paint-glow-a {
   width: 55vw;
@@ -227,20 +228,20 @@ html.dark .paint-glow {
 }
 
 html.dark .paint-glow-a {
-  background: radial-gradient(circle, color-mix(in srgb, var(--app-cool) 55%, transparent) 0%, transparent 68%);
-  opacity: 0.85;
+  background: radial-gradient(circle, color-mix(in srgb, var(--app-cool) 22%, transparent) 0%, transparent 70%);
+  opacity: 0.4;
 }
 html.dark .paint-glow-b {
-  background: radial-gradient(circle, color-mix(in srgb, var(--app-accent) 45%, transparent) 0%, transparent 68%);
-  opacity: 0.75;
+  background: radial-gradient(circle, color-mix(in srgb, var(--app-accent) 18%, transparent) 0%, transparent 70%);
+  opacity: 0.35;
 }
 html.dark .paint-glow-c {
-  background: radial-gradient(circle, color-mix(in srgb, var(--app-accent-3) 40%, transparent) 0%, transparent 68%);
-  opacity: 0.7;
+  background: radial-gradient(circle, color-mix(in srgb, var(--app-accent-3) 16%, transparent) 0%, transparent 70%);
+  opacity: 0.32;
 }
 html.dark .paint-glow-d {
-  background: radial-gradient(circle, color-mix(in srgb, var(--app-accent-2) 38%, transparent) 0%, transparent 68%);
-  opacity: 0.65;
+  background: radial-gradient(circle, color-mix(in srgb, var(--app-accent-2) 14%, transparent) 0%, transparent 70%);
+  opacity: 0.28;
 }
 
 .paint-brush {
@@ -252,8 +253,8 @@ html.dark .paint-glow-d {
   opacity: 0.28;
 }
 html.dark .paint-brush {
-  mix-blend-mode: screen;
-  opacity: 0.38;
+  mix-blend-mode: soft-light;
+  opacity: 0.18;
 }
 
 .paint-brush-1 {
@@ -354,9 +355,9 @@ html.dark .paint-brush-1 {
   background: linear-gradient(
     95deg,
     transparent 0%,
-    color-mix(in srgb, var(--app-cool) 55%, transparent) 25%,
-    color-mix(in srgb, var(--app-accent) 48%, transparent) 55%,
-    color-mix(in srgb, var(--app-accent-2) 40%, transparent) 80%,
+    color-mix(in srgb, var(--app-cool) 24%, transparent) 25%,
+    color-mix(in srgb, var(--app-accent) 20%, transparent) 55%,
+    color-mix(in srgb, var(--app-accent-2) 16%, transparent) 80%,
     transparent 100%
   );
 }
@@ -364,9 +365,9 @@ html.dark .paint-brush-2 {
   background: linear-gradient(
     100deg,
     transparent 0%,
-    color-mix(in srgb, var(--app-accent-3) 50%, transparent) 20%,
-    color-mix(in srgb, var(--app-accent) 42%, transparent) 50%,
-    color-mix(in srgb, var(--app-cool) 35%, transparent) 78%,
+    color-mix(in srgb, var(--app-accent-3) 22%, transparent) 20%,
+    color-mix(in srgb, var(--app-accent) 18%, transparent) 50%,
+    color-mix(in srgb, var(--app-cool) 14%, transparent) 78%,
     transparent 100%
   );
 }
@@ -374,16 +375,16 @@ html.dark .paint-brush-3 {
   background: linear-gradient(
     88deg,
     transparent 0%,
-    color-mix(in srgb, var(--app-cool) 50%, transparent) 22%,
-    color-mix(in srgb, var(--app-accent-2) 38%, transparent) 48%,
-    color-mix(in srgb, var(--app-accent) 30%, transparent) 72%,
+    color-mix(in srgb, var(--app-cool) 20%, transparent) 22%,
+    color-mix(in srgb, var(--app-accent-2) 16%, transparent) 48%,
+    color-mix(in srgb, var(--app-accent) 12%, transparent) 72%,
     transparent 100%
   );
 }
 html.dark .paint-brush-4 {
   background: radial-gradient(
     ellipse at center,
-    color-mix(in srgb, var(--app-accent-2) 42%, transparent) 0%,
+    color-mix(in srgb, var(--app-accent-2) 18%, transparent) 0%,
     transparent 70%
   );
 }
@@ -391,8 +392,8 @@ html.dark .paint-brush-5 {
   background: linear-gradient(
     180deg,
     transparent 0%,
-    color-mix(in srgb, var(--app-cool) 38%, transparent) 30%,
-    color-mix(in srgb, var(--app-accent-3) 36%, transparent) 70%,
+    color-mix(in srgb, var(--app-cool) 16%, transparent) 30%,
+    color-mix(in srgb, var(--app-accent-3) 14%, transparent) 70%,
     transparent 100%
   );
 }
@@ -408,8 +409,8 @@ html.dark .paint-brush-5 {
   will-change: transform;
 }
 html.dark .paint-ribbon {
-  mix-blend-mode: screen;
-  opacity: 0.28;
+  mix-blend-mode: soft-light;
+  opacity: 0.14;
 }
 .paint-ribbon-a {
   top: 28%;
@@ -468,7 +469,7 @@ html.dark .paint-ribbon-b {
 }
 html.dark .paint-vignette {
   background:
-    radial-gradient(ellipse 85% 75% at 50% 40%, transparent 35%, rgba(0, 0, 0, 0.55) 100%);
+    radial-gradient(ellipse 85% 75% at 50% 40%, transparent 28%, rgba(0, 0, 0, 0.72) 100%);
 }
 
 @keyframes paint-drift-a {
@@ -556,14 +557,15 @@ html.dark .aurora-grid {
 
 html.dark .aurora-stars {
   background-image:
-    radial-gradient(1px 1px at 12% 18%, rgba(199, 248, 254, 0.6), transparent 60%),
-    radial-gradient(1px 1px at 28% 72%, rgba(255, 255, 255, 0.45), transparent 60%),
-    radial-gradient(1.2px 1.2px at 44% 32%, rgba(80, 232, 244, 0.55), transparent 60%),
-    radial-gradient(1px 1px at 62% 84%, rgba(255, 244, 79, 0.4), transparent 60%),
-    radial-gradient(1px 1px at 78% 22%, rgba(199, 248, 254, 0.55), transparent 60%),
-    radial-gradient(1px 1px at 90% 60%, rgba(255, 255, 255, 0.4), transparent 60%),
-    radial-gradient(1px 1px at 8% 88%, rgba(247, 181, 56, 0.4), transparent 60%),
-    radial-gradient(1.2px 1.2px at 54% 12%, rgba(80, 232, 244, 0.5), transparent 60%);
+    radial-gradient(1px 1px at 12% 18%, rgba(160, 200, 210, 0.22), transparent 60%),
+    radial-gradient(1px 1px at 28% 72%, rgba(230, 230, 230, 0.16), transparent 60%),
+    radial-gradient(1.2px 1.2px at 44% 32%, rgba(60, 160, 170, 0.2), transparent 60%),
+    radial-gradient(1px 1px at 62% 84%, rgba(180, 150, 60, 0.16), transparent 60%),
+    radial-gradient(1px 1px at 78% 22%, rgba(160, 200, 210, 0.18), transparent 60%),
+    radial-gradient(1px 1px at 90% 60%, rgba(230, 230, 230, 0.14), transparent 60%),
+    radial-gradient(1px 1px at 8% 88%, rgba(180, 130, 50, 0.14), transparent 60%),
+    radial-gradient(1.2px 1.2px at 54% 12%, rgba(60, 160, 170, 0.16), transparent 60%);
+  opacity: 0.55;
 }
 @keyframes aurora-twinkle {
   0%, 100% { opacity: 0.45; }
@@ -680,13 +682,20 @@ html.dark .bg-noise {
   }
 }
 
-/* Dashboard: no drifting/scaling aurora (avoids ?zooming? behind the shell) */
+/* Dashboard: flat zinc canvas — no warm marketing washes */
+.dashboard-aurora .paint-canvas {
+  background: #09090b !important;
+}
+
 .dashboard-aurora .paint-mesh,
 .dashboard-aurora .paint-glow,
 .dashboard-aurora .paint-brush,
 .dashboard-aurora .paint-ribbon,
 .dashboard-aurora .aurora-grid,
-.dashboard-aurora .aurora-stars {
+.dashboard-aurora .aurora-stars,
+.dashboard-aurora .bg-noise,
+.dashboard-aurora .paint-vignette {
+  display: none !important;
   animation: none !important;
 }
 
@@ -697,21 +706,25 @@ html.dashboard-route body {
   overflow: hidden;
 }
 
-/* Tenant dashboard is always dark — ignore public marketing light theme. */
+/* Tenant dashboard is always dark — cool zinc shell, not marketing warm stone. */
 html.dashboard-route {
-  --app-bg: #151311;
-  --app-fg: #f5f1eb;
-  --app-muted: #a59e94;
-  --app-surface: #1f1b17;
-  --app-surface-2: #2a2520;
-  --app-border: rgba(245, 241, 235, 0.11);
-  --app-accent: #f0a53a;
-  --app-accent-2: #f5c04a;
-  --app-accent-3: #e86b5a;
-  --app-cool: #3db8ba;
-  --app-cool-soft: rgba(61, 184, 186, 0.16);
-  --app-warm-soft: rgba(240, 165, 58, 0.18);
-  --app-rose-soft: rgba(232, 107, 90, 0.14);
+  --app-bg: #09090b;
+  --app-fg: #fafafa;
+  --app-muted: #a1a1aa;
+  --app-surface: #18181b;
+  --app-surface-2: #27272a;
+  --app-border: rgba(255, 255, 255, 0.1);
+  --app-accent: #34d399;
+  --app-accent-2: #6ee7b7;
+  --app-accent-3: #10b981;
+  --app-cool: #34d399;
+  --app-cool-soft: rgba(52, 211, 153, 0.12);
+  --app-warm-soft: rgba(52, 211, 153, 0.08);
+  --app-rose-soft: rgba(161, 161, 170, 0.08);
+  --app-glow: 0 0 70px -14px rgba(52, 211, 153, 0.18);
+  --gradient-brand: linear-gradient(120deg, #6ee7b7 0%, #34d399 45%, #10b981 100%);
+  --hero-scrim-mid: rgba(9, 9, 11, 0.84);
+  --hero-scrim-edge: rgba(9, 9, 11, 0.96);
   color-scheme: dark;
 }
 

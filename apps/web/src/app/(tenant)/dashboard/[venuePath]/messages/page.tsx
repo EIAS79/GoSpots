@@ -1,6 +1,7 @@
 "use client";
 
 import {
+  Bell,
   ChevronLeft,
   Loader2,
   Mail,
@@ -30,6 +31,7 @@ import {
   joinGuestChat,
   sendStaffGuestChatMessage,
   setGuestChatStatus,
+  type GuestChatStatusCounts,
   type StaffGuestChatListItem,
 } from "@/lib/staff-guest-chat-client";
 import { isFeatureUnlocked } from "@/lib/plan";
@@ -116,6 +118,28 @@ function statusToneLabel(status: GuestChatStatus, t: MsgT) {
   }
 }
 
+function CountBadge({
+  count,
+  tone = "emerald",
+}: {
+  count: number;
+  tone?: "emerald" | "amber" | "sky";
+}) {
+  if (count <= 0) return null;
+  return (
+    <span
+      className={cn(
+        "ml-1.5 inline-flex min-w-[1.25rem] items-center justify-center rounded-full px-1.5 py-0.5 text-[10px] font-semibold tabular-nums",
+        tone === "emerald" && "bg-emerald-500 text-zinc-950",
+        tone === "amber" && "bg-amber-400 text-zinc-950",
+        tone === "sky" && "bg-sky-400 text-zinc-950",
+      )}
+    >
+      {count > 99 ? "99+" : count}
+    </span>
+  );
+}
+
 function ActionBtn({
   children,
   onClick,
@@ -151,10 +175,12 @@ function ContactInboxPanel({
   canView,
   t,
   locale,
+  onTotalChange,
 }: {
   canView: boolean;
   t: MsgT;
   locale?: string;
+  onTotalChange?: (total: number) => void;
 }) {
   const [items, setItems] = useState<ContactMessageRow[]>([]);
   const [total, setTotal] = useState(0);
@@ -168,6 +194,7 @@ function ContactInboxPanel({
       const data = await fetchContactMessages({ take: 100 });
       setItems(data.items);
       setTotal(data.total);
+      onTotalChange?.(data.total);
       return true;
     } catch (e) {
       setError(e instanceof Error ? e.message : t("msg.contactLoadFailed"));
@@ -175,7 +202,7 @@ function ContactInboxPanel({
     } finally {
       if (!opts?.silent) setLoading(false);
     }
-  }, [t]);
+  }, [t, onTotalChange]);
 
   useEffect(() => {
     if (canView) void load();
@@ -189,7 +216,7 @@ function ContactInboxPanel({
 
   if (loading) {
     return (
-      <div className="flex justify-center py-16">
+      <div className="flex flex-1 items-center justify-center py-16">
         <Loader2 className="h-5 w-5 animate-spin text-emerald-400" />
       </div>
     );
@@ -208,13 +235,13 @@ function ContactInboxPanel({
   }
 
   return (
-    <div className="space-y-3">
-      <p className="text-[11px] text-zinc-500">
+    <div className="flex min-h-0 flex-1 flex-col gap-3">
+      <p className="shrink-0 text-[11px] text-zinc-500">
         {total === 1
           ? t("msg.contactCountOne", { total })
           : t("msg.contactCountMany", { total })}
       </p>
-      <ul className="divide-y divide-white/5 overflow-hidden rounded-xl border border-white/10 bg-zinc-900/40">
+      <ul className="min-h-0 flex-1 divide-y divide-white/5 overflow-y-auto overscroll-contain rounded-xl border border-white/10 bg-zinc-900/40">
         {items.map((row) => (
           <li key={row.id} className="px-4 py-4">
             <div className="flex flex-wrap items-start justify-between gap-2">
@@ -288,6 +315,17 @@ function MessagesPageInner() {
   const [filter, setFilter] = useState<"ALL" | GuestChatStatus>("ALL");
   const [items, setItems] = useState<StaffGuestChatListItem[]>([]);
   const [waitingCount, setWaitingCount] = useState(0);
+  const [notifiedCount, setNotifiedCount] = useState(0);
+  const [attentionCount, setAttentionCount] = useState(0);
+  const [contactCount, setContactCount] = useState(0);
+  const [counts, setCounts] = useState<GuestChatStatusCounts>({
+    ALL: 0,
+    WAITING: 0,
+    OPEN: 0,
+    PAUSED: 0,
+    ENDED: 0,
+    notified: 0,
+  });
   const [total, setTotal] = useState(0);
   const [selectedId, setSelectedId] = useState<string | null>(
     () => searchParams.get("chat"),
@@ -302,6 +340,10 @@ function MessagesPageInner() {
   const [draft, setDraft] = useState("");
   const [busy, setBusy] = useState(false);
 
+  const onContactTotalChange = useCallback((n: number) => {
+    setContactCount(n);
+  }, []);
+
   const loadList = useCallback(
     async (opts?: { silent?: boolean }) => {
       if (!opts?.silent) setLoadingList(true);
@@ -314,6 +356,10 @@ function MessagesPageInner() {
         setItems(data.items);
         setTotal(data.total);
         setWaitingCount(data.waitingCount);
+        setNotifiedCount(data.notifiedCount ?? 0);
+        setAttentionCount(data.attentionCount ?? data.waitingCount);
+        setContactCount(data.contactCount ?? 0);
+        if (data.counts) setCounts(data.counts);
         return true;
       } catch (e) {
         setError(e instanceof Error ? e.message : t("msg.chatsLoadFailed"));
@@ -346,7 +392,7 @@ function MessagesPageInner() {
   );
 
   useEffect(() => {
-    if (canView && inboxTab === "chats") void loadList();
+    if (canView) void loadList({ silent: inboxTab !== "chats" });
   }, [canView, loadList, inboxTab]);
 
   useEffect(() => {
@@ -355,7 +401,7 @@ function MessagesPageInner() {
   }, [canView, selectedId, loadChat, inboxTab]);
 
   useLiveData(() => loadList({ silent: true }), [loadList], {
-    enabled: canView && inboxTab === "chats",
+    enabled: canView,
     intervalMs: 8_000,
     refreshOnSections: ["messaging", "notifications"],
   });
@@ -431,63 +477,91 @@ function MessagesPageInner() {
       title={guide.title}
       description={guide.description}
       capabilities={guide.capabilities}
+      className="flex flex-col overflow-hidden"
     >
       <FeatureGate feature="messaging" unlocked={unlocked} title={guide.title}>
-      <div className="mb-4 flex flex-wrap gap-2">
+      <div className="flex min-h-0 flex-1 flex-col gap-3">
+      <div className="flex shrink-0 flex-wrap items-center gap-2">
         <button
           type="button"
           onClick={() => setInboxTab("chats")}
           className={cn(
-            "rounded-lg border px-3 py-1.5 text-xs font-medium transition",
+            "inline-flex items-center rounded-lg border px-3 py-1.5 text-xs font-medium transition",
             inboxTab === "chats"
               ? "border-emerald-400/40 bg-emerald-950/40 text-emerald-200"
               : "border-white/10 text-zinc-400 hover:text-zinc-200",
           )}
         >
           {t("msg.tabGuestChat")}
-          {waitingCount > 0 ? ` (${waitingCount})` : null}
+          <CountBadge count={attentionCount} tone="amber" />
         </button>
         <button
           type="button"
           onClick={() => setInboxTab("contact")}
           className={cn(
-            "rounded-lg border px-3 py-1.5 text-xs font-medium transition",
+            "inline-flex items-center rounded-lg border px-3 py-1.5 text-xs font-medium transition",
             inboxTab === "contact"
               ? "border-sky-400/40 bg-sky-950/40 text-sky-200"
               : "border-white/10 text-zinc-400 hover:text-zinc-200",
           )}
         >
           {t("msg.tabContactForm")}
+          <CountBadge count={contactCount} tone="sky" />
         </button>
+        {inboxTab === "chats" && (waitingCount > 0 || notifiedCount > 0) ? (
+          <p className="ml-auto text-[11px] text-zinc-500">
+            {t("msg.waitingNotifiedSummary", {
+              waiting: waitingCount,
+              notified: notifiedCount,
+            })}
+          </p>
+        ) : null}
       </div>
 
       {inboxTab === "contact" ? (
-        <ContactInboxPanel canView={canView} t={t} locale={locale} />
+        <ContactInboxPanel
+          canView={canView}
+          t={t}
+          locale={locale}
+          onTotalChange={onContactTotalChange}
+        />
       ) : (
         <>
           {error ? (
-            <p className="mb-3 text-sm text-rose-300">{error}</p>
+            <p className="shrink-0 text-sm text-rose-300">{error}</p>
           ) : null}
 
-          <div className="mb-3 flex flex-wrap items-center gap-2">
-            {filters.map((f) => (
-              <button
-                key={f.id}
-                type="button"
-                onClick={() => setFilter(f.id)}
-                className={cn(
-                  "rounded-lg border px-2.5 py-1 text-xs font-medium transition",
-                  filter === f.id
-                    ? "border-emerald-400/40 bg-emerald-950/40 text-emerald-200"
-                    : "border-white/10 text-zinc-400 hover:text-zinc-200",
-                )}
-              >
-                {f.label}
-                {f.id === "WAITING" && waitingCount > 0
-                  ? ` (${waitingCount})`
-                  : null}
-              </button>
-            ))}
+          <div className="flex shrink-0 flex-wrap items-center gap-2">
+            {filters.map((f) => {
+              const count =
+                f.id === "ALL"
+                  ? counts.ALL
+                  : counts[f.id as Exclude<keyof GuestChatStatusCounts, "notified" | "ALL">];
+              return (
+                <button
+                  key={f.id}
+                  type="button"
+                  onClick={() => setFilter(f.id)}
+                  className={cn(
+                    "inline-flex items-center rounded-lg border px-2.5 py-1 text-xs font-medium transition",
+                    filter === f.id
+                      ? "border-emerald-400/40 bg-emerald-950/40 text-emerald-200"
+                      : "border-white/10 text-zinc-400 hover:text-zinc-200",
+                  )}
+                >
+                  {f.label}
+                  <CountBadge
+                    count={count}
+                    tone={f.id === "WAITING" ? "amber" : "emerald"}
+                  />
+                </button>
+              );
+            })}
+            <span className="inline-flex items-center rounded-lg border border-amber-400/25 bg-amber-950/30 px-2.5 py-1 text-xs font-medium text-amber-200">
+              <Bell size={11} className="mr-1 opacity-80" />
+              {t("msg.notified")}
+              <CountBadge count={notifiedCount} tone="amber" />
+            </span>
             <span className="ml-auto text-[11px] text-zinc-500">
               {total === 1
                 ? t("msg.chatCountOne", { total })
@@ -495,15 +569,15 @@ function MessagesPageInner() {
             </span>
           </div>
 
-          <div className="grid gap-3 lg:min-h-[28rem] lg:grid-cols-[minmax(0,18rem)_minmax(0,1fr)]">
+          <div className="grid min-h-0 flex-1 gap-3 lg:grid-cols-[minmax(0,18rem)_minmax(0,1fr)]">
             <aside
               className={cn(
-                "overflow-hidden rounded-xl border border-white/10 bg-zinc-900/40",
-                mobileView === "thread" && "hidden lg:block",
+                "flex min-h-0 flex-col overflow-hidden rounded-xl border border-white/10 bg-zinc-900/40",
+                mobileView === "thread" && "hidden lg:flex",
               )}
             >
               {loadingList ? (
-                <div className="flex justify-center py-16">
+                <div className="flex flex-1 items-center justify-center py-16">
                   <Loader2 className="h-5 w-5 animate-spin text-emerald-400" />
                 </div>
               ) : sortedItems.length === 0 ? (
@@ -511,49 +585,61 @@ function MessagesPageInner() {
                   {t("msg.emptyFilter")}
                 </p>
               ) : (
-                <ul className="max-h-[70vh] divide-y divide-white/5 overflow-y-auto">
-                  {sortedItems.map((row) => (
-                    <li key={row.id}>
-                      <button
-                        type="button"
-                        onClick={() => {
-                          setSelectedId(row.id);
-                          setMobileView("thread");
-                        }}
-                        className={cn(
-                          "w-full px-3 py-3 text-left transition hover:bg-white/[0.03]",
-                          selectedId === row.id && "bg-white/[0.05]",
-                        )}
-                      >
-                        <div className="mb-1 flex items-center justify-between gap-2">
-                          <span className="truncate text-sm font-medium text-white">
-                            {row.guestName}
-                          </span>
-                          <span
-                            className={cn(
-                              "shrink-0 rounded border px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide",
-                              statusTone(row.status),
-                            )}
-                          >
-                            {statusBadgeLabel(row.status, t)}
-                          </span>
-                        </div>
-                        <p className="truncate text-xs text-zinc-500">
-                          {row.lastMessage?.body ?? t("msg.noMessagesYet")}
-                        </p>
-                        <p className="mt-1 text-[10px] text-zinc-600">
-                          {formatWhen(row.updatedAt, locale)}
-                        </p>
-                      </button>
-                    </li>
-                  ))}
+                <ul className="min-h-0 flex-1 divide-y divide-white/5 overflow-y-auto overscroll-contain">
+                  {sortedItems.map((row) => {
+                    const pinged = Boolean(
+                      row.lastGuestPingAt && row.status !== "ENDED",
+                    );
+                    return (
+                      <li key={row.id}>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setSelectedId(row.id);
+                            setMobileView("thread");
+                          }}
+                          className={cn(
+                            "w-full px-3 py-3 text-left transition hover:bg-white/[0.03]",
+                            selectedId === row.id && "bg-white/[0.05]",
+                          )}
+                        >
+                          <div className="mb-1 flex items-center justify-between gap-2">
+                            <span className="flex min-w-0 items-center gap-1.5 truncate text-sm font-medium text-white">
+                              {row.guestName}
+                              {pinged ? (
+                                <Bell
+                                  size={12}
+                                  className="shrink-0 text-amber-300"
+                                  aria-label={t("msg.notifiedPing")}
+                                />
+                              ) : null}
+                            </span>
+                            <span
+                              className={cn(
+                                "shrink-0 rounded border px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide",
+                                statusTone(row.status),
+                              )}
+                            >
+                              {statusBadgeLabel(row.status, t)}
+                            </span>
+                          </div>
+                          <p className="truncate text-xs text-zinc-500">
+                            {row.lastMessage?.body ?? t("msg.noMessagesYet")}
+                          </p>
+                          <p className="mt-1 text-[10px] text-zinc-600">
+                            {formatWhen(row.updatedAt, locale)}
+                          </p>
+                        </button>
+                      </li>
+                    );
+                  })}
                 </ul>
               )}
             </aside>
 
             <section
               className={cn(
-                "flex min-h-0 flex-col overflow-hidden rounded-xl border border-white/10 bg-zinc-900/40 lg:min-h-[28rem]",
+                "flex min-h-0 flex-col overflow-hidden rounded-xl border border-white/10 bg-zinc-900/40",
                 mobileView === "list" && "hidden lg:flex",
               )}
             >
@@ -568,7 +654,7 @@ function MessagesPageInner() {
                 </div>
               ) : chat ? (
                 <>
-                  <header className="border-b border-white/10 px-4 py-3">
+                  <header className="shrink-0 border-b border-white/10 px-4 py-3">
                     <div className="flex flex-wrap items-start justify-between gap-3">
                       <div className="flex min-w-0 items-start gap-2">
                         <button
@@ -580,8 +666,14 @@ function MessagesPageInner() {
                           <ChevronLeft size={18} />
                         </button>
                         <div className="min-w-0">
-                        <h2 className="text-base font-semibold text-white">
+                        <h2 className="flex items-center gap-2 text-base font-semibold text-white">
                           {chat.guestName}
+                          {chat.lastGuestPingAt && chat.status !== "ENDED" ? (
+                            <span className="inline-flex items-center gap-1 rounded-full border border-amber-400/30 bg-amber-950/40 px-2 py-0.5 text-[10px] font-medium text-amber-200">
+                              <Bell size={10} />
+                              {t("msg.notified")}
+                            </span>
+                          ) : null}
                         </h2>
                         <p className="mt-0.5 text-xs text-zinc-500">
                           {statusToneLabel(chat.status, t)}
@@ -689,7 +781,7 @@ function MessagesPageInner() {
                     </div>
                   </header>
 
-                  <div className="flex-1 space-y-2 overflow-y-auto px-4 py-3">
+                  <div className="min-h-0 flex-1 space-y-2 overflow-y-auto overscroll-contain px-4 py-3">
                     {chat.messages.map((m) => {
                       const staff = m.sender === "STAFF";
                       return (
@@ -734,7 +826,7 @@ function MessagesPageInner() {
                   {canWrite && chat.status !== "ENDED" ? (
                     <form
                       onSubmit={send}
-                      className="flex gap-2 border-t border-white/10 p-3"
+                      className="flex shrink-0 gap-2 border-t border-white/10 p-3"
                     >
                       <input
                         value={draft}
@@ -757,7 +849,7 @@ function MessagesPageInner() {
                       </button>
                     </form>
                   ) : chat.status === "ENDED" ? (
-                    <p className="border-t border-white/10 px-4 py-3 text-xs text-zinc-500">
+                    <p className="shrink-0 border-t border-white/10 px-4 py-3 text-xs text-zinc-500">
                       {t("msg.chatEndedHint")}
                     </p>
                   ) : null}
@@ -771,6 +863,7 @@ function MessagesPageInner() {
           </div>
         </>
       )}
+      </div>
       </FeatureGate>
     </TenantPage>
   );

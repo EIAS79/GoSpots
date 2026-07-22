@@ -27,7 +27,6 @@ import {
   resolveEffectiveTier,
   type SubscriptionTier,
 } from "@/lib/plan";
-import { ensureOnboardingProgress } from "@/lib/onboarding-progress";
 import { dashboardHref } from "@/lib/venue-dashboard";
 import { useAuth } from "@/lib/use-auth";
 import { useCurrentMembership } from "@/lib/use-current-membership";
@@ -328,9 +327,8 @@ export function VenueSwitcher({
             setAddOpen(false);
             await reload();
             if (!nextVenuePath) return;
-            if (opts?.startOnboarding) {
-              ensureOnboardingProgress(nextVenuePath, opts.shopId ?? null);
-              router.push(dashboardHref(nextVenuePath, "/onboarding"));
+            if (opts?.goToSubscription) {
+              router.push(dashboardHref(nextVenuePath, "/subscription"));
               return;
             }
             router.push(
@@ -350,7 +348,7 @@ function AddVenueDialog({
   onClose: () => void;
   onDone: (
     venuePath: string | null,
-    opts?: { shopId?: string | null; startOnboarding?: boolean },
+    opts?: { goToSubscription?: boolean },
   ) => void | Promise<void>;
 }) {
   const vs = useVenueSettingsOptional();
@@ -399,10 +397,7 @@ function AddVenueDialog({
     setBusy(true);
     try {
       const res = await createVenue({ shopName: name, shopSlug: slug });
-      await onDone(res.venuePath, {
-        shopId: res.shop.id,
-        startOnboarding: true,
-      });
+      await onDone(res.venuePath, { goToSubscription: true });
     } catch (err) {
       setError(
         err instanceof ApiError

@@ -98,21 +98,21 @@ export function PublicVenueView({
     venue.averageRating != null;
 
   return (
-    <div className="min-h-screen bg-[var(--color-background)] text-[var(--color-foreground)]">
-      <header className="border-b border-[var(--color-border)] bg-[color-mix(in_srgb,var(--color-background)_88%,transparent)] backdrop-blur dark:border-white/10">
+    <div className="relative min-h-screen text-[var(--color-foreground)]">
+      <header className="border-b border-[var(--color-border)] bg-[color-mix(in_srgb,var(--color-background)_88%,transparent)] backdrop-blur-xl">
         <div className="mx-auto flex max-w-7xl items-center justify-between gap-2 px-4 py-3 sm:px-6 sm:py-4 md:px-6">
           <LocoraLogo
             href="/"
-            size="sm"
+            size="md"
             showTagline
             tone="auto"
-            className="hidden min-w-0 sm:inline-flex"
+            className="hidden shrink-0 sm:inline-flex"
           />
           <LocoraLogo
             href="/"
             size="sm"
             tone="auto"
-            className="min-w-0 sm:hidden"
+            className="shrink-0 sm:hidden"
           />
           <div className="flex shrink-0 items-center gap-2 sm:gap-3">
             <Link
@@ -137,7 +137,7 @@ export function PublicVenueView({
           sizes="100vw"
           priority
         />
-        <div className="absolute inset-0 bg-gradient-to-t from-[var(--color-background)] via-zinc-950/50 to-zinc-950/10" />
+        <div className="absolute inset-0 bg-gradient-to-t from-[var(--hero-scrim-edge)] via-[var(--hero-scrim-mid)] to-transparent" />
         <div className="absolute bottom-0 left-0 right-0">
           <div className="mx-auto max-w-7xl px-4 pb-4 pt-12 sm:px-6 sm:pb-6 sm:pt-16 md:pb-8">
             {venue.tags && venue.tags.length > 0 ? (
@@ -145,10 +145,10 @@ export function PublicVenueView({
                 {venue.tags.map((t) => (
                   <span
                     key={t.id}
-                    className="rounded-full border border-white/20 bg-zinc-950/50 px-2.5 py-0.5 text-[11px] font-medium backdrop-blur-sm"
+                    className="rounded-full border border-[var(--color-border)] bg-[var(--color-surface)]/70 px-2.5 py-0.5 text-[11px] font-medium text-[var(--color-foreground)] backdrop-blur-sm dark:border-white/15 dark:bg-white/10 dark:text-zinc-100"
                     style={{
                       borderColor: t.color ? `${t.color}66` : undefined,
-                      color: t.color ?? "#fde68a",
+                      color: t.color ?? undefined,
                     }}
                   >
                     {t.name}
@@ -159,11 +159,11 @@ export function PublicVenueView({
 
             <div className="flex flex-col gap-3 sm:flex-row sm:flex-wrap sm:items-end sm:justify-between sm:gap-4">
               <div className="min-w-0 flex-1">
-                <h1 className="break-words text-2xl font-bold tracking-tight text-white sm:text-3xl md:text-4xl">
+                <h1 className="break-words text-2xl font-bold tracking-tight text-[var(--color-foreground)] sm:text-3xl md:text-4xl dark:text-white">
                   {title}
                 </h1>
                 {location ? (
-                  <p className="mt-2 flex min-w-0 items-start gap-1.5 text-sm text-zinc-300">
+                  <p className="mt-2 flex min-w-0 items-start gap-1.5 text-sm text-zinc-600 dark:text-zinc-300">
                     <MapPin size={15} className="mt-0.5 shrink-0 opacity-80" />
                     <span className="break-words">{location}</span>
                   </p>
@@ -174,17 +174,17 @@ export function PublicVenueView({
                   <OpenStatusPill status={status} />
                 ) : null}
                 {hasReviews ? (
-                  <span className="inline-flex items-center gap-1.5 rounded-full border border-white/10 bg-zinc-950/60 px-2.5 py-1 text-[11px] font-medium text-amber-200 backdrop-blur-sm">
+                  <span className="inline-flex items-center gap-1.5 rounded-full border border-[var(--color-border)] bg-[var(--color-surface)]/70 px-2.5 py-1 text-[11px] font-medium text-amber-700 backdrop-blur-sm dark:border-white/15 dark:bg-white/10 dark:text-amber-200">
                     <StarRatingDisplay rating={venue.averageRating!} size={11} />
                     {venue.averageRating!.toFixed(1)}
-                    <span className="text-zinc-500">
+                    <span className="text-zinc-500 dark:text-zinc-400">
                       ({venue.reviewCount})
                     </span>
                   </span>
                 ) : venue.showReviews !== false &&
                   venue.reviewsMode !== "DISABLED" &&
                   venue.reviewsMode !== "HIDDEN" ? (
-                  <span className="inline-flex items-center gap-1 rounded-full border border-white/10 bg-zinc-950/60 px-2.5 py-1 text-[11px] font-medium text-zinc-400 backdrop-blur-sm">
+                  <span className="inline-flex items-center gap-1 rounded-full border border-[var(--color-border)] bg-[var(--color-surface)]/70 px-2.5 py-1 text-[11px] font-medium text-zinc-600 backdrop-blur-sm dark:border-white/15 dark:bg-white/10 dark:text-zinc-400">
                     <Star size={12} className="text-amber-400/60" />
                     New
                   </span>
@@ -271,9 +271,13 @@ function OpenStatusPill({
     <span
       className={cn(
         "inline-flex items-center gap-1.5 rounded-full border px-2.5 py-1 text-[11px] font-semibold backdrop-blur-sm",
-        open && "border-emerald-400/35 bg-emerald-950/70 text-emerald-300",
-        later && "border-amber-400/35 bg-amber-950/70 text-amber-300",
-        !open && !later && "border-white/10 bg-zinc-950/70 text-zinc-400",
+        open &&
+          "border-emerald-400/35 bg-emerald-500/15 text-emerald-700 dark:bg-emerald-950/70 dark:text-emerald-300",
+        later &&
+          "border-amber-400/35 bg-amber-500/15 text-amber-700 dark:bg-amber-950/70 dark:text-amber-300",
+        !open &&
+          !later &&
+          "border-[var(--color-border)] bg-[var(--color-surface)]/70 text-zinc-600 dark:border-white/15 dark:bg-white/10 dark:text-zinc-400",
       )}
     >
       <span
@@ -281,7 +285,7 @@ function OpenStatusPill({
           "size-1.5 rounded-full",
           open && "venue-status-dot bg-emerald-400",
           later && "bg-amber-400",
-          !open && !later && "bg-zinc-600",
+          !open && !later && "bg-zinc-400 dark:bg-zinc-600",
         )}
       />
       {status.label}
