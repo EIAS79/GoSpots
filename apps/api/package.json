@@ -9,7 +9,7 @@
     "node": "24.x"
   },
   "scripts": {
-    "build": "nest build",
+    "build": "node -e \"require('fs').rmSync('dist',{recursive:true,force:true})\" && nest build",
     "format": "prettier --write \"src/**/*.ts\"",
     "start": "nest start",
     "start:dev": "nest build && nest start --watch",
