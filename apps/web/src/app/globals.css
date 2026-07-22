@@ -699,6 +699,36 @@ html.dark .bg-noise {
   animation: none !important;
 }
 
+/* Phones / narrow preview: keep canvas wash only — kill blur/blend GPU stack */
+.aurora-compact .paint-mesh,
+.aurora-compact .paint-glow,
+.aurora-compact .paint-brush,
+.aurora-compact .paint-ribbon,
+.aurora-compact .aurora-grid,
+.aurora-compact .aurora-stars,
+.aurora-compact .bg-noise {
+  display: none !important;
+  animation: none !important;
+}
+
+@media (max-width: 767px) {
+  .paint-mesh,
+  .paint-glow,
+  .paint-brush,
+  .paint-ribbon,
+  .aurora-grid,
+  .aurora-stars,
+  .bg-noise {
+    display: none !important;
+    animation: none !important;
+  }
+
+  .animate-shine,
+  .animate-pulse-soft {
+    animation: none !important;
+  }
+}
+
 html.dashboard-route,
 html.dashboard-route body {
   height: 100%;

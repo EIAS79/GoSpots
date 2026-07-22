@@ -7,6 +7,7 @@ import { Magnetic } from "@/components/effects/magnetic";
 import { cn } from "@/lib/cn";
 import { trustIcons } from "@/lib/mock-data";
 import { usePublicPrefs } from "@/lib/public-prefs-context";
+import { useCompactViewport } from "@/lib/use-compact-viewport";
 import { HeroCollage } from "./hero-collage";
 import { LivePreview } from "./live-preview";
 
@@ -51,6 +52,9 @@ function StaggeredLine({
 export function Hero() {
   const { t } = usePublicPrefs();
   const reduced = useReducedMotion();
+  const compact = useCompactViewport();
+  // Phones: no stagger / delayed fades (desktop unchanged).
+  const light = Boolean(reduced || compact);
   const prefix = "hero.manage";
   const c = {
     badge: t(`${prefix}.badge`),
@@ -84,48 +88,48 @@ export function Hero() {
       <div className="relative z-10 mx-auto max-w-7xl px-4 sm:px-6 md:px-8">
         <div className="mx-auto mt-2 flex max-w-3xl flex-col items-center text-center sm:mt-4">
           <motion.span
-            initial={{ opacity: 0, y: -6 }}
+            initial={light ? false : { opacity: 0, y: -6 }}
             animate={{ opacity: 1, y: 0 }}
-            transition={{ duration: 0.25 }}
+            transition={{ duration: light ? 0 : 0.25 }}
             className="inline-flex items-center gap-2 rounded-full border border-emerald-400/35 bg-emerald-500/15 px-3 py-1 text-[11px] font-medium text-emerald-200 backdrop-blur-md sm:text-xs"
           >
-            <Sparkles size={13} className={reduced ? "" : "animate-pulse-soft"} />
+            <Sparkles size={13} className={light ? "" : "animate-pulse-soft"} />
             {c.badge}
           </motion.span>
 
           <h1 className="mt-6 text-balance text-4xl font-bold leading-[1.06] tracking-tight text-white drop-shadow-[0_2px_18px_rgba(0,0,0,0.55)] sm:mt-7 sm:text-5xl md:text-6xl lg:text-7xl">
-            {reduced ? (
+            {light ? (
               <span className="block">{c.titleA}</span>
             ) : (
               <StaggeredLine text={c.titleA} />
             )}
             <motion.span
-              initial={reduced ? false : { opacity: 0, y: 18 }}
+              initial={light ? false : { opacity: 0, y: 18 }}
               animate={{ opacity: 1, y: 0 }}
               transition={{
-                duration: 0.45,
-                delay: reduced ? 0 : 0.18,
+                duration: light ? 0 : 0.45,
+                delay: light ? 0 : 0.18,
                 ease: [0.22, 1, 0.36, 1],
               }}
-              className="text-gradient animate-shine block"
+              className={cn("text-gradient block", !light && "animate-shine")}
             >
               {c.titleB}
             </motion.span>
           </h1>
 
           <motion.p
-            initial={{ opacity: 0, y: 10 }}
+            initial={light ? false : { opacity: 0, y: 10 }}
             animate={{ opacity: 1, y: 0 }}
-            transition={{ duration: 0.3 }}
+            transition={{ duration: light ? 0 : 0.3 }}
             className="mt-5 max-w-xl text-balance text-sm text-zinc-300 sm:mt-6 sm:text-base md:text-lg"
           >
             {c.subtitle}
           </motion.p>
 
           <motion.div
-            initial={{ opacity: 0, y: 12 }}
+            initial={light ? false : { opacity: 0, y: 12 }}
             animate={{ opacity: 1, y: 0 }}
-            transition={{ duration: 0.3 }}
+            transition={{ duration: light ? 0 : 0.3 }}
             className="mt-8 flex w-full flex-col items-center gap-3 sm:mt-9 sm:w-auto sm:flex-row"
           >
             <Magnetic className="w-full sm:w-auto">
@@ -138,7 +142,7 @@ export function Hero() {
                   size={16}
                   className="relative z-10 transition-transform group-hover:translate-x-1"
                 />
-                {!reduced && (
+                {!light && (
                   <span className="absolute inset-0 -translate-x-full bg-gradient-to-r from-transparent via-white/40 to-transparent transition-transform duration-700 group-hover:translate-x-full" />
                 )}
               </Link>
@@ -164,9 +168,9 @@ export function Hero() {
           </ul>
 
           <motion.div
-            initial={reduced ? false : { opacity: 0 }}
+            initial={light ? false : { opacity: 0 }}
             animate={{ opacity: 1 }}
-            transition={{ delay: reduced ? 0 : 0.35 }}
+            transition={{ delay: light ? 0 : 0.35 }}
             className="mt-6 flex flex-wrap items-center justify-center gap-x-5 gap-y-2 text-[11px] text-zinc-400 sm:mt-8 sm:text-xs"
           >
             {trustIcons.map((item, i) => (
@@ -191,9 +195,12 @@ export function Hero() {
           <AnimatePresence mode="wait">
             <motion.div
               key="preview-manage"
-              initial={{ opacity: 0, y: 24, scale: 0.98 }}
+              initial={light ? false : { opacity: 0, y: 24, scale: 0.98 }}
               animate={{ opacity: 1, y: 0, scale: 1 }}
-              transition={{ duration: 0.45, ease: [0.22, 1, 0.36, 1] }}
+              transition={{
+                duration: light ? 0 : 0.45,
+                ease: [0.22, 1, 0.36, 1],
+              }}
             >
               <LivePreview />
             </motion.div>

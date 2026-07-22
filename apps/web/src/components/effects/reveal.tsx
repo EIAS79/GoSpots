@@ -1,8 +1,9 @@
 "use client";
 
-import { motion, type Variants } from "framer-motion";
+import { motion, useReducedMotion, type Variants } from "framer-motion";
 import type { ReactNode } from "react";
 import { cn } from "@/lib/cn";
+import { useCompactViewport } from "@/lib/use-compact-viewport";
 
 type RevealProps = {
   children: ReactNode;
@@ -28,6 +29,14 @@ export function Reveal({
   delay = 0,
   amount = 0.2,
 }: RevealProps) {
+  const compact = useCompactViewport();
+  const reduced = useReducedMotion() ?? false;
+
+  // Phones / reduced-motion: never start invisible (sections were blank / delayed).
+  if (compact || reduced) {
+    return <div className={cn(className)}>{children}</div>;
+  }
+
   return (
     <motion.div
       initial="hidden"

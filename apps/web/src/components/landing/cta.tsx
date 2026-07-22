@@ -6,12 +6,15 @@ import Link from "next/link";
 import { Magnetic } from "@/components/effects/magnetic";
 import { cn } from "@/lib/cn";
 import { usePublicPrefs } from "@/lib/public-prefs-context";
+import { useCompactViewport } from "@/lib/use-compact-viewport";
 
 const EASE = [0.22, 1, 0.36, 1] as const;
 
 /** Owner CTA — primary register; secondary guest directory. */
 export function Cta() {
   const reduce = useReducedMotion();
+  const compact = useCompactViewport();
+  const light = Boolean(reduce || compact);
   const { t } = usePublicPrefs();
   const prefix = "cta.manage";
   const c = {
@@ -29,13 +32,13 @@ export function Cta() {
     <section className="relative py-20">
       <div className="mx-auto max-w-7xl px-4 sm:px-6 md:px-8">
         <motion.div
-          initial={{ opacity: 0, y: 24 }}
+          initial={light ? false : { opacity: 0, y: 24 }}
           whileInView={{ opacity: 1, y: 0 }}
           viewport={{ once: true }}
-          transition={{ duration: 0.55, ease: EASE }}
+          transition={{ duration: light ? 0 : 0.55, ease: EASE }}
           className="relative overflow-hidden rounded-3xl border border-[var(--color-border)] bg-[var(--color-surface)]/40 p-5 sm:p-8 md:p-14"
         >
-          {!reduce && (
+          {!light && (
             <>
               <motion.div
                 aria-hidden

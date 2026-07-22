@@ -11,6 +11,7 @@ import { Reveal } from "@/components/effects/reveal";
 import { features } from "@/lib/mock-data";
 import { cn } from "@/lib/cn";
 import { usePublicPrefs } from "@/lib/public-prefs-context";
+import { useCompactViewport } from "@/lib/use-compact-viewport";
 
 type Feature = (typeof features)[number];
 
@@ -28,6 +29,8 @@ function formatStep(n: number) {
 export function Features() {
   const { t } = usePublicPrefs();
   const reduced = useReducedMotion();
+  const compact = useCompactViewport();
+  const light = Boolean(reduced || compact);
   const railRef = useRef<HTMLDivElement>(null);
 
   const { scrollYProgress } = useScroll({
@@ -62,11 +65,14 @@ export function Features() {
             aria-hidden
             className="absolute bottom-4 top-4 left-[18px] w-px -translate-x-1/2 bg-black/[0.08] dark:bg-white/[0.08] sm:left-[22px] lg:left-1/2"
           />
-          {/* Drawn rail — fills with scroll */}
+          {/* Drawn rail — fills with scroll (desktop); full height on phones */}
           <motion.div
             aria-hidden
-            style={reduced ? undefined : { scaleY: drawn }}
-            className="absolute bottom-4 top-4 left-[18px] w-px -translate-x-1/2 origin-top bg-gradient-to-b from-emerald-400 via-cyan-400 to-violet-400 shadow-[0_0_16px_rgba(52,211,153,0.45)] sm:left-[22px] lg:left-1/2"
+            style={light ? undefined : { scaleY: drawn }}
+            className={cn(
+              "absolute bottom-4 top-4 left-[18px] w-px -translate-x-1/2 origin-top bg-gradient-to-b from-emerald-400 via-cyan-400 to-violet-400 shadow-[0_0_16px_rgba(52,211,153,0.45)] sm:left-[22px] lg:left-1/2",
+              light && "scale-y-100",
+            )}
           />
 
           <ol className="relative flex flex-col gap-10 sm:gap-12">
@@ -105,13 +111,15 @@ function TimelineRow({
 }) {
   const { t } = usePublicPrefs();
   const reduced = useReducedMotion();
-  const fromX = reduced ? 0 : side === "left" ? -32 : 32;
+  const compact = useCompactViewport();
+  const light = Boolean(reduced || compact);
+  const fromX = light ? 0 : side === "left" ? -32 : 32;
 
   return (
     <li className="relative">
       {/* Node on the rail */}
       <motion.span
-        initial={reduced ? false : { scale: 0, opacity: 0 }}
+        initial={light ? false : { scale: 0, opacity: 0 }}
         whileInView={{ scale: 1, opacity: 1 }}
         viewport={{ once: true, margin: "-80px" }}
         transition={{ type: "spring", stiffness: 320, damping: 22 }}
@@ -134,10 +142,10 @@ function TimelineRow({
 
       {/* Card — full width right of rail on mobile; 42% column on lg */}
       <motion.article
-        initial={{ opacity: 0, y: 18, x: fromX }}
+        initial={light ? false : { opacity: 0, y: 18, x: fromX }}
         whileInView={{ opacity: 1, y: 0, x: 0 }}
         viewport={{ once: true, margin: "-60px" }}
-        transition={{ duration: 0.5, ease: EASE }}
+        transition={{ duration: light ? 0 : 0.5, ease: EASE }}
         className={cn(
           "group relative ml-12 overflow-hidden rounded-2xl border border-[var(--color-border)] bg-[var(--color-surface)]/60 p-4 backdrop-blur transition-colors duration-300 hover:border-emerald-400/30 dark:border-white/10 dark:bg-white/[0.03] sm:ml-14 sm:p-6 lg:ml-0 lg:w-[42%]",
           side === "left" ? "lg:mr-auto" : "lg:ml-auto",

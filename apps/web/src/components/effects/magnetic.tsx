@@ -3,6 +3,7 @@
 import { motion, useMotionValue, useSpring } from "framer-motion";
 import { useRef, type ReactNode } from "react";
 import { cn } from "@/lib/cn";
+import { useCompactViewport } from "@/lib/use-compact-viewport";
 
 type MagneticProps = {
   children: ReactNode;
@@ -11,11 +12,16 @@ type MagneticProps = {
 };
 
 export function Magnetic({ children, className, strength = 0.35 }: MagneticProps) {
+  const compact = useCompactViewport();
   const ref = useRef<HTMLDivElement>(null);
   const x = useMotionValue(0);
   const y = useMotionValue(0);
   const sx = useSpring(x, { stiffness: 250, damping: 18, mass: 0.4 });
   const sy = useSpring(y, { stiffness: 250, damping: 18, mass: 0.4 });
+
+  if (compact) {
+    return <div className={cn("inline-flex", className)}>{children}</div>;
+  }
 
   return (
     <motion.div

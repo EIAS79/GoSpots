@@ -9,6 +9,7 @@ import {
 import Image from "next/image";
 import { useMemo, useRef } from "react";
 import { cn } from "@/lib/cn";
+import { useCompactViewport } from "@/lib/use-compact-viewport";
 
 const HERO_IMAGES = [
   { src: "/hero/billiard.jpg", alt: "Billiard hall" },
@@ -45,15 +46,15 @@ function CollageColumn({
   images,
   direction,
   duration,
-  reduced,
+  staticMode,
 }: {
   images: { src: string; alt: string; tall: boolean }[];
   direction: "up" | "down";
   duration: number;
-  reduced: boolean;
+  staticMode: boolean;
 }) {
-  // Duplicate content so the loop wraps seamlessly.
-  const loop = [...images, ...images];
+  // Duplicate content so the loop wraps seamlessly (desktop only).
+  const loop = staticMode ? images.slice(0, 3) : [...images, ...images];
   const from = direction === "up" ? "0%" : "-50%";
   const to = direction === "up" ? "-50%" : "0%";
 
@@ -62,37 +63,35 @@ function CollageColumn({
       <motion.div
         className="flex flex-col gap-3 will-change-transform md:gap-4"
         initial={{ y: from }}
-        animate={reduced ? { y: from } : { y: to }}
+        animate={staticMode ? { y: from } : { y: to }}
         transition={
-          reduced
+          staticMode
             ? undefined
             : { duration, repeat: Infinity, ease: "linear" }
         }
       >
         {loop.map((img, i) => {
-          // First pass only (before the seamless duplicate). Eager-load enough
-          // tiles that the detected LCP (/hero/bar.jpg) is covered.
-          const firstPass = i < images.length;
+          const firstPass = staticMode || i < images.length;
           const eager =
-            firstPass && (i < 6 || img.src === "/hero/bar.jpg");
+            firstPass && (i < 4 || img.src === "/hero/bar.jpg");
           return (
-          <div
-            key={`${img.src}-${i}`}
-            className={cn(
-              "relative w-full shrink-0 overflow-hidden rounded-xl md:rounded-2xl",
-              img.tall ? "aspect-[3/4]" : "aspect-[4/3]",
-            )}
-          >
-            <Image
-              src={img.src}
-              alt=""
-              role="presentation"
-              fill
-              sizes="(max-width: 640px) 50vw, (max-width: 1024px) 33vw, 25vw"
-              className="object-cover"
-              priority={eager}
-            />
-          </div>
+            <div
+              key={`${img.src}-${i}`}
+              className={cn(
+                "relative w-full shrink-0 overflow-hidden rounded-xl md:rounded-2xl",
+                img.tall ? "aspect-[3/4]" : "aspect-[4/3]",
+              )}
+            >
+              <Image
+                src={img.src}
+                alt=""
+                role="presentation"
+                fill
+                sizes="(max-width: 640px) 50vw, (max-width: 1024px) 33vw, 25vw"
+                className="object-cover"
+                priority={eager}
+              />
+            </div>
           );
         })}
       </motion.div>
@@ -102,15 +101,14 @@ function CollageColumn({
 
 /**
  * Full-bleed animated venue collage behind the hero.
- * Columns drift vertically in alternating directions; scrims above keep
- * copy readable and fade the section into the page background below.
+ * On phones: fewer tiles, no infinite scroll / parallax (desktop unchanged).
  */
 export function HeroCollage() {
   const reduced = useReducedMotion() ?? false;
+  const compact = useCompactViewport();
+  const staticMode = reduced || compact;
   const columns = useMemo(() => buildColumns(4), []);
 
-  // Subtle scroll parallax on the photo grid only — the scrims stay static so
-  // readability and the fade into the next section are never compromised.
   const ref = useRef<HTMLDivElement>(null);
   const { scrollYProgress } = useScroll({
     target: ref,
@@ -121,13 +119,13 @@ export function HeroCollage() {
   return (
     <div ref={ref} className="absolute inset-0 -z-20 overflow-hidden" aria-hidden>
       <motion.div
-        style={reduced ? undefined : { y: gridY }}
-        className="absolute inset-x-0 -top-[6%] bottom-[-6%] grid grid-cols-2 gap-3 px-3 sm:grid-cols-3 md:gap-4 md:px-4 lg:grid-cols-4">
+        style={staticMode ? undefined : { y: gridY }}
+        className="absolute inset-x-0 -top-[6%] bottom-[-6%] grid grid-cols-2 gap-3 px-3 sm:grid-cols-3 md:gap-4 md:px-4 lg:grid-cols-4"
+      >
         {columns.map((col, i) => (
           <div
             key={i}
             className={cn(
-              // Hide extra columns on smaller screens to save bandwidth/JANK
               i === 2 && "hidden sm:block",
               i === 3 && "hidden lg:block",
             )}
@@ -136,16 +134,14 @@ export function HeroCollage() {
               images={col}
               direction={i % 2 === 0 ? "up" : "down"}
               duration={54 + i * 9}
-              reduced={reduced}
+              staticMode={staticMode}
             />
           </div>
         ))}
       </motion.div>
 
-      {/* Readability + theme scrims */}
       <div className="absolute inset-0 bg-zinc-950/62" />
       <div className="absolute inset-0 bg-[radial-gradient(ellipse_100%_65%_at_50%_30%,rgba(9,9,11,0.32)_0%,rgba(9,9,11,0.78)_100%)]" />
-      {/* Merge into the section below */}
       <div className="absolute inset-x-0 top-0 h-24 bg-gradient-to-b from-[var(--app-bg)]/85 to-transparent" />
       <div className="absolute inset-x-0 bottom-0 h-48 bg-gradient-to-t from-[var(--app-bg)] via-[var(--app-bg)]/70 to-transparent md:h-64" />
     </div>

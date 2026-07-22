@@ -17,6 +17,7 @@ import { useEffect, useMemo, useState } from "react";
 import { cn } from "@/lib/cn";
 import { liveTables, type LiveTable } from "@/lib/mock-data";
 import { usePublicPrefs } from "@/lib/public-prefs-context";
+import { useCompactViewport } from "@/lib/use-compact-viewport";
 
 function useTickerPool() {
   const { formatMoney } = usePublicPrefs();
@@ -83,20 +84,24 @@ function fmtTime(min: number) {
 
 export function LivePreview() {
   const { formatMoney } = usePublicPrefs();
+  const compact = useCompactViewport();
   const tickerPool = useTickerPool();
   const [tick, setTick] = useState(0);
   const [tickerIdx, setTickerIdx] = useState(0);
+  // Phones: static demo snapshot — no 1s / ticker intervals.
   useEffect(() => {
+    if (compact) return;
     const id = setInterval(() => setTick((t) => t + 1), 1000);
     return () => clearInterval(id);
-  }, []);
+  }, [compact]);
   useEffect(() => {
+    if (compact) return;
     const id = setInterval(
       () => setTickerIdx((i) => (i + 1) % tickerPool.length),
       3200,
     );
     return () => clearInterval(id);
-  }, [tickerPool.length]);
+  }, [compact, tickerPool.length]);
   const ticker = tickerPool[tickerIdx];
 
   const tables = liveTables.map((t) => {
@@ -118,7 +123,12 @@ export function LivePreview() {
       <p className="mb-3 text-center text-[11px] font-medium uppercase tracking-wider text-zinc-500">
         Illustrative operations UI · demo numbers
       </p>
-      <div className="absolute inset-x-0 -inset-y-10 -z-10 rounded-[40px] bg-gradient-to-br from-amber-400/20 via-orange-400/10 to-rose-400/15 blur-2xl sm:-inset-x-4 dark:from-emerald-500/20 dark:via-cyan-500/10 dark:to-violet-500/20" />
+      <div
+        className={cn(
+          "absolute inset-x-0 -inset-y-10 -z-10 rounded-[40px] bg-gradient-to-br from-amber-400/20 via-orange-400/10 to-rose-400/15 sm:-inset-x-4 dark:from-emerald-500/20 dark:via-cyan-500/10 dark:to-violet-500/20",
+          compact ? "opacity-70" : "blur-2xl",
+        )}
+      />
 
       <div className="relative overflow-hidden rounded-3xl border border-[var(--color-border)] bg-[var(--color-surface)]/95 shadow-2xl backdrop-blur-xl dark:border-white/10 dark:bg-zinc-950/95">
         <div className="flex min-w-0 flex-wrap items-center justify-between gap-2 border-b border-[var(--color-border)] bg-[var(--color-surface-2)]/70 px-4 py-3 sm:px-5 dark:border-white/5 dark:bg-zinc-900/60">
@@ -180,10 +190,13 @@ export function LivePreview() {
           {tables.map((t, i) => (
             <motion.div
               key={t.id}
-              initial={{ opacity: 0, y: 12 }}
+              initial={compact ? false : { opacity: 0, y: 12 }}
               whileInView={{ opacity: 1, y: 0 }}
               viewport={{ once: true }}
-              transition={{ duration: 0.4, delay: i * 0.04 }}
+              transition={{
+                duration: compact ? 0 : 0.4,
+                delay: compact ? 0 : i * 0.04,
+              }}
               className={cn(
                 "group relative overflow-hidden rounded-xl border bg-[var(--color-surface-2)]/50 p-3 transition-all dark:bg-zinc-900/60",
                 statusStyles[t.status],

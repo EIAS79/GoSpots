@@ -1,16 +1,20 @@
 "use client";
 
 import { usePathname } from "next/navigation";
+import { useCompactViewport } from "@/lib/use-compact-viewport";
+import { cn } from "@/lib/cn";
 
 /**
  * Full-viewport painted atmosphere — layered radial/linear/conic washes,
  * brush smears, and soft glows. Not a flat fill.
  *
  * Dashboard routes stay mounted but inert: flat zinc canvas only (see `.dashboard-aurora`).
+ * Phones get a light canvas-only wash (see `.aurora-compact`) — desktop unchanged.
  */
 export function AuroraBackground() {
   const pathname = usePathname();
   const isDashboard = pathname?.startsWith("/dashboard") ?? false;
+  const compact = useCompactViewport();
 
   if (isDashboard) {
     return (
@@ -24,7 +28,10 @@ export function AuroraBackground() {
   return (
     <div
       aria-hidden
-      className="pointer-events-none fixed inset-0 -z-20 overflow-hidden"
+      className={cn(
+        "pointer-events-none fixed inset-0 -z-20 overflow-hidden",
+        compact && "aurora-compact",
+      )}
     >
       {/* Canvas base — already a multi-stop painted wash */}
       <div className="paint-canvas absolute inset-0" />
