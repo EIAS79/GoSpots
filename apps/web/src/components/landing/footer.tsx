@@ -3,7 +3,6 @@
 import Link from "next/link";
 import { LocoraLogo as GoSpotsLogo } from "@/components/brand/locora-logo";
 import { OurCsiLogo } from "@/components/brand/dashboard-sidebar-brand";
-import { BRAND_TAGLINE } from "@/lib/brand";
 import { usePublicPrefs } from "@/lib/public-prefs-context";
 
 type FooterLink = { label: string; href: string; external?: boolean };
@@ -45,7 +44,7 @@ export function Footer() {
           <div className="md:col-span-2">
             <GoSpotsLogo href="/" size="lg" showTagline />
             <p className="mt-4 max-w-xs text-sm text-zinc-600 dark:text-zinc-400">
-              {BRAND_TAGLINE} — {t("footer.blurb")}
+              {t("footer.blurb")}
             </p>
           </div>
 

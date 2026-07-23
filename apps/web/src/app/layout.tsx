@@ -3,6 +3,7 @@ import { Geist, Geist_Mono } from "next/font/google";
 import Script from "next/script";
 import { AppProviders } from "@/components/layout/app-providers";
 import { OfflineBanner } from "@/components/layout/offline-banner";
+import { BRAND_NAME, BRAND_TAGLINE } from "@/lib/brand";
 import { getSiteUrlString } from "@/lib/site-url";
 import "./globals.css";
 
@@ -17,16 +18,17 @@ const geistMono = Geist_Mono({
 });
 
 const siteUrl = getSiteUrlString();
+const defaultTitle = `${BRAND_NAME} — ${BRAND_TAGLINE}`;
 
 export const metadata: Metadata = {
   metadataBase: new URL(siteUrl),
   title: {
-    default: "GoSpots — host every location",
-    template: "%s · GoSpots",
+    default: defaultTitle,
+    template: `%s · ${BRAND_NAME}`,
   },
   description:
     "GoSpots is the dashboard for gaming centers, restaurants, and venues: publish your site, take reservations, collect reviews, and run day-to-day operations from one place.",
-  applicationName: "GoSpots",
+  applicationName: BRAND_NAME,
   keywords: [
     "venue dashboard",
     "gaming center software",
@@ -37,30 +39,33 @@ export const metadata: Metadata = {
     "entertainment venue billing",
   ],
   icons: {
-    icon: [{ url: "/brand/gospots-icon.png", type: "image/png" }],
-    shortcut: "/brand/gospots-icon.png",
+    icon: [
+      { url: "/favicon.ico", sizes: "any" },
+      { url: "/brand/gospots-icon.png", type: "image/png", sizes: "804x804" },
+    ],
+    shortcut: "/favicon.ico",
     apple: "/brand/gospots-icon.png",
   },
   openGraph: {
     type: "website",
     locale: "en_US",
     url: siteUrl,
-    siteName: "GoSpots",
-    title: "GoSpots — host every location",
+    siteName: BRAND_NAME,
+    title: defaultTitle,
     description:
       "Dashboard for gaming centers, restaurants, and venues — publish your site, take reservations, collect reviews.",
     images: [
       {
         url: "/brand/gospots-og.png",
-        alt: "GoSpots",
+        alt: BRAND_NAME,
       },
     ],
   },
   twitter: {
     card: "summary",
-    title: "GoSpots — host every location",
+    title: defaultTitle,
     description:
-      "Host every location: dashboard, public venue site, bookings, reviews, and contact.",
+      `${BRAND_TAGLINE} — dashboard, public venue site, bookings, reviews, and contact.`,
     images: ["/brand/gospots-og.png"],
   },
   robots: { index: true, follow: true },

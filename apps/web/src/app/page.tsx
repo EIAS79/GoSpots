@@ -1,8 +1,9 @@
 import type { Metadata } from "next";
 import { LandingPage } from "@/components/landing/landing-page";
+import { BRAND_NAME, BRAND_TAGLINE } from "@/lib/brand";
 
 export const metadata: Metadata = {
-  title: "GoSpots — host every location",
+  title: `${BRAND_NAME} — ${BRAND_TAGLINE}`,
   description:
     "Run gaming venues, restaurants, bars, hotel F&B, and mixed entertainment — dashboard, public site, bookings, menu, and play billing.",
 };
