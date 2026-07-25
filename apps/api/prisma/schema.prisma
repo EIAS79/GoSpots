@@ -52,6 +52,8 @@ model User {
   ownedShops    Shop[] @relation("ShopOwner")
   notifications Notification[]
   mfaRecoveryCodes MfaRecoveryCode[]
+  staffActionRequestsRequested StaffActionRequest[] @relation("StaffActionRequester")
+  staffActionRequestsApproved  StaffActionRequest[] @relation("StaffActionApprover")
 
   @@index([accountType])
 }
@@ -79,6 +81,12 @@ model AuthSession {
   refreshTokenHash String // SHA-256 hex of raw refresh token
   userAgent        String?
   ipAddress        String?
+  /// Long-lived login (remember-me). Affects idle + absolute TTL policy.
+  rememberMe       Boolean   @default(false)
+  /// Last successful refresh / issuance — idle timeout is measured from this.
+  lastActiveAt     DateTime  @default(now())
+  /// Hard cap from login (12h default / 30d remember-me). Sliding never exceeds this.
+  absoluteExpiresAt DateTime?
   expiresAt        DateTime
   revokedAt        DateTime?
   createdAt        DateTime  @default(now())
@@ -179,6 +187,7 @@ model Shop {
   storedImages  StoredImage[]
   consentRecords ConsentRecord[]
   guestDsarRequests GuestDsarRequest[]
+  staffActionRequests StaffActionRequest[]
 }
 
 /// Compressed venue images (menu, gallery, gaming, cover, etc.)
@@ -1333,4 +1342,50 @@ model GuestDsarRequest {
 
   @@index([shopId, status, createdAt])
   @@index([shopId, guestEmail])
+}
+
+// ─────────────────────────────────────────────────────────────────
+// STAFF ACTION REQUESTS — one-time privileged edits (bible: no sticky elevate)
+// ─────────────────────────────────────────────────────────────────
+
+enum StaffActionKind {
+  MENU_ITEM_UPDATE
+  RESOURCE_UNIT_UPDATE
+  RESOURCE_CATEGORY_UPDATE
+}
+
+enum StaffActionRequestStatus {
+  PENDING
+  APPROVED
+  REJECTED
+  CANCELLED
+  EXPIRED
+}
+
+/// Staff without write perms propose a change; owner/manager approves once (not a lasting grant).
+model StaffActionRequest {
+  id                  String                   @id @default(cuid())
+  shopId              String
+  shop                Shop                     @relation(fields: [shopId], references: [id], onDelete: Cascade)
+  requesterUserId     String
+  requester           User                     @relation("StaffActionRequester", fields: [requesterUserId], references: [id], onDelete: Cascade)
+  kind                StaffActionKind
+  targetId            String
+  targetLabel         String                   @default("")
+  /// JSON patch applied on approve (menu/resource fields only)
+  proposedPatch       String
+  requiredPermission  String
+  status              StaffActionRequestStatus @default(PENDING)
+  note                String?
+  approverUserId      String?
+  approver            User?                    @relation("StaffActionApprover", fields: [approverUserId], references: [id], onDelete: SetNull)
+  resolveNote         String?
+  resolvedAt          DateTime?
+  expiresAt           DateTime
+  createdAt           DateTime                 @default(now())
+  updatedAt           DateTime                 @updatedAt
+
+  @@index([shopId, status, createdAt])
+  @@index([shopId, requesterUserId, createdAt])
+  @@index([expiresAt])
 }

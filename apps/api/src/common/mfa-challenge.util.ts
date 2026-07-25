@@ -7,6 +7,8 @@ export type MfaChallengeJwtPayload = {
   purpose: typeof MFA_CHALLENGE_PURPOSE;
   /** Bound login account type for audit / UI continuity. */
   acct?: string;
+  /** Carry remember-me through MFA before cookies are issued. */
+  rememberMe?: boolean;
 };
 
 export function isMfaChallengePayload(

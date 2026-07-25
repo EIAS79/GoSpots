@@ -7,6 +7,7 @@ import {
   sessionRevokedUserMessage,
   venueAccessDeniedUserMessage,
 } from "./api-error-message";
+import { notifySessionRevoked } from "./auth-session";
 import {
   getCsrfHeaders,
   getCsrfTokenFromDocument,
@@ -103,6 +104,52 @@ function buildJsonHeaders(init?: RequestInit): HeadersInit {
   };
 }
 
+function shouldAttemptSessionRefresh(path: string, status: number): boolean {
+  if (status !== 401) return false;
+  const p = path.split("?")[0] ?? path;
+  return (
+    !p.endsWith("/auth/refresh") &&
+    !p.endsWith("/auth/login") &&
+    !p.endsWith("/auth/logout") &&
+    !p.endsWith("/auth/csrf") &&
+    !p.includes("/auth/mfa/verify")
+  );
+}
+
+let refreshInFlight: Promise<boolean> | null = null;
+
+/** Single-flight refresh for mid-session access expiry. */
+async function tryRefreshSession(): Promise<boolean> {
+  if (refreshInFlight) return refreshInFlight;
+  refreshInFlight = (async () => {
+    try {
+      await ensureCsrf();
+      const res = await fetch(`${API_BASE_URL}/auth/refresh`, {
+        method: "POST",
+        credentials: "include",
+        headers: buildJsonHeaders({ method: "POST" }),
+      });
+      if (res.ok) return true;
+      let body: unknown = null;
+      try {
+        body = await res.json();
+      } catch {
+        /* ignore */
+      }
+      const { code } = apiErrorFromResponse(res.status, body);
+      if (code === "SESSION_REVOKED" || res.status === 401) {
+        notifySessionRevoked();
+      }
+      return false;
+    } catch {
+      return false;
+    } finally {
+      refreshInFlight = null;
+    }
+  })();
+  return refreshInFlight;
+}
+
 /** Credentialed fetch with venue + CSRF headers (no forced JSON Content-Type). */
 export async function credentialedFetch(
   path: string,
@@ -134,6 +181,13 @@ export async function credentialedFetch(
     res = await run();
   }
 
+  if (shouldAttemptSessionRefresh(path, res.status)) {
+    const refreshed = await tryRefreshSession();
+    if (refreshed) {
+      res = await run();
+    }
+  }
+
   return res;
 }
 
@@ -142,13 +196,16 @@ export async function api<T = unknown>(
   init: RequestInit = {},
 ): Promise<T> {
   const { headers: _ignored, ...rest } = init;
-  let res: Response;
-  try {
-    res = await fetch(`${API_BASE_URL}${path}`, {
+  const run = () =>
+    fetch(`${API_BASE_URL}${path}`, {
       credentials: "include",
       ...rest,
       headers: buildJsonHeaders(init),
     });
+
+  let res: Response;
+  try {
+    res = await run();
   } catch {
     throw new ApiError(networkUnreachableMessage(API_BASE_URL), 0);
   }
@@ -159,11 +216,14 @@ export async function api<T = unknown>(
   if (res.status === 403 && method !== "GET" && method !== "HEAD") {
     await ensureCsrf();
     csrfRetried = true;
-    res = await fetch(`${API_BASE_URL}${path}`, {
-      credentials: "include",
-      ...rest,
-      headers: buildJsonHeaders(init),
-    });
+    res = await run();
+  }
+
+  if (shouldAttemptSessionRefresh(path, res.status)) {
+    const refreshed = await tryRefreshSession();
+    if (refreshed) {
+      res = await run();
+    }
   }
 
   if (res.status === 204) return undefined as T;
@@ -176,6 +236,14 @@ export async function api<T = unknown>(
   }
 
   if (!res.ok) {
+    if (
+      res.status === 401 &&
+      body &&
+      typeof body === "object" &&
+      (body as { code?: string }).code === "SESSION_REVOKED"
+    ) {
+      notifySessionRevoked();
+    }
     throwApiErrorFromResponse(res, body, csrfRetried);
   }
 

@@ -12,6 +12,7 @@ import { useVenueSettings } from "@/lib/venue-settings-context";
 export function BillingCheckoutCard({
   monthlyTotal,
   configured,
+  missingEnv,
   hasLemonSub,
   trialActive,
   trialExpired,
@@ -19,6 +20,8 @@ export function BillingCheckoutCard({
   /** Monthly total in EUR catalog units — converted for display. */
   monthlyTotal: number;
   configured: boolean;
+  /** Missing Lemon env var names from the API (never secret values). */
+  missingEnv?: string[];
   hasLemonSub: boolean;
   trialActive: boolean;
   trialExpired: boolean;
@@ -43,6 +46,8 @@ export function BillingCheckoutCard({
     }
   }
 
+  const missing = (missingEnv ?? []).filter(Boolean);
+
   return (
     <section className="rounded-xl border border-emerald-400/20 bg-emerald-500/[0.06] p-5">
       <div className="flex flex-wrap items-start justify-between gap-4">
@@ -63,7 +68,11 @@ export function BillingCheckoutCard({
           ) : null}
           {!configured ? (
             <p className="mt-2 text-xs text-amber-200/90">
-              {t("subscription.billingNotConfigured")}
+              {missing.length > 0
+                ? t("subscription.billingMissingKeys", {
+                    keys: missing.join(", "),
+                  })
+                : t("subscription.billingNotConfigured")}
             </p>
           ) : null}
         </div>

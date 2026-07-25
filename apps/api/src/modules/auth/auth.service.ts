@@ -21,6 +21,10 @@ import {
   verifyPassword,
 } from '../../common/security/password';
 import { generateRefreshTokenRaw, hashToken } from '../../common/security/token';
+import {
+  computeSessionExpiresAt,
+  resolveRefreshTtlSec,
+} from '../../common/auth-session-policy.util';
 import { ShopRole, UserAccountType } from '@prisma/client';
 import {
   isValidOwnerEmail,
@@ -154,7 +158,8 @@ export class AuthService {
     mfaSvc?: AuthMfaService,
   ) {
     this.sessions = sessions ?? new AuthSessionService(prisma);
-    this.refreshSvc = refreshSvc ?? new AuthRefreshService(prisma, this);
+    this.refreshSvc =
+      refreshSvc ?? new AuthRefreshService(prisma, config, this);
     this.logoutSvc = logoutSvc ?? new AuthLogoutService(prisma);
     this.passwordSvc =
       passwordSvc ??
@@ -663,6 +668,7 @@ export class AuthService {
           sub: user.id,
           purpose: MFA_CHALLENGE_PURPOSE,
           acct: user.accountType,
+          rememberMe: dto.rememberMe === true,
         },
         {
           secret: this.config.getOrThrow('JWT_ACCESS_SECRET'),
@@ -677,7 +683,9 @@ export class AuthService {
       data: { failedLogins: 0, lockedUntil: null },
     });
 
-    return this.completeLoginAfterPassword(user.id, ip, ua);
+    return this.completeLoginAfterPassword(user.id, ip, ua, {
+      rememberMe: dto.rememberMe === true,
+    });
   }
 
   /** Finish login after password (and MFA when enabled). */
@@ -685,6 +693,7 @@ export class AuthService {
     userId: string,
     ip?: string,
     ua?: string,
+    opts: { rememberMe?: boolean } = {},
   ): Promise<AuthTokenBundle> {
     const user = await this.prisma.user.findUnique({
       where: { id: userId },
@@ -711,7 +720,9 @@ export class AuthService {
       select: { userAgent: true },
     });
 
-    const tokens = await this.issueTokens(user.id, ip, ua);
+    const tokens = await this.issueTokens(user.id, ip, ua, {
+      rememberMe: opts.rememberMe === true,
+    });
     await this.notifications.recordSignIn({
       userId: user.id,
       email: user.email,
@@ -777,8 +788,9 @@ export class AuthService {
     userId: string,
     ip?: string,
     ua?: string,
+    opts: { rememberMe?: boolean } = {},
   ): Promise<AuthTokenBundle> {
-    return this.completeLoginAfterPassword(userId, ip, ua);
+    return this.completeLoginAfterPassword(userId, ip, ua, opts);
   }
 
   // ─── Password reset (facade → AuthPasswordService, Bible #14) ───
@@ -926,15 +938,19 @@ export class AuthService {
 
   /**
    * Wire hook for AuthRefreshService DI factory (Bible #14). Not for controllers.
-   * Token issuance stays here because login / activate share `issueTokens`.
+   * Token issuance stays here because login / activate / refresh share `issueTokens`.
    */
   refreshIssueTokens(
     userId: string,
-    ip?: string,
-    ua?: string,
-    familyId?: string,
+    ip: string | undefined,
+    ua: string | undefined,
+    opts: {
+      familyId: string;
+      rememberMe: boolean;
+      absoluteExpiresAt: Date | null;
+    },
   ): Promise<AuthTokenBundle> {
-    return this.issueTokens(userId, ip, ua, familyId);
+    return this.issueTokens(userId, ip, ua, opts);
   }
 
   // ─── Logout (facade → AuthLogoutService, Bible #14) ─────────────
@@ -1114,7 +1130,11 @@ export class AuthService {
     userId: string,
     ip?: string,
     ua?: string,
-    familyId?: string,
+    opts: {
+      familyId?: string;
+      rememberMe?: boolean;
+      absoluteExpiresAt?: Date | null;
+    } = {},
   ) {
     const user = await this.prisma.user.findUnique({
       where: { id: userId },
@@ -1141,11 +1161,31 @@ export class AuthService {
     const primary =
       activeMemberships.find((m) => m.role === 'OWNER') ?? activeMemberships[0];
     const accessTtl = +this.config.get('JWT_ACCESS_TTL', '900');
-    const refreshTtl = +this.config.get('JWT_REFRESH_TTL', '604800');
+    const rememberMe = opts.rememberMe === true;
+    const refreshTtl = resolveRefreshTtlSec(rememberMe, {
+      jwtRefreshTtl: this.config.get('JWT_REFRESH_TTL'),
+      jwtRefreshTtlRemember: this.config.get('JWT_REFRESH_TTL_REMEMBER'),
+    });
+
+    const now = new Date();
+    const absoluteExpiresAt =
+      opts.absoluteExpiresAt !== undefined
+        ? opts.absoluteExpiresAt
+        : new Date(now.getTime() + refreshTtl * 1000);
+    const expiresAt = computeSessionExpiresAt({
+      now,
+      refreshTtlSec: refreshTtl,
+      absoluteExpiresAt,
+    });
+    // Cookie / client maxAge: remaining time until sliding or absolute expiry.
+    const refreshExpiresIn = Math.max(
+      1,
+      Math.floor((expiresAt.getTime() - now.getTime()) / 1000),
+    );
 
     const refreshRaw = generateRefreshTokenRaw();
     const refreshHash = hashToken(refreshRaw);
-    const sessionFamilyId = familyId ?? randomUUID();
+    const sessionFamilyId = opts.familyId ?? randomUUID();
 
     const session = await this.prisma.authSession.create({
       data: {
@@ -1154,7 +1194,10 @@ export class AuthService {
         refreshTokenHash: refreshHash,
         userAgent: ua?.slice(0, 200),
         ipAddress: ip?.slice(0, 64),
-        expiresAt: new Date(Date.now() + refreshTtl * 1000),
+        rememberMe,
+        lastActiveAt: now,
+        absoluteExpiresAt,
+        expiresAt,
       },
     });
 
@@ -1163,10 +1206,7 @@ export class AuthService {
       sysRole: user.systemRole,
       email: user.email,
       acct: user.accountType,
-      sid:
-        user.accountType === UserAccountType.VENUE_STAFF
-          ? session.id
-          : undefined,
+      sid: session.id,
       shopId: primary?.shopId,
       shopRole: primary?.role,
       perms: primary
@@ -1201,7 +1241,7 @@ export class AuthService {
       accessToken,
       accessExpiresIn: accessTtl,
       refreshToken: refreshRaw,
-      refreshExpiresIn: refreshTtl,
+      refreshExpiresIn,
     };
   }
 }

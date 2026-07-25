@@ -31,13 +31,14 @@ import { Reveal } from "@/components/effects/reveal";
 import { cn } from "@/lib/cn";
 import { usePublicPrefs } from "@/lib/public-prefs-context";
 import {
+  featuresMonthlyTotal,
+  marketAdjustedCatalogEur,
+  recommendedFeaturesForPack,
   SELF_SERVE_PACK_LIST,
   TRIAL_DURATION_DAYS,
   VENUE_ADD_ON_LIST,
   VENUE_ADD_ONS,
   VENUE_PACKS,
-  featuresMonthlyTotal,
-  recommendedFeaturesForPack,
   type AddOnId,
   type SelfServePackId,
   type VenueAddOn,
@@ -115,7 +116,10 @@ export function Pricing() {
   const freePrice = formatMoney(0);
   const hasTeam = features.includes("team_accounts");
   const effectiveSeats = hasTeam ? Math.max(0, seats) : 0;
-  const totalEur = featuresMonthlyTotal(features, effectiveSeats);
+  const totalEur = marketAdjustedCatalogEur(
+    featuresMonthlyTotal(features, effectiveSeats),
+    currency,
+  );
   const displayTotal = convertAmount(totalEur, "EUR");
   const selectedCount = featureCountSafe(features);
 
@@ -314,7 +318,9 @@ export function Pricing() {
                         feature.recommendedFor?.includes(packId),
                       )}
                       index={i}
-                      formatMoney={formatMoney}
+                      formatMoney={(n) =>
+                        formatMoney(marketAdjustedCatalogEur(n, currency), "EUR")
+                      }
                       t={t}
                       onToggle={() => toggleFeature(feature.id as AddOnId)}
                       isTeam={feature.id === "team_accounts"}
@@ -390,8 +396,8 @@ export function Pricing() {
                       const Icon = FEATURE_ICONS[id];
                       const line =
                         id === "team_accounts"
-                          ? `${formatMoney(effectiveSeats * f.monthlyPrice)}${t("pricing.perMonthShort")}`
-                          : `${formatMoney(f.monthlyPrice)}${t("pricing.perMonthShort")}`;
+                          ? `${formatMoney(marketAdjustedCatalogEur(effectiveSeats * f.monthlyPrice, currency), "EUR")}${t("pricing.perMonthShort")}`
+                          : `${formatMoney(marketAdjustedCatalogEur(f.monthlyPrice, currency), "EUR")}${t("pricing.perMonthShort")}`;
                       return (
                         <li
                           key={f.id}

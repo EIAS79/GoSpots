@@ -27,6 +27,7 @@ import { usePublicPrefs } from "@/lib/public-prefs-context";
 import { useAuth } from "@/lib/use-auth";
 import {
   dashboardBase,
+  resolveVenuePathFromMemberships,
   toPublicDashboardPathname,
   toPublicVenuePath,
 } from "@/lib/venue-dashboard";
@@ -36,7 +37,7 @@ type StaffMode = "login" | "forgot";
 
 export function LoginForm() {
   const router = useRouter();
-  const { reload } = useAuth();
+  const { state, reload } = useAuth();
   const { t } = usePublicPrefs();
   const params = useSearchParams();
   const nextParam = params.get("next");
@@ -56,12 +57,30 @@ export function LoginForm() {
   const [mfaToken, setMfaToken] = useState<string | null>(null);
   const [mfaCode, setMfaCode] = useState("");
   const [mfaRecovery, setMfaRecovery] = useState("");
+  const [rememberMe, setRememberMe] = useState(false);
 
   useEffect(() => {
     if (consumeSessionRevokedNotice()) {
       setError(sessionRevokedUserMessage());
     }
   }, []);
+
+  /** Already signed in → skip the form and go to the dashboard. */
+  useEffect(() => {
+    if (state.status !== "authed" || !state.user) return;
+    const venuePath = resolveVenuePathFromMemberships(state.user.memberships);
+    const home = venuePath ? dashboardBase(venuePath) : "/dashboard";
+    const publicPath = venuePath ? toPublicVenuePath(venuePath) : null;
+    const nextClean = nextParam ? toPublicDashboardPathname(nextParam) : null;
+    const dest =
+      nextClean &&
+      publicPath &&
+      (nextClean === `/dashboard/${publicPath}` ||
+        nextClean.startsWith(`/dashboard/${publicPath}/`))
+        ? nextClean
+        : home;
+    router.replace(dest);
+  }, [state, nextParam, router]);
 
   const isOwner = panel === "owner";
   const accountType: UserAccountType = isOwner
@@ -131,6 +150,7 @@ export function LoginForm() {
         loginId.trim().toLowerCase(),
         password,
         accountType,
+        rememberMe,
       );
       if (isMfaLoginChallenge(session)) {
         setMfaToken(session.mfaToken);
@@ -410,6 +430,23 @@ export function LoginForm() {
             </div>
           ) : null}
 
+          <label className="flex cursor-pointer items-start gap-2.5 text-xs text-zinc-400">
+            <input
+              type="checkbox"
+              checked={rememberMe}
+              onChange={(e) => setRememberMe(e.target.checked)}
+              className="mt-0.5 size-3.5 shrink-0 rounded border-white/20 bg-zinc-900 text-emerald-500 focus:ring-emerald-400/40"
+            />
+            <span>
+              <span className="font-medium text-zinc-300">
+                {t("auth.login.rememberMe")}
+              </span>
+              <span className="mt-0.5 block text-[11px] text-zinc-500">
+                {t("auth.login.rememberMeHint")}
+              </span>
+            </span>
+          </label>
+
           <button
             type="submit"
             disabled={loading}
@@ -570,6 +607,23 @@ export function LoginForm() {
               {error}
             </div>
           ) : null}
+
+          <label className="flex cursor-pointer items-start gap-2.5 text-xs text-zinc-400">
+            <input
+              type="checkbox"
+              checked={rememberMe}
+              onChange={(e) => setRememberMe(e.target.checked)}
+              className="mt-0.5 size-3.5 shrink-0 rounded border-white/20 bg-zinc-900 text-cyan-500 focus:ring-cyan-400/40"
+            />
+            <span>
+              <span className="font-medium text-zinc-300">
+                {t("auth.login.rememberMe")}
+              </span>
+              <span className="mt-0.5 block text-[11px] text-zinc-500">
+                {t("auth.login.rememberMeHint")}
+              </span>
+            </span>
+          </label>
 
           <button
             type="submit"

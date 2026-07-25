@@ -80,6 +80,7 @@ export function MenuBoard({
   onEditItem,
   onAddItem,
   onDeleteItem,
+  onRequestEditItem,
 }: {
   sections: MenuSection[];
   itemsBySection: Map<string, MenuItem[]>;
@@ -92,6 +93,8 @@ export function MenuBoard({
   onEditItem: (item: MenuItem) => void;
   onAddItem: (sectionId: string) => void;
   onDeleteItem: (item: MenuItem) => void;
+  /** When staff can read but not write — open one-time approval request. */
+  onRequestEditItem?: (item: MenuItem) => void;
 }) {
   const t: MenuT =
     useVenueSettingsOptional()?.t ?? ((key, vars) => key);
@@ -521,8 +524,10 @@ export function MenuBoard({
                       }
                       formatPrice={formatPrice}
                       canWrite={canWrite}
+                      canRequest={!canWrite && !!onRequestEditItem}
                       t={t}
                       onEdit={() => onEditItem(item)}
+                      onRequest={() => onRequestEditItem?.(item)}
                       onDelete={() => onDeleteItem(item)}
                     />
                   ))
@@ -620,16 +625,20 @@ function MenuItemRow({
   section,
   formatPrice,
   canWrite,
+  canRequest,
   t,
   onEdit,
+  onRequest,
   onDelete,
 }: {
   item: MenuItem;
   section?: MenuSection;
   formatPrice: (n: import("@/lib/money").MoneyWire) => string;
   canWrite: boolean;
+  canRequest?: boolean;
   t: MenuT;
   onEdit: () => void;
+  onRequest?: () => void;
   onDelete: () => void;
 }) {
   const imageSrc = item.imageUrl ?? item.imageUrl2;
@@ -640,11 +649,11 @@ function MenuItemRow({
     <li className="group flex items-start gap-3 px-3 py-3 sm:gap-4 sm:px-4">
       <button
         type="button"
-        onClick={onEdit}
-        disabled={!canWrite}
+        onClick={canWrite ? onEdit : canRequest ? onRequest : undefined}
+        disabled={!canWrite && !canRequest}
         className={cn(
           "flex min-w-0 flex-1 items-start gap-3 text-left sm:gap-4",
-          canWrite && "hover:opacity-90",
+          (canWrite || canRequest) && "hover:opacity-90",
         )}
       >
         <span className="relative h-14 w-14 shrink-0 overflow-hidden rounded-lg bg-zinc-800 ring-1 ring-white/10 sm:h-16 sm:w-16">
@@ -708,6 +717,10 @@ function MenuItemRow({
         >
           <Trash2 size={14} />
         </button>
+      ) : canRequest ? (
+        <span className="mt-1 shrink-0 rounded-md bg-amber-500/10 px-1.5 py-1 text-[10px] font-medium text-amber-200">
+          Request
+        </span>
       ) : null}
     </li>
   );

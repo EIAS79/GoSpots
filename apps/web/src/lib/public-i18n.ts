@@ -9,6 +9,7 @@ const en: Dict = {
   "nav.features": "Features",
   "nav.pricing": "Pricing",
   "nav.signIn": "Sign in",
+  "nav.dashboard": "Dashboard",
   "nav.listVenue": "List your venue",
   "nav.listVenueShort": "List venue",
   "nav.iOwnVenue": "I own a venue",
@@ -352,7 +353,7 @@ const en: Dict = {
   "pricing.contactSalesLead": "Restaurant or hotel F&B?",
   "pricing.contactSales": "Talk to us",
   "pricing.footnote":
-    "Prices in {currency}. Change features anytime — during the trial changes unlock immediately.",
+    "Prices in {currency}, with regional early-market rates for Europe, Poland, and MENA. Change features anytime — during the trial changes unlock immediately.",
   "pricing.noCard": "No card required · nothing is charged without your consent",
 
   "addon.ops_alerts.name": "Ops alerts, audit & reviews",
@@ -731,6 +732,9 @@ const en: Dict = {
   "auth.login.staffTip":
     "Use your staff login ID and the password you set from the setup link. Forgot it? Ask your owner for a new link below.",
   "auth.login.forgotStaffPassword": "Forgot password?",
+  "auth.login.rememberMe": "Remember me",
+  "auth.login.rememberMeHint":
+    "Stay signed in on this device for up to 30 days. Sign out anytime to end the session.",
 
   "auth.register.title": "Create your venue",
   "auth.register.subtitle":
@@ -977,6 +981,7 @@ const en: Dict = {
   "venuePage.book.eventDescDigital":
     "Birthdays, meetings, and parties — choose the dining area (or activity) from this venue’s live setup. Staff review against the same floor data as the dashboard.",
   "venuePage.book.contact": "Contact",
+  "venuePage.book.privacy": "Privacy",
 
   "venuePage.contact.title": "Contact the venue",
   "venuePage.contact.subtitle":
@@ -1288,6 +1293,7 @@ const pl: Dict = {
   "nav.features": "Funkcje",
   "nav.pricing": "Cennik",
   "nav.signIn": "Zaloguj się",
+  "nav.dashboard": "Panel",
   "nav.listVenue": "Dodaj lokal",
   "nav.listVenueShort": "Dodaj lokal",
   "nav.iOwnVenue": "Mam lokal",
@@ -1632,7 +1638,7 @@ const pl: Dict = {
   "pricing.contactSalesLead": "Restauracja lub hotel F&B?",
   "pricing.contactSales": "Napisz do nas",
   "pricing.footnote":
-    "Ceny w {currency}. Zmieniaj funkcje w każdej chwili — w okresie próbnym odblokowanie jest natychmiastowe.",
+    "Ceny w {currency}, z regionalnymi stawkami early-market dla Europy, Polski i MENA. Zmieniaj funkcje w każdej chwili — w okresie próbnym odblokowanie jest natychmiastowe.",
   "pricing.noCard": "Bez karty · nic nie jest obciążane bez Twojej zgody",
 
   "addon.ops_alerts.name": "Alerty, audyt i opinie",
@@ -2009,6 +2015,9 @@ const pl: Dict = {
   "auth.login.staffTip":
     "Użyj ID logowania i hasła ustawionego z linku aktywacyjnego. Nie pamiętasz? Poproś właściciela o nowy link poniżej.",
   "auth.login.forgotStaffPassword": "Nie pamiętam hasła?",
+  "auth.login.rememberMe": "Zapamiętaj mnie",
+  "auth.login.rememberMeHint":
+    "Pozostań zalogowany na tym urządzeniu do 30 dni. Wylogowanie zawsze kończy sesję.",
 
   "auth.register.title": "Utwórz swój lokal",
   "auth.register.subtitle":
@@ -2257,6 +2266,7 @@ const pl: Dict = {
   "venuePage.book.eventDescDigital":
     "Urodziny, spotkania i imprezy — wybierz strefę gastronomiczną (lub aktywność) z aktualnego układu lokalu. Personel weryfikuje względem tych samych danych co w panelu.",
   "venuePage.book.contact": "Kontakt",
+  "venuePage.book.privacy": "Prywatność",
 
   "venuePage.contact.title": "Kontakt z lokalem",
   "venuePage.contact.subtitle":
@@ -4707,7 +4717,7 @@ const ar: Dict = {
   "pricing.teamPart": " · {count} {seatLabel} للفريق",
   "pricing.startTrial": "ابدأ {days} يومًا مجانًا",
   "pricing.footnote":
-    "الأسعار بـ {currency}. غيّر الميزات في أي وقت — تُفعَّل فورًا أثناء التجربة.",
+    "الأسعار بـ {currency}، مع أسعار مبكرة مخصصة لأوروبا وبولندا والشرق الأوسط وشمال أفريقيا. غيّر الميزات في أي وقت — تُفعَّل فورًا أثناء التجربة.",
   "pricing.noCard": "بدون بطاقة · لا يُخصم شيء دون موافقتك",
 
   "addon.ops_alerts.name": "تنبيهات وتدقيق ومراجعات",

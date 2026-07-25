@@ -1,6 +1,7 @@
 import {
   ArrayMaxSize,
   IsArray,
+  IsBoolean,
   IsEmail,
   IsIn,
   IsInt,
@@ -90,6 +91,11 @@ export class LoginDto {
   @IsOptional()
   @IsIn(['VENUE_OWNER', 'VENUE_STAFF'])
   accountType?: 'VENUE_OWNER' | 'VENUE_STAFF';
+
+  /** Persist a longer session (30d abs / 7d idle). Default short session. */
+  @IsOptional()
+  @IsBoolean()
+  rememberMe?: boolean;
 }
 
 export class ForgotPasswordDto {

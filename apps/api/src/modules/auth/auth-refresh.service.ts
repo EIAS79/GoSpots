@@ -4,13 +4,20 @@ import {
   Injectable,
   UnauthorizedException,
 } from '@nestjs/common';
+import { ConfigService } from '@nestjs/config';
 import { ApiDomainErrorCode } from '../../common/api-error.codes';
 import { apiUnauthorizedException } from '../../common/api-error.util';
+import {
+  isSessionAbsolutelyExpired,
+  isSessionIdleExpired,
+  resolveIdleTtlSec,
+} from '../../common/auth-session-policy.util';
 import { hashToken } from '../../common/security/token';
 import { PrismaService } from '../../prisma/prisma.service';
 import { AuthService } from './auth.service';
 
 const REFRESH_INVALID_MESSAGE = 'Refresh token invalid.';
+const SESSION_EXPIRED_MESSAGE = 'Session expired. Sign in again.';
 
 /**
  * Refresh-token rotation API surface.
@@ -24,6 +31,7 @@ const REFRESH_INVALID_MESSAGE = 'Refresh token invalid.';
 export class AuthRefreshService {
   constructor(
     private readonly prisma: PrismaService,
+    private readonly config: ConfigService,
     @Inject(forwardRef(() => AuthService))
     private readonly auth: Pick<AuthService, 'refreshIssueTokens'>,
   ) {}
@@ -46,12 +54,34 @@ export class AuthRefreshService {
       );
     }
 
-    if (session.expiresAt < new Date()) {
-      await this.prisma.authSession.updateMany({
-        where: { id: session.id, revokedAt: null },
-        data: { revokedAt: new Date() },
-      });
-      throw new UnauthorizedException(REFRESH_INVALID_MESSAGE);
+    if (
+      isSessionAbsolutelyExpired({
+        absoluteExpiresAt: session.absoluteExpiresAt,
+      }) ||
+      session.expiresAt < new Date()
+    ) {
+      await this.revokeSessionFamily(session.familyId);
+      throw apiUnauthorizedException(
+        ApiDomainErrorCode.SESSION_REVOKED,
+        SESSION_EXPIRED_MESSAGE,
+      );
+    }
+
+    const idleTtlSec = resolveIdleTtlSec(session.rememberMe, {
+      authIdleTtlSec: this.config.get('AUTH_IDLE_TTL_SEC'),
+      authIdleTtlRememberSec: this.config.get('AUTH_IDLE_TTL_REMEMBER_SEC'),
+    });
+    if (
+      isSessionIdleExpired({
+        lastActiveAt: session.lastActiveAt,
+        idleTtlSec,
+      })
+    ) {
+      await this.revokeSessionFamily(session.familyId);
+      throw apiUnauthorizedException(
+        ApiDomainErrorCode.SESSION_REVOKED,
+        SESSION_EXPIRED_MESSAGE,
+      );
     }
 
     // Rotate: claim-revoke current (lost race = treat as reuse), then issue same family.
@@ -67,12 +97,11 @@ export class AuthRefreshService {
       );
     }
 
-    return this.auth.refreshIssueTokens(
-      session.userId,
-      ip,
-      ua,
-      session.familyId,
-    );
+    return this.auth.refreshIssueTokens(session.userId, ip, ua, {
+      familyId: session.familyId,
+      rememberMe: session.rememberMe,
+      absoluteExpiresAt: session.absoluteExpiresAt,
+    });
   }
 
   /** Revoke every active session in a refresh-token family (reuse / theft response). */

@@ -4,7 +4,8 @@ export interface JwtAccessPayload {
   sysRole: string;
   email: string;
   acct?: string; // VENUE_OWNER | VENUE_STAFF
-  sid?: string; // auth session id (staff: single active session)
+  /** Auth session id — validated on every request for owners and staff. */
+  sid?: string;
   // Active membership context (optional — picked first owned shop on login).
   shopId?: string;
   shopRole?: string;

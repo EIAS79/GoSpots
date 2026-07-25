@@ -4,6 +4,8 @@ import { AnimatePresence, motion, LayoutGroup } from "framer-motion";
 import {
   ArrowRight,
   Banknote,
+  ChevronLeft,
+  ChevronRight,
   Clock3,
   Gamepad2,
   Globe2,
@@ -53,6 +55,8 @@ type OpenStatus = {
   window: string | null;
 };
 
+const PAGE_SIZE = 10;
+
 function valuesFromParams(searchParams: URLSearchParams): VenueSearchFormValues {
   const parsed = parseVenueSearchParams(searchParams);
   return {
@@ -78,6 +82,7 @@ export function VenuesDiscovery() {
   });
   const [loading, setLoading] = useState(true);
   const [view, setView] = useState<"grid" | "list">("grid");
+  const [page, setPage] = useState(0);
 
   const activeQuery = useMemo(
     () => parseVenueSearchParams(searchParams),
@@ -100,10 +105,12 @@ export function VenuesDiscovery() {
         setVenues(data.items);
         setTotal(data.total);
         setFacets(data.facets);
+        setPage(0);
       })
       .catch(() => {
         setVenues([]);
         setTotal(0);
+        setPage(0);
       })
       .finally(() => setLoading(false));
   }, [activeQuery]);
@@ -111,6 +118,18 @@ export function VenuesDiscovery() {
   useEffect(() => {
     void load();
   }, [load]);
+
+  const pageCount = Math.max(1, Math.ceil(venues.length / PAGE_SIZE));
+  const safePage = Math.min(page, pageCount - 1);
+  const pageVenues = useMemo(
+    () =>
+      venues.slice(safePage * PAGE_SIZE, safePage * PAGE_SIZE + PAGE_SIZE),
+    [venues, safePage],
+  );
+
+  useEffect(() => {
+    if (page !== safePage) setPage(safePage);
+  }, [page, safePage]);
 
   function patchForm(patch: Partial<VenueSearchFormValues>) {
     setForm((prev) => ({ ...prev, ...patch }));
@@ -248,7 +267,10 @@ export function VenuesDiscovery() {
           <div className="flex items-center gap-1 rounded-lg border border-[var(--color-border)] bg-[var(--color-surface)] p-1">
             <button
               type="button"
-              onClick={() => setView("grid")}
+              onClick={() => {
+                setView("grid");
+                setPage(0);
+              }}
               className={cn(
                 "grid size-8 place-items-center rounded-md transition",
                 view === "grid"
@@ -261,7 +283,10 @@ export function VenuesDiscovery() {
             </button>
             <button
               type="button"
-              onClick={() => setView("list")}
+              onClick={() => {
+                setView("list");
+                setPage(0);
+              }}
               className={cn(
                 "grid size-8 place-items-center rounded-md transition",
                 view === "list"
@@ -308,23 +333,33 @@ export function VenuesDiscovery() {
             </div>
           </motion.div>
         ) : (
-          <LayoutGroup>
-            <motion.ul
-              layout
-              className={cn(
-                "relative grid gap-3 md:gap-4",
-                view === "grid"
-                  ? "grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5"
-                  : "grid-cols-1",
-              )}
-            >
-              <AnimatePresence mode="popLayout">
-                {venues.map((v, i) => (
-                  <VenueCard key={v.id} venue={v} index={i} variant={view} />
-                ))}
-              </AnimatePresence>
-            </motion.ul>
-          </LayoutGroup>
+          <>
+            <LayoutGroup>
+              <motion.ul
+                layout
+                className={cn(
+                  "relative",
+                  view === "grid"
+                    ? "grid gap-3 md:gap-4 grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5"
+                    : "flex flex-col gap-2",
+                )}
+              >
+                <AnimatePresence mode="popLayout">
+                  {pageVenues.map((v, i) => (
+                    <VenueCard key={v.id} venue={v} index={i} variant={view} />
+                  ))}
+                </AnimatePresence>
+              </motion.ul>
+            </LayoutGroup>
+            {venues.length > PAGE_SIZE ? (
+              <VenuesPagination
+                page={safePage}
+                pageCount={pageCount}
+                total={venues.length}
+                onPage={setPage}
+              />
+            ) : null}
+          </>
         )}
       </section>
     </div>
@@ -340,54 +375,118 @@ function VenueCard({
   index: number;
   variant: "grid" | "list";
 }) {
-  const { t } = usePublicPrefs();
+  const { t, currency } = usePublicPrefs();
   const title = venueMarketingName(venue);
   const location = formatVenueLocation(venue);
   const status = venueOpenStatus(venue.openingHours, venue.scheduleExceptions) as OpenStatus;
   const accent = venue.tags?.[0]?.color ?? "#f59e0b";
+  const gameCount = venue.gameOfferingCount ?? 0;
 
   if (variant === "list") {
     return (
       <motion.li
         layout
-        initial={{ opacity: 0, y: 12 }}
+        initial={{ opacity: 0, y: 8 }}
         animate={{ opacity: 1, y: 0 }}
         exit={{ opacity: 0 }}
-        transition={{ delay: Math.min(index * 0.03, 0.2) }}
+        transition={{ delay: Math.min(index * 0.02, 0.15) }}
         className="list-none"
       >
         <Link
           href={`/venue/${venue.slug}`}
-          className="group flex flex-col gap-4 overflow-hidden rounded-2xl border border-[var(--color-border)] bg-[var(--color-surface)]/60 p-4 transition hover:border-amber-400/40 dark:bg-white/[0.03] sm:flex-row"
+          className={cn(
+            "group grid overflow-hidden rounded-xl border border-[var(--color-border)]",
+            "bg-[var(--color-surface)]/70 transition hover:border-amber-400/40",
+            "dark:bg-white/[0.03]",
+            "grid-cols-1 sm:grid-cols-[9.5rem_minmax(0,1fr)] md:grid-cols-[11rem_minmax(0,1.4fr)_minmax(11rem,15rem)]",
+          )}
         >
-          <div className="relative h-36 w-full shrink-0 overflow-hidden rounded-xl sm:h-28 sm:w-44">
-            <VenueCoverImage src={venue.coverImage} sizes="176px" />
+          {/* Cover */}
+          <div className="relative aspect-[16/10] w-full overflow-hidden sm:aspect-auto sm:h-full sm:min-h-[7.5rem] md:min-h-[8.5rem]">
+            <VenueCoverImage
+              src={venue.coverImage}
+              sizes="(max-width: 640px) 100vw, 176px"
+              className="transition-transform duration-500 group-hover:scale-[1.04]"
+            />
+            <div className="absolute inset-0 bg-gradient-to-t from-black/35 to-transparent sm:hidden" />
           </div>
-          <div className="min-w-0 flex-1">
-            <div className="flex flex-wrap items-start justify-between gap-2">
-              <h2 className="text-lg font-semibold text-[var(--color-foreground)] group-hover:text-amber-700 dark:group-hover:text-amber-100">
+
+          {/* Left: identity + place + hours + description */}
+          <div className="flex min-w-0 flex-col justify-center gap-2 border-[var(--color-border)] p-3.5 sm:border-r sm:p-4">
+            <div className="min-w-0">
+              <h2 className="truncate text-base font-semibold tracking-tight text-[var(--color-foreground)] group-hover:text-amber-700 dark:group-hover:text-amber-100 sm:text-lg">
                 {title}
               </h2>
-              <VenueMetaBadges venue={venue} />
-            </div>
-            <div className="mt-1 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-zinc-600 dark:text-zinc-400">
               {location ? (
-                <span className="inline-flex items-center gap-1">
-                  <MapPin size={12} className="shrink-0 text-amber-500/80" />
-                  {location}
+                <p className="mt-1 flex items-start gap-1.5 text-xs text-zinc-600 dark:text-zinc-400 sm:text-[13px]">
+                  <MapPin
+                    size={13}
+                    className="mt-0.5 shrink-0 text-amber-500/80"
+                  />
+                  <span className="line-clamp-2 leading-snug">{location}</span>
+                </p>
+              ) : null}
+            </div>
+
+            <div className="flex flex-wrap items-center gap-2">
+              <OpenStatusPill status={status} />
+              {status.window ? (
+                <span className="inline-flex items-center gap-1 text-[11px] text-zinc-500">
+                  <Clock3 size={11} className="shrink-0 opacity-80" />
+                  {status.window}
                 </span>
               ) : null}
-              <OpenStatusPill status={status} compact />
               <RatingBadge venue={venue} />
             </div>
+
             {venue.description ? (
-              <p className="mt-2 line-clamp-2 text-sm text-zinc-500">{venue.description}</p>
-            ) : null}
-            <div className="mt-2 flex flex-wrap gap-1.5">
-              {(venue.tags ?? []).slice(0, 4).map((t) => (
-                <CategoryPill key={t.id} tag={t} />
-              ))}
+              <p className="line-clamp-2 text-sm leading-relaxed text-zinc-500">
+                {venue.description}
+              </p>
+            ) : (
+              <p className="text-sm italic text-zinc-500">
+                {t("venuesDiscovery.noDescription")}
+              </p>
+            )}
+          </div>
+
+          {/* Right: currency / games / tags */}
+          <div className="flex flex-col justify-center gap-3 border-t border-[var(--color-border)] bg-[color-mix(in_srgb,var(--color-background)_55%,transparent)] p-3.5 sm:col-span-2 sm:flex-row sm:items-center sm:justify-between md:col-span-1 md:flex-col md:items-stretch md:border-l md:border-t-0 md:p-4">
+            <div className="flex flex-wrap items-center gap-1.5 md:flex-col md:items-start">
+              <span className="inline-flex items-center gap-1.5 rounded-lg border border-[var(--color-border)] bg-[var(--color-surface)] px-2.5 py-1 text-[11px] font-medium text-zinc-700 dark:bg-white/[0.04] dark:text-zinc-200">
+                <Banknote size={12} className="text-amber-500/90" />
+                {t("venues.pricesIn", { currency })}
+              </span>
+              {gameCount > 0 ? (
+                <span className="inline-flex items-center gap-1.5 rounded-lg border border-emerald-400/25 bg-emerald-500/10 px-2.5 py-1 text-[11px] font-medium text-emerald-800 dark:text-emerald-200">
+                  <Gamepad2 size={12} />
+                  {t(gameCount === 1 ? "venues.gameOne" : "venues.games", {
+                    count: gameCount,
+                  })}
+                </span>
+              ) : null}
             </div>
+
+            {(venue.tags?.length ?? 0) > 0 ? (
+              <div className="flex flex-wrap gap-1.5 md:max-h-[4.5rem] md:overflow-hidden">
+                {(venue.tags ?? []).slice(0, 5).map((tag) => (
+                  <CategoryPill key={tag.id} tag={tag} />
+                ))}
+                {(venue.tags?.length ?? 0) > 5 ? (
+                  <span className="rounded-full border border-[var(--color-border)] px-2 py-0.5 text-[10px] text-zinc-500">
+                    +{(venue.tags?.length ?? 0) - 5}
+                  </span>
+                ) : null}
+              </div>
+            ) : null}
+
+            <span className="hidden items-center gap-1 text-[11px] font-semibold text-amber-700 transition group-hover:text-amber-600 dark:text-amber-300/90 md:inline-flex">
+              More details
+              <ArrowRight
+                size={12}
+                className="transition-transform group-hover:translate-x-0.5"
+              />
+            </span>
           </div>
         </Link>
       </motion.li>
@@ -513,6 +612,53 @@ function VenueCard({
   );
 }
 
+function VenuesPagination({
+  page,
+  pageCount,
+  total,
+  onPage,
+}: {
+  page: number;
+  pageCount: number;
+  total: number;
+  onPage: (p: number) => void;
+}) {
+  const { t } = usePublicPrefs();
+  const from = page * PAGE_SIZE + 1;
+  const to = Math.min(total, (page + 1) * PAGE_SIZE);
+
+  return (
+    <div className="mt-6 flex flex-wrap items-center justify-between gap-3 border-t border-[var(--color-border)] pt-4">
+      <p className="text-xs text-zinc-500">
+        {t("menu.pageOf", { from, to, total })}
+      </p>
+      <div className="flex items-center gap-1.5">
+        <button
+          type="button"
+          disabled={page <= 0}
+          onClick={() => onPage(page - 1)}
+          className="grid h-9 w-9 place-items-center rounded-lg border border-[var(--color-border)] text-zinc-600 transition hover:bg-[var(--color-surface)] disabled:opacity-35 dark:text-zinc-300"
+          aria-label={t("menu.prevPage")}
+        >
+          <ChevronLeft size={16} />
+        </button>
+        <span className="min-w-[4.5rem] text-center text-xs tabular-nums text-zinc-600 dark:text-zinc-400">
+          {page + 1} / {pageCount}
+        </span>
+        <button
+          type="button"
+          disabled={page >= pageCount - 1}
+          onClick={() => onPage(page + 1)}
+          className="grid h-9 w-9 place-items-center rounded-lg border border-[var(--color-border)] text-zinc-600 transition hover:bg-[var(--color-surface)] disabled:opacity-35 dark:text-zinc-300"
+          aria-label={t("menu.nextPage")}
+        >
+          <ChevronRight size={16} />
+        </button>
+      </div>
+    </div>
+  );
+}
+
 function OpenStatusPill({
   status,
   compact,
@@ -581,27 +727,6 @@ function RatingBadge({ venue }: { venue: PublicVenue }) {
       <Star size={10} className="text-amber-600 dark:text-amber-400/70" />
       {t("venues.new")}
     </span>
-  );
-}
-
-function VenueMetaBadges({ venue }: { venue: PublicVenue }) {
-  const { t, currency } = usePublicPrefs();
-  const gameCount = venue.gameOfferingCount ?? 0;
-  return (
-    <div className="flex flex-wrap items-center justify-end gap-1.5">
-      <span className="inline-flex items-center gap-1 rounded-full border border-[var(--color-border)] bg-[var(--color-background)]/70 px-2 py-0.5 text-[10px] text-zinc-700 backdrop-blur dark:text-zinc-200">
-        <Banknote size={10} />
-        {t("venues.pricesIn", { currency })}
-      </span>
-      {gameCount > 0 ? (
-        <span className="inline-flex items-center gap-1 rounded-full border border-emerald-400/25 bg-emerald-500/15 px-2 py-0.5 text-[10px] text-emerald-200 backdrop-blur">
-          <Gamepad2 size={10} />
-          {t(gameCount === 1 ? "venues.gameOne" : "venues.games", {
-            count: gameCount,
-          })}
-        </span>
-      ) : null}
-    </div>
   );
 }
 

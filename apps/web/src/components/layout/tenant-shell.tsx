@@ -17,6 +17,7 @@ import {
   Receipt,
   Settings,
   ShieldCheck,
+  ClipboardCheck,
   ShoppingCart,
   Star,
   StickyNote,
@@ -217,6 +218,11 @@ const NAV_GROUPS: NavGroup[] = [
   {
     labelKey: "nav.group.team",
     items: [
+      {
+        segment: "/approvals",
+        labelKey: "nav.approvals",
+        icon: ClipboardCheck,
+      },
       {
         segment: "/staff",
         labelKey: "nav.staff",

@@ -51,6 +51,7 @@ const en: DictTree = {
     playBilling: "Game billing",
     finance: "Finance",
     staff: "Employee accounts",
+    approvals: "Staff approvals",
     signOut: "Sign out",
     openNavigation: "Open navigation",
     closeNavigation: "Close navigation",
@@ -187,7 +188,9 @@ const en: DictTree = {
     billingManageHint:
       "Manage payment method, invoices, or cancel in the Lemon Squeezy portal. Pack changes you save here apply at the next billing period.",
     billingNotConfigured:
-      "Billing keys are not set on the API yet. Add LEMON_SQUEEZY_* env vars to enable checkout.",
+      "Checkout is not ready on the API. On the Render API service, set LEMON_SQUEEZY_API_KEY, LEMON_SQUEEZY_STORE_ID, and LEMON_SQUEEZY_VARIANT_ID, then redeploy. (Webhook secret is separate.)",
+    billingMissingKeys:
+      "Missing on the API service: {keys}. Add them in Render → your API service → Environment, then Manual Deploy.",
     manageBilling: "Manage billing",
     addPayment: "Add payment method",
     activate: "Activate subscription",
@@ -2667,6 +2670,7 @@ const pl: DictTree = {
     playBilling: "Rozliczenia gier",
     finance: "Finanse",
     staff: "Konta pracowników",
+    approvals: "Zatwierdzenia personelu",
     signOut: "Wyloguj",
     openNavigation: "Otwórz nawigację",
     closeNavigation: "Zamknij nawigację",
@@ -2803,7 +2807,9 @@ const pl: DictTree = {
     billingManageHint:
       "Metoda płatności, faktury lub anulowanie w portalu Lemon Squeezy. Zmiany pakietu zapisane tutaj obowiązują od następnego okresu.",
     billingNotConfigured:
-      "Klucze rozliczeń nie są jeszcze ustawione w API. Dodaj zmienne LEMON_SQUEEZY_*, aby włączyć checkout.",
+      "Checkout nie jest gotowy na API. Na usłudze API w Render ustaw LEMON_SQUEEZY_API_KEY, LEMON_SQUEEZY_STORE_ID i LEMON_SQUEEZY_VARIANT_ID, potem zrób redeploy. (Webhook secret jest osobno.)",
+    billingMissingKeys:
+      "Brakuje na usłudze API: {keys}. Dodaj w Render → usługa API → Environment, potem Manual Deploy.",
     manageBilling: "Zarządzaj płatnościami",
     addPayment: "Dodaj metodę płatności",
     activate: "Aktywuj subskrypcję",

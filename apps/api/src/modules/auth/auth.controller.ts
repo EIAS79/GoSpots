@@ -87,7 +87,7 @@ export class AuthController {
     });
   }
 
-  private setCsrfCookie(res: Response): string {
+  private setCsrfCookie(res: Response, maxAgeMs?: number): string {
     const token = generateCsrfToken();
     const { secure, sameSite } = this.cookieOptions();
     // Not httpOnly: JS must read it for the double-submit X-CSRF-Token header.
@@ -96,7 +96,7 @@ export class AuthController {
       secure,
       sameSite,
       path: ACCESS_COOKIE_PATH,
-      maxAge: 7 * 24 * 60 * 60 * 1000,
+      maxAge: maxAgeMs ?? 7 * 24 * 60 * 60 * 1000,
     });
     return token;
   }
@@ -121,7 +121,7 @@ export class AuthController {
       path: REFRESH_COOKIE_PATH,
       maxAge: tokens.refreshExpiresIn * 1000,
     });
-    this.setCsrfCookie(res);
+    this.setCsrfCookie(res, tokens.refreshExpiresIn * 1000);
   }
 
   private clearAuthCookies(res: Response) {

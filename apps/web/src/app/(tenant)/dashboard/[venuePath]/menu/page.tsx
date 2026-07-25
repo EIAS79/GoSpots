@@ -4,6 +4,7 @@ import { Loader2, Plus, Radio } from "lucide-react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { MenuBoard } from "@/components/menu/menu-board";
 import { ItemDialog, SectionDialog } from "@/components/menu/menu-dialogs";
+import { RequestPrivilegedEditDialog } from "@/components/staff/request-privileged-edit-dialog";
 import { ConfirmDialog } from "@/components/ui/confirm-dialog";
 import { FeedbackBanner } from "@/components/ui/feedback-banner";
 import { FeatureGate } from "@/components/subscription/feature-gate";
@@ -62,6 +63,7 @@ export default function MenuPage() {
     null,
   );
   const [itemToRemove, setItemToRemove] = useState<MenuItem | null>(null);
+  const [requestItem, setRequestItem] = useState<MenuItem | null>(null);
 
   const loadGen = useRef(0);
 
@@ -368,7 +370,11 @@ export default function MenuPage() {
         ) : (
           <>
             {!canWrite ? (
-              <p className="mb-4 text-xs text-zinc-500">{t("menu.viewOnly")}</p>
+              <p className="mb-4 text-xs text-zinc-500">
+                {t("menu.viewOnly")} Tap an item to request a one-time price/name
+                change — owner or manager must approve (does not grant lasting
+                permission).
+              </p>
             ) : null}
 
             {partialWarning ? (
@@ -392,6 +398,11 @@ export default function MenuPage() {
                 onRemoveSections={setSectionToRemove}
                 onEditItem={(item) =>
                   setItemDialog({ item, sectionId: item.sectionId })
+                }
+                onRequestEditItem={
+                  !canWrite && menuUnlocked
+                    ? (item) => setRequestItem(item)
+                    : undefined
                 }
                 onAddItem={(sectionId) => setItemDialog({ sectionId })}
                 onDeleteItem={(item) => setItemToRemove(item)}
@@ -505,6 +516,22 @@ export default function MenuPage() {
               ? () => setItemToRemove(itemDialog.item!)
               : undefined
           }
+        />
+      ) : null}
+
+      {requestItem ? (
+        <RequestPrivilegedEditDialog
+          open
+          onClose={() => setRequestItem(null)}
+          kind="MENU_ITEM_UPDATE"
+          targetId={requestItem.id}
+          targetLabel={requestItem.name}
+          initialPatch={{
+            name: requestItem.name,
+            price: Number(requestItem.price),
+            isAvailable: requestItem.isAvailable,
+          }}
+          onSubmitted={() => setRequestItem(null)}
         />
       ) : null}
     </TenantPage>

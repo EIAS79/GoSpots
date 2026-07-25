@@ -21,6 +21,9 @@ import {
   refresh as apiRefresh,
 } from "./auth-client";
 
+/** Keep idle clock + cookies sliding while the dashboard tab is visible. */
+const PROACTIVE_REFRESH_MS = 10 * 60 * 1000;
+
 type State =
   | { status: "loading"; user: null }
   | { status: "authed"; user: AuthUser }
@@ -76,6 +79,41 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     void reload();
   }, [reload]);
+
+  useEffect(() => {
+    if (state.status !== "authed") return;
+
+    let cancelled = false;
+
+    async function tick() {
+      if (cancelled) return;
+      if (document.visibilityState !== "visible") return;
+      try {
+        await ensureCsrf();
+        await apiRefresh();
+      } catch (err) {
+        if (err instanceof ApiError && err.code === "SESSION_REVOKED") {
+          notifySessionRevoked();
+          setState({ status: "guest", user: null });
+        }
+      }
+    }
+
+    const id = window.setInterval(() => {
+      void tick();
+    }, PROACTIVE_REFRESH_MS);
+
+    function onVisible() {
+      if (document.visibilityState === "visible") void tick();
+    }
+    document.addEventListener("visibilitychange", onVisible);
+
+    return () => {
+      cancelled = true;
+      window.clearInterval(id);
+      document.removeEventListener("visibilitychange", onVisible);
+    };
+  }, [state.status]);
 
   return (
     <AuthContext.Provider value={{ state, reload, signOut }}>

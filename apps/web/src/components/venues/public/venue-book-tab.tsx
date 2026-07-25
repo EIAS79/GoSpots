@@ -1,9 +1,8 @@
 "use client";
 
-import { CalendarCheck, Mail, Phone } from "lucide-react";
+import { CalendarCheck, Shield } from "lucide-react";
 import Link from "next/link";
 import { PublicBookingRequestForm } from "@/components/reservations/public-booking-request-form";
-import { PublicContactForm } from "@/components/venues/public/public-contact-form";
 import { VenueGuestDsarForm } from "@/components/venues/public/venue-guest-dsar-form";
 import { usePublicPrefs } from "@/lib/public-prefs-context";
 import type { PublicVenueDetail } from "@/lib/shop-settings-client";
@@ -82,33 +81,6 @@ export function VenueBookTab({
         </p>
       </div>
 
-      {(venue.phone || venue.email) ? (
-        <div className="flex flex-col gap-3 text-sm sm:flex-row sm:flex-wrap">
-          {venue.phone ? (
-            <a
-              href={`tel:${venue.phone}`}
-              className="inline-flex max-w-full items-center gap-2 rounded-lg border border-[var(--color-border)] bg-[var(--color-surface)] px-4 py-2.5 text-zinc-700 transition hover:border-amber-400/40 hover:text-amber-700 dark:text-zinc-300 dark:hover:text-amber-200"
-            >
-              <Phone size={16} className="shrink-0" />
-              <span className="truncate">
-                <span className="sm:hidden">{t("venuePage.book.call")}</span>
-                <span className="hidden sm:inline">
-                  {t("venuePage.book.callPhone", { phone: venue.phone })}
-                </span>
-              </span>
-            </a>
-          ) : null}
-          {venue.email ? (
-            <a
-              href={`mailto:${venue.email}`}
-              className="inline-flex items-center gap-2 rounded-lg border border-[var(--color-border)] bg-[var(--color-surface)] px-4 py-2.5 text-zinc-700 transition hover:border-amber-400/40 hover:text-amber-700 dark:text-zinc-300 dark:hover:text-amber-200"
-            >
-              {t("venuePage.book.emailVenue")}
-            </a>
-          ) : null}
-        </div>
-      ) : null}
-
       {hasLegacyTables ? (
         <section id="book-table">
           <SectionLabel
@@ -149,10 +121,9 @@ export function VenueBookTab({
         </div>
       </section>
 
-      <section id="contact">
-        <SectionLabel icon={Mail} label={t("venuePage.book.contact")} />
-        <div className="max-w-xl space-y-6">
-          <PublicContactForm slug={slug} />
+      <section id="privacy">
+        <SectionLabel icon={Shield} label={t("venuePage.book.privacy")} />
+        <div className="max-w-xl">
           <VenueGuestDsarForm slug={slug} />
         </div>
       </section>

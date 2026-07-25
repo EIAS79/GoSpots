@@ -163,6 +163,7 @@ function SubscriptionPageInner() {
             <BillingCheckoutCard
               monthlyTotal={data.monthlyTotal}
               configured={data.billingConfigured ?? false}
+              missingEnv={data.billingMissingEnv}
               hasLemonSub={!!data.lemonSubscriptionId}
               trialActive={trialActive}
               trialExpired={trialExpired}

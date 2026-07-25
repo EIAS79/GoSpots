@@ -7,19 +7,31 @@ import {
 } from "framer-motion";
 import { Menu, X } from "lucide-react";
 import Link from "next/link";
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import { GoSpotsBrandLockup } from "@/components/brand/gospots-brand-lockup";
 import { LocaleCurrencySwitcher } from "@/components/public/locale-currency-switcher";
 import { ThemeToggle } from "@/components/theme/theme-toggle";
 import { cn } from "@/lib/cn";
 import { navLinks } from "@/lib/mock-data";
 import { usePublicPrefs } from "@/lib/public-prefs-context";
+import { useAuth } from "@/lib/use-auth";
+import {
+  dashboardBase,
+  resolveVenuePathFromMemberships,
+} from "@/lib/venue-dashboard";
 
 /** Owner-landing navbar — Explore → guest `/venues`; CTAs stay owner-focused. */
 export function Navbar() {
   const [open, setOpen] = useState(false);
   const [scrolled, setScrolled] = useState(false);
   const { t } = usePublicPrefs();
+  const { state } = useAuth();
+
+  const dashboardHref = useMemo(() => {
+    if (state.status !== "authed" || !state.user) return null;
+    const venuePath = resolveVenuePathFromMemberships(state.user.memberships);
+    return venuePath ? dashboardBase(venuePath) : "/dashboard";
+  }, [state]);
 
   const { scrollY } = useScroll();
   useMotionValueEvent(scrollY, "change", (y) => {
@@ -90,7 +102,7 @@ export function Navbar() {
           />
           <div className="hidden items-center gap-2 md:flex">
             <Link
-              href="/login"
+              href={dashboardHref ?? "/login"}
               className={cn(
                 "rounded-full border px-3.5 py-2 text-sm font-medium backdrop-blur-md transition lg:px-4",
                 scrolled
@@ -98,15 +110,17 @@ export function Navbar() {
                   : "border-white/15 bg-white/[0.06] text-zinc-100 hover:border-white/30 hover:bg-white/10",
               )}
             >
-              {t("nav.signIn")}
+              {dashboardHref ? t("nav.dashboard") : t("nav.signIn")}
             </Link>
-            <Link
-              href="/register"
-              className="group relative overflow-hidden rounded-full bg-emerald-500 px-3.5 py-2 text-sm font-semibold text-white shadow-lg shadow-emerald-500/25 transition hover:bg-emerald-400 lg:px-4 dark:bg-emerald-400 dark:text-zinc-950 dark:hover:bg-emerald-300"
-            >
-              <span className="relative z-10">{t("nav.listVenue")}</span>
-              <span className="absolute inset-0 -translate-x-full bg-gradient-to-r from-transparent via-white/50 to-transparent transition-transform duration-700 group-hover:translate-x-full" />
-            </Link>
+            {dashboardHref ? null : (
+              <Link
+                href="/register"
+                className="group relative overflow-hidden rounded-full bg-emerald-500 px-3.5 py-2 text-sm font-semibold text-white shadow-lg shadow-emerald-500/25 transition hover:bg-emerald-400 lg:px-4 dark:bg-emerald-400 dark:text-zinc-950 dark:hover:bg-emerald-300"
+              >
+                <span className="relative z-10">{t("nav.listVenue")}</span>
+                <span className="absolute inset-0 -translate-x-full bg-gradient-to-r from-transparent via-white/50 to-transparent transition-transform duration-700 group-hover:translate-x-full" />
+              </Link>
+            )}
           </div>
 
           <LocaleCurrencySwitcher
@@ -160,19 +174,21 @@ export function Navbar() {
           <div className="my-2 h-px bg-white/10" />
 
           <Link
-            href="/login"
+            href={dashboardHref ?? "/login"}
             onClick={() => setOpen(false)}
             className="rounded-full border border-white/15 bg-white/[0.04] px-4 py-2.5 text-center text-sm text-zinc-200"
           >
-            {t("nav.signIn")}
+            {dashboardHref ? t("nav.dashboard") : t("nav.signIn")}
           </Link>
-          <Link
-            href="/register"
-            onClick={() => setOpen(false)}
-            className="rounded-full bg-emerald-400 px-4 py-2.5 text-center text-sm font-semibold text-zinc-950"
-          >
-            {t("nav.listVenue")}
-          </Link>
+          {dashboardHref ? null : (
+            <Link
+              href="/register"
+              onClick={() => setOpen(false)}
+              className="rounded-full bg-emerald-400 px-4 py-2.5 text-center text-sm font-semibold text-zinc-950"
+            >
+              {t("nav.listVenue")}
+            </Link>
+          )}
         </div>
       </motion.div>
     </motion.header>

@@ -29,6 +29,7 @@ import { MediaModule } from './modules/media/media.module';
 import { NotesModule } from './modules/notes/notes.module';
 import { GdprModule } from './modules/gdpr/gdpr.module';
 import { GuestCheckModule } from './modules/guest-check/guest-check.module';
+import { StaffApprovalsModule } from './modules/staff-approvals/staff-approvals.module';
 import { VenueContextInterceptor } from './common/venue-context.interceptor';
 import { TenantRlsInterceptor } from './common/tenant-rls.interceptor';
 import { RequestLoggingInterceptor } from './common/request-logging.interceptor';
@@ -89,6 +90,7 @@ import { RolesGuard } from './modules/auth/guards/roles.guard';
     NotesModule,
     GdprModule,
     GuestCheckModule,
+    StaffApprovalsModule,
     HealthModule,
     MetricsModule,
   ],

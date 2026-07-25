@@ -330,6 +330,7 @@ export class DashboardService {
         staffSeatQuantity,
       ),
       billingConfigured: this.billingConfigured(),
+      billingMissingEnv: this.billingMissingEnv(),
       lemonSubscriptionId:
         (sub as { lemonSubscriptionId?: string | null } | null)
           ?.lemonSubscriptionId ?? null,
@@ -346,11 +347,22 @@ export class DashboardService {
   }
 
   private billingConfigured() {
-    return Boolean(
-      process.env.LEMON_SQUEEZY_API_KEY &&
-        process.env.LEMON_SQUEEZY_STORE_ID &&
-        process.env.LEMON_SQUEEZY_VARIANT_ID,
-    );
+    return this.billingMissingEnv().length === 0;
+  }
+
+  /** Env var *names* only — never values. Checkout needs API key + store + variant. */
+  private billingMissingEnv(): string[] {
+    const missing: string[] = [];
+    if (!process.env.LEMON_SQUEEZY_API_KEY?.trim()) {
+      missing.push('LEMON_SQUEEZY_API_KEY');
+    }
+    if (!process.env.LEMON_SQUEEZY_STORE_ID?.trim()) {
+      missing.push('LEMON_SQUEEZY_STORE_ID');
+    }
+    if (!process.env.LEMON_SQUEEZY_VARIANT_ID?.trim()) {
+      missing.push('LEMON_SQUEEZY_VARIANT_ID');
+    }
+    return missing;
   }
 
   /**

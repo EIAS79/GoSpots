@@ -860,7 +860,9 @@ export class AuthMfaService {
 
 
 
-    return this.auth.mfaCompleteLogin(user.id, ip, ua);
+    return this.auth.mfaCompleteLogin(user.id, ip, ua, {
+      rememberMe: payload.rememberMe === true,
+    });
 
   }
 

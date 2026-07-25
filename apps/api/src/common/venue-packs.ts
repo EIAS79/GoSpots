@@ -84,7 +84,7 @@ export const VENUE_PACKS: Record<VenuePackId, VenuePack> = {
     tagline: 'Stations, live map bookings, and play billing.',
     monthlyPrice: 0,
     currency: 'EUR',
-    recommendedFeatures: ['gaming_suite', 'ops_alerts'],
+    recommendedFeatures: ['gaming_suite', 'venue_presence'],
     categorySlugs: [
       'gaming-center',
       'gaming-lounge',
@@ -103,7 +103,7 @@ export const VENUE_PACKS: Record<VenuePackId, VenuePack> = {
     tagline: 'Tables, digital booking, menu, and kitchen tickets.',
     monthlyPrice: 0,
     currency: 'EUR',
-    recommendedFeatures: ['dining_floor', 'menu_orders', 'ops_alerts'],
+    recommendedFeatures: ['dining_floor', 'menu_orders', 'venue_presence'],
     categorySlugs: ['restaurant', 'cafe'],
     showsGaming: false,
     showsDining: true,
@@ -114,7 +114,7 @@ export const VENUE_PACKS: Record<VenuePackId, VenuePack> = {
     tagline: 'Menu, light reservations, and counter sales.',
     monthlyPrice: 0,
     currency: 'EUR',
-    recommendedFeatures: ['menu_orders', 'dining_floor', 'ops_alerts'],
+    recommendedFeatures: ['menu_orders', 'venue_presence'],
     categorySlugs: [
       'bar',
       'lounge',
@@ -137,7 +137,7 @@ export const VENUE_PACKS: Record<VenuePackId, VenuePack> = {
       'dining_floor',
       'menu_orders',
       'team_accounts',
-      'ops_alerts',
+      'venue_presence',
     ],
     categorySlugs: ['restaurant', 'lounge', 'bar'],
     showsGaming: false,
@@ -153,7 +153,7 @@ export const VENUE_PACKS: Record<VenuePackId, VenuePack> = {
       'gaming_suite',
       'dining_floor',
       'menu_orders',
-      'ops_alerts',
+      'venue_presence',
     ],
     categorySlugs: [
       'family-entertainment',
@@ -173,10 +173,11 @@ export const VENUE_ADD_ONS: Record<AddOnId, VenueAddOn> = {
     tagline: 'Notifications, activity log, and guest review inbox.',
     details:
       'Unlocks Notifications, Audit log, and Reviews. See booking alerts, staff actions, and guest ratings in one ops suite — filter and manage reviews from the dashboard.',
-    monthlyPrice: 8,
+    /** Early-market EUR list — sized for EU / PL / MENA SMB venues */
+    monthlyPrice: 5,
     currency: 'EUR',
     modules: ['notifications', 'audit', 'reviews'],
-    recommendedFor: ['gaming', 'dining', 'bar', 'hotel_fb', 'mixed'],
+    recommendedFor: [],
   },
   gaming_suite: {
     id: 'gaming_suite',
@@ -184,7 +185,7 @@ export const VENUE_ADD_ONS: Record<AddOnId, VenueAddOn> = {
     tagline: 'Layout, setup, play billing, and game reservations.',
     details:
       'For gaming venues: design the floor map, configure stations/tables, take gaming reservations, and run play billing / session charges from the dashboard.',
-    monthlyPrice: 20,
+    monthlyPrice: 12,
     currency: 'EUR',
     modules: ['resource', 'reservation', 'transaction', 'reports'],
     unlocksGaming: true,
@@ -196,7 +197,7 @@ export const VENUE_ADD_ONS: Record<AddOnId, VenueAddOn> = {
     tagline: 'Catalog, sections, and kitchen tickets.',
     details:
       'Build food and drink menus, manage stock and sections, and process menu orders / kitchen tickets. Ideal for restaurants, bars, and cafés.',
-    monthlyPrice: 15,
+    monthlyPrice: 9,
     currency: 'EUR',
     /** `bar` included so pack-only authz never shrinks STANDARD+ legacy access */
     modules: ['menu', 'transaction', 'reports', 'bar'],
@@ -208,11 +209,11 @@ export const VENUE_ADD_ONS: Record<AddOnId, VenueAddOn> = {
     tagline: 'Table layout and restaurant reservations.',
     details:
       'Design dining rooms and table layouts, then take and manage restaurant reservations. Works alongside Menu & kitchen orders when you serve food.',
-    monthlyPrice: 15,
+    monthlyPrice: 9,
     currency: 'EUR',
     modules: ['resource', 'reservation'],
     unlocksDining: true,
-    recommendedFor: ['dining', 'bar', 'hotel_fb', 'mixed'],
+    recommendedFor: ['dining', 'hotel_fb', 'mixed'],
   },
   venue_presence: {
     id: 'venue_presence',
@@ -220,7 +221,7 @@ export const VENUE_ADD_ONS: Record<AddOnId, VenueAddOn> = {
     tagline: 'Public venue page plus directory placement.',
     details:
       'Publish your venue on GoSpots with a dedicated public page, and unlock advertising / promoted placement in the venues directory so more guests can find you.',
-    monthlyPrice: 10,
+    monthlyPrice: 4,
     currency: 'EUR',
     modules: ['marketing'],
     recommendedFor: ['gaming', 'dining', 'bar', 'hotel_fb', 'mixed'],
@@ -231,10 +232,10 @@ export const VENUE_ADD_ONS: Record<AddOnId, VenueAddOn> = {
     tagline: 'Live chat with guests on your venue page.',
     details:
       'Guests start a private Uber-style chat from your public page, wait until staff joins, then message in real time. Staff can pause, end, reopen, or delete; guests can ping for attention.',
-    monthlyPrice: 15,
+    monthlyPrice: 6,
     currency: 'EUR',
     modules: ['messaging'],
-    recommendedFor: ['dining', 'hotel_fb', 'mixed'],
+    recommendedFor: [],
   },
   team_accounts: {
     id: 'team_accounts',
@@ -242,12 +243,12 @@ export const VENUE_ADD_ONS: Record<AddOnId, VenueAddOn> = {
     tagline: 'Employee seats — priced per seat / month.',
     details:
       'Buy how many employee seats you need (starts at 0). Then create one login per seat with roles and permissions. Each seat is one person.',
-    monthlyPrice: 4,
+    monthlyPrice: 3,
     currency: 'EUR',
     /** Priced per staffSeatQuantity, not flat */
     pricedPerSeat: true,
     modules: ['roles', 'memberships'],
-    recommendedFor: ['hotel_fb', 'mixed'],
+    recommendedFor: ['hotel_fb'],
   },
 };
 
@@ -443,6 +444,42 @@ export function featuresMonthlyTotal(
     if (addOn.pricedPerSeat) return sum + addOn.monthlyPrice * seats;
     return sum + addOn.monthlyPrice;
   }, 0);
+}
+
+/**
+ * Purchasing-power adjust EUR catalog before FX — CEE / MENA SMB venues
+ * should not see Western-EU SaaS sticker shock. Factor ≤ 1.
+ * Billing must use the same helper so checkout matches the UI.
+ */
+export const CATALOG_PPP_BY_CURRENCY: Readonly<Record<string, number>> = {
+  EUR: 1,
+  USD: 1,
+  GBP: 1,
+  CHF: 1,
+  AED: 1,
+  SAR: 1,
+  SEK: 0.95,
+  NOK: 1,
+  DKK: 1,
+  PLN: 0.85,
+  CZK: 0.82,
+  HUF: 0.78,
+  RON: 0.8,
+  TRY: 0.58,
+  EGP: 0.48,
+  IQD: 0.52,
+  PKR: 0.42,
+  CNY: 0.72,
+};
+
+export function marketAdjustedCatalogEur(
+  amountEur: number,
+  currency?: string | null,
+): number {
+  const code = (currency ?? 'EUR').trim().toUpperCase();
+  const factor = CATALOG_PPP_BY_CURRENCY[code] ?? 1;
+  if (!(amountEur > 0) || factor >= 0.999) return amountEur;
+  return Math.round(amountEur * factor * 100) / 100;
 }
 
 export function showsGamingUi(

@@ -1,0 +1,4 @@
+-- AlterTable
+ALTER TABLE "AuthSession" ADD COLUMN     "rememberMe" BOOLEAN NOT NULL DEFAULT false,
+ADD COLUMN     "lastActiveAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+ADD COLUMN     "absoluteExpiresAt" TIMESTAMP(3);

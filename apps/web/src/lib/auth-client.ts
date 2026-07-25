@@ -58,10 +58,16 @@ export function login(
   login: string,
   password: string,
   accountType?: UserAccountType,
+  rememberMe?: boolean,
 ) {
   return api<LoginResponse>("/auth/login", {
     method: "POST",
-    body: JSON.stringify({ login, password, accountType }),
+    body: JSON.stringify({
+      login,
+      password,
+      accountType,
+      rememberMe: rememberMe === true,
+    }),
   });
 }
 

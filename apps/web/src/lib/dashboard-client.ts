@@ -97,6 +97,8 @@ export type SubscriptionResponse = {
   enabledModules: string[];
   monthlyTotal: number;
   billingConfigured?: boolean;
+  /** Missing Lemon env var names (never values). */
+  billingMissingEnv?: string[];
   lemonSubscriptionId?: string | null;
   features: { key: string; unlocked: boolean }[];
   marketingFeatures: { key: string; unlocked: boolean }[];

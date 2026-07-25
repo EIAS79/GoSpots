@@ -10,6 +10,7 @@ import {
 import { TRIAL_STAFF_SEAT_LIMIT } from "@/lib/plan";
 import {
   featuresMonthlyTotal,
+  marketAdjustedCatalogEur,
   serializeAddOns,
   VENUE_ADD_ONS,
   type AddOnId,
@@ -62,7 +63,7 @@ export function VenuePackPanel({
   data: SubscriptionResponse;
   onUpdated: (next: SubscriptionResponse) => void;
 }) {
-  const { formatFromEur, t } = useVenueSettings();
+  const { formatFromEur, t, currency } = useVenueSettings();
   const trialActive = data.trialActive;
   const paidActive =
     data.subscription?.status === "ACTIVE" && !data.trialActive;
@@ -119,8 +120,12 @@ export function VenuePackPanel({
     ? Math.min(maxSeats, Math.max(trialActive ? 1 : 0, seatQty))
     : 0;
   const total = useMemo(
-    () => featuresMonthlyTotal(features, effectiveSeats),
-    [features, effectiveSeats],
+    () =>
+      marketAdjustedCatalogEur(
+        featuresMonthlyTotal(features, effectiveSeats),
+        currency,
+      ),
+    [features, effectiveSeats, currency],
   );
 
   const dirty =
@@ -349,7 +354,12 @@ export function VenuePackPanel({
                         ) : null}
                       </span>
                       <span className="text-sm text-emerald-300">
-                        {formatFromEur(feature.monthlyPrice)}
+                        {formatFromEur(
+                          marketAdjustedCatalogEur(
+                            feature.monthlyPrice,
+                            currency,
+                          ),
+                        )}
                         <span className="text-xs text-zinc-500">
                           {VENUE_ADD_ONS[id]?.pricedPerSeat ||
                           feature.pricedPerSeat
@@ -378,12 +388,18 @@ export function VenuePackPanel({
                 ? t("subscription.seatsHintTrial", {
                     max: trialSeatMax,
                     price: formatFromEur(
-                      VENUE_ADD_ONS.team_accounts.monthlyPrice,
+                      marketAdjustedCatalogEur(
+                        VENUE_ADD_ONS.team_accounts.monthlyPrice,
+                        currency,
+                      ),
                     ),
                   })
                 : t("subscription.seatsHintPaid", {
                     price: formatFromEur(
-                      VENUE_ADD_ONS.team_accounts.monthlyPrice,
+                      marketAdjustedCatalogEur(
+                        VENUE_ADD_ONS.team_accounts.monthlyPrice,
+                        currency,
+                      ),
                     ),
                   })}
             </p>
@@ -430,8 +446,11 @@ export function VenuePackPanel({
                 <span className="text-sm text-emerald-300">
                   ={" "}
                   {formatFromEur(
-                    VENUE_ADD_ONS.team_accounts.monthlyPrice *
-                      Math.max(1, seatQty),
+                    marketAdjustedCatalogEur(
+                      VENUE_ADD_ONS.team_accounts.monthlyPrice *
+                        Math.max(1, seatQty),
+                      currency,
+                    ),
                   )}
                   {t("subscription.perMo")}
                 </span>

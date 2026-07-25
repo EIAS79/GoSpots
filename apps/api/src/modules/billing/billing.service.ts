@@ -12,6 +12,7 @@ import { ConfigService } from '@nestjs/config';
 import { createHash, createHmac, timingSafeEqual } from 'crypto';
 import { Prisma, SubscriptionStatus } from '@prisma/client';
 import {
+  marketAdjustedCatalogEur,
   monthlyTotal,
   resolveAddOnsCsv,
   resolvePackId,
@@ -142,8 +143,11 @@ export class BillingService implements OnModuleInit {
         .pendingStaffSeatQuantity ??
       (shop.subscription as { staffSeatQuantity?: number }).staffSeatQuantity ??
       0;
-    const eurTotal = monthlyTotal(packId, addOns, seats);
     const currency = (shop.currency || 'EUR').toUpperCase();
+    const eurTotal = marketAdjustedCatalogEur(
+      monthlyTotal(packId, addOns, seats),
+      currency,
+    );
     const { rate, ratesAt } = await this.rates.getRate('EUR', currency, {
       forceRefresh: true,
     });

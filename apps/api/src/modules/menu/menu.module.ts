@@ -7,5 +7,6 @@ import { MenuService } from './menu.service';
   imports: [NotificationsModule],
   controllers: [MenuController],
   providers: [MenuService],
+  exports: [MenuService],
 })
 export class MenuModule {}
