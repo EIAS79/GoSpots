@@ -8,7 +8,7 @@ import {
 import { Menu, X } from "lucide-react";
 import Link from "next/link";
 import { useState } from "react";
-import { LocoraLogo } from "@/components/brand/locora-logo";
+import { GoSpotsBrandLockup } from "@/components/brand/gospots-brand-lockup";
 import { LocaleCurrencySwitcher } from "@/components/public/locale-currency-switcher";
 import { ThemeToggle } from "@/components/theme/theme-toggle";
 import { cn } from "@/lib/cn";
@@ -26,6 +26,8 @@ export function Navbar() {
     setScrolled(y > 18);
   });
 
+  const logoTone = scrolled ? "auto" : "onDark";
+
   return (
     <motion.header
       className={cn(
@@ -36,17 +38,17 @@ export function Navbar() {
       )}
     >
       <div className="mx-auto flex max-w-7xl items-center justify-between gap-3 px-4 py-3 sm:px-6 sm:py-3.5 md:px-8">
-        <LocoraLogo
+        <GoSpotsBrandLockup
           href="/"
           size="md"
           showTagline
-          tone={scrolled ? "auto" : "onDark"}
+          tone={logoTone}
           className="hidden shrink-0 lg:inline-flex"
         />
-        <LocoraLogo
+        <GoSpotsBrandLockup
           href="/"
           size="sm"
-          tone={scrolled ? "auto" : "onDark"}
+          tone={logoTone}
           className="shrink-0 lg:hidden"
         />
 

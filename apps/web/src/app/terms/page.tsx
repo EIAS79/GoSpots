@@ -187,10 +187,10 @@ export default function TermsPage() {
             <p>
               Questions about these Terms:{" "}
               <a
-                href="mailto:hello@gospots.eu"
+                href="mailto:support@gospots.eu"
                 className="text-emerald-400 hover:text-emerald-300"
               >
-                hello@gospots.eu
+                support@gospots.eu
               </a>
               . See also our{" "}
               <Link

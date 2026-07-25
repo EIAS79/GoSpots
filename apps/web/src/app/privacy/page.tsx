@@ -143,10 +143,10 @@ export default function PrivacyPage() {
               marketing emails. Venue owners control what appears on their public
               listing. For privacy requests, contact{" "}
               <a
-                href="mailto:hello@gospots.eu"
+                href="mailto:support@gospots.eu"
                 className="text-emerald-400 hover:text-emerald-300"
               >
-                hello@gospots.eu
+                support@gospots.eu
               </a>
               .
             </p>
@@ -175,10 +175,10 @@ export default function PrivacyPage() {
             <p>
               Questions about privacy:{" "}
               <a
-                href="mailto:hello@gospots.eu"
+                href="mailto:support@gospots.eu"
                 className="text-emerald-400 hover:text-emerald-300"
               >
-                hello@gospots.eu
+                support@gospots.eu
               </a>
               .
             </p>

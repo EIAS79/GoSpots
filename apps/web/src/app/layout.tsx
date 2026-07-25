@@ -1,6 +1,5 @@
 import type { Metadata } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
-import Script from "next/script";
 import { AppProviders } from "@/components/layout/app-providers";
 import { OfflineBanner } from "@/components/layout/offline-banner";
 import { BRAND_NAME, BRAND_TAGLINE } from "@/lib/brand";
@@ -80,12 +79,10 @@ export default function RootLayout({
     <html
       lang="en"
       suppressHydrationWarning
-      className={`${geistSans.variable} ${geistMono.variable} relative h-full antialiased`}
+      className={`${geistSans.variable} ${geistMono.variable} relative h-full antialiased dark`}
+      data-theme="dark"
     >
       <body className="relative min-h-full bg-[var(--color-background)] font-sans text-[var(--color-foreground)] transition-colors duration-300">
-        <Script id="gospots-theme-init" strategy="beforeInteractive">
-          {`(function(){try{var t=localStorage.getItem('gospots-theme')||localStorage.getItem('locora-theme');var r=document.documentElement;if(t==='light'){r.classList.remove('dark');r.dataset.theme='light';}else{r.classList.add('dark');r.dataset.theme='dark';}}catch(e){document.documentElement.classList.add('dark');document.documentElement.dataset.theme='dark';}})();`}
-        </Script>
         <AppProviders>
           <OfflineBanner />
           {children}

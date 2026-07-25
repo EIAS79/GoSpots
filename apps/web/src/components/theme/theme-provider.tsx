@@ -5,6 +5,7 @@ import {
   useCallback,
   useContext,
   useEffect,
+  useLayoutEffect,
   useMemo,
   useState,
   type ReactNode,
@@ -32,7 +33,7 @@ function readStoredTheme(): Theme {
   try {
     const v =
       window.localStorage.getItem(STORAGE_KEY) ||
-      window.localStorage.getItem("gospots-theme");
+      window.localStorage.getItem("locora-theme");
     if (v === "light" || v === "dark") return v;
   } catch {
     /* ignore */
@@ -63,10 +64,13 @@ export function ThemeProvider({ children }: { children: ReactNode }) {
   const [theme, setThemeState] = useState<Theme>("dark");
   const [ready, setReady] = useState(false);
 
-  useEffect(() => {
-    setThemeState(readStoredTheme());
+  // Apply stored theme before paint — no <script> in layout (React 19 warns).
+  useLayoutEffect(() => {
+    const stored = readStoredTheme();
+    setThemeState(stored);
+    applyDom(isAppShellPath(pathname) ? "dark" : stored);
     setReady(true);
-  }, []);
+  }, [pathname]);
 
   // Dashboard / auth always render dark so the public home theme toggle
   // cannot wash out the tenant sidebar (shared html.dark + translucent panels).

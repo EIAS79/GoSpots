@@ -1,8 +1,10 @@
 "use client";
 
 import { motion, useReducedMotion } from "framer-motion";
-import type { ReactNode } from "react";
+import { useRef, type ReactNode } from "react";
 import { cn } from "@/lib/cn";
+import { useMotionCapability } from "@/lib/motion-capability";
+import { useActiveWhenVisible } from "@/lib/use-active-when-visible";
 
 type MarqueeProps = {
   children: ReactNode;
@@ -12,6 +14,10 @@ type MarqueeProps = {
   fade?: boolean;
 };
 
+/**
+ * Horizontal marquee — one transform loop, paused when offscreen / reduced /
+ * compact (static wrap row instead).
+ */
 export function Marquee({
   children,
   duration = 30,
@@ -19,10 +25,34 @@ export function Marquee({
   className,
   fade = true,
 }: MarqueeProps) {
-  const reduceMotion = useReducedMotion();
+  const reduceMotion = useReducedMotion() ?? false;
+  const cap = useMotionCapability();
+  const ref = useRef<HTMLDivElement>(null);
+  const active = useActiveWhenVisible(ref);
+
+  const animate =
+    !reduceMotion &&
+    cap !== "reduced" &&
+    cap !== "compact" &&
+    active;
+
+  if (cap === "compact" || reduceMotion) {
+    return (
+      <div
+        ref={ref}
+        className={cn(
+          "relative flex w-full gap-3 overflow-x-auto pb-1 [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden",
+          className,
+        )}
+      >
+        {children}
+      </div>
+    );
+  }
 
   return (
     <div
+      ref={ref}
       className={cn(
         "relative flex w-full overflow-hidden",
         fade &&
@@ -31,16 +61,16 @@ export function Marquee({
       )}
     >
       <motion.div
-        className="flex shrink-0 gap-8 pr-8"
+        className="flex shrink-0 gap-8 pr-8 will-change-transform"
         animate={
-          reduceMotion
-            ? undefined
-            : { x: reverse ? ["-50%", "0%"] : ["0%", "-50%"] }
+          animate
+            ? { x: reverse ? ["-50%", "0%"] : ["0%", "-50%"] }
+            : { x: "0%" }
         }
         transition={
-          reduceMotion
-            ? undefined
-            : { duration, ease: "linear", repeat: Infinity }
+          animate
+            ? { duration, ease: "linear", repeat: Infinity }
+            : undefined
         }
       >
         {children}

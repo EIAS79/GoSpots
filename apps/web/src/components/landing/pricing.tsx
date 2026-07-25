@@ -232,14 +232,14 @@ export function Pricing() {
                           className={cn(
                             "relative flex min-w-[8.5rem] flex-1 flex-col items-start gap-2.5 rounded-2xl px-3.5 py-3.5 text-left transition sm:min-w-0",
                             active
-                              ? "bg-zinc-950 text-white shadow-[0_16px_40px_-24px_rgba(16,185,129,0.55)] ring-1 ring-emerald-400/50 dark:bg-zinc-900"
+                              ? "bg-white text-zinc-950 shadow-[0_16px_40px_-24px_rgba(16,185,129,0.45)] ring-1 ring-emerald-500/45 dark:bg-zinc-900 dark:text-white dark:shadow-[0_16px_40px_-24px_rgba(16,185,129,0.55)] dark:ring-emerald-400/50"
                               : "bg-zinc-100/90 text-zinc-700 ring-1 ring-transparent hover:bg-zinc-200/80 dark:bg-white/[0.035] dark:text-zinc-300 dark:hover:bg-white/[0.06]",
                           )}
                         >
                           {active ? (
                             <motion.span
                               layoutId="pack-active-bar"
-                              className="absolute inset-x-3 top-0 h-0.5 rounded-full bg-emerald-400"
+                              className="absolute inset-x-3 top-0 h-0.5 rounded-full bg-emerald-500 dark:bg-emerald-400"
                               transition={{
                                 type: "spring",
                                 stiffness: 380,
@@ -251,7 +251,7 @@ export function Pricing() {
                             className={cn(
                               "grid h-9 w-9 place-items-center rounded-xl",
                               active
-                                ? "bg-emerald-400/15 text-emerald-300"
+                                ? "bg-emerald-500/15 text-emerald-700 dark:bg-emerald-400/15 dark:text-emerald-300"
                                 : "bg-black/[0.04] text-zinc-500 dark:bg-white/[0.06]",
                             )}
                           >
@@ -263,13 +263,15 @@ export function Pricing() {
                           <span
                             className={cn(
                               "font-mono text-[10px] tracking-wide",
-                              active ? "text-zinc-400" : "text-zinc-500",
+                              active
+                                ? "text-zinc-500 dark:text-zinc-400"
+                                : "text-zinc-500",
                             )}
                           >
                             {freePrice}
                           </span>
                           {active ? (
-                            <span className="absolute right-2.5 top-2.5 grid h-5 w-5 place-items-center rounded-full bg-emerald-400 text-zinc-950">
+                            <span className="absolute right-2.5 top-2.5 grid h-5 w-5 place-items-center rounded-full bg-emerald-500 text-white dark:bg-emerald-400 dark:text-zinc-950">
                               <Check size={11} strokeWidth={3} />
                             </span>
                           ) : null}
@@ -325,14 +327,14 @@ export function Pricing() {
             </div>
 
             <Reveal delay={0.1} className="lg:sticky lg:top-24">
-              <div className="relative overflow-hidden rounded-[1.6rem] border border-white/10 bg-zinc-950 text-white shadow-[0_30px_80px_-40px_rgba(0,0,0,0.8)]">
+              <div className="relative overflow-hidden rounded-[1.6rem] border border-emerald-500/20 bg-white text-zinc-950 shadow-[0_30px_80px_-40px_rgba(16,185,129,0.35)] dark:border-white/10 dark:bg-zinc-950 dark:text-white dark:shadow-[0_30px_80px_-40px_rgba(0,0,0,0.8)]">
                 <div
-                  className="pointer-events-none absolute inset-x-0 top-0 h-32 bg-[radial-gradient(ellipse_at_top,_rgba(52,211,153,0.22),transparent_70%)]"
+                  className="pointer-events-none absolute inset-x-0 top-0 h-32 bg-[radial-gradient(ellipse_at_top,_rgba(16,185,129,0.14),transparent_70%)] dark:bg-[radial-gradient(ellipse_at_top,_rgba(52,211,153,0.22),transparent_70%)]"
                   aria-hidden
                 />
 
-                <div className="relative border-b border-white/10 px-6 py-5">
-                  <p className="text-[11px] font-semibold uppercase tracking-[0.2em] text-emerald-300/90">
+                <div className="relative border-b border-zinc-200/80 px-6 py-5 dark:border-white/10">
+                  <p className="text-[11px] font-semibold uppercase tracking-[0.2em] text-emerald-700 dark:text-emerald-300/90">
                     {t("pricing.estimate")}
                   </p>
                   <div className="mt-3 flex flex-wrap items-end gap-x-2 gap-y-1">
@@ -343,11 +345,11 @@ export function Pricing() {
                         format={formatDisplay}
                       />
                     </span>
-                    <span className="mb-1.5 text-sm text-zinc-400">
+                    <span className="mb-1.5 text-sm text-zinc-500 dark:text-zinc-400">
                       {t("pricing.afterTrial")}
                     </span>
                   </div>
-                  <p className="mt-2 text-sm text-zinc-400">
+                  <p className="mt-2 text-sm text-zinc-600 dark:text-zinc-400">
                     {t("pricing.summary", {
                       pack: t(`pack.${pack.id}.name`),
                       price: freePrice,
@@ -363,11 +365,11 @@ export function Pricing() {
 
                 <ul className="relative max-h-56 space-y-0 overflow-y-auto px-3 py-2">
                   <li className="flex items-center justify-between gap-3 rounded-xl px-3 py-2.5 text-sm">
-                    <span className="flex min-w-0 items-center gap-2.5 text-zinc-300">
+                    <span className="flex min-w-0 items-center gap-2.5 text-zinc-700 dark:text-zinc-300">
                       {(() => {
                         const PackIcon = PACK_ICONS[packId];
                         return (
-                          <span className="grid h-7 w-7 shrink-0 place-items-center rounded-lg bg-white/5 text-emerald-300">
+                          <span className="grid h-7 w-7 shrink-0 place-items-center rounded-lg bg-emerald-500/10 text-emerald-700 dark:bg-white/5 dark:text-emerald-300">
                             <PackIcon size={14} />
                           </span>
                         );
@@ -393,12 +395,12 @@ export function Pricing() {
                       return (
                         <li
                           key={f.id}
-                          className="flex items-center justify-between gap-3 rounded-xl px-3 py-2.5 text-sm transition hover:bg-white/[0.03]"
+                          className="flex items-center justify-between gap-3 rounded-xl px-3 py-2.5 text-sm transition hover:bg-zinc-100/80 dark:hover:bg-white/[0.03]"
                         >
-                          <span className="flex min-w-0 items-center gap-2.5 text-zinc-300">
+                          <span className="flex min-w-0 items-center gap-2.5 text-zinc-700 dark:text-zinc-300">
                             <span
                               className={cn(
-                                "grid h-7 w-7 shrink-0 place-items-center rounded-lg bg-white/5",
+                                "grid h-7 w-7 shrink-0 place-items-center rounded-lg bg-zinc-100 dark:bg-white/5",
                                 FEATURE_ICON_TONE[id],
                               )}
                             >
@@ -413,7 +415,7 @@ export function Pricing() {
                               </span>
                             ) : null}
                           </span>
-                          <span className="shrink-0 font-mono text-xs text-zinc-400">
+                          <span className="shrink-0 font-mono text-xs text-zinc-500 dark:text-zinc-400">
                             {line}
                           </span>
                         </li>
@@ -422,14 +424,14 @@ export function Pricing() {
                   )}
                 </ul>
 
-                <div className="relative border-t border-white/10 px-6 py-5">
-                  <p className="mb-4 rounded-xl bg-emerald-400/10 px-3 py-2 text-center text-[11px] font-medium text-emerald-200/90">
+                <div className="relative border-t border-zinc-200/80 px-6 py-5 dark:border-white/10">
+                  <p className="mb-4 rounded-xl bg-emerald-500/10 px-3 py-2 text-center text-[11px] font-medium text-emerald-800 dark:bg-emerald-400/10 dark:text-emerald-200/90">
                     {t("pricing.trialBanner", { days: TRIAL_DURATION_DAYS })}
                   </p>
                   <Magnetic className="flex w-full">
                     <Link
                       href="/register"
-                      className="group relative flex w-full items-center justify-center gap-2 overflow-hidden rounded-full bg-emerald-400 px-6 py-3.5 text-sm font-semibold text-zinc-950 transition hover:bg-emerald-300"
+                      className="group relative flex w-full items-center justify-center gap-2 overflow-hidden rounded-full bg-emerald-500 px-6 py-3.5 text-sm font-semibold text-white transition hover:bg-emerald-400 dark:bg-emerald-400 dark:text-zinc-950 dark:hover:bg-emerald-300"
                     >
                       <span className="relative z-10">
                         {t("pricing.startTrial", { days: TRIAL_DURATION_DAYS })}

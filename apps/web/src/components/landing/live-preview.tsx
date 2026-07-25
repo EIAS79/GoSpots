@@ -13,11 +13,12 @@ import {
   Timer,
   Users,
 } from "lucide-react";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { cn } from "@/lib/cn";
 import { liveTables, type LiveTable } from "@/lib/mock-data";
+import { useMotionCapability } from "@/lib/motion-capability";
 import { usePublicPrefs } from "@/lib/public-prefs-context";
-import { useCompactViewport } from "@/lib/use-compact-viewport";
+import { useActiveWhenVisible } from "@/lib/use-active-when-visible";
 
 function useTickerPool() {
   const { formatMoney } = usePublicPrefs();
@@ -84,24 +85,27 @@ function fmtTime(min: number) {
 
 export function LivePreview() {
   const { formatMoney } = usePublicPrefs();
-  const compact = useCompactViewport();
+  const cap = useMotionCapability();
+  const compact = cap === "compact" || cap === "reduced";
+  const rootRef = useRef<HTMLDivElement>(null);
+  const liveActive = useActiveWhenVisible(rootRef);
   const tickerPool = useTickerPool();
   const [tick, setTick] = useState(0);
   const [tickerIdx, setTickerIdx] = useState(0);
-  // Phones: static demo snapshot — no 1s / ticker intervals.
+  // Static on phones / reduced; pause intervals when offscreen.
   useEffect(() => {
-    if (compact) return;
+    if (compact || !liveActive) return;
     const id = setInterval(() => setTick((t) => t + 1), 1000);
     return () => clearInterval(id);
-  }, [compact]);
+  }, [compact, liveActive]);
   useEffect(() => {
-    if (compact) return;
+    if (compact || !liveActive) return;
     const id = setInterval(
       () => setTickerIdx((i) => (i + 1) % tickerPool.length),
       3200,
     );
     return () => clearInterval(id);
-  }, [compact, tickerPool.length]);
+  }, [compact, liveActive, tickerPool.length]);
   const ticker = tickerPool[tickerIdx];
 
   const tables = liveTables.map((t) => {
@@ -113,13 +117,13 @@ export function LivePreview() {
     return t;
   });
 
-  const active = tables.filter((t) => t.status === "busy");
+  const busyTables = tables.filter((t) => t.status === "busy");
   const total = tables.length;
-  const occupancy = Math.round((active.length / total) * 100);
-  const revenue = active.reduce((sum, t) => sum + (t.amount ?? 0), 0);
+  const occupancy = Math.round((busyTables.length / total) * 100);
+  const revenue = busyTables.reduce((sum, t) => sum + (t.amount ?? 0), 0);
 
   return (
-    <div className="relative w-full">
+    <div ref={rootRef} className="relative w-full">
       <p className="mb-3 text-center text-[11px] font-medium uppercase tracking-wider text-zinc-500">
         Illustrative operations UI · demo numbers
       </p>
@@ -175,7 +179,7 @@ export function LivePreview() {
         <div className="grid grid-cols-1 gap-3 border-b border-[var(--color-border)] px-4 py-4 text-sm sm:grid-cols-3 sm:px-5 dark:border-white/5">
           <Stat
             label="Active sessions"
-            value={`${active.length} / ${total}`}
+            value={`${busyTables.length} / ${total}`}
             tone="emerald"
           />
           <Stat label="Occupancy" value={`${occupancy}%`} tone="cyan" />

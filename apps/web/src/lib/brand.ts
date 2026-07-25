@@ -10,7 +10,7 @@ export const BRAND_SUPPORTING =
 export const BRAND_LOGO_SRC = "/brand/gospots-logo.png";
 /** Horizontal lockup — white wordmark (dark chrome / hero) */
 export const BRAND_LOGO_LIGHT_SRC = "/brand/gospots-logo-light.png";
-/** Gold pin only — same mark that sits inside the logo lockup (not a second logo) */
+/** Gold pin only — DO NOT use in nav/footer (file is a broken crop). Prefer full lockup. */
 export const BRAND_MARK_SRC = "/brand/gospots-mark.png";
 /** Square app icon — browser tab / apple / PWA */
 export const BRAND_ICON_SRC = "/brand/gospots-icon.png";
@@ -20,9 +20,9 @@ export const BRAND_OG_SRC = "/brand/gospots-og.png";
  * Drop assets under `apps/web/public/brand/`:
  * - `gospots-logo.png` — horizontal icon + GoSpots wordmark (dark text)
  * - `gospots-logo-light.png` — same lockup with light wordmark
- * - `gospots-mark.png` — gold pin alone (extracted from the lockup)
  * - `gospots-icon.png` — square tab / app icon
  * - `gospots-og.png` — optional OG share image
+ * Avoid `gospots-mark.png` in UI chrome — bad crop with letter scraps.
  * Also copy the square icon to `apps/web/src/app/icon.png` + `favicon.ico`
  *
  * Regenerate from exports: `python apps/web/scripts/process-brand-assets.py`

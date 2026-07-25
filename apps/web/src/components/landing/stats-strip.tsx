@@ -1,11 +1,12 @@
 "use client";
 
-import { motion } from "framer-motion";
 import { CountUp } from "@/components/effects/count-up";
+import {
+  SectionReveal,
+  SectionRevealItem,
+} from "@/components/effects/section-reveal";
 import { usePublicPrefs } from "@/lib/public-prefs-context";
 import { TRIAL_DURATION_DAYS, VENUE_ADD_ON_LIST } from "@/lib/venue-packs";
-
-const EASE = [0.22, 1, 0.36, 1] as const;
 
 /** Quick trust numbers — owner view only. */
 export function StatsStrip() {
@@ -38,14 +39,13 @@ export function StatsStrip() {
   return (
     <section className="relative py-14 sm:py-16">
       <div className="mx-auto max-w-7xl px-4 sm:px-6 md:px-8">
-        <div className="grid grid-cols-2 gap-4 lg:grid-cols-4">
-          {stats.map((s, i) => (
-            <motion.div
+        <SectionReveal
+          stagger
+          className="grid grid-cols-2 gap-4 lg:grid-cols-4"
+        >
+          {stats.map((s) => (
+            <SectionRevealItem
               key={s.label}
-              initial={{ opacity: 0, y: 14 }}
-              whileInView={{ opacity: 1, y: 0 }}
-              viewport={{ once: true, margin: "-40px" }}
-              transition={{ duration: 0.45, delay: i * 0.07, ease: EASE }}
               className="relative overflow-hidden rounded-2xl border border-[var(--color-border)] bg-[var(--color-surface)]/60 p-5 text-center dark:border-white/[0.07] dark:bg-white/[0.02] sm:p-6"
             >
               <div
@@ -63,9 +63,9 @@ export function StatsStrip() {
                 {s.label}
               </p>
               <p className="mt-1 text-[11px] text-zinc-500">{s.hint}</p>
-            </motion.div>
+            </SectionRevealItem>
           ))}
-        </div>
+        </SectionReveal>
       </div>
     </section>
   );

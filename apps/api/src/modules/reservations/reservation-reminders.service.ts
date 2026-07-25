@@ -29,6 +29,7 @@ export const AUTO_NO_SHOW_FROM_STATUSES = [
 @Injectable()
 export class ReservationRemindersService {
   private readonly logger = new Logger(ReservationRemindersService.name);
+  private schemaOutOfDateLogged = false;
 
   constructor(
     private readonly prisma: PrismaService,
@@ -59,9 +60,12 @@ export class ReservationRemindersService {
       // Schema/transient DB errors — avoid flooding the console every minute.
       const message = err instanceof Error ? err.message : String(err);
       if (message.includes('does not exist')) {
-        this.logger.warn(
-          `Reservation reminders skipped (DB schema out of date): ${message.split('\n')[0]}`,
-        );
+        if (!this.schemaOutOfDateLogged) {
+          this.schemaOutOfDateLogged = true;
+          this.logger.warn(
+            `Reservation reminders skipped (DB schema out of date — run prisma migrate). Further skips are silent. ${message.split('\n')[0]}`,
+          );
+        }
         return;
       }
       this.logger.warn(`Reservation reminder tick failed: ${message.split('\n')[0]}`);

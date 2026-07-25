@@ -606,7 +606,7 @@ const en: Dict = {
   "cta.play.secondary": "I run a venue — list it free",
 
   "footer.blurb":
-    "gaming centers, restaurants, and venues — host dashboard, public site, bookings, and reviews.",
+    "Dashboard and discovery for gaming centers, restaurants, and venues — public site, bookings, and reviews.",
   "footer.product": "Product",
   "footer.explore": "Explore",
   "footer.forVenues": "For venues",

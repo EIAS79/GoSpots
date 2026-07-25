@@ -151,7 +151,7 @@ export function WhoItsFor() {
           <p className="max-w-md text-center text-xs text-zinc-500">
             {t("who.noteLead")}{" "}
             <a
-              href="mailto:hello@gospots.eu"
+              href="mailto:support@gospots.eu"
               className="text-emerald-700 underline-offset-2 hover:underline dark:text-emerald-400"
             >
               {t("who.talkToUs")}

@@ -15,6 +15,7 @@ import { MAIL_OUTBOX_SENT_RETENTION_DAYS_DEFAULT } from './mail-outbox.types';
 @Injectable()
 export class MailOutboxRetentionProcessor {
   private readonly logger = new Logger(MailOutboxRetentionProcessor.name);
+  private schemaOutOfDateLogged = false;
 
   constructor(
     private readonly prisma: PrismaService,
@@ -70,9 +71,12 @@ export class MailOutboxRetentionProcessor {
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err);
       if (message.includes('does not exist')) {
-        this.logger.warn(
-          `Mail outbox SENT retention skipped (DB schema out of date): ${message.split('\n')[0]}`,
-        );
+        if (!this.schemaOutOfDateLogged) {
+          this.schemaOutOfDateLogged = true;
+          this.logger.warn(
+            `Mail outbox SENT retention skipped (DB schema out of date — run prisma migrate). Further skips are silent. ${message.split('\n')[0]}`,
+          );
+        }
         return;
       }
       this.logger.warn(
