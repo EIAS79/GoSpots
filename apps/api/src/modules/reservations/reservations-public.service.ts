@@ -32,7 +32,7 @@ import {
   holdEndsAt,
   isDiningResourceType,
   parseNoShowMinutes,
-  usesSessionLifecycle,
+  usesHoldArrivalWindow,
 } from '../../common/dining-reservation.util';
 import { FEATURED_GAME_TYPES } from '../../common/booking-unit-kind';
 import {
@@ -263,7 +263,7 @@ export class ReservationsPublicService {
       );
     }
 
-    if (usesSessionLifecycle(resource.type)) {
+    if (usesHoldArrivalWindow(resource.type)) {
       const noShowMinutes = parseNoShowMinutes(resource.category?.offeringConfig);
       endsAt = holdEndsAt(startsAt, noShowMinutes);
     } else {
@@ -273,13 +273,19 @@ export class ReservationsPublicService {
           'A single booking cannot span more than 24 hours.',
         );
       }
+      const minSpanMs = 15 * 60_000;
+      if (endsAt.getTime() - startsAt.getTime() < minSpanMs) {
+        throw new BadRequestException(
+          'Book at least 15 minutes of play time.',
+        );
+      }
     }
 
     await assertWithinOpeningHours(
       this.prisma,
       shop.id,
       startsAt,
-      usesSessionLifecycle(resource.type) ? startsAt : endsAt,
+      usesHoldArrivalWindow(resource.type) ? startsAt : endsAt,
     );
 
     const issued = issueGuestToken({

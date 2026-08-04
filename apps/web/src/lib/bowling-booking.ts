@@ -184,7 +184,9 @@ export function estimateBowlingPrice(
   return null;
 }
 
-/** Estimate price from timed rate tiers (PC, billiard, lane rental, etc.). */
+/** Estimate price from timed rate tiers (PC, billiard, lane rental, etc.).
+ * Pro-rates setup rates by duration (60 min @ 30 → 30 min = 15).
+ */
 export function estimateTimedRatesPrice(
   rates: { label: string; durationMinutes: number | null; price: import("./money").MoneyWire }[],
   durationMinutes: number,
@@ -196,11 +198,11 @@ export function estimateTimedRatesPrice(
   if (blockRates.length === 0) return null;
   let best: number | null = null;
   for (const rate of blockRates) {
-    const blocks = Math.ceil(durationMinutes / rate.durationMinutes!);
-    const amount = blocks * coerceMoney(rate.price);
+    const amount =
+      coerceMoney(rate.price) * (durationMinutes / rate.durationMinutes!);
     if (best === null || amount < best) best = amount;
   }
-  return best;
+  return best == null ? null : Math.round(best * 100) / 100;
 }
 
 /** Suggested walk-in charge from a configured bowling mode. */

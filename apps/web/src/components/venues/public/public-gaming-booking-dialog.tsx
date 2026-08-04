@@ -5,7 +5,7 @@ import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
 import { ModalPortal } from "@/components/ui/modal-portal";
 import { FeedbackBanner } from "@/components/ui/feedback-banner";
-import { splitDateAndTime } from "@/lib/booking-time";
+import { splitDateAndTime, addMinutesToTime } from "@/lib/booking-time";
 import {
   holdEndFromLocal,
   parseNoShowMinutes,
@@ -46,6 +46,17 @@ import {
   venueDayKey,
 } from "@/lib/venue-timezone";
 import type { ScheduleCategory, ScheduleUnit } from "@/lib/reservations-client";
+
+function minutesBetweenLocal(
+  date: string,
+  startTime: string,
+  endTime: string,
+): number {
+  const start = new Date(`${date}T${startTime}`);
+  const end = new Date(`${date}T${endTime}`);
+  if (Number.isNaN(start.getTime()) || Number.isNaN(end.getTime())) return 0;
+  return Math.max(0, Math.round((end.getTime() - start.getTime()) / 60_000));
+}
 
 /** Modes A/B/C — fail-closed on public booking writes (bible #32). Mode F keeps submit. */
 function isConnectivityOutage(mode: ConnectivityMode): boolean {
@@ -194,6 +205,11 @@ export function PublicGamingBookingDialog({
   const [startTime, setStartTime] = useState(
     () => initialStartTime ?? defaultStartTime(),
   );
+  const [endTime, setEndTime] = useState(() => {
+    if (initialEndTime) return initialEndTime;
+    const start = initialStartTime ?? defaultStartTime();
+    return addMinutesToTime(start, slotMinutes);
+  });
   const [gameCount, setGameCount] = useState(
     String(bowlingConfig.defaultGames),
   );
@@ -252,30 +268,36 @@ export function PublicGamingBookingDialog({
     () => combineLocalDateTime(date, startTime),
     [date, startTime],
   );
-  const endsAt = useMemo(
-    () => holdEndFromLocal(date, startTime, noShowMinutes),
-    [date, startTime, noShowMinutes],
-  );
+  const endsAt = useMemo(() => {
+    if (isDining) {
+      return holdEndFromLocal(date, startTime, noShowMinutes);
+    }
+    return combineLocalDateTime(date, endTime);
+  }, [isDining, date, startTime, endTime, noShowMinutes]);
 
   const estimatedDurationMinutes = useMemo(() => {
-    if (isBowling && selectedBowlingMode) {
-      if (chargeMode === "GAME") {
-        const games = parseInt(gameCount, 10) || bowlingConfig.defaultGames;
-        return games * (selectedBowlingMode.minutesPerGame ?? effectiveSlotMinutes);
-      }
-      return selectedBowlingMode.slotMinutes;
+    if (isDining) return effectiveSlotMinutes;
+    if (isBowling && selectedBowlingMode && chargeMode === "GAME") {
+      const games = parseInt(gameCount, 10) || bowlingConfig.defaultGames;
+      return games * (selectedBowlingMode.minutesPerGame ?? effectiveSlotMinutes);
     }
-    return effectiveSlotMinutes;
+    const span = minutesBetweenLocal(date, startTime, endTime);
+    return span > 0 ? span : effectiveSlotMinutes;
   }, [
+    isDining,
     isBowling,
     selectedBowlingMode,
     chargeMode,
     gameCount,
     bowlingConfig.defaultGames,
     effectiveSlotMinutes,
+    date,
+    startTime,
+    endTime,
   ]);
 
   const estimatedPrice = useMemo(() => {
+    if (isDining) return null;
     if (isBowling && selectedBowlingMode) {
       const games = parseInt(gameCount, 10) || bowlingConfig.defaultGames;
       const players = parseInt(partySize, 10) || 1;
@@ -293,14 +315,18 @@ export function PublicGamingBookingDialog({
           bowlingConfig,
           estimatedDurationMinutes,
           selectedBowlingMode.slotMinutes,
-        )
+        ) ??
+        (legacyRates.length > 0
+          ? estimateTimedRatesPrice(legacyRates, estimatedDurationMinutes)
+          : null)
       );
     }
-    if (!isBowling && legacyRates.length > 0 && estimatedDurationMinutes > 0) {
+    if (legacyRates.length > 0 && estimatedDurationMinutes > 0) {
       return estimateTimedRatesPrice(legacyRates, estimatedDurationMinutes);
     }
     return null;
   }, [
+    isDining,
     isBowling,
     selectedBowlingMode,
     chargeMode,
@@ -310,6 +336,15 @@ export function PublicGamingBookingDialog({
     legacyRates,
     estimatedDurationMinutes,
   ]);
+
+  function applyStartTime(next: string) {
+    setStartTime(next);
+    if (!isDining) {
+      const span = minutesBetweenLocal(date, startTime, endTime);
+      const keep = span > 0 ? span : effectiveSlotMinutes;
+      setEndTime(addMinutesToTime(next, keep));
+    }
+  }
 
   const formatEstPrice = (amount: number) =>
     formatMoney(amount, currency ?? "EUR");
@@ -332,9 +367,16 @@ export function PublicGamingBookingDialog({
       return;
     }
 
-    const overlapEndTime = splitDateAndTime(
-      holdEndFromLocal(date, startTime, noShowMinutes),
-    ).time;
+    const overlapEndTime = isDining
+      ? splitDateAndTime(
+          holdEndFromLocal(date, startTime, noShowMinutes),
+        ).time
+      : endTime;
+
+    if (!isDining && minutesBetweenLocal(date, startTime, endTime) < 15) {
+      setError(t("venuePage.booking.endAfterStart"));
+      return;
+    }
 
     const overlap = hasWindowOverlapWithBookings(
       unit,
@@ -380,8 +422,9 @@ export function PublicGamingBookingDialog({
           )
         : notes.trim() || undefined;
 
-    const resolvedEndsAt =
-      endsAt ?? holdEndFromLocal(date, startTime, noShowMinutes);
+    const resolvedEndsAt = isDining
+      ? holdEndFromLocal(date, startTime, noShowMinutes)
+      : (endsAt ?? combineLocalDateTime(date, endTime));
     if (!resolvedEndsAt) {
       setError(t("venuePage.booking.invalidTime"));
       return;
@@ -543,6 +586,7 @@ export function PublicGamingBookingDialog({
                     })}
                     {" · "}
                     {startTime}
+                    {!isDining ? ` – ${endTime}` : ""}
                   </span>
                 </div>
                 {estimatedPrice != null ? (
@@ -684,16 +728,50 @@ export function PublicGamingBookingDialog({
                 <input
                   type="time"
                   value={startTime}
-                  onChange={(e) => setStartTime(e.target.value)}
+                  onChange={(e) => applyStartTime(e.target.value)}
                   className={fieldClass}
                 />
               </label>
-              <p className="text-[10px] text-zinc-600 dark:text-zinc-500">
-                {t("venuePage.booking.holdHint", {
-                  unitKind,
-                  minutes: noShowMinutes,
-                })}
-              </p>
+              {!isDining ? (
+                <>
+                  <label className={labelClass}>
+                    {t("venuePage.booking.endTime")}
+                    <input
+                      type="time"
+                      value={endTime}
+                      onChange={(e) => setEndTime(e.target.value)}
+                      className={fieldClass}
+                    />
+                  </label>
+                  <p className="text-[10px] text-zinc-600 dark:text-zinc-500">
+                    {t("venuePage.booking.playWindowHint", {
+                      minutes: estimatedDurationMinutes,
+                      unitKind,
+                      grace: noShowMinutes,
+                    })}
+                  </p>
+                </>
+              ) : (
+                <p className="text-[10px] text-zinc-600 dark:text-zinc-500">
+                  {t("venuePage.booking.holdHint", {
+                    unitKind,
+                    minutes: noShowMinutes,
+                  })}
+                </p>
+              )}
+
+              {!isDining && estimatedPrice != null ? (
+                <p className="rounded-lg border border-emerald-500/25 bg-emerald-500/10 px-3 py-2 text-sm font-medium text-emerald-800 dark:text-emerald-200">
+                  {t("venuePage.booking.estPrice", {
+                    price: formatEstPrice(estimatedPrice),
+                  })}
+                  <span className="mt-0.5 block text-[11px] font-normal text-emerald-800/80 dark:text-emerald-200/70">
+                    {t("venuePage.booking.priceFromSetup", {
+                      minutes: estimatedDurationMinutes,
+                    })}
+                  </span>
+                </p>
+              ) : null}
 
               <label className={labelClass}>
                 {t("venuePage.booking.notesOptional")}

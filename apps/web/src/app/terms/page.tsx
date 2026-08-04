@@ -98,12 +98,13 @@ export default function TermsPage() {
               5. Subscriptions &amp; payments
             </h2>
             <p>
-              Paid venue features and employee seats are billed through Lemon
-              Squeezy. Prices are shown in-product (for example, feature add-ons
-              and per-seat fees). Trials, renewals, and cancellations follow the
-              checkout and billing terms presented at purchase. Taxes may apply.
-              Failure to pay may result in suspension of paid modules while core
-              data is retained as described in our Privacy Policy.
+              Paid venue features and employee seats are billed through our
+              payment providers (Stripe, Mollie). Prices are shown in-product (for
+              example, feature add-ons and per-seat fees). Trials, renewals, and
+              cancellations follow the checkout and billing terms presented at
+              purchase. Taxes may apply. Failure to pay may result in suspension
+              of paid modules while core data is retained as described in our
+              Privacy Policy.
             </p>
           </section>
 

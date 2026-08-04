@@ -184,11 +184,69 @@ const en: DictTree = {
     featureDetails: "Feature details",
     billingTitle: "Billing",
     billingBody:
-      "Payments run through Lemon Squeezy (Merchant of Record) — multi-currency checkout, VAT/tax handled for you. Your pack + add-ons total {price}/mo.",
+      "Secure checkout through our payment providers — multi-currency support with tax handled at checkout. Your pack + add-ons total {price}/mo.",
+    billingDualBody:
+      "Choose Stripe or Mollie, then automatic or manual renewal. Your pack + add-ons total {price}/mo. You are redirected to the provider’s hosted checkout.",
+    billingProvidersNotPortable:
+      "Payment methods are not portable between Stripe and Mollie. Switching providers means setting up payment again.",
     billingManageHint:
-      "Manage payment method, invoices, or cancel in the Lemon Squeezy portal. Pack changes you save here apply at the next billing period.",
+      "Manage payment method, invoices, or cancel in the billing portal. Pack changes you save here apply at the next billing period.",
+    billingManageDualHint:
+      "Active on {provider} · {mode}. Update your payment method, pause, cancel, or switch providers below.",
+    billingProviderLabel: "Payment provider",
+    billingStatusTitle: "Subscription billing",
+    billingStatusLabel: "Status",
+    providerStripe: "Stripe",
+    providerMollie: "Mollie",
+    providerDefault: "default",
+    renewalModeLabel: "Renewal",
+    renewalAutomatic: "Automatic",
+    renewalManual: "Manual",
+    renewalAutomaticHint:
+      "Your card or mandate is charged each period. You can cancel anytime.",
+    renewalManualHint:
+      "Pay each month with Pay now when the period ends. Access pauses if payment is late.",
+    autoRenewConsent:
+      "I agree to automatic renewal charges for this subscription until I cancel.",
+    billingAutoRenewRequired:
+      "Confirm automatic renewal consent to continue.",
+    updatePaymentMethod: "Update payment method",
+    openStripePortal: "Stripe customer portal",
+    payNow: "Pay now",
+    pauseSubscription: "Pause",
+    resumeSubscription: "Resume",
+    cancelSubscription: "Cancel",
+    switchProvider: "Switch to {provider}",
+    cancelConfirmTitle: "Cancel subscription?",
+    cancelConfirmDesc:
+      "Billing stops at the end of the current period. You keep access until then.",
+    cancelConfirmAction: "Cancel at period end",
+    pauseConfirmTitle: "Pause subscription?",
+    pauseConfirmDesc:
+      "Access pauses with the provider. You can resume from this page later.",
+    pauseConfirmAction: "Pause",
+    switchConfirmTitle: "Switch to {provider}?",
+    switchConfirmDesc:
+      "Payment methods do not transfer between providers. You will complete a new checkout with the other provider.",
+    switchConfirmAction: "Switch provider",
+    confirmingPayment: "Confirming payment…",
+    paymentConfirmFailed:
+      "Payment was not confirmed. You can try checkout again.",
+    paymentConfirmTimeout:
+      "Still waiting on the payment provider. Refresh in a moment — status updates via webhook.",
+    graceTitle: "Payment past due — grace period",
+    graceBody:
+      "Update your payment method before {ends} to avoid losing access.",
+    periodStart: "Period start",
+    periodEnd: "Period end",
+    nextAmount: "Next amount",
+    paymentMethodLabel: "Payment method",
+    paymentMethodNone: "No payment method on file yet",
+    paymentMethodCard: "{brand} ···· {last4}",
+    paymentMethodBank: "{bank}",
+    paymentMethodOnFile: "Payment method on file",
     billingNotConfigured:
-      "Checkout is not ready on the API. On the Render API service, set LEMON_SQUEEZY_API_KEY, LEMON_SQUEEZY_STORE_ID, and LEMON_SQUEEZY_VARIANT_ID, then redeploy. (Webhook secret is separate.)",
+      "Checkout is not ready on the API. Configure billing provider credentials on the API service, then redeploy.",
     billingMissingKeys:
       "Missing on the API service: {keys}. Add them in Render → your API service → Environment, then Manual Deploy.",
     manageBilling: "Manage billing",
@@ -421,12 +479,12 @@ const en: DictTree = {
     eraseByEmailPlaceholder: "guest@example.com",
     eraseAccount: "Delete my account",
     eraseAccountHint:
-      "Soft-wipes your GoSpots account, unpublishes venues you own, and redacts guest PII there. Finance rows stay for accounting. Cancel Lemon billing in the provider portal (operator).",
+      "Soft-wipes your GoSpots account, unpublishes venues you own, and redacts guest PII there. Finance rows stay for accounting. Cancel billing in the payment provider portal (operator).",
     eraseAccountPhrase: "Type DELETE MY ACCOUNT",
     eraseAccountConfirm: "Delete account",
     eraseAccountConfirmTitle: "Delete your GoSpots account?",
     eraseAccountConfirmDesc:
-      "This signs you out everywhere, tombstones your login, and redacts owned venues. Money and Lemon records are kept until an operator purge.",
+      "This signs you out everywhere, tombstones your login, and redacts owned venues. Money and payment-provider records are kept until an operator purge.",
     eraseAccountSuccess: "Account wiped. Sign in is no longer possible with this login.",
     eraseAccountFailed: "Could not delete account.",
     dsarInbox: "Guest privacy requests",
@@ -2015,9 +2073,14 @@ const en: DictTree = {
     numberOfGames: "Number of games",
     arrivalTime: "Arrival time",
     startTime: "Start time",
+    endTime: "End time",
     holdHint:
       "No fixed end time — unit held for {minutes} min after start. If the guest does not show, it is freed automatically. Staff checks in on arrival and marks free when they leave.",
+    playWindowHint:
+      "Play window: {minutes} min. Guest should arrive within {grace} min of start or the unit may be released.",
     estimatedCharge: "Estimated charge: {amount}",
+    priceFromSetup: "Pro-rated from Gaming setup rates for {minutes} min.",
+    endAfterStart: "End time must be at least 15 minutes after start.",
     guestName: "Guest name",
     playersRange: "Players ({min}–{max})",
     perPersonPricingHint:
@@ -2803,9 +2866,9 @@ const pl: DictTree = {
     featureDetails: "Szczegóły funkcji",
     billingTitle: "Płatności",
     billingBody:
-      "Płatności przez Lemon Squeezy (Merchant of Record) — checkout w wielu walutach, VAT/podatki załatwione. Pakiet + dodatki: {price}/mies.",
+      "Płatności przez dostawców (Stripe, Mollie) — checkout w wielu walutach. Pakiet + dodatki: {price}/mies.",
     billingManageHint:
-      "Metoda płatności, faktury lub anulowanie w portalu Lemon Squeezy. Zmiany pakietu zapisane tutaj obowiązują od następnego okresu.",
+      "Metoda płatności, faktury lub anulowanie w portalu rozliczeniowym. Zmiany pakietu zapisane tutaj obowiązują od następnego okresu.",
     billingNotConfigured:
       "Checkout nie jest gotowy na API. Na usłudze API w Render ustaw LEMON_SQUEEZY_API_KEY, LEMON_SQUEEZY_STORE_ID i LEMON_SQUEEZY_VARIANT_ID, potem zrób redeploy. (Webhook secret jest osobno.)",
     billingMissingKeys:
@@ -3040,12 +3103,12 @@ const pl: DictTree = {
     eraseByEmailPlaceholder: "gosc@example.com",
     eraseAccount: "Usuń moje konto",
     eraseAccountHint:
-      "Miękkie wymazanie konta GoSpots, odpublikowanie lokali i redakcja PII gości. Finanse zostają. Anuluj Lemon w portalu dostawcy (operator).",
+      "Miękkie wymazanie konta GoSpots, odpublikowanie lokali i redakcja PII gości. Finanse zostają. Anuluj subskrypcję w portalu dostawcy płatności (operator).",
     eraseAccountPhrase: "Wpisz DELETE MY ACCOUNT",
     eraseAccountConfirm: "Usuń konto",
     eraseAccountConfirmTitle: "Usunąć konto GoSpots?",
     eraseAccountConfirmDesc:
-      "Wyloguje wszędzie, ztombstonuje login i zredaguje lokale. Pieniądze i Lemon zostają do purge operatora.",
+      "Wyloguje wszędzie, ztombstonuje login i zredaguje lokale. Pieniądze i rekordy dostawców płatności zostają do purge operatora.",
     eraseAccountSuccess: "Konto wymazane. Logowanie tym loginem nie jest już możliwe.",
     eraseAccountFailed: "Nie udało się usunąć konta.",
     dsarInbox: "Wnioski prywatności gości",
@@ -4638,9 +4701,14 @@ const pl: DictTree = {
     numberOfGames: "Liczba gier",
     arrivalTime: "Godzina przybycia",
     startTime: "Godzina początkowa",
+    endTime: "Godzina zakończenia",
     holdHint:
       "Brak ustalonej godziny zakończenia — stanowisko jest zarezerwowane {minutes} min od startu. Jeśli gość się nie zjawi, zostaje automatycznie zwolnione. Personel zamelduje przybycie i zwalnia po wyjściu.",
+    playWindowHint:
+      "Czas gry: {minutes} min. Gość powinien przyjść w ciągu {grace} min od startu, inaczej stanowisko może zostać zwolnione.",
     estimatedCharge: "Szacowana opłata: {amount}",
+    priceFromSetup: "Proporcjonalnie z cennika Gaming za {minutes} min.",
+    endAfterStart: "Godzina zakończenia musi być co najmniej 15 minut po starcie.",
     guestName: "Imię gościa",
     playersRange: "Gracze ({min}–{max})",
     perPersonPricingHint:

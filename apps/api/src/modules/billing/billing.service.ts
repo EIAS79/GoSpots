@@ -27,6 +27,7 @@ import { AuditService } from '../audit/audit.service';
 import type { JwtAccessPayload } from '../auth/auth.service';
 import { PrismaService } from '../../prisma/prisma.service';
 import { CurrencyRatesService } from '../shop/currency-rates.service';
+import { isLemonCheckoutAllowed, isLemonBillingEnabled } from './billing-config';
 import { LemonSqueezyClient } from './lemon-squeezy.client';
 
 const LEMON_PROVIDER = 'lemon_squeezy';
@@ -75,13 +76,18 @@ export class BillingService implements OnModuleInit {
   ) {}
 
   onModuleInit() {
+    if (!isLemonBillingEnabled(this.config)) {
+      this.logger.log(
+        'Lemon Squeezy billing soft-gated (BILLING_LEMON_ENABLED≠true).',
+      );
+      return;
+    }
     const secret = this.config.get<string>('LEMON_SQUEEZY_WEBHOOK_SECRET')?.trim();
     const isProd = this.config.get<string>('NODE_ENV') === 'production';
     if (secret) return;
     if (isProd) {
-      // Belt-and-suspenders with main.ts assertCriticalSecretsAtBoot.
       throw new Error(
-        'LEMON_SQUEEZY_WEBHOOK_SECRET is required in production (unsigned Lemon webhooks must never be accepted).',
+        'LEMON_SQUEEZY_WEBHOOK_SECRET is required in production when BILLING_LEMON_ENABLED=true.',
       );
     }
     this.logger.warn(
@@ -93,12 +99,18 @@ export class BillingService implements OnModuleInit {
     return {
       provider: 'lemon_squeezy' as const,
       configured: this.lemon.isConfigured(),
+      lemonEnabled: isLemonBillingEnabled(this.config),
       currenciesNote:
         'Lemon Squeezy is Merchant of Record — customers pay in supported currencies; tax/VAT handled for you.',
     };
   }
 
   async createCheckout(actor: JwtAccessPayload) {
+    if (!isLemonCheckoutAllowed(this.config)) {
+      throw new BadRequestException(
+        'Lemon Squeezy checkout is disabled. Use dual-provider billing (BILLING_ENABLED) or set BILLING_LEMON_ENABLED=true.',
+      );
+    }
     if (
       actor.shopRole !== 'OWNER' &&
       !hasPermission(actor.perms ?? '', PERMISSIONS.SUBSCRIPTION_MANAGE)
@@ -197,6 +209,11 @@ export class BillingService implements OnModuleInit {
   }
 
   async openPortal(actor: JwtAccessPayload) {
+    if (!isLemonCheckoutAllowed(this.config)) {
+      throw new BadRequestException(
+        'Lemon Squeezy portal is disabled. Use dual-provider billing (BILLING_ENABLED) or set BILLING_LEMON_ENABLED=true.',
+      );
+    }
     if (
       actor.shopRole !== 'OWNER' &&
       !hasPermission(actor.perms ?? '', PERMISSIONS.SUBSCRIPTION_MANAGE)

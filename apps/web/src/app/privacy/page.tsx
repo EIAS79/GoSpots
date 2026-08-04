@@ -71,9 +71,9 @@ export default function PrivacyPage() {
               </li>
               <li>
                 <span className="text-zinc-200">Payments</span> — subscription
-                billing for venue features is processed by Lemon Squeezy. We
-                receive billing status and related metadata; we do not store full
-                card numbers on our servers.
+                billing for venue features is processed by our payment providers
+                (Stripe, Mollie). We receive billing status and related metadata;
+                we do not store full card numbers on our servers.
               </li>
               <li>
                 <span className="text-zinc-200">Emails &amp; messages</span> —
@@ -98,7 +98,7 @@ export default function PrivacyPage() {
               <li>Provide, maintain, and improve the GoSpots platform</li>
               <li>Authenticate users and enforce tenant isolation between venues</li>
               <li>Process bookings, sessions, and operational workflows</li>
-              <li>Bill venue subscriptions via Lemon Squeezy</li>
+              <li>Bill venue subscriptions via payment providers (Stripe, Mollie)</li>
               <li>Send service emails and respond to support requests</li>
               <li>Detect abuse, prevent fraud, and keep the service secure</li>
             </ul>
@@ -114,7 +114,8 @@ export default function PrivacyPage() {
             </h2>
             <p>
               We share data with service providers only as needed to run GoSpots,
-              including hosting, email delivery, and Lemon Squeezy for payments.
+              including hosting, email delivery, and payment providers (Stripe,
+              Mollie) for subscription billing.
               Venue staff you invite can access operational data for that venue
               according to their roles. We may disclose information if required
               by law or to protect the rights and safety of users and the

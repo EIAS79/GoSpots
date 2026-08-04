@@ -35,7 +35,15 @@ export function isDiningResourceType(type: string | null | undefined) {
   return type === 'DINING';
 }
 
-/** Reservations on a physical unit use arrival + no-show grace + check-in. */
+/**
+ * Dining: arrival-only + no-show hold (endsAt is grace, not play length).
+ * Gaming / bowling / etc.: guest/staff pick a real play end for overlap + pricing.
+ */
+export function usesHoldArrivalWindow(type: string | null | undefined) {
+  return isDiningResourceType(type);
+}
+
+/** Reservations on a physical unit use arrival + check-in lifecycle. */
 export function usesSessionLifecycle(type: string | null | undefined) {
   return type != null && type.length > 0;
 }

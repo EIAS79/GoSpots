@@ -20,6 +20,10 @@ export const GDPR_RETENTION_CRON_LOCK_KEY2 = 0x4744; // 'GD'
 export const MAIL_OUTBOX_RETENTION_CRON_LOCK_KEY1 = 0x4753; // 'GS'
 export const MAIL_OUTBOX_RETENTION_CRON_LOCK_KEY2 = 0x4d52; // 'MR'
 
+/** Dual-provider billing cron (reconcile / grace / webhook retry) — 'GS' + 'BL'. */
+export const BILLING_CRON_LOCK_KEY1 = 0x4753; // 'GS'
+export const BILLING_CRON_LOCK_KEY2 = 0x424c; // 'BL'
+
 export type AdvisoryLockOutcome<T> =
   | { acquired: false }
   | { acquired: true; result: T };
@@ -121,6 +125,21 @@ export async function withMailOutboxRetentionCronLock<T>(
     prisma,
     MAIL_OUTBOX_RETENTION_CRON_LOCK_KEY1,
     MAIL_OUTBOX_RETENTION_CRON_LOCK_KEY2,
+    fn,
+    options,
+  );
+}
+
+/** Single-flight wrapper for dual-provider billing cron ticks. */
+export async function withBillingCronLock<T>(
+  prisma: PrismaClient,
+  fn: () => Promise<T>,
+  options?: XactLockOptions,
+): Promise<AdvisoryLockOutcome<T>> {
+  return withPgAdvisoryXactLock(
+    prisma,
+    BILLING_CRON_LOCK_KEY1,
+    BILLING_CRON_LOCK_KEY2,
     fn,
     options,
   );

@@ -2,7 +2,11 @@ import { Injectable, Logger } from '@nestjs/common';
 import { Cron, CronExpression } from '@nestjs/schedule';
 import { ReservationStatus, ResourceStatus } from '@prisma/client';
 import { ACTIVE_RESERVATION } from '../../common/booking-floor-status';
-import { isDiningResourceType } from '../../common/dining-reservation.util';
+import {
+  holdEndsAt,
+  isDiningResourceType,
+  parseNoShowMinutes,
+} from '../../common/dining-reservation.util';
 import { guestTokenRevokeFields } from '../../common/guest-token.util';
 import { withReservationRemindersCronLock } from '../../common/pg-advisory-lock.util';
 import { reservationSessionsHref } from '../../common/reservation-notification-href';
@@ -87,7 +91,7 @@ export class ReservationRemindersService {
     const rows = await this.prisma.reservation.findMany({
       where: {
         status: { in: [...AUTO_NO_SHOW_FROM_STATUSES] },
-        endsAt: { lte: now },
+        startsAt: { lte: now },
         resourceId: { not: null },
       },
       select: {
@@ -96,7 +100,14 @@ export class ReservationRemindersService {
         resourceId: true,
         guestName: true,
         startsAt: true,
-        resource: { select: { type: true, name: true } },
+        endsAt: true,
+        resource: {
+          select: {
+            type: true,
+            name: true,
+            category: { select: { offeringConfig: true } },
+          },
+        },
       },
       take: 500,
     });
@@ -105,6 +116,13 @@ export class ReservationRemindersService {
 
     let marked = 0;
     for (const r of rows) {
+      const noShowMinutes = parseNoShowMinutes(
+        r.resource?.category?.offeringConfig,
+      );
+      const graceEnds = holdEndsAt(r.startsAt, noShowMinutes);
+      // Dining hold window OR gaming: no-show after arrival grace, not full play end.
+      if (graceEnds > now) continue;
+
       const result = await this.prisma.reservation.updateMany({
         where: {
           id: r.id,

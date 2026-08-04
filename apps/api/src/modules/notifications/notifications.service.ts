@@ -605,6 +605,28 @@ export class NotificationsService {
     });
   }
 
+  /** SaaS subscription / dual-provider billing notices (venue-wide). */
+  async recordBillingEvent(
+    shopId: string,
+    input: {
+      title: string;
+      body: string;
+      href?: string;
+      dedupeKey?: string;
+    },
+  ) {
+    return this.create({
+      shopId,
+      userId: null,
+      section: 'billing',
+      type: NotificationType.BILLING,
+      title: input.title,
+      body: input.body,
+      href: input.href ?? '/subscription',
+      dedupeKey: input.dedupeKey,
+    });
+  }
+
   async seedWelcomeNotifications(
     shopId: string,
     userId: string,

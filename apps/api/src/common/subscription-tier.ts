@@ -250,13 +250,15 @@ export function resolveSubscriptionAccess(
         )
       : 0;
 
+  // PAUSED locks paid modules (same as PAST_DUE) — billing UI stays reachable.
   const locked =
     status === SubscriptionStatus.CANCELED ||
     status === SubscriptionStatus.PAST_DUE ||
+    status === SubscriptionStatus.PAUSED ||
     (status === SubscriptionStatus.TRIAL && !!trialEndsAt && expired);
 
   // Trial + paid ACTIVE: visibility follows saved features (never wipe data).
-  // Expired trial / past_due / canceled: all modules off until they pay.
+  // Expired trial / past_due / paused / canceled: all modules off until they pay.
   const modules = locked
     ? new Set<ModuleKey>()
     : resolveModules(subscription);

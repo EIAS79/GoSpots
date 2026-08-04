@@ -34,7 +34,9 @@ export function applyBillingDiscount(
 }
 
 /**
- * Price from Gaming setup: category rate blocks (e.g. 60 min @ $40) or unit hourlyRate.
+ * Price from Gaming setup: category rates pro-rated by actual duration
+ * (e.g. 60 min @ $30 → 30 min = $15), picking the cheapest applicable rate.
+ * Falls back to unit hourlyRate × hours when no block rates exist.
  */
 export function computePlayBillingAmount(
   input: PlayBillingComputeInput,
@@ -56,9 +58,11 @@ export function computePlayBillingAmount(
       null;
     for (const rate of blockRates) {
       const blockMin = rate.durationMinutes!;
-      const blocks = Math.ceil(durationMinutes / blockMin);
-      const amount = roundMoney(blocks * rate.price * party);
-      const breakdown = `${durationMinutes} min · ${blocks}× ${rate.label} · ${party} guest${party > 1 ? 's' : ''}`;
+      // Pro-rate: half of a 60-min@$30 block → $15 (not a full ceil block).
+      const amount = roundMoney(
+        rate.price * (durationMinutes / blockMin) * party,
+      );
+      const breakdown = `${durationMinutes} min · ${rate.label} (${blockMin} min @ ${rate.price}) · ${party} guest${party > 1 ? 's' : ''}`;
       if (!best || amount < best.amount) {
         best = { amount, label: rate.label, breakdown };
       }

@@ -1067,8 +1067,15 @@ const en: Dict = {
     "Lane rental — you book the lane for the duration; guest count does not change the price.",
   "venuePage.booking.arrivalTime": "Arrival time",
   "venuePage.booking.startTime": "Start time",
+  "venuePage.booking.endTime": "End time",
   "venuePage.booking.holdHint":
     "No fixed end time — your {unitKind} is held for {minutes} minutes after start. Please arrive on time.",
+  "venuePage.booking.playWindowHint":
+    "Play window: {minutes} min. Arrive within {grace} minutes of start or the {unitKind} may be released.",
+  "venuePage.booking.priceFromSetup":
+    "Estimated from your Gaming setup rates for {minutes} minutes (pro-rated).",
+  "venuePage.booking.endAfterStart":
+    "End time must be at least 15 minutes after start.",
   "venuePage.booking.unitKindTable": "table",
   "venuePage.booking.unitKindStation": "station",
   "venuePage.booking.notesOptional": "Notes (optional)",
@@ -2352,8 +2359,15 @@ const pl: Dict = {
     "Wynajem toru — rezerwujesz tor na czas; liczba gości nie zmienia ceny.",
   "venuePage.booking.arrivalTime": "Godzina przybycia",
   "venuePage.booking.startTime": "Godzina rozpoczęcia",
+  "venuePage.booking.endTime": "Godzina zakończenia",
   "venuePage.booking.holdHint":
     "Bez stałej godziny końca — Twój {unitKind} jest trzymany przez {minutes} min od startu. Prosimy o punktualność.",
+  "venuePage.booking.playWindowHint":
+    "Czas gry: {minutes} min. Przyjdź w ciągu {grace} min od startu, inaczej {unitKind} może zostać zwolnione.",
+  "venuePage.booking.priceFromSetup":
+    "Szacunek z cennika Gaming dla {minutes} min (proporcjonalnie).",
+  "venuePage.booking.endAfterStart":
+    "Godzina zakończenia musi być co najmniej 15 minut po starcie.",
   "venuePage.booking.unitKindTable": "stolik",
   "venuePage.booking.unitKindStation": "stanowisko",
   "venuePage.booking.notesOptional": "Notatki (opcjonalnie)",

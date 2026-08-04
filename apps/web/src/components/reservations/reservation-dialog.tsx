@@ -6,6 +6,7 @@ import { FeedbackBanner } from "@/components/ui/feedback-banner";
 import { ModalPortal } from "@/components/ui/modal-portal";
 import {
   ACTIVE_BOOKING_STATUSES,
+  addMinutesToTime,
   combineDateAndTime,
   splitDateAndTime,
 } from "@/lib/booking-time";
@@ -17,6 +18,7 @@ import { BowlingModePicker } from "@/components/gaming/bowling-mode-picker";
 import {
   buildBowlingNotes,
   estimateBowlingPrice,
+  estimateTimedRatesPrice,
   suggestBowlingWalkInAmount,
   parseBowlingConfig,
   parseGamesFromNotes,
@@ -125,7 +127,10 @@ export function ReservationDialog({
 
   const [date, setDate] = useState(initialParts.date || defaultDate || "");
   const [startTime, setStartTime] = useState(initialParts.time || "14:00");
-  const [endTime, setEndTime] = useState(initialEnd.time || "15:00");
+  const [endTime, setEndTime] = useState(() => {
+    if (initial) return initialEnd.time || "15:00";
+    return addMinutesToTime(initialParts.time || "14:00", 60);
+  });
 
   const selected = units.find((u) => u.id === resourceId);
   const selectedCategory = catalog.categories.find(
@@ -138,6 +143,14 @@ export function ReservationDialog({
   );
   const unitLabels = getBookingUnitLabels(selected?.unitKind ?? "UNIT");
   const slotMinutes = selected?.slotMinutes ?? 60;
+
+  useEffect(() => {
+    if (initial) return;
+    if (isDining) return;
+    setEndTime(addMinutesToTime(startTime, slotMinutes));
+    // Intentionally omit startTime: applyStartTime already preserves duration.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [resourceId, slotMinutes, isDining, initial]);
 
   const bowlingModes = useMemo(
     () =>
@@ -209,43 +222,64 @@ export function ReservationDialog({
       }));
 
   const estimatedDurationMinutes = useMemo(() => {
+    if (isDining) return effectiveSlotMinutes;
     if (isBowling && chargeMode === "GAME") {
       const games = parseInt(gameCount, 10) || bowlingConfig.defaultGames;
       return games * (selectedBowlingMode?.minutesPerGame ?? effectiveSlotMinutes);
     }
-    return effectiveSlotMinutes;
+    if (!date || !startTime || !endTime) return effectiveSlotMinutes;
+    const start = combineDateAndTime(date, startTime);
+    const end = combineDateAndTime(date, endTime);
+    const mins = Math.round((end.getTime() - start.getTime()) / 60_000);
+    return mins > 0 ? mins : effectiveSlotMinutes;
   }, [
+    isDining,
     isBowling,
     chargeMode,
     gameCount,
     bowlingConfig.defaultGames,
     selectedBowlingMode?.minutesPerGame,
     effectiveSlotMinutes,
+    date,
+    startTime,
+    endTime,
   ]);
 
   const estimatedPrice = useMemo(() => {
-    if (!isBowling || !selectedBowlingMode) return null;
-    const games = parseInt(gameCount, 10) || bowlingConfig.defaultGames;
-    const players = parseInt(partySize, 10) || 1;
-    return (
-      suggestBowlingWalkInAmount(
-        selectedBowlingMode,
-        players,
-        estimatedDurationMinutes,
-        games,
-      ) ??
-      estimateBowlingPrice(
-        chargeMode,
-        games,
-        players,
-        bowlingConfig,
-        estimatedDurationMinutes,
-        effectiveSlotMinutes,
-      )
-    );
+    if (isDining) return null;
+    const rates = selectedCategory?.rates ?? [];
+    if (isBowling && selectedBowlingMode) {
+      const games = parseInt(gameCount, 10) || bowlingConfig.defaultGames;
+      const players = parseInt(partySize, 10) || 1;
+      return (
+        suggestBowlingWalkInAmount(
+          selectedBowlingMode,
+          players,
+          estimatedDurationMinutes,
+          games,
+        ) ??
+        estimateBowlingPrice(
+          chargeMode,
+          games,
+          players,
+          bowlingConfig,
+          estimatedDurationMinutes,
+          effectiveSlotMinutes,
+        ) ??
+        (rates.length > 0
+          ? estimateTimedRatesPrice(rates, estimatedDurationMinutes)
+          : null)
+      );
+    }
+    if (rates.length > 0) {
+      return estimateTimedRatesPrice(rates, estimatedDurationMinutes);
+    }
+    return null;
   }, [
+    isDining,
     isBowling,
     selectedBowlingMode,
+    selectedCategory?.rates,
     chargeMode,
     gameCount,
     partySize,
@@ -257,13 +291,15 @@ export function ReservationDialog({
   const overlapHint = useMemo(() => {
     if (!resourceId || !date || !startTime) return null;
     const start = combineDateAndTime(date, startTime);
-    const holdEnd = new Date(holdEndFromLocal(date, startTime, noShowMinutes));
+    const windowEnd = isDining
+      ? new Date(holdEndFromLocal(date, startTime, noShowMinutes))
+      : combineDateAndTime(date, endTime);
     const clash = existingBookings.find(
       (b) =>
         b.id !== initial?.id &&
         ACTIVE_BOOKING_STATUSES.includes(b.status) &&
         start < new Date(b.endsAt) &&
-        holdEnd > new Date(b.startsAt),
+        windowEnd > new Date(b.startsAt),
     );
     if (clash) {
       return isDining
@@ -275,6 +311,7 @@ export function ReservationDialog({
     resourceId,
     date,
     startTime,
+    endTime,
     existingBookings,
     initial?.id,
     isDining,
@@ -284,6 +321,13 @@ export function ReservationDialog({
 
   function applyStartTime(next: string) {
     setStartTime(next);
+    if (!isDining) {
+      const start = combineDateAndTime(date || "1970-01-01", startTime);
+      const end = combineDateAndTime(date || "1970-01-01", endTime);
+      const span = Math.round((end.getTime() - start.getTime()) / 60_000);
+      const keep = span > 0 ? span : effectiveSlotMinutes;
+      setEndTime(addMinutesToTime(next, keep));
+    }
   }
 
   function onBowlingModeChange(modeId: string) {
@@ -378,7 +422,20 @@ export function ReservationDialog({
                 return;
               }
               const startsAt = combineDateAndTime(date, startTime).toISOString();
-              const endsAt = holdEndFromLocal(date, startTime, noShowMinutes);
+              const endsAt = isDining
+                ? holdEndFromLocal(date, startTime, noShowMinutes)
+                : combineDateAndTime(date, endTime).toISOString();
+              if (!isDining) {
+                const startMs = combineDateAndTime(date, startTime).getTime();
+                const endMs = combineDateAndTime(date, endTime).getTime();
+                if (endMs - startMs < 15 * 60_000) {
+                  setFeedback({
+                    variant: "error",
+                    message: t("reservationDialog.endAfterStart"),
+                  });
+                  return;
+                }
+              }
               const games = parseInt(gameCount, 10) || bowlingConfig.defaultGames;
               const finalNotes =
                 isBowling && selectedBowlingMode
@@ -512,15 +569,41 @@ export function ReservationDialog({
                 className="mt-1 w-full rounded-lg border border-white/10 bg-zinc-900 px-2 py-2 text-sm text-white"
               />
             </label>
-            <p className="text-[10px] text-zinc-600">
-              {t("reservationDialog.holdHint", { minutes: noShowMinutes })}
-            </p>
+            {!isDining ? (
+              <>
+                <label className="block text-xs text-zinc-500">
+                  {t("reservationDialog.endTime")}
+                  <input
+                    type="time"
+                    required
+                    value={endTime}
+                    onChange={(e) => setEndTime(e.target.value)}
+                    className="mt-1 w-full rounded-lg border border-white/10 bg-zinc-900 px-2 py-2 text-sm text-white"
+                  />
+                </label>
+                <p className="text-[10px] text-zinc-600">
+                  {t("reservationDialog.playWindowHint", {
+                    minutes: estimatedDurationMinutes,
+                    grace: noShowMinutes,
+                  })}
+                </p>
+              </>
+            ) : (
+              <p className="text-[10px] text-zinc-600">
+                {t("reservationDialog.holdHint", { minutes: noShowMinutes })}
+              </p>
+            )}
 
             {estimatedPrice != null ? (
               <p className="rounded-lg border border-emerald-400/20 bg-emerald-500/5 px-3 py-2 text-xs text-emerald-200">
                 {t("reservationDialog.estimatedCharge", {
                   amount: formatMoney(estimatedPrice),
                 })}
+                <span className="mt-0.5 block text-[10px] text-emerald-200/70">
+                  {t("reservationDialog.priceFromSetup", {
+                    minutes: estimatedDurationMinutes,
+                  })}
+                </span>
               </p>
             ) : null}
 

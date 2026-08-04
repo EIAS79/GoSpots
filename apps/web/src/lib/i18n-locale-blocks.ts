@@ -89,9 +89,9 @@ export const deLocaleBlocks: LocaleBlocks = {
     featureDetails: "Funktionsdetails",
     billingTitle: "Abrechnung",
     billingBody:
-      "Zahlungen laufen über Lemon Squeezy (Merchant of Record) — Multi-Währungs-Checkout, MwSt./Steuern für Sie erledigt. Ihr Paket + Add-ons: {price}/Mon.",
+      "Zahlungen laufen über unsere Zahlungsanbieter (Stripe, Mollie) — Multi-Währungs-Checkout. Ihr Paket + Add-ons: {price}/Mon.",
     billingManageHint:
-      "Zahlungsmethode, Rechnungen oder Kündigung im Lemon-Squeezy-Portal verwalten. Hier gespeicherte Paketänderungen gelten ab der nächsten Abrechnungsperiode.",
+      "Zahlungsmethode, Rechnungen oder Kündigung im Abrechnungsportal verwalten. Hier gespeicherte Paketänderungen gelten ab der nächsten Abrechnungsperiode.",
     billingNotConfigured:
       "Abrechnungsschlüssel sind in der API noch nicht gesetzt. Fügen Sie LEMON_SQUEEZY_*-Umgebungsvariablen hinzu, um den Checkout zu aktivieren.",
     manageBilling: "Abrechnung verwalten",
@@ -431,9 +431,9 @@ export const frLocaleBlocks: LocaleBlocks = {
     featureDetails: "Détails des fonctionnalités",
     billingTitle: "Facturation",
     billingBody:
-      "Les paiements passent par Lemon Squeezy (Merchant of Record) — paiement multi-devises, TVA/taxes gérées pour vous. Votre pack + options : {price}/mois.",
+      "Les paiements passent par nos prestataires (Stripe, Mollie) — paiement multi-devises. Votre pack + options : {price}/mois.",
     billingManageHint:
-      "Gérez le moyen de paiement, les factures ou l’annulation dans le portail Lemon Squeezy. Les changements de pack enregistrés ici s’appliquent à la période suivante.",
+      "Gérez le moyen de paiement, les factures ou l’annulation dans le portail de facturation. Les changements de pack enregistrés ici s’appliquent à la période suivante.",
     billingNotConfigured:
       "Les clés de facturation ne sont pas encore configurées sur l’API. Ajoutez les variables LEMON_SQUEEZY_* pour activer le paiement.",
     manageBilling: "Gérer la facturation",
@@ -773,9 +773,9 @@ export const esLocaleBlocks: LocaleBlocks = {
     featureDetails: "Detalles de las funciones",
     billingTitle: "Facturación",
     billingBody:
-      "Los pagos pasan por Lemon Squeezy (Merchant of Record) — checkout multi-divisa, IVA/impuestos gestionados por usted. Su pack + complementos: {price}/mes.",
+      "Los pagos pasan por nuestros proveedores (Stripe, Mollie) — checkout multi-divisa. Su pack + complementos: {price}/mes.",
     billingManageHint:
-      "Gestione método de pago, facturas o cancelación en el portal de Lemon Squeezy. Los cambios de pack que guarde aquí se aplican en el próximo período.",
+      "Gestione método de pago, facturas o cancelación en el portal de facturación. Los cambios de pack que guarde aquí se aplican en el próximo período.",
     billingNotConfigured:
       "Las claves de facturación aún no están configuradas en la API. Añada variables LEMON_SQUEEZY_* para habilitar el checkout.",
     manageBilling: "Gestionar facturación",
@@ -1115,9 +1115,9 @@ export const arLocaleBlocks: LocaleBlocks = {
     featureDetails: "تفاصيل الميزات",
     billingTitle: "الفوترة",
     billingBody:
-      "المدفوعات عبر Lemon Squeezy (تاجر السجل) — دفع متعدد العملات، والضريبة/ضريبة القيمة المضافة تُدار لك. حزمتك + الإضافات: {price}/شهر.",
+      "المدفوعات عبر مزودي الدفع (Stripe، Mollie) — دفع متعدد العملات. حزمتك + الإضافات: {price}/شهر.",
     billingManageHint:
-      "أدِر طريقة الدفع أو الفواتير أو الإلغاء في بوابة Lemon Squeezy. تغييرات الحزمة التي تحفظها هنا تسري في فترة الفوترة التالية.",
+      "أدِر طريقة الدفع أو الفواتير أو الإلغاء في بوابة الفوترة. تغييرات الحزمة التي تحفظها هنا تسري في فترة الفوترة التالية.",
     billingNotConfigured:
       "مفاتيح الفوترة غير مضبوطة بعد في واجهة البرمجة. أضف متغيرات LEMON_SQUEEZY_* لتفعيل الدفع.",
     manageBilling: "إدارة الفوترة",

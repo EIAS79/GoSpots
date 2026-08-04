@@ -37,6 +37,17 @@ export const IDEMPOTENCY_SCOPES = {
   SHOP_CURRENCY_APPLY: 'shop.currency.apply',
   /** Onboarding template seed — derived key from templateId when header absent (Lane ONBOARD32). */
   SHOP_ONBOARDING_APPLY_TEMPLATE: 'shop.onboarding.apply-template',
+  /** Dual-provider SaaS billing mutations. */
+  BILLING_CHECKOUT: 'billing.checkout',
+  BILLING_CANCEL: 'billing.cancel',
+  BILLING_PAUSE: 'billing.pause',
+  BILLING_RESUME: 'billing.resume',
+  BILLING_CHANGE_PLAN: 'billing.change-plan',
+  BILLING_CHANGE_RENEWAL_MODE: 'billing.change-renewal-mode',
+  BILLING_SWITCH_PROVIDER: 'billing.switch-provider',
+  BILLING_MANUAL_RENEWAL: 'billing.manual-renewal',
+  BILLING_PAYMENT_METHOD_UPDATE: 'billing.payment-method.update',
+  BILLING_STRIPE_PORTAL: 'billing.stripe.customer-portal',
 } as const;
 
 /**

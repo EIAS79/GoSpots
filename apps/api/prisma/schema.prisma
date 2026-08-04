@@ -113,6 +113,73 @@ enum SubscriptionStatus {
   ACTIVE
   PAST_DUE
   CANCELED
+  /// Access suspended (provider pause / grace expired without unpaid wipe)
+  PAUSED
+}
+
+enum BillingProvider {
+  STRIPE
+  MOLLIE
+  LEMON_SQUEEZY
+}
+
+enum BillingRenewalMode {
+  AUTOMATIC_RENEWAL
+  MANUAL_MONTHLY
+}
+
+enum BillingCanonicalSubscriptionStatus {
+  DRAFT
+  CHECKOUT_PENDING
+  INCOMPLETE
+  REQUIRES_ACTION
+  PROCESSING
+  TRIALING
+  ACTIVE
+  PAST_DUE
+  UNPAID
+  PAUSE_PENDING
+  PAUSED
+  RESUME_PENDING
+  CANCEL_AT_PERIOD_END
+  CANCELED
+  EXPIRED
+  INCOMPLETE_EXPIRED
+  PROVIDER_ERROR
+}
+
+enum BillingCanonicalPaymentStatus {
+  CREATED
+  OPEN
+  REQUIRES_ACTION
+  PENDING
+  PROCESSING
+  AUTHORIZED
+  PAID
+  FAILED
+  CANCELED
+  EXPIRED
+  REFUND_PENDING
+  PARTIALLY_REFUNDED
+  REFUNDED
+  DISPUTED
+  CHARGEBACK
+  UNKNOWN
+}
+
+enum BillingWebhookProcessingStatus {
+  RECEIVED
+  PROCESSING
+  PROCESSED
+  FAILED
+  DEAD
+}
+
+enum BillingOperationStatus {
+  PENDING
+  COMPLETED
+  FAILED
+  EXPIRED
 }
 
 model Shop {
@@ -188,6 +255,11 @@ model Shop {
   consentRecords ConsentRecord[]
   guestDsarRequests GuestDsarRequest[]
   staffActionRequests StaffActionRequest[]
+  billingAccounts BillingAccount[]
+  billingSubscriptions BillingSubscription[]
+  billingPayments BillingPayment[]
+  billingOperations BillingOperation[]
+  billingNotificationDeliveries BillingNotificationDelivery[]
 }
 
 /// Compressed venue images (menu, gallery, gaming, cover, etc.)
@@ -224,12 +296,15 @@ model Subscription {
   /// Pending add-ons CSV (no relational twin yet — kept intentionally)
   pendingAddOns             String?
   pendingStaffSeatQuantity  Int?
-  /// Lemon Squeezy subscription id (stringified)
+  /// Lemon Squeezy ids (legacy history; new checkouts use Stripe/Mollie)
   lemonSubscriptionId String?
   lemonCustomerId     String?
   lemonOrderId        String?
   /// Checkout / invoice currency (ISO 4217), defaults to shop currency
   billingCurrency     String  @default("EUR")
+  /// Link to provider-neutral billing subscription when dual billing is active
+  billingSubscriptionId String? @unique
+  billingSubscription   BillingSubscription? @relation(fields: [billingSubscriptionId], references: [id], onDelete: SetNull)
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
@@ -237,18 +312,195 @@ model Subscription {
   addOnRows SubscriptionAddOn[]
 }
 
-/// Durable receipt for MoR / billing provider webhooks (idempotent delivery).
+/// Provider customer binding per shop (Stripe Customer / Mollie Customer).
+model BillingAccount {
+  id                 String          @id @default(cuid())
+  shopId             String
+  shop               Shop            @relation(fields: [shopId], references: [id], onDelete: Cascade)
+  provider           BillingProvider
+  providerCustomerId String
+  billingEmail       String?
+  country            String?
+  taxId              String?
+  createdAt          DateTime        @default(now())
+  updatedAt          DateTime        @updatedAt
+
+  subscriptions  BillingSubscription[]
+  paymentMethods BillingPaymentMethodSummary[]
+
+  @@unique([shopId, provider])
+  @@unique([provider, providerCustomerId])
+  @@index([shopId])
+}
+
+/// Provider-neutral SaaS subscription (Stripe / Mollie / manual).
+model BillingSubscription {
+  id                      String                             @id @default(cuid())
+  shopId                  String
+  shop                    Shop                               @relation(fields: [shopId], references: [id], onDelete: Cascade)
+  billingAccountId        String
+  billingAccount          BillingAccount                     @relation(fields: [billingAccountId], references: [id], onDelete: Cascade)
+  provider                BillingProvider
+  providerSubscriptionId  String?
+  providerPriceId         String?
+  planId                  String
+  renewalMode             BillingRenewalMode                 @default(AUTOMATIC_RENEWAL)
+  canonicalStatus         BillingCanonicalSubscriptionStatus @default(DRAFT)
+  providerStatus          String?
+  currency                String                             @default("EUR")
+  /// Minor units (cents) — authoritative recurring amount
+  amountMinor             Int                                @default(0)
+  seatQuantity            Int                                @default(0)
+  currentPeriodStart      DateTime?
+  currentPeriodEnd        DateTime?
+  nextBillingAt           DateTime?
+  trialEndsAt             DateTime?
+  cancelAtPeriodEnd       Boolean                            @default(false)
+  cancellationRequestedAt DateTime?
+  canceledAt              DateTime?
+  pausedAt                DateTime?
+  resumeAt                DateTime?
+  gracePeriodEndsAt       DateTime?
+  lastSuccessfulPaymentAt DateTime?
+  lastFailedPaymentAt     DateTime?
+  failureCount            Int                                @default(0)
+  /// Explicit consent for off-session / automatic charging
+  autoRenewConsentAt      DateTime?
+  version                 Int                                @default(1)
+  createdAt               DateTime                           @default(now())
+  updatedAt               DateTime                           @updatedAt
+
+  addOns          BillingSubscriptionAddOn[]
+  payments        BillingPayment[]
+  notifications   BillingNotificationDelivery[]
+  entitlementLink Subscription?
+
+  @@unique([provider, providerSubscriptionId])
+  @@index([shopId, canonicalStatus])
+  @@index([nextBillingAt])
+  @@index([currentPeriodEnd])
+}
+
+model BillingSubscriptionAddOn {
+  id              String              @id @default(cuid())
+  subscriptionId  String
+  subscription    BillingSubscription @relation(fields: [subscriptionId], references: [id], onDelete: Cascade)
+  addOnId         String
+  quantity        Int                 @default(1)
+  unitAmountMinor Int                 @default(0)
+
+  @@unique([subscriptionId, addOnId])
+  @@index([addOnId])
+}
+
+model BillingPayment {
+  id                      String                        @id @default(cuid())
+  shopId                  String
+  shop                    Shop                          @relation(fields: [shopId], references: [id], onDelete: Cascade)
+  subscriptionId          String?
+  subscription            BillingSubscription?          @relation(fields: [subscriptionId], references: [id], onDelete: SetNull)
+  provider                BillingProvider
+  providerPaymentId       String?
+  providerInvoiceId       String?
+  providerCheckoutId      String?
+  canonicalStatus         BillingCanonicalPaymentStatus @default(CREATED)
+  providerStatus          String?
+  amountMinor             Int                           @default(0)
+  amountRefundedMinor     Int                           @default(0)
+  currency                String                        @default("EUR")
+  sequenceType            String?
+  failureCode             String?
+  failureMessageSanitized String?
+  requiresCustomerAction  Boolean                       @default(false)
+  actionUrl               String?
+  paidAt                  DateTime?
+  failedAt                DateTime?
+  refundedAt              DateTime?
+  disputedAt              DateTime?
+  createdAt               DateTime                      @default(now())
+  updatedAt               DateTime                      @updatedAt
+
+  @@unique([provider, providerPaymentId])
+  @@index([shopId, createdAt])
+  @@index([subscriptionId])
+  @@index([providerCheckoutId])
+}
+
+model BillingPaymentMethodSummary {
+  id                      String         @id @default(cuid())
+  billingAccountId        String
+  billingAccount          BillingAccount @relation(fields: [billingAccountId], references: [id], onDelete: Cascade)
+  provider                BillingProvider
+  providerPaymentMethodId String?
+  type                    String?
+  cardBrand               String?
+  last4                   String?
+  expiryMonth             Int?
+  expiryYear              Int?
+  bankName                String?
+  mandateStatus           String?
+  isDefault               Boolean        @default(false)
+  createdAt               DateTime       @default(now())
+  updatedAt               DateTime       @updatedAt
+
+  @@index([billingAccountId])
+  @@unique([provider, providerPaymentMethodId])
+}
+
+/// Durable webhook inbox — RECEIVED first; PROCESSED only after mutations commit.
 model BillingWebhookEvent {
-  id          String   @id @default(cuid())
-  provider    String
-  eventId     String
-  eventName   String
-  shopId      String?
-  payloadHash String?
-  processedAt DateTime @default(now())
+  id                String                         @id @default(cuid())
+  provider          String
+  eventId           String
+  eventName         String
+  shopId            String?
+  payloadHash       String?
+  canonicalEntityId String?
+  status            BillingWebhookProcessingStatus @default(PROCESSED)
+  attemptCount      Int                            @default(0)
+  lastError         String?
+  receivedAt        DateTime                       @default(now())
+  processedAt       DateTime?
+  nextAttemptAt     DateTime?
+  /// Redacted JSON summary only — never PAN / secrets
+  redactedPayload   Json?
 
   @@unique([provider, eventId])
-  @@index([shopId, processedAt])
+  @@index([shopId, receivedAt])
+  @@index([status, nextAttemptAt])
+}
+
+model BillingNotificationDelivery {
+  id               String               @id @default(cuid())
+  shopId           String
+  shop             Shop                 @relation(fields: [shopId], references: [id], onDelete: Cascade)
+  subscriptionId   String?
+  subscription     BillingSubscription? @relation(fields: [subscriptionId], references: [id], onDelete: SetNull)
+  notificationType String
+  periodEnd        DateTime?
+  channel          String
+  status           String               @default("SENT")
+  sentAt           DateTime             @default(now())
+  dedupeKey        String               @unique
+
+  @@index([shopId, notificationType])
+}
+
+model BillingOperation {
+  id             String                 @id @default(cuid())
+  idempotencyKey String
+  shopId         String
+  shop           Shop                   @relation(fields: [shopId], references: [id], onDelete: Cascade)
+  operationType  String
+  requestHash    String
+  status         BillingOperationStatus @default(PENDING)
+  responseJson   Json?
+  expiresAt      DateTime
+  createdAt      DateTime               @default(now())
+  updatedAt      DateTime               @updatedAt
+
+  @@unique([shopId, operationType, idempotencyKey])
+  @@index([shopId, createdAt])
 }
 
 /// Client Idempotency-Key receipts for hot money mutations (expand-only).

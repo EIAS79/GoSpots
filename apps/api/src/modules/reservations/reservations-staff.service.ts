@@ -31,6 +31,7 @@ import {
   isDiningResourceType,
   parseNoShowMinutes,
   sessionEndsAt,
+  usesHoldArrivalWindow,
   usesSessionLifecycle,
 } from '../../common/dining-reservation.util';
 import {
@@ -193,13 +194,13 @@ export class ReservationsStaffService {
       }
       resourceType = resource.type;
       offeringConfig = resource.category?.offeringConfig ?? null;
-      if (usesSessionLifecycle(resource.type)) {
+      if (usesHoldArrivalWindow(resource.type)) {
         const noShowMinutes = parseNoShowMinutes(offeringConfig);
         endsAt = holdEndsAt(startsAt, noShowMinutes);
       }
     }
 
-    if (!usesSessionLifecycle(resourceType)) {
+    if (!usesHoldArrivalWindow(resourceType)) {
       if (endsAt <= startsAt) {
         throw new BadRequestException(
           'End time must be after start time (same day).',
@@ -211,13 +212,18 @@ export class ReservationsStaffService {
           'A single booking cannot span more than 24 hours.',
         );
       }
+      if (resourceType && endsAt.getTime() - startsAt.getTime() < 15 * 60_000) {
+        throw new BadRequestException(
+          'Book at least 15 minutes of play time.',
+        );
+      }
     }
 
     await assertWithinOpeningHours(
       this.prisma,
       shopId,
       startsAt,
-      usesSessionLifecycle(resourceType) ? startsAt : endsAt,
+      usesHoldArrivalWindow(resourceType) ? startsAt : endsAt,
     );
     const guestEmail = dto.guestEmail?.trim() || null;
     const issuedGuest = guestEmail
@@ -339,8 +345,9 @@ export class ReservationsStaffService {
         : existingResource;
 
     const isSession = usesSessionLifecycle(resource?.type);
+    const holdOnly = usesHoldArrivalWindow(resource?.type);
 
-    if (isSession) {
+    if (holdOnly) {
       const noShowMinutes = parseNoShowMinutes(
         resource?.category?.offeringConfig,
       );
@@ -354,6 +361,19 @@ export class ReservationsStaffService {
       } else if (dto.startsAt != null && dto.endsAt == null) {
         endsAt = holdEndsAt(startsAt, noShowMinutes);
       }
+    } else if (isSession) {
+      // Gaming fixed play window: keep client/existing endsAt.
+      // On check-in without a new end, preserve booked window (or open to EOD if missing).
+      if (nextStatus === ReservationStatus.CHECKED_IN && dto.endsAt == null) {
+        if (endsAt <= startsAt) {
+          endsAt = sessionEndsAt(startsAt);
+        }
+      } else if (dto.startsAt != null && dto.endsAt == null) {
+        // start moved without end — keep duration
+        const prevSpan =
+          existing.endsAt.getTime() - existing.startsAt.getTime();
+        endsAt = new Date(startsAt.getTime() + Math.max(prevSpan, 15 * 60_000));
+      }
     }
 
     if (
@@ -363,13 +383,13 @@ export class ReservationsStaffService {
       endsAt = new Date();
     }
 
-    if (!isSession && endsAt <= startsAt) {
+    if (!holdOnly && endsAt <= startsAt) {
       throw new BadRequestException(
         'End time must be after start time (same day).',
       );
     }
 
-    if (!isSession) {
+    if (!holdOnly) {
       const maxSpanMs = 24 * 60 * 60 * 1000;
       if (endsAt.getTime() - startsAt.getTime() > maxSpanMs) {
         throw new BadRequestException(
@@ -386,7 +406,7 @@ export class ReservationsStaffService {
         this.prisma,
         shopId,
         startsAt,
-        isSession ? startsAt : endsAt,
+        holdOnly ? startsAt : endsAt,
       );
     }
     const updateData = {
@@ -396,7 +416,10 @@ export class ReservationsStaffService {
       ...(dto.guestPhone !== undefined && { guestPhone: dto.guestPhone }),
       ...(dto.partySize != null && { partySize: dto.partySize }),
       ...(dto.startsAt != null && { startsAt }),
-      ...(dto.endsAt != null && { endsAt }),
+      ...((dto.endsAt != null ||
+        dto.startsAt != null ||
+        dto.status != null ||
+        holdOnly) && { endsAt }),
       ...(dto.status != null && { status: dto.status }),
       ...(dto.staffAlert !== undefined && { staffAlert: dto.staffAlert }),
       ...(dto.notes !== undefined && { notes: dto.notes }),
