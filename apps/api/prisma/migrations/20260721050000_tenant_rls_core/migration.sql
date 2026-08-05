@@ -60,6 +60,10 @@ DECLARE
 BEGIN
   FOREACH t IN ARRAY tables
   LOOP
+    -- Skip tables that were historically created via db push and are missing from migrate history.
+    IF to_regclass(format('public.%I', t)) IS NULL THEN
+      CONTINUE;
+    END IF;
     EXECUTE format('ALTER TABLE %I ENABLE ROW LEVEL SECURITY', t);
     EXECUTE format('ALTER TABLE %I FORCE ROW LEVEL SECURITY', t);
     EXECUTE format('DROP POLICY IF EXISTS %I ON %I', t || '_tenant_isolation', t);

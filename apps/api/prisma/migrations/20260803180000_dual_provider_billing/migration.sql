@@ -1,23 +1,102 @@
 -- Dual-provider billing (Stripe + Mollie) — preserve Lemon history
 
+-- Ensure legacy Subscription enums exist (init used TEXT for tier/status)
+DO $$ BEGIN
+  CREATE TYPE "SubscriptionTier" AS ENUM (
+    'FREE', 'STARTER', 'STANDARD', 'PRO', 'ENTERPRISE'
+  );
+EXCEPTION WHEN duplicate_object THEN NULL;
+END $$;
+
+DO $$ BEGIN
+  CREATE TYPE "SubscriptionStatus" AS ENUM (
+    'TRIAL', 'ACTIVE', 'PAST_DUE', 'CANCELED'
+  );
+EXCEPTION WHEN duplicate_object THEN NULL;
+END $$;
+
+DO $$ BEGIN
+  IF EXISTS (
+    SELECT 1 FROM information_schema.columns
+    WHERE table_schema = 'public' AND table_name = 'Subscription'
+      AND column_name = 'tier' AND udt_name = 'text'
+  ) THEN
+    ALTER TABLE "Subscription"
+      ALTER COLUMN "tier" DROP DEFAULT,
+      ALTER COLUMN "tier" TYPE "SubscriptionTier"
+        USING (
+          CASE upper("tier")
+            WHEN 'FREE' THEN 'FREE'::"SubscriptionTier"
+            WHEN 'STARTER' THEN 'STARTER'::"SubscriptionTier"
+            WHEN 'STANDARD' THEN 'STANDARD'::"SubscriptionTier"
+            WHEN 'PRO' THEN 'PRO'::"SubscriptionTier"
+            WHEN 'ENTERPRISE' THEN 'ENTERPRISE'::"SubscriptionTier"
+            ELSE 'STARTER'::"SubscriptionTier"
+          END
+        ),
+      ALTER COLUMN "tier" SET DEFAULT 'STARTER'::"SubscriptionTier";
+  END IF;
+END $$;
+
+DO $$ BEGIN
+  IF EXISTS (
+    SELECT 1 FROM information_schema.columns
+    WHERE table_schema = 'public' AND table_name = 'Subscription'
+      AND column_name = 'status' AND udt_name = 'text'
+  ) THEN
+    ALTER TABLE "Subscription"
+      ALTER COLUMN "status" DROP DEFAULT,
+      ALTER COLUMN "status" TYPE "SubscriptionStatus"
+        USING (
+          CASE upper("status")
+            WHEN 'TRIAL' THEN 'TRIAL'::"SubscriptionStatus"
+            WHEN 'ACTIVE' THEN 'ACTIVE'::"SubscriptionStatus"
+            WHEN 'PAST_DUE' THEN 'PAST_DUE'::"SubscriptionStatus"
+            WHEN 'CANCELED' THEN 'CANCELED'::"SubscriptionStatus"
+            WHEN 'PAUSED' THEN 'ACTIVE'::"SubscriptionStatus"
+            ELSE 'TRIAL'::"SubscriptionStatus"
+          END
+        ),
+      ALTER COLUMN "status" SET DEFAULT 'TRIAL'::"SubscriptionStatus";
+  END IF;
+END $$;
+
 -- Enums
-CREATE TYPE "BillingProvider" AS ENUM ('STRIPE', 'MOLLIE', 'LEMON_SQUEEZY');
-CREATE TYPE "BillingRenewalMode" AS ENUM ('AUTOMATIC_RENEWAL', 'MANUAL_MONTHLY');
-CREATE TYPE "BillingCanonicalSubscriptionStatus" AS ENUM (
-  'DRAFT', 'CHECKOUT_PENDING', 'INCOMPLETE', 'REQUIRES_ACTION', 'PROCESSING',
-  'TRIALING', 'ACTIVE', 'PAST_DUE', 'UNPAID', 'PAUSE_PENDING', 'PAUSED',
-  'RESUME_PENDING', 'CANCEL_AT_PERIOD_END', 'CANCELED', 'EXPIRED',
-  'INCOMPLETE_EXPIRED', 'PROVIDER_ERROR'
-);
-CREATE TYPE "BillingCanonicalPaymentStatus" AS ENUM (
-  'CREATED', 'OPEN', 'REQUIRES_ACTION', 'PENDING', 'PROCESSING', 'AUTHORIZED',
-  'PAID', 'FAILED', 'CANCELED', 'EXPIRED', 'REFUND_PENDING', 'PARTIALLY_REFUNDED',
-  'REFUNDED', 'DISPUTED', 'CHARGEBACK', 'UNKNOWN'
-);
-CREATE TYPE "BillingWebhookProcessingStatus" AS ENUM (
-  'RECEIVED', 'PROCESSING', 'PROCESSED', 'FAILED', 'DEAD'
-);
-CREATE TYPE "BillingOperationStatus" AS ENUM ('PENDING', 'COMPLETED', 'FAILED', 'EXPIRED');
+DO $$ BEGIN
+  CREATE TYPE "BillingProvider" AS ENUM ('STRIPE', 'MOLLIE', 'LEMON_SQUEEZY');
+EXCEPTION WHEN duplicate_object THEN NULL;
+END $$;
+DO $$ BEGIN
+  CREATE TYPE "BillingRenewalMode" AS ENUM ('AUTOMATIC_RENEWAL', 'MANUAL_MONTHLY');
+EXCEPTION WHEN duplicate_object THEN NULL;
+END $$;
+DO $$ BEGIN
+  CREATE TYPE "BillingCanonicalSubscriptionStatus" AS ENUM (
+    'DRAFT', 'CHECKOUT_PENDING', 'INCOMPLETE', 'REQUIRES_ACTION', 'PROCESSING',
+    'TRIALING', 'ACTIVE', 'PAST_DUE', 'UNPAID', 'PAUSE_PENDING', 'PAUSED',
+    'RESUME_PENDING', 'CANCEL_AT_PERIOD_END', 'CANCELED', 'EXPIRED',
+    'INCOMPLETE_EXPIRED', 'PROVIDER_ERROR'
+  );
+EXCEPTION WHEN duplicate_object THEN NULL;
+END $$;
+DO $$ BEGIN
+  CREATE TYPE "BillingCanonicalPaymentStatus" AS ENUM (
+    'CREATED', 'OPEN', 'REQUIRES_ACTION', 'PENDING', 'PROCESSING', 'AUTHORIZED',
+    'PAID', 'FAILED', 'CANCELED', 'EXPIRED', 'REFUND_PENDING', 'PARTIALLY_REFUNDED',
+    'REFUNDED', 'DISPUTED', 'CHARGEBACK', 'UNKNOWN'
+  );
+EXCEPTION WHEN duplicate_object THEN NULL;
+END $$;
+DO $$ BEGIN
+  CREATE TYPE "BillingWebhookProcessingStatus" AS ENUM (
+    'RECEIVED', 'PROCESSING', 'PROCESSED', 'FAILED', 'DEAD'
+  );
+EXCEPTION WHEN duplicate_object THEN NULL;
+END $$;
+DO $$ BEGIN
+  CREATE TYPE "BillingOperationStatus" AS ENUM ('PENDING', 'COMPLETED', 'FAILED', 'EXPIRED');
+EXCEPTION WHEN duplicate_object THEN NULL;
+END $$;
 
 ALTER TYPE "SubscriptionStatus" ADD VALUE IF NOT EXISTS 'PAUSED';
 

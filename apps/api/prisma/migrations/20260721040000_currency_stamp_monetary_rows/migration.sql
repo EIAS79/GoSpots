@@ -22,38 +22,48 @@ CREATE INDEX IF NOT EXISTS "Reservation_shopId_currency_billedAt_idx"
 
 -- Backfill: current Shop.currency (honest limit — pre-stamp eras that already
 -- flipped currency may be mis-labeled; accept for v1).
-UPDATE "Transaction" t
-SET "currency" = s."currency"
-FROM "Shop" s
-WHERE t."shopId" = s."id"
-  AND t."currency" IS NULL
-  AND s."currency" IS NOT NULL;
+-- Guard: only when Shop.currency exists (fresh migrate chains).
+DO $$
+BEGIN
+  IF EXISTS (
+    SELECT 1 FROM information_schema.columns
+    WHERE table_schema = 'public' AND table_name = 'Shop' AND column_name = 'currency'
+  ) THEN
+    UPDATE "Transaction" t
+    SET "currency" = s."currency"
+    FROM "Shop" s
+    WHERE t."shopId" = s."id"
+      AND t."currency" IS NULL
+      AND s."currency" IS NOT NULL;
 
-UPDATE "ShopOrder" o
-SET "currency" = s."currency"
-FROM "Shop" s
-WHERE o."shopId" = s."id"
-  AND o."currency" IS NULL
-  AND s."currency" IS NOT NULL;
+    UPDATE "ShopOrder" o
+    SET "currency" = s."currency"
+    FROM "Shop" s
+    WHERE o."shopId" = s."id"
+      AND o."currency" IS NULL
+      AND s."currency" IS NOT NULL;
 
-UPDATE "PlaySession" p
-SET "currency" = s."currency"
-FROM "Shop" s
-WHERE p."shopId" = s."id"
-  AND p."currency" IS NULL
-  AND s."currency" IS NOT NULL;
+    UPDATE "PlaySession" p
+    SET "currency" = s."currency"
+    FROM "Shop" s
+    WHERE p."shopId" = s."id"
+      AND p."currency" IS NULL
+      AND s."currency" IS NOT NULL;
 
-UPDATE "ShopLoss" l
-SET "currency" = s."currency"
-FROM "Shop" s
-WHERE l."shopId" = s."id"
-  AND l."currency" IS NULL
-  AND s."currency" IS NOT NULL;
+    UPDATE "ShopLoss" l
+    SET "currency" = s."currency"
+    FROM "Shop" s
+    WHERE l."shopId" = s."id"
+      AND l."currency" IS NULL
+      AND s."currency" IS NOT NULL;
 
-UPDATE "Reservation" r
-SET "currency" = s."currency"
-FROM "Shop" s
-WHERE r."shopId" = s."id"
-  AND r."currency" IS NULL
-  AND s."currency" IS NOT NULL
-  AND (r."billedAmount" IS NOT NULL OR r."billingBaseAmount" IS NOT NULL);
+    UPDATE "Reservation" r
+    SET "currency" = s."currency"
+    FROM "Shop" s
+    WHERE r."shopId" = s."id"
+      AND r."currency" IS NULL
+      AND s."currency" IS NOT NULL
+      AND (r."billedAmount" IS NOT NULL OR r."billingBaseAmount" IS NOT NULL);
+  END IF;
+END $$;
+
