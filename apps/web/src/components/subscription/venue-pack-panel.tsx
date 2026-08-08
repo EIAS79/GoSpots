@@ -4,15 +4,14 @@ import { Check, Info, Loader2 } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 import { cn } from "@/lib/cn";
 import {
+  fetchBillingCatalog,
   updateVenuePack,
+  type BillingCatalogResponse,
   type SubscriptionResponse,
 } from "@/lib/dashboard-client";
 import { TRIAL_STAFF_SEAT_LIMIT } from "@/lib/plan";
 import {
-  featuresMonthlyTotal,
-  marketAdjustedCatalogEur,
   serializeAddOns,
-  VENUE_ADD_ONS,
   type AddOnId,
   type VenuePackId,
 } from "@/lib/venue-packs";
@@ -63,7 +62,7 @@ export function VenuePackPanel({
   data: SubscriptionResponse;
   onUpdated: (next: SubscriptionResponse) => void;
 }) {
-  const { formatFromEur, t, currency } = useVenueSettings();
+  const { formatFromEur, formatMoney, t, currency } = useVenueSettings();
   const trialActive = data.trialActive;
   const paidActive =
     data.subscription?.status === "ACTIVE" && !data.trialActive;
@@ -103,6 +102,8 @@ export function VenuePackPanel({
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [saved, setSaved] = useState(false);
+  const [billingCatalog, setBillingCatalog] =
+    useState<BillingCatalogResponse | null>(null);
 
   useEffect(() => {
     setPackId(editorSource.packId);
@@ -114,19 +115,64 @@ export function VenuePackPanel({
     );
   }, [editorSource, trialActive, trialSeatMax]);
 
+  useEffect(() => {
+    let cancelled = false;
+    setBillingCatalog(null);
+    void fetchBillingCatalog(currency)
+      .then((catalog) => {
+        if (!cancelled) setBillingCatalog(catalog);
+      })
+      .catch(() => {
+        // The subscription response remains usable. Checkout itself always
+        // obtains a fresh server-side quote, so a catalog display failure must
+        // never cause the browser to invent a charge amount.
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [currency]);
+
+  const quotedAddOns = useMemo(
+    () =>
+      new Map(
+        (billingCatalog?.addOns ?? []).map((entry) => [entry.id, entry] as const),
+      ),
+    [billingCatalog],
+  );
+
   const hasTeam = features.includes("team_accounts");
   const maxSeats = trialActive ? trialSeatMax : 100;
   const effectiveSeats = hasTeam
     ? Math.min(maxSeats, Math.max(trialActive ? 1 : 0, seatQty))
     : 0;
-  const total = useMemo(
+
+  const catalog = data.addOnCatalog;
+
+  const totalLocal = useMemo(() => {
+    if (!billingCatalog) return null;
+    return features.reduce((sum, id) => {
+      const item = quotedAddOns.get(id);
+      if (!item) return sum;
+      const quantity = item.pricedPerSeat ? effectiveSeats : 1;
+      return sum + item.monthlyPrice * quantity;
+    }, 0);
+  }, [billingCatalog, effectiveSeats, features, quotedAddOns]);
+
+  const totalFallbackEur = useMemo(
     () =>
-      marketAdjustedCatalogEur(
-        featuresMonthlyTotal(features, effectiveSeats),
-        currency,
-      ),
-    [features, effectiveSeats, currency],
+      features.reduce((sum, id) => {
+        const item = catalog.find((entry) => entry.id === id);
+        if (!item) return sum;
+        const quantity = item.pricedPerSeat ? effectiveSeats : 1;
+        return sum + item.monthlyPrice * quantity;
+      }, 0),
+    [catalog, effectiveSeats, features],
   );
+
+  const totalLabel =
+    totalLocal != null && billingCatalog
+      ? formatMoney(totalLocal, billingCatalog.currency)
+      : formatFromEur(totalFallbackEur);
 
   const dirty =
     packId !== editorSource.packId ||
@@ -135,10 +181,25 @@ export function VenuePackPanel({
 
   const neverConfigured = !data.addOns?.trim() && !data.hasPendingChanges;
 
-  const catalog = useMemo(() => {
-    if (data.addOnCatalog?.length) return data.addOnCatalog;
-    return Object.values(VENUE_ADD_ONS);
-  }, [data.addOnCatalog]);
+  function featurePriceLabel(id: AddOnId, fallbackEur: number): string {
+    const quoted = quotedAddOns.get(id);
+    if (quoted && billingCatalog) {
+      return formatMoney(quoted.monthlyPrice, billingCatalog.currency);
+    }
+    return formatFromEur(fallbackEur);
+  }
+
+  function teamPriceLabel(quantity = 1): string {
+    const fallback = catalog.find((entry) => entry.id === "team_accounts");
+    const quoted = quotedAddOns.get("team_accounts");
+    if (quoted && billingCatalog) {
+      return formatMoney(
+        quoted.monthlyPrice * Math.max(1, quantity),
+        billingCatalog.currency,
+      );
+    }
+    return formatFromEur((fallback?.monthlyPrice ?? 0) * Math.max(1, quantity));
+  }
 
   async function save() {
     if (hasTeam && effectiveSeats < 1) {
@@ -278,9 +339,11 @@ export function VenuePackPanel({
           </div>
           <p className="text-right">
             <span className="text-2xl font-semibold text-emerald-300">
-              {formatFromEur(total)}
+              {totalLabel}
             </span>
-            <span className="text-sm text-zinc-500">{t("subscription.perMo")}</span>
+            <span className="text-sm text-zinc-500">
+              {t("subscription.perMo")}
+            </span>
           </p>
         </div>
 
@@ -354,15 +417,9 @@ export function VenuePackPanel({
                         ) : null}
                       </span>
                       <span className="text-sm text-emerald-300">
-                        {formatFromEur(
-                          marketAdjustedCatalogEur(
-                            feature.monthlyPrice,
-                            currency,
-                          ),
-                        )}
+                        {featurePriceLabel(id, feature.monthlyPrice)}
                         <span className="text-xs text-zinc-500">
-                          {VENUE_ADD_ONS[id]?.pricedPerSeat ||
-                          feature.pricedPerSeat
+                          {feature.pricedPerSeat
                             ? t("subscription.perSeat")
                             : t("subscription.perMo")}
                         </span>
@@ -387,20 +444,10 @@ export function VenuePackPanel({
               {trialActive
                 ? t("subscription.seatsHintTrial", {
                     max: trialSeatMax,
-                    price: formatFromEur(
-                      marketAdjustedCatalogEur(
-                        VENUE_ADD_ONS.team_accounts.monthlyPrice,
-                        currency,
-                      ),
-                    ),
+                    price: teamPriceLabel(),
                   })
                 : t("subscription.seatsHintPaid", {
-                    price: formatFromEur(
-                      marketAdjustedCatalogEur(
-                        VENUE_ADD_ONS.team_accounts.monthlyPrice,
-                        currency,
-                      ),
-                    ),
+                    price: teamPriceLabel(),
                   })}
             </p>
             <div className="mt-3 flex flex-wrap items-center gap-3">
@@ -444,14 +491,7 @@ export function VenuePackPanel({
               </button>
               {!trialActive ? (
                 <span className="text-sm text-emerald-300">
-                  ={" "}
-                  {formatFromEur(
-                    marketAdjustedCatalogEur(
-                      VENUE_ADD_ONS.team_accounts.monthlyPrice *
-                        Math.max(1, seatQty),
-                      currency,
-                    ),
-                  )}
+                  = {teamPriceLabel(Math.max(1, seatQty))}
                   {t("subscription.perMo")}
                 </span>
               ) : (

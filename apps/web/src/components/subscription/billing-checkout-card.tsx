@@ -47,8 +47,25 @@ const LIVE_STATUSES = new Set([
   "INCOMPLETE",
 ]);
 
+function isBillingProvider(value: unknown): value is BillingProvider {
+  return value === "STRIPE" || value === "MOLLIE";
+}
+
 function isLiveDualSub(sub: DualBillingSubscription | null | undefined) {
   return !!sub && LIVE_STATUSES.has(sub.canonicalStatus);
+}
+
+function BillingUnavailable({ message }: { message: string }) {
+  const { t } = useVenueSettings();
+  return (
+    <section className="rounded-xl border border-rose-400/25 bg-rose-500/[0.07] p-5">
+      <h2 className="flex items-center gap-2 text-lg font-semibold text-white">
+        <CreditCard size={18} className="text-rose-300" />
+        {t("subscription.billingTitle")}
+      </h2>
+      <p className="mt-2 text-sm text-rose-200">{message}</p>
+    </section>
+  );
 }
 
 function LemonBillingFallback({
@@ -139,9 +156,7 @@ function LemonBillingFallback({
               : t("subscription.activate")}
         </button>
       </div>
-      {error ? (
-        <p className="mt-3 text-sm text-rose-300">{error}</p>
-      ) : null}
+      {error ? <p className="mt-3 text-sm text-rose-300">{error}</p> : null}
     </section>
   );
 }
@@ -178,66 +193,85 @@ export function BillingCheckoutCard({
   const { formatFromEur, t } = useVenueSettings();
   const [status, setStatus] = useState<BillingStatusResponse | null>(null);
   const [providers, setProviders] = useState<BillingProvider[]>([]);
-  const [defaultProvider, setDefaultProvider] =
-    useState<BillingProvider>("STRIPE");
-  const [provider, setProvider] = useState<BillingProvider>("STRIPE");
+  const [defaultProvider, setDefaultProvider] = useState<BillingProvider | null>(
+    null,
+  );
+  const [provider, setProvider] = useState<BillingProvider | null>(null);
   const [renewalMode, setRenewalMode] =
     useState<BillingRenewalMode>("AUTOMATIC_RENEWAL");
   const [autoRenewConsent, setAutoRenewConsent] = useState(false);
   const [loading, setLoading] = useState(false);
   const [bootLoading, setBootLoading] = useState(true);
+  const [bootError, setBootError] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [confirmKind, setConfirmKind] = useState<ConfirmKind>(null);
-  const [switchTarget, setSwitchTarget] = useState<BillingProvider | null>(
-    null,
-  );
+  const [switchTarget, setSwitchTarget] = useState<BillingProvider | null>(null);
 
   const dual = isDualBillingStatus(status);
+  const legacyLemon =
+    !!status && !dual && status.provider === "lemon_squeezy";
   const live = isLiveDualSub(dualSubscription);
 
   useEffect(() => {
     let cancelled = false;
+
     (async () => {
       try {
         const st = await fetchBillingStatus();
         if (cancelled) return;
         setStatus(st);
-        if (isDualBillingStatus(st)) {
-          try {
-            const list = await fetchBillingProviders();
-            if (cancelled) return;
-            const enabled = list.providers.filter(
-              (p): p is BillingProvider => p === "STRIPE" || p === "MOLLIE",
-            );
-            setProviders(enabled.length ? enabled : ["STRIPE", "MOLLIE"]);
-            setDefaultProvider(list.defaultProvider);
-            setProvider(list.defaultProvider);
-          } catch {
-            const fromStatus = (st.providers ?? []).filter(
-              (p): p is BillingProvider => p === "STRIPE" || p === "MOLLIE",
-            );
-            setProviders(fromStatus.length ? fromStatus : ["STRIPE", "MOLLIE"]);
-            if (st.defaultProvider) {
-              setDefaultProvider(st.defaultProvider);
-              setProvider(st.defaultProvider);
-            }
-          }
+        setBootError(null);
+
+        if (!isDualBillingStatus(st)) return;
+
+        let enabled = (st.providers ?? []).filter(isBillingProvider);
+        let preferred = isBillingProvider(st.defaultProvider)
+          ? st.defaultProvider
+          : null;
+
+        try {
+          const list = await fetchBillingProviders();
+          if (cancelled) return;
+          enabled = list.providers.filter(isBillingProvider);
+          preferred = isBillingProvider(list.defaultProvider)
+            ? list.defaultProvider
+            : preferred;
+        } catch {
+          // Status already contains the server-declared providers. Never invent
+          // providers when the detailed provider request fails.
         }
-      } catch {
-        if (!cancelled) setStatus(null);
+
+        if (cancelled) return;
+        const selected =
+          preferred && enabled.includes(preferred)
+            ? preferred
+            : enabled[0] ?? null;
+        setProviders(enabled);
+        setDefaultProvider(selected);
+        setProvider(selected);
+      } catch (e) {
+        if (!cancelled) {
+          setStatus(null);
+          setProviders([]);
+          setProvider(null);
+          setDefaultProvider(null);
+          setBootError(
+            e instanceof Error ? e.message : t("subscription.billingFailed"),
+          );
+        }
       } finally {
         if (!cancelled) setBootLoading(false);
       }
     })();
+
     return () => {
       cancelled = true;
     };
-  }, []);
+  }, [t]);
 
   const otherProvider = useMemo(() => {
     if (!dualSubscription) return null;
-    const cur = dualSubscription.provider;
-    return providers.find((p) => p !== cur) ?? null;
+    return providers.find((p) => p !== dualSubscription.provider) ?? null;
   }, [dualSubscription, providers]);
 
   async function redirectHosted(url: string, operationId?: string) {
@@ -246,6 +280,11 @@ export function BillingCheckoutCard({
   }
 
   async function startCheckout() {
+    if (!provider) {
+      setError(t("subscription.billingNotConfigured"));
+      return;
+    }
+
     setLoading(true);
     setError(null);
     try {
@@ -311,7 +350,9 @@ export function BillingCheckoutCard({
     );
   }
 
-  if (!dual) {
+  if (bootError) return <BillingUnavailable message={bootError} />;
+
+  if (legacyLemon) {
     return (
       <LemonBillingFallback
         monthlyTotal={monthlyTotal}
@@ -324,8 +365,12 @@ export function BillingCheckoutCard({
     );
   }
 
+  if (!status || !dual) {
+    return <BillingUnavailable message={t("subscription.billingNotConfigured")} />;
+  }
+
   const dualConfigured =
-    providers.length > 0 && (status?.enabled !== false);
+    status.enabled !== false && providers.length > 0 && provider !== null;
 
   return (
     <section className="rounded-xl border border-emerald-400/20 bg-emerald-500/[0.06] p-5">
@@ -344,6 +389,12 @@ export function BillingCheckoutCard({
         </p>
       </div>
 
+      {!dualConfigured ? (
+        <p className="mt-4 rounded-lg border border-amber-400/25 bg-amber-500/10 px-3 py-2 text-sm text-amber-100">
+          {t("subscription.billingNotConfigured")}
+        </p>
+      ) : null}
+
       {live && dualSubscription ? (
         <div className="mt-4 space-y-3">
           <p className="text-sm text-zinc-300">
@@ -359,9 +410,7 @@ export function BillingCheckoutCard({
             <button
               type="button"
               disabled={loading}
-              onClick={() =>
-                void runManage(() => updateDualPaymentMethod())
-              }
+              onClick={() => void runManage(() => updateDualPaymentMethod())}
               className="inline-flex items-center gap-2 rounded-lg border border-emerald-400/30 bg-emerald-500/15 px-3 py-2 text-sm text-emerald-100 hover:bg-emerald-500/25 disabled:opacity-40"
             >
               {loading ? (
@@ -371,19 +420,19 @@ export function BillingCheckoutCard({
               )}
               {t("subscription.updatePaymentMethod")}
             </button>
+
             {dualSubscription.provider === "STRIPE" ? (
               <button
                 type="button"
                 disabled={loading}
-                onClick={() =>
-                  void runManage(() => openStripeCustomerPortal())
-                }
+                onClick={() => void runManage(() => openStripeCustomerPortal())}
                 className="inline-flex items-center gap-2 rounded-lg border border-white/15 px-3 py-2 text-sm text-zinc-200 hover:bg-white/5 disabled:opacity-40"
               >
                 <ExternalLink size={14} />
                 {t("subscription.openStripePortal")}
               </button>
             ) : null}
+
             {dualSubscription.renewalMode === "MANUAL_MONTHLY" ? (
               <button
                 type="button"
@@ -397,14 +446,13 @@ export function BillingCheckoutCard({
                 {t("subscription.payNow")}
               </button>
             ) : null}
+
             {dualSubscription.canonicalStatus === "PAUSED" ||
             dualSubscription.canonicalStatus === "PAUSE_PENDING" ? (
               <button
                 type="button"
                 disabled={loading}
-                onClick={() =>
-                  void runManage(() => resumeDualSubscription())
-                }
+                onClick={() => void runManage(() => resumeDualSubscription())}
                 className="inline-flex items-center gap-2 rounded-lg border border-white/15 px-3 py-2 text-sm text-zinc-200 hover:bg-white/5 disabled:opacity-40"
               >
                 <Play size={14} />
@@ -421,6 +469,7 @@ export function BillingCheckoutCard({
                 {t("subscription.pauseSubscription")}
               </button>
             )}
+
             {otherProvider ? (
               <button
                 type="button"
@@ -432,11 +481,10 @@ export function BillingCheckoutCard({
                 className="inline-flex items-center gap-2 rounded-lg border border-amber-400/30 px-3 py-2 text-sm text-amber-100 hover:bg-amber-500/10 disabled:opacity-40"
               >
                 <RefreshCw size={14} />
-                {t("subscription.switchProvider", {
-                  provider: otherProvider,
-                })}
+                {t("subscription.switchProvider", { provider: otherProvider })}
               </button>
             ) : null}
+
             <button
               type="button"
               disabled={loading}
@@ -485,10 +533,7 @@ export function BillingCheckoutCard({
             </p>
             <div className="mt-2 flex flex-wrap gap-2">
               {(
-                [
-                  "AUTOMATIC_RENEWAL",
-                  "MANUAL_MONTHLY",
-                ] as BillingRenewalMode[]
+                ["AUTOMATIC_RENEWAL", "MANUAL_MONTHLY"] as BillingRenewalMode[]
               ).map((mode) => (
                 <button
                   key={mode}
@@ -533,12 +578,7 @@ export function BillingCheckoutCard({
             type="button"
             disabled={!dualConfigured || loading || !packId}
             onClick={() => void startCheckout()}
-            className={cn(
-              "inline-flex items-center gap-2 rounded-lg px-4 py-2.5 text-sm font-medium text-white disabled:opacity-40",
-              trialExpired
-                ? "bg-emerald-600 hover:bg-emerald-500"
-                : "bg-emerald-600 hover:bg-emerald-500",
-            )}
+            className="inline-flex items-center gap-2 rounded-lg bg-emerald-600 px-4 py-2.5 text-sm font-medium text-white hover:bg-emerald-500 disabled:opacity-40"
           >
             {loading ? (
               <Loader2 size={16} className="animate-spin" />
@@ -552,9 +592,7 @@ export function BillingCheckoutCard({
         </div>
       )}
 
-      {error ? (
-        <p className="mt-3 text-sm text-rose-300">{error}</p>
-      ) : null}
+      {error ? <p className="mt-3 text-sm text-rose-300">{error}</p> : null}
 
       <ConfirmDialog
         open={confirmKind === "cancel"}

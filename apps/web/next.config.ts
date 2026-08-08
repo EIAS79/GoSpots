@@ -2,15 +2,20 @@ import type { NextConfig } from "next";
 import path from "path";
 
 const monorepoRoot = path.join(__dirname, "../..");
+const isProd = process.env.NODE_ENV === "production";
 
 function apiUploadPatterns(): NonNullable<NextConfig["images"]>["remotePatterns"] {
   const patterns: NonNullable<NextConfig["images"]>["remotePatterns"] = [
-    {
-      protocol: "http",
-      hostname: "localhost",
-      port: "4000",
-      pathname: "/api/v1/**",
-    },
+    ...(isProd
+      ? []
+      : [
+          {
+            protocol: "http" as const,
+            hostname: "localhost",
+            port: "4000",
+            pathname: "/api/v1/**",
+          },
+        ]),
     {
       protocol: "https",
       hostname: "images.unsplash.com",
@@ -29,7 +34,9 @@ function apiUploadPatterns(): NonNullable<NextConfig["images"]>["remotePatterns"
         pathname: "/api/v1/**",
       });
     } catch {
-      /* ignore */
+      if (isProd) {
+        throw new Error("NEXT_PUBLIC_API_BASE_URL is not a valid URL/path.");
+      }
     }
   }
 
@@ -44,7 +51,33 @@ function apiUploadPatterns(): NonNullable<NextConfig["images"]>["remotePatterns"
   return patterns;
 }
 
-const apiProxyTarget = process.env.API_PROXY_TARGET?.replace(/\/$/, "");
+const apiProxyTarget = process.env.API_PROXY_TARGET?.trim().replace(/\/$/, "");
+const publicApiBase = process.env.NEXT_PUBLIC_API_BASE_URL?.trim() || "/api/v1";
+const usesSameOriginProxy = publicApiBase.startsWith("/");
+
+if (isProd && usesSameOriginProxy && !apiProxyTarget) {
+  throw new Error(
+    "API_PROXY_TARGET is required in production when NEXT_PUBLIC_API_BASE_URL is relative (recommended: /api/v1).",
+  );
+}
+
+if (apiProxyTarget) {
+  let parsed: URL;
+  try {
+    parsed = new URL(apiProxyTarget);
+  } catch {
+    throw new Error("API_PROXY_TARGET must be an absolute http(s) URL.");
+  }
+  if (!/^https?:$/.test(parsed.protocol)) {
+    throw new Error("API_PROXY_TARGET must use http or https.");
+  }
+  if (
+    isProd &&
+    (parsed.hostname === "localhost" || parsed.hostname === "127.0.0.1")
+  ) {
+    throw new Error("API_PROXY_TARGET must not point to localhost in production.");
+  }
+}
 
 const nextConfig: NextConfig = {
   outputFileTracingRoot: monorepoRoot,
@@ -53,6 +86,30 @@ const nextConfig: NextConfig = {
   },
   images: {
     remotePatterns: apiUploadPatterns(),
+  },
+  async redirects() {
+    if (!isProd) return [];
+    const canonical = "https://www.gospots.eu/:path*";
+    return [
+      {
+        source: "/:path*",
+        has: [{ type: "host", value: "gospots.pl" }],
+        destination: canonical,
+        permanent: true,
+      },
+      {
+        source: "/:path*",
+        has: [{ type: "host", value: "www.gospots.pl" }],
+        destination: canonical,
+        permanent: true,
+      },
+      {
+        source: "/:path*",
+        has: [{ type: "host", value: "gospots.eu" }],
+        destination: canonical,
+        permanent: true,
+      },
+    ];
   },
   async rewrites() {
     if (!apiProxyTarget) return [];

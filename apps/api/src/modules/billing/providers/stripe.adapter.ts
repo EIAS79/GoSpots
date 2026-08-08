@@ -41,6 +41,15 @@ function metaStrings(
   return out;
 }
 
+function stripeResourceMissing(err: unknown): boolean {
+  return Boolean(
+    err &&
+    typeof err === 'object' &&
+    'code' in err &&
+    (err as { code?: unknown }).code === 'resource_missing',
+  );
+}
+
 @Injectable()
 export class StripeBillingAdapter implements BillingProviderAdapter {
   readonly provider = 'STRIPE' as const;
@@ -56,15 +65,9 @@ export class StripeBillingAdapter implements BillingProviderAdapter {
       );
     }
     if (!this.client) {
-      const configuredApiVersion = this.config
-        .get<string>('STRIPE_API_VERSION')
-        ?.trim();
-      this.client = new Stripe(key, {
-        ...(configuredApiVersion
-          ? { apiVersion: configuredApiVersion as Stripe.LatestApiVersion }
-          : {}),
-        typescript: true,
-      });
+      // Do not pin an API version in application config. The installed Stripe SDK
+      // selects a compatible version; account-level upgrades are then explicit.
+      this.client = new Stripe(key, { typescript: true });
     }
     return this.client;
   }
@@ -74,20 +77,27 @@ export class StripeBillingAdapter implements BillingProviderAdapter {
   ): Promise<CheckoutResult> {
     const stripe = this.getStripe();
     const customerId = await this.ensureCustomer(stripe, input);
+    const validatedPriceId = await this.resolveRecurringPriceId(stripe, {
+      priceId: input.priceId,
+      amountMinor: input.amountMinor,
+      currency: input.currency,
+      interval: input.interval ?? 'month',
+    });
 
-    const lineItems: Stripe.Checkout.SessionCreateParams.LineItem[] = input.priceId
-      ? [{ price: input.priceId, quantity: 1 }]
-      : [
-          {
-            quantity: 1,
-            price_data: {
-              currency: input.currency.toLowerCase(),
-              unit_amount: Math.max(0, Math.round(input.amountMinor)),
-              recurring: { interval: input.interval ?? 'month' },
-              product_data: { name: input.description },
+    const lineItems: Stripe.Checkout.SessionCreateParams.LineItem[] =
+      validatedPriceId
+        ? [{ price: validatedPriceId, quantity: 1 }]
+        : [
+            {
+              quantity: 1,
+              price_data: {
+                currency: input.currency.toLowerCase(),
+                unit_amount: Math.max(0, Math.round(input.amountMinor)),
+                recurring: { interval: input.interval ?? 'month' },
+                product_data: { name: input.description },
+              },
             },
-          },
-        ];
+          ];
 
     const session = await stripe.checkout.sessions.create({
       mode: 'subscription',
@@ -120,7 +130,8 @@ export class StripeBillingAdapter implements BillingProviderAdapter {
       providerSubscriptionId:
         typeof session.subscription === 'string'
           ? session.subscription
-          : session.subscription?.id ?? null,
+          : (session.subscription?.id ?? null),
+      providerPriceId: validatedPriceId,
     };
   }
 
@@ -167,7 +178,7 @@ export class StripeBillingAdapter implements BillingProviderAdapter {
       providerPaymentId:
         typeof session.payment_intent === 'string'
           ? session.payment_intent
-          : session.payment_intent?.id ?? null,
+          : (session.payment_intent?.id ?? null),
     };
   }
 
@@ -203,7 +214,9 @@ export class StripeBillingAdapter implements BillingProviderAdapter {
         amountMinor: pi.amount,
         currency: pi.currency.toUpperCase(),
         customerId:
-          typeof pi.customer === 'string' ? pi.customer : pi.customer?.id ?? null,
+          typeof pi.customer === 'string'
+            ? pi.customer
+            : (pi.customer?.id ?? null),
         paidAt: pi.status === 'succeeded' ? unixToDate(pi.created) : null,
         metadata: metaStrings(pi.metadata),
       };
@@ -217,7 +230,7 @@ export class StripeBillingAdapter implements BillingProviderAdapter {
       customerId:
         typeof charge.customer === 'string'
           ? charge.customer
-          : charge.customer?.id ?? null,
+          : (charge.customer?.id ?? null),
       paidAt: charge.paid ? unixToDate(charge.created) : null,
       metadata: metaStrings(charge.metadata),
     };
@@ -283,8 +296,18 @@ export class StripeBillingAdapter implements BillingProviderAdapter {
       );
     }
 
-    const items: Stripe.SubscriptionUpdateParams.Item[] = input.priceId
-      ? [{ id: itemId, price: input.priceId }]
+    const validatedPriceId =
+      input.priceId && input.amountMinor != null && input.currency
+        ? await this.resolveRecurringPriceId(stripe, {
+            priceId: input.priceId,
+            amountMinor: input.amountMinor,
+            currency: input.currency,
+            interval: 'month',
+          })
+        : null;
+
+    const items: Stripe.SubscriptionUpdateParams.Item[] = validatedPriceId
+      ? [{ id: itemId, price: validatedPriceId }]
       : input.amountMinor != null && input.currency
         ? [
             {
@@ -435,7 +458,15 @@ export class StripeBillingAdapter implements BillingProviderAdapter {
       metadata?: Record<string, string>;
     },
   ): Promise<string> {
-    if (input.customerId) return input.customerId;
+    if (input.customerId) {
+      try {
+        const existing = await stripe.customers.retrieve(input.customerId);
+        if (!existing.deleted) return existing.id;
+      } catch (err) {
+        if (!stripeResourceMissing(err)) throw err;
+      }
+    }
+
     const customer = await stripe.customers.create({
       email: input.email,
       name: input.name ?? undefined,
@@ -445,6 +476,36 @@ export class StripeBillingAdapter implements BillingProviderAdapter {
       },
     });
     return customer.id;
+  }
+
+  private async resolveRecurringPriceId(
+    stripe: Stripe,
+    input: {
+      priceId?: string | null;
+      amountMinor: number;
+      currency: string;
+      interval: 'month';
+    },
+  ): Promise<string | null> {
+    const priceId = input.priceId?.trim();
+    if (!priceId) return null;
+
+    try {
+      const price = await stripe.prices.retrieve(priceId);
+      const expectedAmount = Math.max(0, Math.round(input.amountMinor));
+      const valid =
+        price.active &&
+        price.currency.toUpperCase() === input.currency.toUpperCase() &&
+        price.type === 'recurring' &&
+        price.recurring?.interval === input.interval &&
+        price.unit_amount === expectedAmount;
+      return valid ? price.id : null;
+    } catch (err) {
+      // A Price can be stale, deleted, test-mode-only, or belong to an old
+      // Stripe account. Those configuration drifts must not take checkout down.
+      if (stripeResourceMissing(err)) return null;
+      throw err;
+    }
   }
 
   private mapStripeSubscription(

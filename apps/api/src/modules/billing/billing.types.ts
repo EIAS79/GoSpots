@@ -19,6 +19,8 @@ export type CheckoutResult = {
   providerCustomerId?: string | null;
   providerPaymentId?: string | null;
   providerSubscriptionId?: string | null;
+  /** Provider-native recurring Price id only when it was validated and used. */
+  providerPriceId?: string | null;
 };
 
 export type ProviderCustomer = {
