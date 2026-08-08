@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
 import { GoogleTagManager } from "@/components/analytics/google-tag-manager";
+import { PublicContactLinkTracker } from "@/components/analytics/public-contact-link-tracker";
 import { CookieConsent } from "@/components/consent/cookie-consent";
 import { AppProviders } from "@/components/layout/app-providers";
 import { OfflineBanner } from "@/components/layout/offline-banner";
@@ -105,6 +106,7 @@ export default function RootLayout({
         <JsonLd data={websiteJsonLd()} />
         <JsonLd data={softwareApplicationJsonLd()} />
         <GoogleTagManager />
+        <PublicContactLinkTracker />
         <AppProviders>
           <OfflineBanner />
           {children}
