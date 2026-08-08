@@ -5,13 +5,23 @@ import { AuroraBackground } from "@/components/effects/aurora-background";
 import { ScrollProgress } from "@/components/effects/scroll-progress";
 import { ThemeProvider } from "@/components/theme/theme-provider";
 import { ConnectivityProvider } from "@/lib/connectivity-context";
-import { AuthProvider } from "@/lib/use-auth";
+import type { DomainPublicDefaults } from "@/lib/domain-defaults";
 import { PublicPrefsProvider } from "@/lib/public-prefs-context";
+import { AuthProvider } from "@/lib/use-auth";
 
-export function AppProviders({ children }: { children: ReactNode }) {
+export function AppProviders({
+  children,
+  publicDefaults,
+}: {
+  children: ReactNode;
+  publicDefaults: DomainPublicDefaults;
+}) {
   return (
     <ThemeProvider>
-      <PublicPrefsProvider>
+      <PublicPrefsProvider
+        defaultLocale={publicDefaults.locale}
+        defaultCurrency={publicDefaults.currency}
+      >
         <AuthProvider>
           <ConnectivityProvider>
             <AuroraBackground />
