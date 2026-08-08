@@ -48,6 +48,40 @@ services:
         sync: false
       - key: MAIL_FROM_NAME
         value: GoSpots
+
+      # SaaS billing — Stripe is the explicit production default.
+      # Keeping these flags in the Blueprint prevents a deploy from silently
+      # falling back to the legacy Lemon checkout path.
+      - key: BILLING_ENABLED
+        value: "true"
+      - key: BILLING_STRIPE_ENABLED
+        value: "true"
+      - key: BILLING_MOLLIE_ENABLED
+        value: "false"
+      - key: BILLING_DEFAULT_PROVIDER
+        value: STRIPE
+      - key: BILLING_LEMON_ENABLED
+        value: "false"
+      - key: BILLING_LEMON_LEGACY_CHECKOUT
+        value: "false"
+      - key: BILLING_GRACE_PERIOD_DAYS
+        value: "3"
+      - key: BILLING_WEBHOOK_MAX_ATTEMPTS
+        value: "8"
+      - key: STRIPE_SECRET_KEY
+        sync: false
+      - key: STRIPE_WEBHOOK_SECRET
+        sync: false
+      # Optional. Leave unset to let checkout use inline Stripe price_data.
+      - key: STRIPE_PRICE_MAP
+        sync: false
+
+      # Mollie stays disabled until deliberately enabled with its API key.
+      - key: MOLLIE_API_KEY
+        sync: false
+
+      # Lemon Squeezy remains available only as stored legacy configuration;
+      # the flags above prevent it from handling new production checkouts.
       - key: LEMON_SQUEEZY_API_KEY
         sync: false
       - key: LEMON_SQUEEZY_STORE_ID
