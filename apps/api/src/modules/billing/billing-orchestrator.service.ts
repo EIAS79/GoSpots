@@ -22,7 +22,6 @@ import {
 } from '../../common/idempotency.util';
 import { hasPermission, PERMISSIONS } from '../../common/permissions';
 import { requireShopId } from '../../common/tenant';
-import { VENUE_ADD_ONS, type AddOnId } from '../../common/venue-packs';
 import { PrismaService } from '../../prisma/prisma.service';
 import { AuditService } from '../audit/audit.service';
 import type { JwtAccessPayload } from '../auth/auth.service';
@@ -35,9 +34,7 @@ import { BillingCatalogService } from './billing-catalog.service';
 import { BillingEntitlementSync } from './billing-entitlement.sync';
 import { BillingNotificationService } from './billing-notification.service';
 import { BillingProviderRegistry } from './billing-provider.registry';
-import {
-  assertSubscriptionTransition,
-} from './billing-state-machine';
+import { assertSubscriptionTransition } from './billing-state-machine';
 import type {
   CancelDto,
   ChangePlanDto,
@@ -47,13 +44,6 @@ import type {
   SwitchProviderDto,
 } from './dto/billing.dto';
 import { MollieBillingAdapter } from './providers/mollie.adapter';
-
-const LIVE_STATUSES: BillingCanonicalSubscriptionStatus[] = [
-  'ACTIVE',
-  'TRIALING',
-  'PAST_DUE',
-  'CANCEL_AT_PERIOD_END',
-];
 
 const OPERATION_TTL_MS = 24 * 60 * 60 * 1000;
 
@@ -92,16 +82,43 @@ export class BillingOrchestratorService {
   }
 
   private webAppBase(): string {
-    return (
+    const configured = (
       this.config.get<string>('WEB_APP_URL') ??
       this.config.get<string>('WEB_ORIGIN') ??
-      'http://localhost:3000'
-    ).replace(/\/$/, '');
+      ''
+    ).trim();
+    const isProd = this.config.get<string>('NODE_ENV') === 'production';
+
+    if (!configured) {
+      if (isProd) {
+        throw new ServiceUnavailableException(
+          'WEB_APP_URL or WEB_ORIGIN is required for production billing redirects.',
+        );
+      }
+      return 'http://localhost:3000';
+    }
+
+    const normalized = configured.replace(/\/$/, '');
+    if (isProd) {
+      try {
+        const parsed = new URL(normalized);
+        if (
+          parsed.protocol !== 'https:' ||
+          parsed.hostname === 'localhost' ||
+          parsed.hostname === '127.0.0.1'
+        ) {
+          throw new Error('invalid production origin');
+        }
+      } catch {
+        throw new ServiceUnavailableException(
+          'WEB_APP_URL or WEB_ORIGIN must be a non-localhost HTTPS URL in production.',
+        );
+      }
+    }
+    return normalized;
   }
 
-  private resolveProvider(
-    preferred?: string | null,
-  ): BillingProviderChoice {
+  private resolveProvider(preferred?: string | null): BillingProviderChoice {
     if (preferred === 'STRIPE' || preferred === 'MOLLIE') {
       return preferred;
     }
@@ -351,14 +368,18 @@ export class BillingOrchestratorService {
                 ? new Date()
                 : null,
             addOns: {
-              create: quote.addOnIds.map((id) => ({
-                addOnId: id,
-                quantity:
-                  id === 'team_accounts' ? Math.max(1, quote.seatQuantity) : 1,
-                unitAmountMinor: Math.round(
-                  (VENUE_ADD_ONS[id as AddOnId]?.monthlyPrice ?? 0) * 100,
-                ),
-              })),
+              create: quote.addOnIds.map((id) => {
+                const line = quote.lineItems.find((item) => item.id === id);
+                return {
+                  addOnId: id,
+                  quantity:
+                    id === 'team_accounts' ? Math.max(1, quote.seatQuantity) : 1,
+                  unitAmountMinor: Math.max(
+                    0,
+                    Math.round((line?.unitAmount ?? 0) * 100),
+                  ),
+                };
+              }),
             },
           },
           include: { addOns: true },
@@ -462,7 +483,7 @@ export class BillingOrchestratorService {
         where: { id: billingSub.id },
         data: {
           providerSubscriptionId: checkout.providerSubscriptionId ?? undefined,
-          providerPriceId: priceId ?? undefined,
+          providerPriceId: checkout.providerPriceId ?? null,
         },
       });
 
@@ -858,7 +879,6 @@ export class BillingOrchestratorService {
       currency: locked.currency,
     });
 
-    // Schedule at period end on entitlement Subscription pending* fields.
     await this.prisma.subscription.update({
       where: { shopId },
       data: {
@@ -868,14 +888,12 @@ export class BillingOrchestratorService {
       } as never,
     });
 
-    // If Stripe/Mollie supports live update and period end is far, still stage pending.
     if (locked.providerSubscriptionId && locked.provider === 'STRIPE') {
       const adapter = this.registry.get('STRIPE');
       const priceId =
         quote.lineItems.find((l) => l.kind === 'pack')?.stripePriceId ??
         this.catalog.resolveStripePriceId(`pack:${quote.packId}`, quote.currency);
-      // Stripe proration applied; pending fields remain for entitlement pack sync at period end.
-      await adapter.updateSubscription({
+      const remote = await adapter.updateSubscription({
         subscriptionId: locked.providerSubscriptionId,
         customerId: locked.billingAccount.providerCustomerId,
         priceId,
@@ -888,6 +906,10 @@ export class BillingOrchestratorService {
           pack_id: quote.packId,
           pending_at_period_end: '1',
         },
+      });
+      await this.prisma.billingSubscription.update({
+        where: { id: locked.id },
+        data: { providerPriceId: remote.priceId ?? null },
       });
     }
 
@@ -905,15 +927,19 @@ export class BillingOrchestratorService {
     });
     if (quote.addOnIds.length) {
       await this.prisma.billingSubscriptionAddOn.createMany({
-        data: quote.addOnIds.map((id) => ({
-          subscriptionId: locked.id,
-          addOnId: id,
-          quantity:
-            id === 'team_accounts' ? Math.max(1, quote.seatQuantity) : 1,
-          unitAmountMinor: Math.round(
-            (VENUE_ADD_ONS[id as AddOnId]?.monthlyPrice ?? 0) * 100,
-          ),
-        })),
+        data: quote.addOnIds.map((id) => {
+          const line = quote.lineItems.find((item) => item.id === id);
+          return {
+            subscriptionId: locked.id,
+            addOnId: id,
+            quantity:
+              id === 'team_accounts' ? Math.max(1, quote.seatQuantity) : 1,
+            unitAmountMinor: Math.max(
+              0,
+              Math.round((line?.unitAmount ?? 0) * 100),
+            ),
+          };
+        }),
       });
     }
 
@@ -973,8 +999,6 @@ export class BillingOrchestratorService {
         ? BillingRenewalMode.MANUAL_MONTHLY
         : BillingRenewalMode.AUTOMATIC_RENEWAL;
 
-    // Apply at period end conceptually — persist now; provider switch for Mollie
-    // mandate happens on next renewal / resume.
     const updated = await this.prisma.billingSubscription.update({
       where: { id: locked.id },
       data: {
@@ -1029,7 +1053,6 @@ export class BillingOrchestratorService {
       throw new BadRequestException('Already on that provider.');
     }
 
-    // Schedule cancel of current at period end, then open checkout on target.
     if (locked.providerSubscriptionId) {
       const adapter = this.registry.get(
         locked.provider as BillingProviderChoice,
@@ -1343,7 +1366,6 @@ export class BillingOrchestratorService {
     return { url: portal.url, mode: 'portal' as const };
   }
 
-  /** Used by webhook processor after Mollie first payment succeeds. */
   async ensureMollieSubscriptionAfterMandate(input: {
     shopId: string;
     billingSubscriptionId: string;
@@ -1381,9 +1403,6 @@ export class BillingOrchestratorService {
     });
   }
 
-  /**
-   * Cron: auto-resume PAUSED subscriptions whose resumeAt has elapsed.
-   */
   async resumeDuePausedSubscriptions(now = new Date()) {
     const due = await this.prisma.billingSubscription.findMany({
       where: {
@@ -1399,7 +1418,6 @@ export class BillingOrchestratorService {
         await this.runResumeSystem(row.shopId);
         resumed += 1;
       } catch (err) {
-        // Leave PAUSED; operators see audit/logs. Owner can still resume manually.
         await this.audit.recordForShop(row.shopId, {
           section: 'subscription',
           action: 'billing.resume_scheduled_failed',
@@ -1416,7 +1434,6 @@ export class BillingOrchestratorService {
   }
 
   private async runResumeSystem(shopId: string) {
-    // Reuse owner resume path without JWT — audit via recordForShop.
     const locked = await this.prisma.$transaction(async (tx) => {
       const rows = await tx.$queryRaw<Array<{ id: string }>>`
         SELECT id FROM "BillingSubscription"
@@ -1563,7 +1580,6 @@ export class BillingOrchestratorService {
     shopId: string,
     opts?: { allowCancelAtPeriodEnd?: boolean },
   ) {
-    // Always lock candidate live rows so concurrent checkouts serialize.
     const rows = await tx.$queryRaw<
       Array<{ id: string; canonicalStatus: string }>
     >`
