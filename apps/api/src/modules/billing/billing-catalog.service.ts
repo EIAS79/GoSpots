@@ -68,6 +68,13 @@ export type CatalogEntry = {
 
 type StripePriceMap = Record<string, string | Record<string, string>>;
 
+type BillingRate = {
+  marketCurrency: SupportedCurrency;
+  chargeCurrency: SupportedCurrency;
+  rate: number;
+  ratesAt: string;
+};
+
 /**
  * GoSpots supports IQD for venue accounting, but Stripe does not currently
  * expose IQD as a supported presentment currency. Keep venue accounting intact
@@ -110,6 +117,47 @@ export class BillingCatalogService {
     return requested;
   }
 
+  private async resolveBillingRate(
+    provider: BillingProviderChoice | null | undefined,
+    requestedCurrency: string,
+  ): Promise<BillingRate> {
+    const marketCurrency = this.resolveBillingCurrency(
+      provider,
+      requestedCurrency,
+    );
+    if (marketCurrency === 'EUR') {
+      return {
+        marketCurrency,
+        chargeCurrency: 'EUR',
+        rate: 1,
+        ratesAt: new Date().toISOString(),
+      };
+    }
+
+    try {
+      const { rate, ratesAt } = await this.rates.getRate(
+        'EUR',
+        marketCurrency,
+        { forceRefresh: false },
+      );
+      return {
+        marketCurrency,
+        chargeCurrency: marketCurrency,
+        rate,
+        ratesAt,
+      };
+    } catch {
+      // FX is an optional localization enhancement, not a payment dependency.
+      // Preserve the market-adjusted EUR price and let checkout proceed in EUR.
+      return {
+        marketCurrency,
+        chargeCurrency: 'EUR',
+        rate: 1,
+        ratesAt: new Date().toISOString(),
+      };
+    }
+  }
+
   /**
    * Optional `STRIPE_PRICE_MAP` JSON.
    * Flat: `{ "gaming_suite": "price_…" }`
@@ -141,13 +189,11 @@ export class BillingCatalogService {
     fxRate: number;
     ratesAt: string;
   }> {
-    const code = this.resolveBillingCurrency(provider, currency);
-    const { rate, ratesAt } = await this.rates.getRate('EUR', code, {
-      forceRefresh: false,
-    });
+    const resolved = await this.resolveBillingRate(provider, currency);
+    const { marketCurrency, chargeCurrency, rate, ratesAt } = resolved;
 
     const packs: CatalogEntry[] = VENUE_PACK_LIST.map((pack) => {
-      const eur = marketAdjustedCatalogEur(pack.monthlyPrice, code);
+      const eur = marketAdjustedCatalogEur(pack.monthlyPrice, marketCurrency);
       const local = this.rates.convertAmount(eur, rate);
       return {
         id: pack.id,
@@ -156,14 +202,17 @@ export class BillingCatalogService {
         tagline: pack.tagline,
         monthlyPriceEur: eur,
         monthlyPrice: local,
-        monthlyPriceMinor: toMinor(local, code),
-        currency: code,
-        stripePriceId: this.resolveStripePriceId(`pack:${pack.id}`, code),
+        monthlyPriceMinor: toMinor(local, chargeCurrency),
+        currency: chargeCurrency,
+        stripePriceId: this.resolveStripePriceId(
+          `pack:${pack.id}`,
+          chargeCurrency,
+        ),
       };
     });
 
     const addOns: CatalogEntry[] = VENUE_ADD_ON_LIST.map((addOn) => {
-      const eur = marketAdjustedCatalogEur(addOn.monthlyPrice, code);
+      const eur = marketAdjustedCatalogEur(addOn.monthlyPrice, marketCurrency);
       const local = this.rates.convertAmount(eur, rate);
       return {
         id: addOn.id,
@@ -172,21 +221,27 @@ export class BillingCatalogService {
         tagline: addOn.tagline,
         monthlyPriceEur: eur,
         monthlyPrice: local,
-        monthlyPriceMinor: toMinor(local, code),
-        currency: code,
+        monthlyPriceMinor: toMinor(local, chargeCurrency),
+        currency: chargeCurrency,
         pricedPerSeat: addOn.pricedPerSeat,
-        stripePriceId: this.resolveStripePriceId(addOn.id, code),
+        stripePriceId: this.resolveStripePriceId(addOn.id, chargeCurrency),
       };
     });
 
-    return { currency: code, packs, addOns, fxRate: rate, ratesAt };
+    return {
+      currency: chargeCurrency,
+      packs,
+      addOns,
+      fxRate: rate,
+      ratesAt,
+    };
   }
 
   /**
    * Server-side quote — never trust client prices.
-   * Uses venue-packs `monthlyTotal` + `marketAdjustedCatalogEur`, then FX.
-   * Checkout deliberately reuses the cached rate when available instead of
-   * making the payment path depend on a fresh third-party FX HTTP request.
+   * Uses venue-packs `monthlyTotal` + market adjustment, then cached/live FX.
+   * If FX is unavailable, checkout continues in EUR at the already-adjusted
+   * EUR price instead of making a third-party FX service a payment dependency.
    */
   async quote(input: {
     packId: string;
@@ -211,23 +266,23 @@ export class BillingCatalogService {
       );
     }
 
-    const code = this.resolveBillingCurrency(input.provider, input.currency);
+    const resolved = await this.resolveBillingRate(input.provider, input.currency);
+    const { marketCurrency, chargeCurrency, rate, ratesAt } = resolved;
     const addOnsCsv = serializeAddOns(addOnIds);
     const amountEur = marketAdjustedCatalogEur(
       monthlyTotal(packId, addOnsCsv, seats),
-      code,
+      marketCurrency,
     );
-
-    const { rate, ratesAt } = await this.rates.getRate('EUR', code, {
-      forceRefresh: false,
-    });
     const amount = this.rates.convertAmount(amountEur, rate);
-    const amountMinor = toMinor(amount, code);
+    const amountMinor = toMinor(amount, chargeCurrency);
 
     const lineItems: CatalogLineItem[] = [];
     const pack = VENUE_PACK_LIST.find((p) => p.id === packId);
     if (pack) {
-      const eur = marketAdjustedCatalogEur(pack.monthlyPrice, code);
+      const eur = marketAdjustedCatalogEur(
+        pack.monthlyPrice,
+        marketCurrency,
+      );
       const local = this.rates.convertAmount(eur, rate);
       lineItems.push({
         kind: 'pack',
@@ -236,14 +291,20 @@ export class BillingCatalogService {
         quantity: 1,
         unitAmount: local,
         amount: local,
-        amountMinor: toMinor(local, code),
-        stripePriceId: this.resolveStripePriceId(`pack:${pack.id}`, code),
+        amountMinor: toMinor(local, chargeCurrency),
+        stripePriceId: this.resolveStripePriceId(
+          `pack:${pack.id}`,
+          chargeCurrency,
+        ),
       });
     }
 
     for (const id of addOnIds) {
       const addOn = VENUE_ADD_ONS[id];
-      const eurUnit = marketAdjustedCatalogEur(addOn.monthlyPrice, code);
+      const eurUnit = marketAdjustedCatalogEur(
+        addOn.monthlyPrice,
+        marketCurrency,
+      );
       const unitLocal = this.rates.convertAmount(eurUnit, rate);
       if (addOn.pricedPerSeat) {
         const lineAmount = unitLocal * seats;
@@ -254,8 +315,8 @@ export class BillingCatalogService {
           quantity: seats,
           unitAmount: unitLocal,
           amount: lineAmount,
-          amountMinor: toMinor(lineAmount, code),
-          stripePriceId: this.resolveStripePriceId(id, code),
+          amountMinor: toMinor(lineAmount, chargeCurrency),
+          stripePriceId: this.resolveStripePriceId(id, chargeCurrency),
         });
       } else {
         lineItems.push({
@@ -265,8 +326,8 @@ export class BillingCatalogService {
           quantity: 1,
           unitAmount: unitLocal,
           amount: unitLocal,
-          amountMinor: toMinor(unitLocal, code),
-          stripePriceId: this.resolveStripePriceId(id, code),
+          amountMinor: toMinor(unitLocal, chargeCurrency),
+          stripePriceId: this.resolveStripePriceId(id, chargeCurrency),
         });
       }
     }
@@ -275,7 +336,7 @@ export class BillingCatalogService {
       packId,
       addOnIds,
       seatQuantity: seats,
-      currency: code,
+      currency: chargeCurrency,
       amountEur,
       amount,
       amountMinor,
