@@ -15,8 +15,12 @@ import {
   type AddOnId,
   type VenuePackId,
 } from '../../common/venue-packs';
-import { normalizeCurrency } from '../../common/locale-currency';
+import {
+  normalizeCurrency,
+  type SupportedCurrency,
+} from '../../common/locale-currency';
 import { CurrencyRatesService } from '../shop/currency-rates.service';
+import type { BillingProviderChoice } from './billing-config';
 
 export type CatalogLineItem = {
   kind: 'pack' | 'add_on' | 'seat';
@@ -61,8 +65,23 @@ export type CatalogEntry = {
 
 type StripePriceMap = Record<string, string | Record<string, string>>;
 
-function toMinor(amount: number): number {
-  return Math.max(0, Math.round(amount * 100));
+/**
+ * GoSpots supports IQD for venue accounting, but Stripe does not currently
+ * expose IQD as a supported presentment currency. Keep venue accounting intact
+ * and fall back to EUR only for Stripe SaaS billing.
+ */
+const STRIPE_UNSUPPORTED_PRESENTMENT = new Set<SupportedCurrency>(['IQD']);
+
+/** ISO 4217 minor-unit exponent for currencies supported by GoSpots. */
+function minorUnitExponent(currency: SupportedCurrency): number {
+  return currency === 'IQD' ? 3 : 2;
+}
+
+function toMinor(amount: number, currency: SupportedCurrency): number {
+  return Math.max(
+    0,
+    Math.round(amount * 10 ** minorUnitExponent(currency)),
+  );
 }
 
 @Injectable()
@@ -71,6 +90,20 @@ export class BillingCatalogService {
     private readonly config: ConfigService,
     private readonly rates: CurrencyRatesService,
   ) {}
+
+  resolveBillingCurrency(
+    provider: BillingProviderChoice | null | undefined,
+    requestedCurrency: string,
+  ): SupportedCurrency {
+    const requested = normalizeCurrency(requestedCurrency);
+    if (
+      provider === 'STRIPE' &&
+      STRIPE_UNSUPPORTED_PRESENTMENT.has(requested)
+    ) {
+      return 'EUR';
+    }
+    return requested;
+  }
 
   /**
    * Optional `STRIPE_PRICE_MAP` JSON.
@@ -93,14 +126,17 @@ export class BillingCatalogService {
     return typeof flat === 'string' && flat.trim() ? flat.trim() : null;
   }
 
-  async listCatalog(currency: string): Promise<{
+  async listCatalog(
+    currency: string,
+    provider?: BillingProviderChoice | null,
+  ): Promise<{
     currency: string;
     packs: CatalogEntry[];
     addOns: CatalogEntry[];
     fxRate: number;
     ratesAt: string;
   }> {
-    const code = normalizeCurrency(currency);
+    const code = this.resolveBillingCurrency(provider, currency);
     const { rate, ratesAt } = await this.rates.getRate('EUR', code, {
       forceRefresh: false,
     });
@@ -115,7 +151,7 @@ export class BillingCatalogService {
         tagline: pack.tagline,
         monthlyPriceEur: eur,
         monthlyPrice: local,
-        monthlyPriceMinor: toMinor(local),
+        monthlyPriceMinor: toMinor(local, code),
         currency: code,
         stripePriceId: this.resolveStripePriceId(`pack:${pack.id}`, code),
       };
@@ -131,7 +167,7 @@ export class BillingCatalogService {
         tagline: addOn.tagline,
         monthlyPriceEur: eur,
         monthlyPrice: local,
-        monthlyPriceMinor: toMinor(local),
+        monthlyPriceMinor: toMinor(local, code),
         currency: code,
         pricedPerSeat: addOn.pricedPerSeat,
         stripePriceId: this.resolveStripePriceId(addOn.id, code),
@@ -152,6 +188,7 @@ export class BillingCatalogService {
     addOnIds: string[];
     seatQuantity?: number;
     currency: string;
+    provider?: BillingProviderChoice | null;
   }): Promise<CatalogQuote> {
     const rawPack = String(input.packId ?? '').trim();
     if (!rawPack || !(rawPack in VENUE_PACKS)) {
@@ -169,7 +206,7 @@ export class BillingCatalogService {
       );
     }
 
-    const code = normalizeCurrency(input.currency);
+    const code = this.resolveBillingCurrency(input.provider, input.currency);
     const addOnsCsv = serializeAddOns(addOnIds);
     const amountEur = marketAdjustedCatalogEur(
       monthlyTotal(packId, addOnsCsv, seats),
@@ -180,7 +217,7 @@ export class BillingCatalogService {
       forceRefresh: false,
     });
     const amount = this.rates.convertAmount(amountEur, rate);
-    const amountMinor = toMinor(amount);
+    const amountMinor = toMinor(amount, code);
 
     const lineItems: CatalogLineItem[] = [];
     const pack = VENUE_PACK_LIST.find((p) => p.id === packId);
@@ -194,7 +231,7 @@ export class BillingCatalogService {
         quantity: 1,
         unitAmount: local,
         amount: local,
-        amountMinor: toMinor(local),
+        amountMinor: toMinor(local, code),
         stripePriceId: this.resolveStripePriceId(`pack:${pack.id}`, code),
       });
     }
@@ -212,7 +249,7 @@ export class BillingCatalogService {
           quantity: seats,
           unitAmount: unitLocal,
           amount: lineAmount,
-          amountMinor: toMinor(lineAmount),
+          amountMinor: toMinor(lineAmount, code),
           stripePriceId: this.resolveStripePriceId(id, code),
         });
       } else {
@@ -223,7 +260,7 @@ export class BillingCatalogService {
           quantity: 1,
           unitAmount: unitLocal,
           amount: unitLocal,
-          amountMinor: toMinor(unitLocal),
+          amountMinor: toMinor(unitLocal, code),
           stripePriceId: this.resolveStripePriceId(id, code),
         });
       }
