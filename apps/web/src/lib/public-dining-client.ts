@@ -1,3 +1,4 @@
+import { trackEvent } from "./analytics";
 import { ApiError } from "./api";
 import { getApiBaseUrl } from "./api-base-url";
 import {
@@ -45,7 +46,7 @@ export function fetchPublicDiningSchedule(
   );
 }
 
-export function submitPublicDiningReservation(
+export async function submitPublicDiningReservation(
   slug: string,
   body: {
     resourceId: string;
@@ -61,7 +62,16 @@ export function submitPublicDiningReservation(
     captchaToken?: string;
   },
 ) {
-  return publicFetch<{
+  trackEvent({
+    event: "begin_booking",
+    venue_slug: slug,
+    booking_kind: "dining",
+    resource_id: body.resourceId,
+    party_size: body.partySize,
+    has_phone: Boolean(body.guestPhone),
+  });
+
+  const result = await publicFetch<{
     message: string;
     statusPath?: string;
     id: string;
@@ -71,6 +81,18 @@ export function submitPublicDiningReservation(
     method: "POST",
     body: JSON.stringify(body),
   });
+
+  trackEvent({
+    event: "booking_complete",
+    venue_slug: slug,
+    booking_kind: "dining",
+    reservation_id: result.id,
+    resource_id: body.resourceId,
+    party_size: body.partySize,
+    email_sent: result.emailSent,
+  });
+
+  return result;
 }
 
 export type PublicDiningReservationStatus = {
