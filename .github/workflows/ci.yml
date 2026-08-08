@@ -46,7 +46,10 @@ jobs:
       - name: Lint
         run: npx eslint "{src,apps,libs}/**/*.ts"
 
+      # Keep lint failures visible, but never let existing lint debt prevent the
+      # TypeScript/Nest build from running. The job still fails when lint fails.
       - name: Build
+        if: ${{ always() }}
         run: pnpm run build
         env:
           DATABASE_URL: postgresql://ci:ci@localhost:5432/ci?schema=public
