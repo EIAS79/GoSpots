@@ -44,12 +44,12 @@ export function softwareApplicationJsonLd() {
 }
 
 function openingHoursSpecification(venue: PublicVenueDetail) {
-  const days = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"];
+  const days = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"];
   return venue.openingHours
     ?.filter((hour) => !hour.isClosed)
     .map((hour) => ({
       "@type": "OpeningHoursSpecification",
-      dayOfWeek: days[(hour.weekday + 6) % 7],
+      dayOfWeek: days[hour.weekday],
       opens: hour.opensAt,
       closes: hour.closesAt,
     }));
@@ -59,6 +59,7 @@ export function venueJsonLd(venue: PublicVenueDetail) {
   const url = `${getSiteUrlString()}/venue/${encodeURIComponent(venue.slug)}`;
   const isRestaurant = venue.tags?.some((tag) => /restaurant|dining|food|cafe/i.test(`${tag.name} ${tag.slug}`));
   const type = isRestaurant ? "Restaurant" : "LocalBusiness";
+  const hours = openingHoursSpecification(venue);
 
   return {
     "@context": "https://schema.org",
@@ -90,8 +91,6 @@ export function venueJsonLd(venue: PublicVenueDetail) {
           },
         }
       : {}),
-    ...(openingHoursSpecification(venue)?.length
-      ? { openingHoursSpecification: openingHoursSpecification(venue) }
-      : {}),
+    ...(hours?.length ? { openingHoursSpecification: hours } : {}),
   };
 }
