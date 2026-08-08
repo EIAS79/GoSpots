@@ -28,6 +28,7 @@ export function BillingPurchaseTracker() {
     const query = new URLSearchParams(window.location.search);
     const operationId = query.get("op") || peekPendingBillingOperation();
     if (!operationId) return;
+    const checkoutOperationId = operationId;
 
     let cancelled = false;
     const startedAt = Date.now();
@@ -38,7 +39,7 @@ export function BillingPurchaseTracker() {
 
       try {
         const [operation, payments] = await Promise.all([
-          fetchBillingCheckoutStatus(operationId).catch(() => null),
+          fetchBillingCheckoutStatus(checkoutOperationId).catch(() => null),
           fetchBillingPayments(20).catch(() => ({ items: [] })),
         ]);
 
@@ -74,7 +75,7 @@ export function BillingPurchaseTracker() {
               currency: paidPayment.currency,
               provider: paidPayment.provider,
               subscription_id: subscriptionId,
-              operation_id: operationId,
+              operation_id: checkoutOperationId,
               sequence_type: paidPayment.sequenceType,
             });
             return;
