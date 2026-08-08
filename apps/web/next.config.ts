@@ -87,6 +87,30 @@ const nextConfig: NextConfig = {
   images: {
     remotePatterns: apiUploadPatterns(),
   },
+  async redirects() {
+    if (!isProd) return [];
+    const canonical = "https://www.gospots.eu/:path*";
+    return [
+      {
+        source: "/:path*",
+        has: [{ type: "host", value: "gospots.pl" }],
+        destination: canonical,
+        permanent: true,
+      },
+      {
+        source: "/:path*",
+        has: [{ type: "host", value: "www.gospots.pl" }],
+        destination: canonical,
+        permanent: true,
+      },
+      {
+        source: "/:path*",
+        has: [{ type: "host", value: "gospots.eu" }],
+        destination: canonical,
+        permanent: true,
+      },
+    ];
+  },
   async rewrites() {
     if (!apiProxyTarget) return [];
     return [
