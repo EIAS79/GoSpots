@@ -44,9 +44,9 @@ function metaStrings(
 function stripeResourceMissing(err: unknown): boolean {
   return Boolean(
     err &&
-      typeof err === 'object' &&
-      'code' in err &&
-      (err as { code?: unknown }).code === 'resource_missing',
+    typeof err === 'object' &&
+    'code' in err &&
+    (err as { code?: unknown }).code === 'resource_missing',
   );
 }
 
@@ -130,7 +130,7 @@ export class StripeBillingAdapter implements BillingProviderAdapter {
       providerSubscriptionId:
         typeof session.subscription === 'string'
           ? session.subscription
-          : session.subscription?.id ?? null,
+          : (session.subscription?.id ?? null),
       providerPriceId: validatedPriceId,
     };
   }
@@ -178,7 +178,7 @@ export class StripeBillingAdapter implements BillingProviderAdapter {
       providerPaymentId:
         typeof session.payment_intent === 'string'
           ? session.payment_intent
-          : session.payment_intent?.id ?? null,
+          : (session.payment_intent?.id ?? null),
     };
   }
 
@@ -214,7 +214,9 @@ export class StripeBillingAdapter implements BillingProviderAdapter {
         amountMinor: pi.amount,
         currency: pi.currency.toUpperCase(),
         customerId:
-          typeof pi.customer === 'string' ? pi.customer : pi.customer?.id ?? null,
+          typeof pi.customer === 'string'
+            ? pi.customer
+            : (pi.customer?.id ?? null),
         paidAt: pi.status === 'succeeded' ? unixToDate(pi.created) : null,
         metadata: metaStrings(pi.metadata),
       };
@@ -228,7 +230,7 @@ export class StripeBillingAdapter implements BillingProviderAdapter {
       customerId:
         typeof charge.customer === 'string'
           ? charge.customer
-          : charge.customer?.id ?? null,
+          : (charge.customer?.id ?? null),
       paidAt: charge.paid ? unixToDate(charge.created) : null,
       metadata: metaStrings(charge.metadata),
     };
