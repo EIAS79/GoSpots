@@ -25,8 +25,6 @@ import type {
   UpdateSubscriptionInput,
 } from '../billing.types';
 
-const DEFAULT_STRIPE_API_VERSION = '2026-07-29.dahlia' as Stripe.LatestApiVersion;
-
 function unixToDate(sec: number | null | undefined): Date | null {
   if (sec == null || !Number.isFinite(sec)) return null;
   return new Date(sec * 1000);
@@ -58,12 +56,13 @@ export class StripeBillingAdapter implements BillingProviderAdapter {
       );
     }
     if (!this.client) {
-      const apiVersion =
-        (this.config.get<string>('STRIPE_API_VERSION')?.trim() as
-          | Stripe.LatestApiVersion
-          | undefined) || DEFAULT_STRIPE_API_VERSION;
+      const configuredApiVersion = this.config
+        .get<string>('STRIPE_API_VERSION')
+        ?.trim();
       this.client = new Stripe(key, {
-        apiVersion,
+        ...(configuredApiVersion
+          ? { apiVersion: configuredApiVersion as Stripe.LatestApiVersion }
+          : {}),
         typescript: true,
       });
     }
