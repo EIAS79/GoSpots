@@ -3,6 +3,7 @@ import {
   Injectable,
   NotFoundException,
 } from '@nestjs/common';
+import { ConfigService } from '@nestjs/config';
 import { PrismaService } from '../../prisma/prisma.service';
 import {
   buildFeatureCatalog,
@@ -33,10 +34,17 @@ import {
   buildFinanceAnalytics,
   computeRevenueSince,
 } from '../finance/finance-analytics.util';
+import {
+  isLemonCheckoutAllowed,
+  readBillingConfig,
+} from '../billing/billing-config';
 
 @Injectable()
 export class DashboardService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly config: ConfigService,
+  ) {}
 
   async overview(actor: JwtAccessPayload) {
     const shopId = requireShopId(actor);
@@ -340,7 +348,6 @@ export class DashboardService {
       marketingFeatures: buildMarketingCatalog(effectiveTier),
       packs: VENUE_PACK_LIST,
       addOnCatalog: VENUE_ADD_ON_LIST,
-      /** Data is never deleted when features turn off — only visibility. */
       dataRetentionNote:
         'Turning features off only hides them from the dashboard. Your data stays and returns when you turn the feature back on.',
     };
@@ -350,25 +357,46 @@ export class DashboardService {
     return this.billingMissingEnv().length === 0;
   }
 
-  /** Env var *names* only — never values. Checkout needs API key + store + variant. */
+  /** Env var names only — never values. Reflect the provider that can take checkout. */
   private billingMissingEnv(): string[] {
+    const billing = readBillingConfig(this.config);
     const missing: string[] = [];
-    if (!process.env.LEMON_SQUEEZY_API_KEY?.trim()) {
-      missing.push('LEMON_SQUEEZY_API_KEY');
+
+    if (billing.enabled) {
+      if (billing.defaultProvider === 'STRIPE') {
+        if (!this.config.get<string>('STRIPE_SECRET_KEY')?.trim()) {
+          missing.push('STRIPE_SECRET_KEY');
+        }
+        if (!this.config.get<string>('STRIPE_WEBHOOK_SECRET')?.trim()) {
+          missing.push('STRIPE_WEBHOOK_SECRET');
+        }
+        return missing;
+      }
+      if (billing.defaultProvider === 'MOLLIE') {
+        if (!this.config.get<string>('MOLLIE_API_KEY')?.trim()) {
+          missing.push('MOLLIE_API_KEY');
+        }
+        return missing;
+      }
+      return ['BILLING_DEFAULT_PROVIDER'];
     }
-    if (!process.env.LEMON_SQUEEZY_STORE_ID?.trim()) {
-      missing.push('LEMON_SQUEEZY_STORE_ID');
+
+    if (isLemonCheckoutAllowed(this.config)) {
+      if (!this.config.get<string>('LEMON_SQUEEZY_API_KEY')?.trim()) {
+        missing.push('LEMON_SQUEEZY_API_KEY');
+      }
+      if (!this.config.get<string>('LEMON_SQUEEZY_STORE_ID')?.trim()) {
+        missing.push('LEMON_SQUEEZY_STORE_ID');
+      }
+      if (!this.config.get<string>('LEMON_SQUEEZY_VARIANT_ID')?.trim()) {
+        missing.push('LEMON_SQUEEZY_VARIANT_ID');
+      }
+      return missing;
     }
-    if (!process.env.LEMON_SQUEEZY_VARIANT_ID?.trim()) {
-      missing.push('LEMON_SQUEEZY_VARIANT_ID');
-    }
-    return missing;
+
+    return ['BILLING_ENABLED'];
   }
 
-  /**
-   * If a paid period has ended and pending plan changes exist, promote them.
-   * Safe to call often — no-op when nothing is due.
-   */
   async applyDuePendingPlan(shopId: string) {
     const sub = await this.prisma.subscription.findUnique({
       where: { shopId },
@@ -477,7 +505,6 @@ export class DashboardService {
         staffSeatQuantity === currentSeats;
 
       if (liveSame) {
-        // Cancel any scheduled change that matches what is already live.
         await this.prisma.subscription.update({
           where: { shopId },
           data: {
@@ -487,7 +514,6 @@ export class DashboardService {
           } as never,
         });
       } else {
-        // No mid-cycle refunds or access changes — schedule for next period.
         await this.prisma.subscription.update({
           where: { shopId },
           data: {
@@ -498,8 +524,6 @@ export class DashboardService {
         });
       }
     } else if (waitingToPay) {
-      // Trial ended / canceled / past due: save selection for checkout only.
-      // Modules stay locked until Lemon marks the subscription ACTIVE.
       await this.prisma.subscription.update({
         where: { shopId },
         data: {
@@ -509,7 +533,6 @@ export class DashboardService {
         } as never,
       });
     } else {
-      // Active trial: apply immediately so selected modules appear in the dashboard.
       await this.prisma.$transaction(async (tx) => {
         const updated = await tx.subscription.update({
           where: { shopId },
