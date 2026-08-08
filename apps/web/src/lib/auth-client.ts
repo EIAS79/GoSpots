@@ -1,3 +1,4 @@
+import { trackEvent } from "./analytics";
 import { api } from "./api";
 
 export type SystemRole = "USER" | "SUPER_ADMIN";
@@ -92,7 +93,7 @@ export function resetOwnerPassword(token: string, password: string) {
   });
 }
 
-export function register(input: {
+export async function register(input: {
   email: string;
   password: string;
   name?: string;
@@ -105,10 +106,39 @@ export function register(input: {
   country?: string;
   phone?: string;
 }) {
-  return api<AuthSessionResponse>("/auth/register", {
+  trackEvent({
+    event: "venue_lead_start",
+    source: "owner_registration",
+    pack_id: input.packId,
+    venue_type: input.venueType,
+    has_city: Boolean(input.city),
+    has_country: Boolean(input.country),
+    has_phone: Boolean(input.phone),
+  });
+
+  const session = await api<AuthSessionResponse>("/auth/register", {
     method: "POST",
     body: JSON.stringify(input),
   });
+
+  const venueSlug = session.venuePath ?? input.shopSlug ?? null;
+  trackEvent({
+    event: "sign_up",
+    method: "email",
+    account_type: "venue_owner",
+    venue_slug: venueSlug,
+    pack_id: input.packId,
+    venue_type: input.venueType,
+  });
+  trackEvent({
+    event: "venue_lead",
+    source: "owner_registration",
+    venue_slug: venueSlug,
+    pack_id: input.packId,
+    venue_type: input.venueType,
+  });
+
+  return session;
 }
 
 export function logout() {

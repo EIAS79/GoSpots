@@ -1,3 +1,4 @@
+import { trackEvent } from "./analytics";
 import { ApiError } from "./api";
 import { getApiBaseUrl } from "./api-base-url";
 import {
@@ -88,7 +89,7 @@ export function submitPublicVenueReview(
   );
 }
 
-export function submitPublicVenueContact(
+export async function submitPublicVenueContact(
   slug: string,
   body: {
     guestName: string;
@@ -101,8 +102,19 @@ export function submitPublicVenueContact(
     captchaToken?: string;
   },
 ) {
-  return publicFetch<{ ok: boolean; message: string; id: string }>(
+  const result = await publicFetch<{ ok: boolean; message: string; id: string }>(
     `/public/venues/${encodeURIComponent(slug)}/contact`,
     { method: "POST", body: JSON.stringify(body) },
   );
+
+  trackEvent({
+    event: "contact_venue",
+    venue_slug: slug,
+    contact_id: result.id,
+    has_email: Boolean(body.guestEmail),
+    has_phone: Boolean(body.guestPhone),
+    has_subject: Boolean(body.subject),
+  });
+
+  return result;
 }

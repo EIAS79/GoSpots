@@ -2,8 +2,9 @@
 
 import { Loader2 } from "lucide-react";
 import Link from "next/link";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { PublicVenueView } from "@/components/venues/public/public-venue-view";
+import { trackEvent } from "@/lib/analytics";
 import { usePublicPrefs } from "@/lib/public-prefs-context";
 import {
   fetchPublicVenue,
@@ -21,6 +22,7 @@ export function PublicVenueClient({
   const [venue, setVenue] = useState<PublicVenueDetail | null>(initialVenue);
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(!initialVenue);
+  const trackedSlug = useRef<string | null>(null);
 
   useEffect(() => {
     if (initialVenue) {
@@ -49,6 +51,19 @@ export function PublicVenueClient({
       cancelled = true;
     };
   }, [slug, initialVenue, t]);
+
+  useEffect(() => {
+    if (!venue || trackedSlug.current === venue.slug) return;
+    trackedSlug.current = venue.slug;
+    trackEvent({
+      event: "view_venue",
+      venue_id: venue.id,
+      venue_slug: venue.slug,
+      venue_name: venue.displayName?.trim() || venue.name,
+      city: venue.city,
+      country: venue.country,
+    });
+  }, [venue]);
 
   if (loading) {
     return (

@@ -1,8 +1,16 @@
 import type { Metadata } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
+import { GoogleTagManager } from "@/components/analytics/google-tag-manager";
+import { PublicContactLinkTracker } from "@/components/analytics/public-contact-link-tracker";
+import { CookieConsent } from "@/components/consent/cookie-consent";
 import { AppProviders } from "@/components/layout/app-providers";
 import { OfflineBanner } from "@/components/layout/offline-banner";
 import { BRAND_NAME, BRAND_TAGLINE } from "@/lib/brand";
+import {
+  organizationJsonLd,
+  softwareApplicationJsonLd,
+  websiteJsonLd,
+} from "@/lib/seo/structured-data";
 import { getSiteUrlString } from "@/lib/site-url";
 import "./globals.css";
 
@@ -70,6 +78,17 @@ export const metadata: Metadata = {
   robots: { index: true, follow: true },
 };
 
+function JsonLd({ data }: { data: object }) {
+  return (
+    <script
+      type="application/ld+json"
+      dangerouslySetInnerHTML={{
+        __html: JSON.stringify(data).replace(/</g, "\\u003c"),
+      }}
+    />
+  );
+}
+
 export default function RootLayout({
   children,
 }: Readonly<{
@@ -83,9 +102,15 @@ export default function RootLayout({
       data-theme="dark"
     >
       <body className="relative min-h-full bg-[var(--color-background)] font-sans text-[var(--color-foreground)] transition-colors duration-300">
+        <JsonLd data={organizationJsonLd()} />
+        <JsonLd data={websiteJsonLd()} />
+        <JsonLd data={softwareApplicationJsonLd()} />
+        <GoogleTagManager />
+        <PublicContactLinkTracker />
         <AppProviders>
           <OfflineBanner />
           {children}
+          <CookieConsent />
         </AppProviders>
       </body>
     </html>

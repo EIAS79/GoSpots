@@ -1,3 +1,4 @@
+import { trackEvent } from "./analytics";
 import { getApiBaseUrl } from "./api-base-url";
 import {
   apiErrorFromResponse,
@@ -16,6 +17,43 @@ import {
 import { getVenuePathHeaders } from "./venue-api-headers";
 
 export const API_BASE_URL = getApiBaseUrl();
+
+function trackSuccessfulPublicVenueSearch(path: string, body: unknown): void {
+  if (typeof window === "undefined") return;
+  const [pathname, queryString] = path.split("?", 2);
+  if (pathname !== "/public/venues" || !queryString) return;
+
+  const params = new URLSearchParams(queryString);
+  const query = params.get("q")?.trim() ?? "";
+  const city = params.get("city")?.trim() ?? "";
+  const country = params.get("country")?.trim() ?? "";
+  const categories =
+    params
+      .get("categories")
+      ?.split(",")
+      .map((value) => value.trim())
+      .filter(Boolean) ?? [];
+
+  if (!query && !city && !country && categories.length === 0) return;
+
+  const total =
+    body &&
+    typeof body === "object" &&
+    typeof (body as { total?: unknown }).total === "number"
+      ? (body as { total: number }).total
+      : undefined;
+
+  // Do not send the raw free-text query: users can type arbitrary PII there.
+  trackEvent({
+    event: "search_venues",
+    has_query: Boolean(query),
+    query_length: query ? query.length : 0,
+    city: city || undefined,
+    country: country || undefined,
+    category_count: categories.length,
+    result_count: total,
+  });
+}
 
 export class ApiError extends Error {
   status: number;
@@ -247,5 +285,6 @@ export async function api<T = unknown>(
     throwApiErrorFromResponse(res, body, csrfRetried);
   }
 
+  trackSuccessfulPublicVenueSearch(path, body);
   return body as T;
 }
