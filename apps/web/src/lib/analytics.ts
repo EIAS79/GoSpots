@@ -27,6 +27,22 @@ export function trackEvent(payload: AnalyticsEvent): void {
   window.dataLayer.push(payload);
 }
 
+/**
+ * Emit an event at most once per browser for a stable business identifier.
+ * Useful for payment confirmations that can be revisited/refreshed.
+ */
+export function trackEventOnce(key: string, payload: AnalyticsEvent): void {
+  if (typeof window === "undefined") return;
+  const storageKey = `gospots.analytics.once:${key}`;
+  try {
+    if (window.localStorage.getItem(storageKey) === "1") return;
+    window.localStorage.setItem(storageKey, "1");
+  } catch {
+    // Storage can be unavailable in privacy modes; still emit the event.
+  }
+  trackEvent(payload);
+}
+
 export function updateGoogleConsent(consent: {
   analytics: boolean;
   marketing: boolean;
