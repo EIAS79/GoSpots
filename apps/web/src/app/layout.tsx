@@ -29,6 +29,9 @@ const defaultTitle = `${BRAND_NAME} — ${BRAND_TAGLINE}`;
 
 export const metadata: Metadata = {
   metadataBase: new URL(siteUrl),
+  alternates: {
+    canonical: "/",
+  },
   title: {
     default: defaultTitle,
     template: `%s · ${BRAND_NAME}`,
