@@ -143,7 +143,9 @@ export class BillingCatalogService {
 
   /**
    * Server-side quote — never trust client prices.
-   * Uses venue-packs `monthlyTotal` + `marketAdjustedCatalogEur`, then live FX.
+   * Uses venue-packs `monthlyTotal` + `marketAdjustedCatalogEur`, then FX.
+   * Checkout deliberately reuses the cached rate when available instead of
+   * making the payment path depend on a fresh third-party FX HTTP request.
    */
   async quote(input: {
     packId: string;
@@ -175,7 +177,7 @@ export class BillingCatalogService {
     );
 
     const { rate, ratesAt } = await this.rates.getRate('EUR', code, {
-      forceRefresh: true,
+      forceRefresh: false,
     });
     const amount = this.rates.convertAmount(amountEur, rate);
     const amountMinor = toMinor(amount);
