@@ -20,7 +20,10 @@ import {
   type SupportedCurrency,
 } from '../../common/locale-currency';
 import { CurrencyRatesService } from '../shop/currency-rates.service';
-import type { BillingProviderChoice } from './billing-config';
+import {
+  readBillingConfig,
+  type BillingProviderChoice,
+} from './billing-config';
 
 export type CatalogLineItem = {
   kind: 'pack' | 'add_on' | 'seat';
@@ -96,8 +99,10 @@ export class BillingCatalogService {
     requestedCurrency: string,
   ): SupportedCurrency {
     const requested = normalizeCurrency(requestedCurrency);
+    const effectiveProvider =
+      provider ?? readBillingConfig(this.config).defaultProvider;
     if (
-      provider === 'STRIPE' &&
+      effectiveProvider === 'STRIPE' &&
       STRIPE_UNSUPPORTED_PRESENTMENT.has(requested)
     ) {
       return 'EUR';
