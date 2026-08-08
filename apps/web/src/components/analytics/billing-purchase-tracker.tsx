@@ -11,6 +11,7 @@ import {
 
 const FAILED_PAYMENT_STATUSES = new Set(["FAILED", "CANCELED", "EXPIRED"]);
 const FAILED_OPERATION_STATUSES = new Set(["FAILED", "EXPIRED"]);
+const PAYMENT_OPERATION_TOLERANCE_MS = 5 * 60_000;
 
 /**
  * Tracks a subscription purchase only from a server-confirmed PAID payment row.
@@ -48,11 +49,19 @@ export function BillingPurchaseTracker() {
           | null
           | undefined;
         const subscriptionId = response?.billingSubscriptionId;
+        const operationCreatedAt = operation?.createdAt
+          ? Date.parse(operation.createdAt)
+          : Number.NaN;
+        const paymentCutoff = Number.isFinite(operationCreatedAt)
+          ? operationCreatedAt - PAYMENT_OPERATION_TOLERANCE_MS
+          : startedAt - PAYMENT_OPERATION_TOLERANCE_MS;
 
         if (subscriptionId) {
-          const relatedPayments = payments.items.filter(
-            (payment) => payment.subscriptionId === subscriptionId,
-          );
+          const relatedPayments = payments.items.filter((payment) => {
+            if (payment.subscriptionId !== subscriptionId) return false;
+            const timestamp = Date.parse(payment.paidAt ?? payment.createdAt);
+            return Number.isFinite(timestamp) && timestamp >= paymentCutoff;
+          });
           const paidPayment = relatedPayments.find(
             (payment) => payment.canonicalStatus === "PAID",
           );
