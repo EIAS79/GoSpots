@@ -2,7 +2,9 @@ import type { Metadata } from "next";
 import { cache } from "react";
 import { PublicVenueClient } from "@/components/venues/public/public-venue-client";
 import { getApiBaseUrl } from "@/lib/api-base-url";
+import { venueJsonLd } from "@/lib/seo/structured-data";
 import type { PublicVenueDetail } from "@/lib/shop-settings-client";
+import { getSiteUrlString } from "@/lib/site-url";
 import {
   formatVenueLocation,
   venueMarketingName,
@@ -36,6 +38,7 @@ export async function generateMetadata({
     return {
       title: "Venue not found",
       description: "This venue is not available or is not published.",
+      robots: { index: false, follow: false },
     };
   }
 
@@ -43,18 +46,20 @@ export async function generateMetadata({
   const location = formatVenueLocation(venue);
   const description =
     venue.description?.trim() ||
-    (location
-      ? `${name} — ${location}`
-      : `${name} on GoSpots`);
+    (location ? `${name} — ${location}` : `${name} on GoSpots`);
+  const canonical = `${getSiteUrlString()}/venue/${encodeURIComponent(venue.slug)}`;
 
   return {
     title: name,
     description,
+    alternates: { canonical },
     openGraph: {
+      type: "website",
+      url: canonical,
       title: name,
       description,
       ...(venue.coverImage
-        ? { images: [{ url: venue.coverImage }] }
+        ? { images: [{ url: venue.coverImage, alt: name }] }
         : undefined),
     },
   };
@@ -64,5 +69,17 @@ export default async function PublicVenuePage({ params }: PageProps) {
   const { slug } = await params;
   const venue = await loadPublicVenue(slug);
 
-  return <PublicVenueClient slug={slug} initialVenue={venue} />;
+  return (
+    <>
+      {venue ? (
+        <script
+          type="application/ld+json"
+          dangerouslySetInnerHTML={{
+            __html: JSON.stringify(venueJsonLd(venue)).replace(/</g, "\\u003c"),
+          }}
+        />
+      ) : null}
+      <PublicVenueClient slug={slug} initialVenue={venue} />
+    </>
+  );
 }
