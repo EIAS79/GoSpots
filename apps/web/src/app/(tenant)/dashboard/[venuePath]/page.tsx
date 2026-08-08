@@ -4,6 +4,7 @@ import { Loader2 } from "lucide-react";
 import { useEffect, useState } from "react";
 import { OverviewDashboard } from "@/components/dashboard/overview-dashboard";
 import { TenantPage } from "@/components/layout/tenant-page";
+import { OverviewReportExport } from "@/components/reports/overview-report-export";
 import {
   fetchDashboardOverview,
   type DashboardOverview,
@@ -68,6 +69,7 @@ export default function VenueOverviewPage() {
       description={`${data.shop.name ?? "Your venue"} — ${guide.description}`}
       capabilities={guide.capabilities}
     >
+      <OverviewReportExport data={data} />
       <OverviewDashboard
         data={data}
         formatMoney={formatMoney}
