@@ -38,6 +38,38 @@ export class HealthService {
       };
     }
 
+    const isProd = this.config.get<string>('NODE_ENV') === 'production';
+    const webApp = (
+      this.config.get<string>('WEB_APP_URL') ??
+      this.config.get<string>('WEB_ORIGIN') ??
+      ''
+    ).trim();
+    if (isProd) {
+      let validWebApp = false;
+      try {
+        const parsed = new URL(webApp);
+        validWebApp =
+          parsed.protocol === 'https:' &&
+          parsed.hostname !== 'localhost' &&
+          parsed.hostname !== '127.0.0.1';
+      } catch {
+        validWebApp = false;
+      }
+      if (!validWebApp) {
+        return {
+          status: 'error' as const,
+          check: 'ready',
+          service: 'GoSpots-api',
+          database: 'up' as const,
+          webApp: 'misconfigured' as const,
+          latencyMs: Date.now() - started,
+          error:
+            'WEB_APP_URL (or WEB_ORIGIN) must be a non-localhost HTTPS URL in production.',
+          timestamp: new Date().toISOString(),
+        };
+      }
+    }
+
     const billing = readBillingConfig(this.config);
     if (billing.enabled) {
       try {
@@ -94,6 +126,7 @@ export class HealthService {
       check: 'ready',
       service: 'GoSpots-api',
       database: 'up' as const,
+      webApp: webApp ? ('ready' as const) : ('not_required' as const),
       billing: billing.enabled ? ('ready' as const) : ('disabled' as const),
       defaultProvider: billing.defaultProvider,
       latencyMs: Date.now() - started,
