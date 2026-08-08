@@ -1,3 +1,4 @@
+import { trackEvent } from "./analytics";
 import { ApiError } from "./api";
 import { getApiBaseUrl } from "./api-base-url";
 import {
@@ -46,12 +47,12 @@ export function fetchPublicGamingSchedule(
   );
 }
 
-export function submitPublicGamingReservation(
+export async function submitPublicGamingReservation(
   slug: string,
   body: {
     resourceId: string;
     guestName: string;
-        guestEmail: string;
+    guestEmail: string;
     guestPhone?: string;
     partySize: number;
     startsAt: string;
@@ -63,7 +64,16 @@ export function submitPublicGamingReservation(
     captchaToken?: string;
   },
 ) {
-  return publicFetch<{
+  trackEvent({
+    event: "begin_booking",
+    venue_slug: slug,
+    booking_kind: "gaming",
+    resource_id: body.resourceId,
+    party_size: body.partySize,
+    has_phone: Boolean(body.guestPhone),
+  });
+
+  const result = await publicFetch<{
     ok: boolean;
     message: string;
     id: string;
@@ -74,6 +84,18 @@ export function submitPublicGamingReservation(
     method: "POST",
     body: JSON.stringify(body),
   });
+
+  trackEvent({
+    event: "booking_complete",
+    venue_slug: slug,
+    booking_kind: "gaming",
+    reservation_id: result.id,
+    resource_id: body.resourceId,
+    party_size: body.partySize,
+    email_sent: result.emailSent,
+  });
+
+  return result;
 }
 
 export type PublicGamingReservationStatus = {
