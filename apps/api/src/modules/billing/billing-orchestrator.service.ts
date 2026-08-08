@@ -292,6 +292,25 @@ export class BillingOrchestratorService {
     ) {
       return existingOp.responseJson as Record<string, unknown>;
     }
+    if (
+      existingOp &&
+      existingOp.status === BillingOperationStatus.COMPLETED
+    ) {
+      throw new ConflictException(
+        'This checkout already completed but its response is unavailable. Refresh billing status before retrying.',
+      );
+    }
+    if (
+      existingOp &&
+      existingOp.status === BillingOperationStatus.PENDING &&
+      existingOp.expiresAt.getTime() > Date.now()
+    ) {
+      throw new ConflictException(
+        'This checkout request is already in progress. Please wait a moment and try again.',
+      );
+    }
+
+    const reusableOperationId = existingOp?.id ?? null;
 
     const { billingSub, account, operation } = await this.prisma.$transaction(
       async (tx) => {
@@ -351,16 +370,26 @@ export class BillingOrchestratorService {
           data: { canonicalStatus: 'CHECKOUT_PENDING' },
         });
 
-        const operation = await tx.billingOperation.create({
-          data: {
-            shopId,
-            operationType: 'checkout',
-            idempotencyKey: opKey,
-            requestHash,
-            status: BillingOperationStatus.PENDING,
-            expiresAt: new Date(Date.now() + OPERATION_TTL_MS),
-          },
-        });
+        const operation = reusableOperationId
+          ? await tx.billingOperation.update({
+              where: { id: reusableOperationId },
+              data: {
+                requestHash,
+                status: BillingOperationStatus.PENDING,
+                responseJson: Prisma.JsonNull,
+                expiresAt: new Date(Date.now() + OPERATION_TTL_MS),
+              },
+            })
+          : await tx.billingOperation.create({
+              data: {
+                shopId,
+                operationType: 'checkout',
+                idempotencyKey: opKey,
+                requestHash,
+                status: BillingOperationStatus.PENDING,
+                expiresAt: new Date(Date.now() + OPERATION_TTL_MS),
+              },
+            });
 
         return { billingSub, account, operation };
       },
