@@ -1,157 +1,210 @@
-# GoSpots — production preview (Vercel + hosted API + Postgres)
+# GoSpots production deployment
 
-This monorepo has **three parts** in production:
+GoSpots runs as three production services:
 
-| Part | Where to host | Why |
-|------|----------------|-----|
-| **Web** (`apps/web`) | [Vercel](https://vercel.com) | Next.js |
-| **API** (`apps/api`) | [Render](https://render.com) (free tier) | NestJS long-running server + Sharp |
-| **Database** | [Neon](https://neon.tech) or Supabase | Postgres (required; SQLite is not used in production) |
+| Part | Host | Notes |
+|---|---|---|
+| Web (`apps/web`) | Vercel | Next.js, canonical host `www.gospots.eu` |
+| API (`apps/api`) | Render | NestJS long-running API |
+| Database | Neon / managed PostgreSQL | Prisma migrations only in production |
 
-Vercel does not run the Nest API reliably; the web app **proxies** `/api/v1/*` to your API so login cookies work on your Vercel domain.
+The browser uses a same-origin `/api/v1/*` path on Vercel. Next.js proxies those requests to Render, which keeps authentication cookies first-party from the browser's perspective.
 
----
+## Canonical domains
 
-## 1. Database (Neon)
+Production canonical URL is:
 
-1. [neon.tech](https://neon.tech) → your project → **Connect**.
-2. Tab **Connection string** → copy the URI (must include `?sslmode=require`).
-3. Paste into:
-   - **Render** → `DATABASE_URL` (production API)
-   - **Local** → `apps/api/.env` as `DATABASE_URL` (file is gitignored)
+```text
+https://www.gospots.eu
+```
 
-Template (no secrets in repo): `apps/api/.env.production.example`
+The web configuration permanently redirects these alternate hosts while preserving the path:
 
-Apply all migrations to Neon once (migrations are **PostgreSQL** — use Neon, not SQLite):
+```text
+https://gospots.eu      -> https://www.gospots.eu
+https://gospots.pl      -> https://www.gospots.eu
+https://www.gospots.pl  -> https://www.gospots.eu
+```
+
+Set on Vercel:
+
+```text
+NEXT_PUBLIC_SITE_URL=https://www.gospots.eu
+NEXT_PUBLIC_API_BASE_URL=/api/v1
+API_PROXY_TARGET=https://gospots-api.onrender.com
+```
+
+`API_PROXY_TARGET` is mandatory for a production build when `NEXT_PUBLIC_API_BASE_URL` is relative. Production builds deliberately fail instead of silently deploying a broken API proxy.
+
+## Database
+
+Use a PostgreSQL connection string with TLS, for example:
+
+```text
+DATABASE_URL=postgresql://USER:PASSWORD@HOST/neondb?sslmode=require
+```
+
+Production starts with:
 
 ```bash
 cd apps/api
-# DATABASE_URL in apps/api/.env must point at Neon
-pnpm exec prisma migrate deploy
+npx prisma migrate deploy
+node dist/main.js
 ```
 
-Optional demo data:
+Do not use `prisma db push` in production. All schema changes belong under `apps/api/prisma/migrations/`.
 
-```bash
-pnpm run seed
+The Render readiness endpoint is:
+
+```text
+GET /api/v1/ready
 ```
 
-After Render deploy, each start runs **`prisma migrate deploy` only** (no `db push`). Keep schema changes in migration files under `apps/api/prisma/migrations/`.
+Readiness verifies database connectivity and, when billing is enabled, verifies that the billing schema exists and the configured default billing provider has its required credentials.
 
-**Security:** Never commit `apps/api/.env`. Rotate your Neon password if it was shared in chat or screenshots.
+## Render API configuration
 
----
+The root `render.yaml` is the source of truth for non-secret flags. Secret values remain in Render Environment.
 
-## 2. API on Render
+Required base configuration:
 
-1. Push the repo to **GitHub** (private is fine).
-2. [Render Dashboard](https://dashboard.render.com) → **New** → **Blueprint** → connect repo (uses root `render.yaml`),  
-   **or** **New Web Service** → root directory `.` with:
-   - **Build:** `npm install -g pnpm@10.12.1 && pnpm install --frozen-lockfile && pnpm --filter @gospots/api exec prisma generate && pnpm --filter @gospots/api run build`  
-     (Do **not** use `corepack enable` on Render — it fails with `EROFS` on `/usr/bin/pnpm`.)
-   - **Start:** `cd apps/api && npx prisma migrate deploy && node dist/main.js`
-   - **Health check path:** `/api/v1/ready` (DB readiness). `/live` and `/health` are liveness-only.
-
-3. Environment variables (Render → Environment):
-
-| Variable | Example |
-|----------|---------|
-| `NODE_ENV` | `production` |
-| `DATABASE_URL` | Neon connection string |
-| `JWT_ACCESS_SECRET` | long random string |
-| `WEB_ORIGIN` | `https://your-app.vercel.app` |
-| `WEB_APP_URL` | same as `WEB_ORIGIN` (password reset, checkout redirects, guest links) |
-| `CORS_ORIGINS` | same as `WEB_ORIGIN` (preferred allowlist; comma-separate previews) |
-| `CORS_ORIGIN` | legacy alias; merged with `CORS_ORIGINS` / `WEB_*` |
-| `COOKIE_SECURE` | `true` |
-| `COOKIE_SAME_SITE` | `none` (only if **not** using Vercel proxy; use `lax` with proxy) |
-| `RESEND_API_KEY` | Resend API key (required for email) |
-| `MAIL_FROM` | Verified sender, e.g. `bookings@yourdomain.com` |
-| `MAIL_FROM_NAME` | `GoSpots` |
-| `LEMON_SQUEEZY_API_KEY` | Lemon Squeezy API key (required for paid checkout) |
-| `LEMON_SQUEEZY_STORE_ID` | Store ID |
-| `LEMON_SQUEEZY_VARIANT_ID` | Subscription variant ID |
-| `LEMON_SQUEEZY_WEBHOOK_SECRET` | Webhook signing secret |
-
-4. Note the public URL, e.g. `https://gospots-api.onrender.com`.
-
----
-
-## 3. Web on Vercel
-
-1. [vercel.com](https://vercel.com) → **Add New Project** → import the GitHub repo.
-2. **Root Directory:** **`apps/web`** (required). If this is empty (repo root), the build fails with “No Next.js version detected”.
-3. Framework should detect **Next.js**; `apps/web/vercel.json` installs dependencies from the monorepo root and runs `pnpm --filter @gospots/web run build`.
-
-4. Environment variables (Vercel → Settings → Environment Variables):
-
-| Variable | Value |
-|----------|--------|
-| `NEXT_PUBLIC_API_BASE_URL` | `/api/v1` |
-| `API_PROXY_TARGET` | `https://gospots-api.onrender.com` (no trailing slash) |
-
-5. Deploy. Open the preview URL and register / log in.
-
-### Preview URLs
-
-Each Vercel preview gets a new hostname. Either:
-
-- Add each preview URL to Render `CORS_ORIGINS` / `CORS_ORIGIN` / `WEB_ORIGIN` (comma-separated), **or**
-- Rely on the **proxy** (`/api/v1` + `API_PROXY_TARGET`) so the browser only talks to Vercel (recommended).
-
----
-
-## 4. GitHub checklist (before first push)
-
-- [ ] `.env` / `.env.local` are **not** committed (see `.gitignore`).
-- [ ] No secrets in the repo.
-- [ ] Postgres migrations are under `apps/api/prisma/migrations/`.
-- [ ] Optional: run `pnpm build` locally to verify.
-
-```bash
-pnpm install
-pnpm build
+```text
+NODE_ENV=production
+DATABASE_URL=<postgres connection string>
+JWT_ACCESS_SECRET=<long random secret>
+WEB_APP_URL=https://www.gospots.eu
+WEB_ORIGIN=https://www.gospots.eu
+CORS_ORIGINS=https://www.gospots.eu,https://gospots.eu,https://www.gospots.pl,https://gospots.pl
+COOKIE_SECURE=true
+COOKIE_SAME_SITE=lax
+CSRF_PROTECTION=true
+RESEND_API_KEY=<secret>
+MAIL_FROM=<verified sender>
+MAIL_FROM_NAME=GoSpots
 ```
 
----
+Never commit real values from Render.
 
-## 5. Local vs production
+## Stripe billing
 
-| | Local | Production preview |
-|--|--------|---------------------|
-| Web | `pnpm dev:web` → :3000 | Vercel |
-| API | `pnpm dev:api` → :4000 | Render |
-| DB | local Postgres / Docker | Neon |
-| `NEXT_PUBLIC_API_BASE_URL` | `http://localhost:4000/api/v1` | `/api/v1` |
-| Proxy | off | `API_PROXY_TARGET` → Render |
+Stripe is the production SaaS billing provider. The production flags are:
 
----
+```text
+BILLING_ENABLED=true
+BILLING_STRIPE_ENABLED=true
+BILLING_MOLLIE_ENABLED=false
+BILLING_DEFAULT_PROVIDER=STRIPE
+BILLING_LEMON_ENABLED=false
+BILLING_LEMON_LEGACY_CHECKOUT=false
+```
 
-## 6. Troubleshooting
+Required Stripe secrets in Render:
 
-**Login works locally but not on Vercel**
+```text
+STRIPE_SECRET_KEY=sk_live_...
+STRIPE_WEBHOOK_SECRET=whsec_...
+```
 
-- Set `NEXT_PUBLIC_API_BASE_URL=/api/v1` and `API_PROXY_TARGET` to your Render URL.
-- Redeploy Vercel after changing env vars.
+Webhook endpoint:
 
-**Images broken**
+```text
+https://gospots-api.onrender.com/api/v1/billing/webhooks/stripe
+```
 
-- API must be up; media is served from `/api/v1/media/:id`.
-- With proxy, images load from your Vercel domain automatically.
+Do **not** configure `STRIPE_API_VERSION` in Render. The installed Stripe SDK selects its compatible API version.
 
-**API build fails on Render**
+`STRIPE_PRICE_MAP` is optional. Leaving it unset is valid: GoSpots creates Stripe Checkout line items from the server-calculated quote with inline `price_data`. If a Price ID is configured, the Stripe adapter validates that it exists in the current account, is active and recurring, has the requested currency, and exactly matches the server quote. Invalid/stale Price IDs fall back to inline pricing instead of taking checkout down.
 
-- **`EROFS: read-only file system, unlink '/usr/bin/pnpm'`** — remove `corepack enable` from the build command; use `npm install -g pnpm@10.12.1` instead (see root `render.yaml`).
-- Ensure `DATABASE_URL` is set before first deploy.
-- Check Render logs for Prisma migrate errors.
+Stored Stripe customer IDs are also validated before reuse. A missing/deleted customer or an ID from an old Stripe account is replaced automatically during checkout and the returned customer ID is persisted by the billing orchestrator.
 
-**Cold start (free Render)**
+## Billing pricing source of truth
 
-- First request after idle can take ~30s; upgrade plan or use a cron ping if needed.
+The backend is authoritative for amounts charged. Checkout never trusts a price sent by the browser.
 
----
+The server quote is built from:
 
-## Optional: custom domains
+```text
+apps/api/src/common/venue-packs.ts
+apps/api/src/modules/billing/billing-catalog.service.ts
+```
 
-- Vercel: `app.yourdomain.com` → set `WEB_ORIGIN` / `CORS_ORIGIN` on Render to match.
-- Render: `api.yourdomain.com` → update `API_PROXY_TARGET` on Vercel.
+The subscription UI receives totals from the API. Frontend catalog metadata is presentation data; Stripe checkout always receives the backend quote.
+
+## Vercel web deployment
+
+Import the repository in Vercel with:
+
+```text
+Root Directory: apps/web
+Framework: Next.js
+```
+
+Required production variables:
+
+```text
+NEXT_PUBLIC_SITE_URL=https://www.gospots.eu
+NEXT_PUBLIC_API_BASE_URL=/api/v1
+API_PROXY_TARGET=https://gospots-api.onrender.com
+```
+
+The app intentionally refuses a production same-origin configuration without `API_PROXY_TARGET`. Localhost fallbacks exist only in development.
+
+## Search / crawler files
+
+Next.js generates:
+
+```text
+/robots.txt
+/sitemap.xml
+```
+
+Both use the canonical `.eu` URL. The sitemap includes public venue pages returned by the API and does not include dashboard/auth routes.
+
+## Local development
+
+Typical local setup:
+
+```text
+Web: http://localhost:3000
+API: http://localhost:4000/api/v1
+```
+
+Localhost fallbacks are development-only and are never used by production URL resolution.
+
+## Deployment checklist
+
+Before production deployment:
+
+- all Prisma migrations are committed;
+- Render has `DATABASE_URL`, `JWT_ACCESS_SECRET`, `WEB_APP_URL`, mail secrets, and Stripe secrets;
+- Stripe dual billing is enabled and Lemon/Mollie are disabled unless deliberately being used;
+- Vercel has `NEXT_PUBLIC_SITE_URL`, `NEXT_PUBLIC_API_BASE_URL`, and `API_PROXY_TARGET`;
+- `/api/v1/ready` returns `status: ok`;
+- `/sitemap.xml` uses `https://www.gospots.eu` URLs;
+- `.pl` and bare `.eu` hosts redirect to `https://www.gospots.eu`;
+- no `.env` or production secrets are committed.
+
+## Troubleshooting
+
+### Checkout returns 500 before Stripe creates a Session
+
+Check Render logs and `/api/v1/ready`. Common pre-provider causes are an unapplied billing migration, a missing billing provider configuration, or database/idempotency errors. Checkout does not force an external FX refresh and stale Stripe customer/Price IDs are self-healed/fallback-safe.
+
+### Login works locally but not in production
+
+Confirm:
+
+```text
+NEXT_PUBLIC_API_BASE_URL=/api/v1
+API_PROXY_TARGET=https://gospots-api.onrender.com
+COOKIE_SAME_SITE=lax
+COOKIE_SECURE=true
+```
+
+### Render build fails with EROFS around pnpm
+
+Use the repository `render.yaml`. It installs pnpm with npm and does not run `corepack enable`.
+
+### First request after idle is slow
+
+The Render free service may cold-start. This is a hosting characteristic, not an application checkout timeout.
