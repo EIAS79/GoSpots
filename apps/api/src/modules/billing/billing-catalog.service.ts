@@ -121,11 +121,13 @@ export class BillingCatalogService {
     provider: BillingProviderChoice | null | undefined,
     requestedCurrency: string,
   ): Promise<BillingRate> {
-    const marketCurrency = this.resolveBillingCurrency(
+    const marketCurrency = normalizeCurrency(requestedCurrency);
+    const preferredChargeCurrency = this.resolveBillingCurrency(
       provider,
       requestedCurrency,
     );
-    if (marketCurrency === 'EUR') {
+
+    if (preferredChargeCurrency === 'EUR') {
       return {
         marketCurrency,
         chargeCurrency: 'EUR',
@@ -137,12 +139,12 @@ export class BillingCatalogService {
     try {
       const { rate, ratesAt } = await this.rates.getRate(
         'EUR',
-        marketCurrency,
+        preferredChargeCurrency,
         { forceRefresh: false },
       );
       return {
         marketCurrency,
-        chargeCurrency: marketCurrency,
+        chargeCurrency: preferredChargeCurrency,
         rate,
         ratesAt,
       };
