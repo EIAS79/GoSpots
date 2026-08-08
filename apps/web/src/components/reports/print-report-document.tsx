@@ -294,6 +294,9 @@ export function PrintReportDocument({
     dateStyle: "medium",
     timeStyle: "short",
   });
+  const labels = locale.toLowerCase().startsWith("pl")
+    ? { period: "Okres", currency: "Waluta", generated: "Wygenerowano" }
+    : { period: "Period", currency: "Currency", generated: "Generated" };
 
   return (
     <div className="gs-print-report" aria-hidden="true">
@@ -304,15 +307,15 @@ export function PrintReportDocument({
         <p className="gs-report-subtitle">{venueName}</p>
         <div className="gs-report-meta">
           <div className="gs-report-meta-item">
-            <span className="gs-report-meta-label">Period</span>
+            <span className="gs-report-meta-label">{labels.period}</span>
             <span className="gs-report-meta-value">{period}</span>
           </div>
           <div className="gs-report-meta-item">
-            <span className="gs-report-meta-label">Currency</span>
+            <span className="gs-report-meta-label">{labels.currency}</span>
             <span className="gs-report-meta-value">{currency}</span>
           </div>
           <div className="gs-report-meta-item">
-            <span className="gs-report-meta-label">Generated</span>
+            <span className="gs-report-meta-label">{labels.generated}</span>
             <span className="gs-report-meta-value">{generatedLabel}</span>
           </div>
         </div>
