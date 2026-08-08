@@ -1,9 +1,19 @@
 "use client";
 
-import { Download, Loader2, Printer } from "lucide-react";
-import { useCallback, useEffect, useRef, useState } from "react";
-import { cn } from "@/lib/cn";
-import { useLiveData } from "@/lib/use-live-data";
+import {
+  CalendarRange,
+  CreditCard,
+  Download,
+  Eye,
+  Gamepad2,
+  Loader2,
+  Printer,
+  TrendingDown,
+  TrendingUp,
+  Users,
+  UtensilsCrossed,
+} from "lucide-react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import {
   VenueBarChart,
   VenueDoughnutChart,
@@ -11,31 +21,27 @@ import {
   VenueMultiBarChart,
 } from "@/components/charts/venue-chart";
 import { KpiCard } from "@/components/dashboard/kpi-card";
-import { coerceMoney } from "@/lib/money";
 import {
-  CalendarRange,
-  CreditCard,
-  Eye,
-  Gamepad2,
-  TrendingDown,
-  TrendingUp,
-  Users,
-  UtensilsCrossed,
-} from "lucide-react";
+  PrintReportDocument,
+  ReportMetricGrid,
+  ReportSection,
+} from "@/components/reports/print-report-document";
+import { cn } from "@/lib/cn";
+import {
+  downloadTextFile,
+  financeReportToCsv,
+  reportFilename,
+} from "@/lib/export-report";
 import {
   fetchFinanceAnalytics,
   fetchSalesByItem,
   type FinanceAnalytics,
   type SalesByItem,
 } from "@/lib/finance-client";
-import {
-  downloadTextFile,
-  financeReportToCsv,
-} from "@/lib/export-report";
+import { coerceMoney } from "@/lib/money";
+import { useLiveData } from "@/lib/use-live-data";
 import { useVenueSettings } from "@/lib/venue-settings-context";
-import {
-  formatVenueDayKey,
-} from "@/lib/venue-timezone";
+import { formatVenueDayKey } from "@/lib/venue-timezone";
 
 const DAY_OPTS = [1, 7, 30, 90] as const;
 
@@ -46,37 +52,40 @@ export function FinanceReportsPanel({
   venueName?: string;
   liveRefresh?: boolean;
 }) {
-  const { formatMoney, t, locale } = useVenueSettings();
+  const { formatMoney, t, locale, currency } = useVenueSettings();
   const formatDayKey = (dayKey: string) => formatVenueDayKey(dayKey, locale);
   const [days, setDays] = useState(30);
   const [data, setData] = useState<FinanceAnalytics | null>(null);
   const [salesByItem, setSalesByItem] = useState<SalesByItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const printRef = useRef<HTMLDivElement>(null);
+  const [generatedAt, setGeneratedAt] = useState(() => new Date());
 
-  const load = useCallback(async (opts?: { silent?: boolean }) => {
-    if (!opts?.silent) setLoading(true);
-    setError(null);
-    try {
-      const [analytics, items] = await Promise.all([
-        fetchFinanceAnalytics(days),
-        fetchSalesByItem(days),
-      ]);
-      setData(analytics);
-      setSalesByItem(items);
-      return true;
-    } catch (e) {
-      if (!opts?.silent) {
-        setError(
-          e instanceof Error ? e.message : t("finance.reportLoadFailed"),
-        );
+  const load = useCallback(
+    async (opts?: { silent?: boolean }) => {
+      if (!opts?.silent) setLoading(true);
+      setError(null);
+      try {
+        const [analytics, items] = await Promise.all([
+          fetchFinanceAnalytics(days),
+          fetchSalesByItem(days),
+        ]);
+        setData(analytics);
+        setSalesByItem(items);
+        return true;
+      } catch (e) {
+        if (!opts?.silent) {
+          setError(
+            e instanceof Error ? e.message : t("finance.reportLoadFailed"),
+          );
+        }
+        return false;
+      } finally {
+        if (!opts?.silent) setLoading(false);
       }
-      return false;
-    } finally {
-      if (!opts?.silent) setLoading(false);
-    }
-  }, [days, t]);
+    },
+    [days, t],
+  );
 
   useEffect(() => {
     void load();
@@ -92,16 +101,62 @@ export function FinanceReportsPanel({
     },
   );
 
+  const periodLabel =
+    days === 1
+      ? t("finance.reportToday")
+      : t("finance.reportLastDays", { days });
+
+  const dayOptLabel = (value: number) => {
+    switch (value) {
+      case 1:
+        return t("finance.reportToday");
+      case 7:
+        return t("finance.reportDays7");
+      case 30:
+        return t("finance.reportDays30");
+      case 90:
+        return t("finance.reportDays90");
+      default:
+        return String(value);
+    }
+  };
+
+  const paymentMethodLabel = useCallback(
+    (method: string) => {
+      switch (method) {
+        case "CASH":
+          return t("finance.txPayCash");
+        case "CARD":
+          return t("finance.txPayCard");
+        case "ONLINE":
+          return t("finance.txPayOnline");
+        case "OTHER":
+          return t("finance.txPayOther");
+        default:
+          return method;
+      }
+    },
+    [t],
+  );
+
   function handlePrint() {
-    window.print();
+    setGeneratedAt(new Date());
+    requestAnimationFrame(() => window.print());
   }
 
   function handleDownload() {
     if (!data) return;
-    const date = new Date().toISOString().slice(0, 10);
+    const now = new Date();
+    const date = now.toISOString().slice(0, 10);
     downloadTextFile(
-      `${venueName.replace(/\s+/g, "-")}-report-${days}d-${date}.csv`,
-      financeReportToCsv(data, venueName),
+      `${reportFilename(venueName)}-finance-${days}d-${date}.csv`,
+      financeReportToCsv(data, venueName, salesByItem, {
+        currency,
+        locale,
+        periodLabel,
+        generatedAt: now,
+        paymentMethodLabel,
+      }),
     );
   }
 
@@ -122,48 +177,14 @@ export function FinanceReportsPanel({
   }
 
   const { summary } = data;
-  const periodLabel =
-    days === 1
-      ? t("finance.reportToday")
-      : t("finance.reportLastDays", { days });
   const paymentBreakdown = data.paymentMethodBreakdown ?? [];
   const dailyClose = data.dailyClose;
   const showDailyClose =
     dailyClose != null && (days === 1 || coerceMoney(dailyClose.total) > 0);
 
-  const dayOptLabel = (value: number) => {
-    switch (value) {
-      case 1:
-        return t("finance.reportToday");
-      case 7:
-        return t("finance.reportDays7");
-      case 30:
-        return t("finance.reportDays30");
-      case 90:
-        return t("finance.reportDays90");
-      default:
-        return String(value);
-    }
-  };
-
-  const paymentMethodLabel = (method: string) => {
-    switch (method) {
-      case "CASH":
-        return t("finance.txPayCash");
-      case "CARD":
-        return t("finance.txPayCard");
-      case "ONLINE":
-        return t("finance.txPayOnline");
-      case "OTHER":
-        return t("finance.txPayOther");
-      default:
-        return method;
-    }
-  };
-
   return (
-    <div className="space-y-6 print:space-y-4">
-      <div className="flex flex-wrap items-center gap-2 print:hidden">
+    <div className="space-y-6">
+      <div className="flex flex-wrap items-center gap-2">
         {DAY_OPTS.map((value) => (
           <button
             key={value}
@@ -181,15 +202,16 @@ export function FinanceReportsPanel({
         <button
           type="button"
           onClick={handlePrint}
-          className="ml-auto inline-flex items-center gap-1 rounded-lg border border-white/15 px-3 py-1.5 text-xs text-zinc-300 hover:bg-white/5"
+          title={t("finance.reportPrint")}
+          className="ml-auto inline-flex items-center gap-1.5 rounded-lg border border-white/15 px-3 py-1.5 text-xs font-medium text-zinc-300 hover:bg-white/5"
         >
           <Printer size={14} />
-          {t("finance.reportPrint")}
+          PDF
         </button>
         <button
           type="button"
           onClick={handleDownload}
-          className="inline-flex items-center gap-1 rounded-lg border border-emerald-400/30 bg-emerald-500/10 px-3 py-1.5 text-xs text-emerald-200"
+          className="inline-flex items-center gap-1.5 rounded-lg border border-emerald-400/30 bg-emerald-500/10 px-3 py-1.5 text-xs font-medium text-emerald-200"
         >
           <Download size={14} />
           {t("finance.reportDownloadCsv")}
@@ -203,15 +225,8 @@ export function FinanceReportsPanel({
         </button>
       </div>
 
-      <div ref={printRef} className="space-y-6 print:text-black">
-        <div className="hidden print:block print:mb-4">
-          <h1 className="text-xl font-bold">
-            {t("finance.reportTitle", { venue: venueName })}
-          </h1>
-          <p className="text-sm text-zinc-600">{periodLabel} · {new Date().toLocaleString()}</p>
-        </div>
-
-        <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4 print:grid-cols-3">
+      <div className="space-y-6">
+        <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4">
           <KpiCard
             label={t("finance.reportTotalRevenue")}
             value={formatMoney(summary.revenue)}
@@ -266,65 +281,46 @@ export function FinanceReportsPanel({
         </div>
 
         {showDailyClose && dailyClose ? (
-          <section className="rounded-xl border border-amber-400/20 bg-amber-500/5 p-5 print:border-zinc-300 print:bg-white">
-            <h2 className="text-sm font-semibold text-white print:text-black">
+          <section className="rounded-xl border border-amber-400/20 bg-amber-500/5 p-5">
+            <h2 className="text-sm font-semibold text-white">
               {t("finance.reportDailyClose", { day: formatDayKey(dailyClose.day) })}
             </h2>
-            <p className="mt-1 text-xs text-zinc-500 print:text-zinc-600">
+            <p className="mt-1 text-xs text-zinc-500">
               {t("finance.reportDailyCloseHint")}
             </p>
             <div className="mt-4 grid gap-3 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5">
-              <div className="rounded-lg border border-white/10 bg-zinc-950/40 px-3 py-2">
-                <p className="text-[10px] uppercase text-zinc-500">
-                  {t("finance.reportChannelMenu")}
-                </p>
-                <p className="text-sm font-semibold text-emerald-300">
-                  {formatMoney(dailyClose.menuOrders)}
-                </p>
-              </div>
-              <div className="rounded-lg border border-white/10 bg-zinc-950/40 px-3 py-2">
-                <p className="text-[10px] uppercase text-zinc-500">
-                  {t("finance.reportChannelPlay")}
-                </p>
-                <p className="text-sm font-semibold text-sky-300">
-                  {formatMoney(dailyClose.playSessions)}
-                </p>
-              </div>
-              <div className="rounded-lg border border-white/10 bg-zinc-950/40 px-3 py-2">
-                <p className="text-[10px] uppercase text-zinc-500">
-                  {t("finance.reportChannelBookings")}
-                </p>
-                <p className="text-sm font-semibold text-amber-300">
-                  {formatMoney(dailyClose.reservations)}
-                </p>
-              </div>
-              <div className="rounded-lg border border-white/10 bg-zinc-950/40 px-3 py-2">
-                <p className="text-[10px] uppercase text-zinc-500">
-                  {t("finance.reportChannelQuick")}
-                </p>
-                <p className="text-sm font-semibold text-violet-300">
-                  {formatMoney(dailyClose.quickSales)}
-                </p>
-              </div>
-              <div className="rounded-lg border border-amber-400/30 bg-amber-500/10 px-3 py-2">
-                <p className="text-[10px] uppercase text-amber-200/80">
-                  {t("finance.reportChannelTotal")}
-                </p>
-                <p className="text-sm font-bold text-amber-100">
-                  {formatMoney(dailyClose.total)}
-                </p>
-              </div>
+              <SummaryAmount
+                label={t("finance.reportChannelMenu")}
+                value={formatMoney(dailyClose.menuOrders)}
+              />
+              <SummaryAmount
+                label={t("finance.reportChannelPlay")}
+                value={formatMoney(dailyClose.playSessions)}
+              />
+              <SummaryAmount
+                label={t("finance.reportChannelBookings")}
+                value={formatMoney(dailyClose.reservations)}
+              />
+              <SummaryAmount
+                label={t("finance.reportChannelQuick")}
+                value={formatMoney(dailyClose.quickSales)}
+              />
+              <SummaryAmount
+                label={t("finance.reportChannelTotal")}
+                value={formatMoney(dailyClose.total)}
+                strong
+              />
             </div>
           </section>
         ) : null}
 
         {paymentBreakdown.length > 0 ? (
-          <section className="rounded-xl border border-white/10 bg-zinc-900/40 p-5 print:border-zinc-300 print:bg-white">
-            <h2 className="flex items-center gap-2 text-sm font-semibold text-white print:text-black">
+          <section className="rounded-xl border border-white/10 bg-zinc-900/40 p-5">
+            <h2 className="flex items-center gap-2 text-sm font-semibold text-white">
               <CreditCard size={14} className="text-sky-400" />
               {t("finance.reportPaymentBreakdown", { period: periodLabel })}
             </h2>
-            <p className="mt-1 text-xs text-zinc-500 print:text-zinc-600">
+            <p className="mt-1 text-xs text-zinc-500">
               {t("finance.reportPaymentHint")}
             </p>
             <div className="mt-4 overflow-x-auto">
@@ -352,11 +348,12 @@ export function FinanceReportsPanel({
                       <td
                         className={cn(
                           "py-2 text-right font-medium tabular-nums",
-                          coerceMoney(row.amount) < 0 ? "text-rose-300" : "text-emerald-300",
+                          coerceMoney(row.amount) < 0
+                            ? "text-rose-300"
+                            : "text-emerald-300",
                         )}
                       >
-                        {coerceMoney(row.amount) < 0 ? "−" : ""}
-                        {formatMoney(Math.abs(coerceMoney(row.amount)))}
+                        {formatMoney(row.amount)}
                       </td>
                     </tr>
                   ))}
@@ -366,11 +363,8 @@ export function FinanceReportsPanel({
           </section>
         ) : null}
 
-        <div className="grid gap-6 lg:grid-cols-2 print:grid-cols-1">
-          <section className="rounded-xl border border-white/10 bg-zinc-900/40 p-5 print:border-zinc-300 print:bg-white">
-            <h2 className="text-sm font-semibold text-white print:text-black">
-              {t("finance.reportRevenuePeriod", { period: periodLabel })}
-            </h2>
+        <div className="grid gap-6 lg:grid-cols-2">
+          <ChartCard title={t("finance.reportRevenuePeriod", { period: periodLabel })}>
             <VenueLineChart
               data={data.revenueByDay.map((d) => ({
                 label: formatDayKey(d.day),
@@ -378,11 +372,8 @@ export function FinanceReportsPanel({
               }))}
               label={t("finance.reportChartRevenue")}
             />
-          </section>
-          <section className="rounded-xl border border-white/10 bg-zinc-900/40 p-5 print:border-zinc-300 print:bg-white">
-            <h2 className="text-sm font-semibold text-white print:text-black">
-              {t("finance.reportRevenueBySource")}
-            </h2>
+          </ChartCard>
+          <ChartCard title={t("finance.reportRevenueBySource")}>
             {data.revenueByDay.length > 1 ? (
               <VenueMultiBarChart
                 labels={data.revenueByDay.map((d) => formatDayKey(d.day))}
@@ -439,41 +430,34 @@ export function FinanceReportsPanel({
                 ]}
               />
             )}
-          </section>
-          <section className="rounded-xl border border-white/10 bg-zinc-900/40 p-5 print:border-zinc-300 print:bg-white">
-            <h2 className="text-sm font-semibold text-white print:text-black">
-              {t("finance.reportInVenueGuests")}
-            </h2>
+          </ChartCard>
+          <ChartCard title={t("finance.reportInVenueGuests")}>
             <VenueBarChart
               data={(data.audienceByDay ?? []).map((d) => ({
-                label: d.day,
+                label: formatDayKey(d.day),
                 value: d.menuCovers + d.reservationGuests + d.playPlayers,
               }))}
               label={t("finance.reportChartGuests")}
               color="rgba(56, 189, 248, 0.85)"
             />
-          </section>
-          <section className="rounded-xl border border-white/10 bg-zinc-900/40 p-5 print:border-zinc-300 print:bg-white">
-            <h2 className="flex items-center gap-2 text-sm font-semibold text-white print:text-black">
-              <TrendingDown size={14} className="text-rose-400" />
-              {t("finance.reportChartLosses")}
-            </h2>
+          </ChartCard>
+          <ChartCard title={t("finance.reportChartLosses")}>
             <VenueBarChart
               data={data.lossesByDay.map((d) => ({
-                label: d.day,
+                label: formatDayKey(d.day),
                 value: Math.round(coerceMoney(d.amount) * 100) / 100,
               }))}
               label={t("finance.reportChartLosses")}
               color="rgba(244, 63, 94, 0.75)"
             />
-          </section>
+          </ChartCard>
         </div>
 
-        <section className="rounded-xl border border-white/10 bg-zinc-900/40 p-5 print:border-zinc-300 print:bg-white">
-          <h2 className="text-sm font-semibold text-white print:text-black">
+        <section className="rounded-xl border border-white/10 bg-zinc-900/40 p-5">
+          <h2 className="text-sm font-semibold text-white">
             {t("finance.reportSalesByItem", { period: periodLabel })}
           </h2>
-          <p className="mt-1 text-xs text-zinc-500 print:text-zinc-600">
+          <p className="mt-1 text-xs text-zinc-500">
             {t("finance.reportSalesByItemHint")}
           </p>
           {salesByItem.length === 0 ? (
@@ -512,6 +496,376 @@ export function FinanceReportsPanel({
           )}
         </section>
       </div>
+
+      <FinancePrintReport
+        data={data}
+        salesByItem={salesByItem}
+        venueName={venueName}
+        periodLabel={periodLabel}
+        generatedAt={generatedAt}
+        locale={locale}
+        currency={currency}
+        formatMoney={formatMoney}
+        formatDayKey={formatDayKey}
+        paymentMethodLabel={paymentMethodLabel}
+        t={t}
+      />
     </div>
+  );
+}
+
+function FinancePrintReport({
+  data,
+  salesByItem,
+  venueName,
+  periodLabel,
+  generatedAt,
+  locale,
+  currency,
+  formatMoney,
+  formatDayKey,
+  paymentMethodLabel,
+  t,
+}: {
+  data: FinanceAnalytics;
+  salesByItem: SalesByItem[];
+  venueName: string;
+  periodLabel: string;
+  generatedAt: Date;
+  locale: string;
+  currency: string;
+  formatMoney: (value: import("@/lib/money").MoneyWire) => string;
+  formatDayKey: (dayKey: string) => string;
+  paymentMethodLabel: (method: string) => string;
+  t: ReturnType<typeof useVenueSettings>["t"];
+}) {
+  const { summary } = data;
+  const paymentBreakdown = data.paymentMethodBreakdown ?? [];
+  const totalGuests =
+    (summary.menuCovers ?? summary.customerCount) +
+    (summary.reservationGuests ?? 0) +
+    (summary.playPlayers ?? 0);
+  const items = salesByItem.length > 0 ? salesByItem : data.topItems;
+  const showDailyClose =
+    data.dailyClose != null &&
+    (data.days === 1 || coerceMoney(data.dailyClose.total) > 0);
+
+  return (
+    <PrintReportDocument
+      title={t("finance.reportTitle", { venue: venueName })}
+      venueName={venueName}
+      period={periodLabel}
+      generatedAt={generatedAt}
+      locale={locale}
+      currency={currency}
+    >
+      <ReportMetricGrid
+        items={[
+          {
+            label: t("finance.reportTotalRevenue"),
+            value: formatMoney(summary.revenue),
+          },
+          {
+            label: t("finance.reportProfitLosses", {
+              profit: "",
+              losses: "",
+            }).split(":")[0] || "Profit",
+            value: formatMoney(summary.profit),
+            note: `${t("finance.reportChartLosses")}: ${formatMoney(summary.losses)}`,
+          },
+          {
+            label: t("finance.reportMenuOrders"),
+            value: formatMoney(summary.revenueMenuOrders ?? summary.revenueOrders),
+          },
+          {
+            label: t("finance.reportTablesGames"),
+            value: formatMoney(summary.revenuePlaySessions ?? 0),
+            note: t("finance.reportSessions", { n: summary.playSessionCount ?? 0 }),
+          },
+          {
+            label: t("finance.reportReservations"),
+            value: formatMoney(summary.revenueReservations ?? 0),
+          },
+          {
+            label: t("finance.reportGuests"),
+            value: String(totalGuests),
+          },
+        ]}
+      />
+
+      <ReportSection title={t("finance.reportRevenueBySource")} keepTogether>
+        <div className="gs-report-table-wrap">
+          <table className="gs-report-table">
+            <thead>
+              <tr>
+                <th>{t("finance.reportMethod")}</th>
+                <th className="num">{t("finance.reportNetAmount")}</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr>
+                <td>{t("finance.reportChannelMenu")}</td>
+                <td className="num positive">
+                  {formatMoney(summary.revenueMenuOrders ?? summary.revenueOrders)}
+                </td>
+              </tr>
+              <tr>
+                <td>{t("finance.reportChannelPlay")}</td>
+                <td className="num positive">
+                  {formatMoney(summary.revenuePlaySessions ?? 0)}
+                </td>
+              </tr>
+              <tr>
+                <td>{t("finance.reportChannelBookings")}</td>
+                <td className="num positive">
+                  {formatMoney(summary.revenueReservations ?? 0)}
+                </td>
+              </tr>
+              <tr>
+                <td>{t("finance.reportChannelQuick")}</td>
+                <td className="num positive">
+                  {formatMoney(summary.revenueQuickSales ?? summary.revenueTransactions)}
+                </td>
+              </tr>
+              <tr>
+                <td><strong>{t("finance.reportChannelTotal")}</strong></td>
+                <td className="num positive"><strong>{formatMoney(summary.revenue)}</strong></td>
+              </tr>
+              <tr>
+                <td>{t("finance.reportChartLosses")}</td>
+                <td className="num negative">{formatMoney(summary.losses)}</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </ReportSection>
+
+      {showDailyClose && data.dailyClose ? (
+        <ReportSection
+          title={t("finance.reportDailyClose", {
+            day: formatDayKey(data.dailyClose.day),
+          })}
+          note={t("finance.reportDailyCloseHint")}
+          keepTogether
+        >
+          <ReportMetricGrid
+            items={[
+              {
+                label: t("finance.reportChannelMenu"),
+                value: formatMoney(data.dailyClose.menuOrders),
+              },
+              {
+                label: t("finance.reportChannelPlay"),
+                value: formatMoney(data.dailyClose.playSessions),
+              },
+              {
+                label: t("finance.reportChannelBookings"),
+                value: formatMoney(data.dailyClose.reservations),
+              },
+              {
+                label: t("finance.reportChannelQuick"),
+                value: formatMoney(data.dailyClose.quickSales),
+              },
+              {
+                label: t("finance.reportChannelTotal"),
+                value: formatMoney(data.dailyClose.total),
+              },
+            ]}
+          />
+        </ReportSection>
+      ) : null}
+
+      {paymentBreakdown.length > 0 ? (
+        <ReportSection
+          title={t("finance.reportPaymentBreakdown", { period: periodLabel })}
+          note={t("finance.reportPaymentHint")}
+          keepTogether={paymentBreakdown.length <= 8}
+        >
+          <div className="gs-report-table-wrap">
+            <table className="gs-report-table">
+              <thead>
+                <tr>
+                  <th>{t("finance.reportMethod")}</th>
+                  <th className="num">{t("finance.reportTxCount")}</th>
+                  <th className="num">{t("finance.reportNetAmount")}</th>
+                </tr>
+              </thead>
+              <tbody>
+                {paymentBreakdown.map((row) => (
+                  <tr key={row.method}>
+                    <td>{paymentMethodLabel(row.method)}</td>
+                    <td className="num">{row.count}</td>
+                    <td
+                      className={cn(
+                        "num",
+                        coerceMoney(row.amount) < 0 ? "negative" : "positive",
+                      )}
+                    >
+                      {formatMoney(row.amount)}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </ReportSection>
+      ) : null}
+
+      <ReportSection
+        title={t("finance.reportRevenuePeriod", { period: periodLabel })}
+        note={t("finance.reportChartRevenue")}
+        newPage={data.days >= 30}
+      >
+        <div className="gs-report-table-wrap">
+          <table className="gs-report-table">
+            <thead>
+              <tr>
+                <th>{t("finance.reportRevenuePeriod", { period: "" })}</th>
+                <th className="num">{t("finance.reportChannelMenu")}</th>
+                <th className="num">{t("finance.reportChannelPlay")}</th>
+                <th className="num">{t("finance.reportChannelBookings")}</th>
+                <th className="num">{t("finance.reportChannelQuick")}</th>
+                <th className="num">{t("finance.reportChannelTotal")}</th>
+              </tr>
+            </thead>
+            <tbody>
+              {data.revenueByDay.map((row) => (
+                <tr key={row.day}>
+                  <td>{formatDayKey(row.day)}</td>
+                  <td className="num">{formatMoney(row.menuOrders)}</td>
+                  <td className="num">{formatMoney(row.playSessions)}</td>
+                  <td className="num">{formatMoney(row.reservations)}</td>
+                  <td className="num">{formatMoney(row.quickSales)}</td>
+                  <td className="num positive">{formatMoney(row.total)}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      </ReportSection>
+
+      {data.lossesByDay.length > 0 ? (
+        <ReportSection title={t("finance.reportChartLosses")}>
+          <div className="gs-report-table-wrap">
+            <table className="gs-report-table">
+              <thead>
+                <tr>
+                  <th>{t("finance.reportChartRevenue")}</th>
+                  <th className="num">{t("finance.reportChartLosses")}</th>
+                </tr>
+              </thead>
+              <tbody>
+                {data.lossesByDay.map((row) => (
+                  <tr key={row.day}>
+                    <td>{formatDayKey(row.day)}</td>
+                    <td className="num negative">{formatMoney(row.amount)}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </ReportSection>
+      ) : null}
+
+      {(data.audienceByDay ?? []).length > 0 ? (
+        <ReportSection title={t("finance.reportInVenueGuests")}>
+          <div className="gs-report-table-wrap">
+            <table className="gs-report-table">
+              <thead>
+                <tr>
+                  <th>{t("finance.reportChartGuests")}</th>
+                  <th className="num">{t("finance.reportChannelMenu")}</th>
+                  <th className="num">{t("finance.reportReservations")}</th>
+                  <th className="num">{t("finance.reportTablesGames")}</th>
+                  <th className="num">{t("finance.reportMarketingViews")}</th>
+                </tr>
+              </thead>
+              <tbody>
+                {(data.audienceByDay ?? []).map((row) => (
+                  <tr key={row.day}>
+                    <td>{formatDayKey(row.day)}</td>
+                    <td className="num">{row.menuCovers}</td>
+                    <td className="num">{row.reservationGuests}</td>
+                    <td className="num">{row.playPlayers}</td>
+                    <td className="num">{row.marketingViews}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </ReportSection>
+      ) : null}
+
+      <ReportSection
+        title={t("finance.reportSalesByItem", { period: periodLabel })}
+        note={t("finance.reportSalesByItemHint")}
+        newPage={data.days >= 30 && items.length > 10}
+      >
+        {items.length === 0 ? (
+          <div className="gs-report-empty">{t("finance.reportNoItemSales")}</div>
+        ) : (
+          <div className="gs-report-table-wrap">
+            <table className="gs-report-table">
+              <thead>
+                <tr>
+                  <th>{t("finance.reportColItem")}</th>
+                  <th className="num">{t("finance.reportColQty")}</th>
+                  <th className="num">{t("finance.reportColRevenue")}</th>
+                </tr>
+              </thead>
+              <tbody>
+                {items.map((row) => (
+                  <tr key={`${row.menuItemId ?? "custom"}-${row.name}`}>
+                    <td>{row.name}</td>
+                    <td className="num">{row.quantity}</td>
+                    <td className="num positive">{formatMoney(row.revenue)}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
+      </ReportSection>
+    </PrintReportDocument>
+  );
+}
+
+function SummaryAmount({
+  label,
+  value,
+  strong = false,
+}: {
+  label: string;
+  value: string;
+  strong?: boolean;
+}) {
+  return (
+    <div
+      className={cn(
+        "rounded-lg border px-3 py-2",
+        strong
+          ? "border-amber-400/30 bg-amber-500/10"
+          : "border-white/10 bg-zinc-950/40",
+      )}
+    >
+      <p className="text-[10px] uppercase tracking-wide text-zinc-500">{label}</p>
+      <p
+        className={cn(
+          "mt-0.5 text-sm font-semibold tabular-nums",
+          strong ? "text-amber-100" : "text-emerald-300",
+        )}
+      >
+        {value}
+      </p>
+    </div>
+  );
+}
+
+function ChartCard({ title, children }: { title: string; children: React.ReactNode }) {
+  return (
+    <section className="rounded-xl border border-white/10 bg-zinc-900/40 p-5">
+      <h2 className="text-sm font-semibold text-white">{title}</h2>
+      {children}
+    </section>
   );
 }
