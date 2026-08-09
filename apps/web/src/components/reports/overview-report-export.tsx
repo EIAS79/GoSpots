@@ -16,6 +16,7 @@ import {
 import { formatDate } from "@/lib/format";
 import { useVenueSettings } from "@/lib/venue-settings-context";
 import { formatVenueDayKey } from "@/lib/venue-timezone";
+import { downloadXlsxFile, overviewReportToXlsx } from "@/lib/xlsx-report";
 
 export function OverviewReportExport({ data }: { data: DashboardOverview }) {
   const { formatMoney, locale, currency, t, shop } = useVenueSettings();
@@ -30,7 +31,21 @@ export function OverviewReportExport({ data }: { data: DashboardOverview }) {
     requestAnimationFrame(() => window.print());
   }
 
-  function handleDownload() {
+  function handleDownloadExcel() {
+    const now = new Date();
+    const date = now.toISOString().slice(0, 10);
+    downloadXlsxFile(
+      `${reportFilename(venueName)}-overview-${date}.xlsx`,
+      overviewReportToXlsx(data, {
+        currency,
+        locale,
+        periodLabel,
+        generatedAt: now,
+      }),
+    );
+  }
+
+  function handleDownloadCsv() {
     const now = new Date();
     const date = now.toISOString().slice(0, 10);
     downloadTextFile(
@@ -51,7 +66,7 @@ export function OverviewReportExport({ data }: { data: DashboardOverview }) {
           <p className="text-xs font-medium text-zinc-300">{labels.exportTitle}</p>
           <p className="mt-0.5 text-[11px] text-zinc-600">{labels.exportHint}</p>
         </div>
-        <div className="flex gap-2">
+        <div className="flex flex-wrap gap-2">
           <button
             type="button"
             onClick={handlePrint}
@@ -62,11 +77,21 @@ export function OverviewReportExport({ data }: { data: DashboardOverview }) {
           </button>
           <button
             type="button"
-            onClick={handleDownload}
+            onClick={handleDownloadExcel}
+            title={labels.excelHint}
             className="inline-flex items-center gap-1.5 rounded-lg border border-emerald-400/30 bg-emerald-500/10 px-3 py-1.5 text-xs font-medium text-emerald-200 transition hover:bg-emerald-500/15"
           >
             <Download size={14} />
-            CSV
+            Excel
+          </button>
+          <button
+            type="button"
+            onClick={handleDownloadCsv}
+            title={labels.csvHint}
+            className="inline-flex items-center gap-1.5 rounded-lg border border-white/15 px-3 py-1.5 text-xs font-medium text-zinc-400 transition hover:bg-white/5 hover:text-zinc-200"
+          >
+            <Download size={14} />
+            Raw CSV
           </button>
         </div>
       </div>
@@ -285,7 +310,11 @@ function reportLabels(locale: string) {
   if (locale.toLowerCase().startsWith("pl")) {
     return {
       exportTitle: "Eksport przeglądu",
-      exportHint: "Czytelny raport PDF do druku oraz uporządkowany plik CSV.",
+      exportHint:
+        "Sformatowany skoroszyt Excel do analizy, PDF do druku oraz surowy CSV do integracji.",
+      excelHint:
+        "Sformatowany skoroszyt Excel z osobnymi sekcjami, dopasowanymi kolumnami i zawijaniem tekstu.",
+      csvHint: "Surowe dane CSV do importu i integracji.",
       reportTitle: "Raport przeglądowy",
       losses: "Straty",
       completed7d: "Zrealizowane 7 dni",
@@ -311,7 +340,11 @@ function reportLabels(locale: string) {
 
   return {
     exportTitle: "Export overview",
-    exportHint: "A clean print-ready PDF report and a structured CSV file.",
+    exportHint:
+      "A formatted Excel workbook for analysis, a print-ready PDF, and Raw CSV for integrations.",
+    excelHint:
+      "Formatted Excel workbook with organized sections, fitted columns, and wrapped text.",
+    csvHint: "Raw CSV data for imports and integrations.",
     reportTitle: "Overview report",
     losses: "Losses",
     completed7d: "Completed 7d",
