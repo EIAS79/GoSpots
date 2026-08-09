@@ -268,8 +268,9 @@ export class BillingController {
     );
   }
 
+  /** Switching provider creates a new hosted checkout, so it is also blocked during trial. */
   @Post('subscription/switch-provider')
-  @UseGuards(JwtAuthGuard)
+  @UseGuards(JwtAuthGuard, TrialCheckoutGuard)
   switchProvider(
     @CurrentUser() user: JwtAccessPayload,
     @Body() dto: SwitchProviderDto,
@@ -283,8 +284,9 @@ export class BillingController {
     );
   }
 
+  /** Manual renewal creates a payment checkout and must never run during the free trial. */
   @Post('manual-renewal/checkout')
-  @UseGuards(JwtAuthGuard)
+  @UseGuards(JwtAuthGuard, TrialCheckoutGuard)
   manualRenewal(
     @CurrentUser() user: JwtAccessPayload,
     @Headers('idempotency-key') idempotencyKey?: string,
@@ -296,8 +298,9 @@ export class BillingController {
     );
   }
 
+  /** Keep payment-method setup disabled during the free trial as well. */
   @Post('payment-method/update')
-  @UseGuards(JwtAuthGuard)
+  @UseGuards(JwtAuthGuard, TrialCheckoutGuard)
   updatePaymentMethod(
     @CurrentUser() user: JwtAccessPayload,
     @Headers('idempotency-key') idempotencyKey?: string,
