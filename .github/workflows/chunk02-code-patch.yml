@@ -1,0 +1,38 @@
+name: Chunk 02 code patch
+
+on:
+  push:
+    branches:
+      - agent/gospots-00-repository-baseline
+    paths:
+      - .github/scripts/chunk02-code-patch.mjs
+      - .github/workflows/chunk02-code-patch.yml
+
+permissions:
+  contents: write
+
+jobs:
+  patch:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: agent/gospots-00-repository-baseline
+          fetch-depth: 0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+      - name: Apply idempotent Chunk 02 integration patch
+        run: node .github/scripts/chunk02-code-patch.mjs
+      - name: Commit integration patch
+        shell: bash
+        run: |
+          if git diff --quiet; then
+            echo "Code already patched"
+            exit 0
+          fi
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add apps/api/src
+          git commit -m "Integrate Chunk 02 checkout foundations"
+          git push origin HEAD:agent/gospots-00-repository-baseline
