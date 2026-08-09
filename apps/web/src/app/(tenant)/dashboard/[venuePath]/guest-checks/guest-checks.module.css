@@ -1,0 +1,81 @@
+.guestChecks {
+  color: #e4e4e7;
+}
+
+.purposeCard {
+  margin-bottom: 1rem;
+  border: 1px solid rgba(52, 211, 153, 0.18);
+  border-radius: 0.875rem;
+  background: rgba(16, 185, 129, 0.06);
+  padding: 0.875rem 1rem;
+  color: #a1a1aa;
+  font-size: 0.8125rem;
+  line-height: 1.5;
+}
+
+.purposeLabel {
+  display: block;
+  margin-bottom: 0.25rem;
+  color: #6ee7b7;
+  font-size: 0.6875rem;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.guestChecks :global(.bg-white),
+.guestChecks :global(.bg-zinc-50\/80) {
+  background-color: rgba(24, 24, 27, 0.72) !important;
+}
+
+.guestChecks :global(.text-zinc-900),
+.guestChecks :global(.text-zinc-800),
+.guestChecks :global(.text-zinc-700) {
+  color: #f4f4f5 !important;
+}
+
+.guestChecks :global(.text-zinc-600),
+.guestChecks :global(.text-zinc-500) {
+  color: #a1a1aa !important;
+}
+
+.guestChecks :global(.border-zinc-300),
+.guestChecks :global(.border-zinc-200),
+.guestChecks :global(.border-zinc-100) {
+  border-color: rgba(255, 255, 255, 0.1) !important;
+}
+
+.guestChecks :global(.divide-zinc-100) > :not([hidden]) ~ :not([hidden]) {
+  border-color: rgba(255, 255, 255, 0.08) !important;
+}
+
+.guestChecks :global(input),
+.guestChecks :global(select),
+.guestChecks :global(textarea) {
+  border-color: rgba(255, 255, 255, 0.1) !important;
+  background-color: #18181b !important;
+  color: #f4f4f5 !important;
+}
+
+.guestChecks :global(input::placeholder),
+.guestChecks :global(textarea::placeholder) {
+  color: #71717a !important;
+}
+
+.guestChecks :global(button.bg-zinc-900) {
+  background-color: #059669 !important;
+  color: #ffffff !important;
+}
+
+.guestChecks :global(button.bg-zinc-900:hover) {
+  background-color: #10b981 !important;
+}
+
+.guestChecks :global(.hover\:bg-zinc-50:hover),
+.guestChecks :global(.hover\:bg-zinc-100:hover) {
+  background-color: rgba(255, 255, 255, 0.06) !important;
+}
+
+.guestChecks :global(.text-red-600) {
+  color: #fda4af !important;
+}
