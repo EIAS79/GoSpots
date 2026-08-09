@@ -16,7 +16,8 @@
     "build:vercel": "pnpm --filter @gospots/web run build",
     "build:api": "pnpm --filter @gospots/api run build",
     "build:web": "pnpm --filter @gospots/web run build",
-    "lint": "pnpm --filter @gospots/api run lint && pnpm --filter @gospots/web run lint"
+    "lint": "pnpm --filter @gospots/api run lint && pnpm --filter @gospots/web run lint",
+    "test": "pnpm --filter @gospots/api test"
   },
   "devDependencies": {
     "concurrently": "^9.2.1",
