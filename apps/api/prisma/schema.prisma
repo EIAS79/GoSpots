@@ -260,6 +260,8 @@ model Shop {
   billingPayments BillingPayment[]
   billingOperations BillingOperation[]
   billingNotificationDeliveries BillingNotificationDelivery[]
+  featureFlags ShopFeatureFlag[]
+  domainEventOutbox DomainEventOutbox[]
 }
 
 /// Compressed venue images (menu, gallery, gaming, cover, etc.)
@@ -541,6 +543,43 @@ model MailOutbox {
   @@unique([idempotencyKey])
   @@index([status, nextAttemptAt])
   @@index([shopId, createdAt])
+}
+
+/// Per-Shop rollout override. Missing row means disabled unless development fallback is explicitly enabled.
+model ShopFeatureFlag {
+  id        String   @id @default(cuid())
+  shopId    String
+  shop      Shop     @relation(fields: [shopId], references: [id], onDelete: Cascade)
+  feature   String
+  enabled   Boolean  @default(false)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([shopId, feature])
+  @@index([feature, enabled])
+}
+
+/// Durable application-domain event outbox. Created in the same DB transaction as aggregate mutations.
+/// Status: PENDING | PROCESSING | PROCESSED | FAILED | DEAD.
+model DomainEventOutbox {
+  id            String   @id @default(cuid())
+  shopId        String
+  shop          Shop     @relation(fields: [shopId], references: [id], onDelete: Cascade)
+  aggregateType String
+  aggregateId   String
+  eventType     String
+  payload       Json
+  occurredAt    DateTime @default(now())
+  status        String   @default("PENDING")
+  attemptCount  Int      @default(0)
+  lastError     String?
+  processedAt   DateTime?
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  @@index([shopId, status, occurredAt])
+  @@index([aggregateType, aggregateId, occurredAt])
+  @@index([status, occurredAt])
 }
 
 // ─────────────────────────────────────────────────────────────────
