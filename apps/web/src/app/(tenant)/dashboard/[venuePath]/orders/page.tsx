@@ -18,7 +18,12 @@ export default function OrdersPage() {
   const access = useVenueAccess();
   const membership = useCurrentMembership();
   const perms = membership?.permissions ?? "";
-  const unlocked = isFeatureUnlocked(access.enabledModules, "transaction");
+  const menuUnlocked = isFeatureUnlocked(access.enabledModules, "menu");
+  const transactionUnlocked = isFeatureUnlocked(
+    access.enabledModules,
+    "transaction",
+  );
+  const unlocked = menuUnlocked && transactionUnlocked;
   const canWrite =
     state.status === "authed" &&
     (membership?.role === "OWNER" ||
@@ -34,7 +39,7 @@ export default function OrdersPage() {
         <p className="mb-4 text-xs text-zinc-500">{t("orders.viewOnly")}</p>
       ) : null}
       <FeatureGate
-        feature="transaction"
+        feature="menu"
         unlocked={unlocked}
         title={t("orders.gateTitle")}
       >
