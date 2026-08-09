@@ -11,7 +11,7 @@ concurrency:
 
 jobs:
   api:
-    name: API lint · build
+    name: API lint · test · build
     runs-on: ubuntu-latest
     timeout-minutes: 20
     defaults:
@@ -46,8 +46,16 @@ jobs:
       - name: Lint
         run: npx eslint "{src,apps,libs}/**/*.ts"
 
-      # Keep lint failures visible, but never let existing lint debt prevent the
-      # TypeScript/Nest build from running. The job still fails when lint fails.
+      # Run the regression suite even when lint fails so a single CI run exposes
+      # both static-analysis debt and behavioral regressions.
+      - name: Test
+        if: ${{ always() }}
+        run: pnpm test
+        env:
+          DATABASE_URL: postgresql://ci:ci@localhost:5432/ci?schema=public
+
+      # Keep build failures visible in the same run. The job remains failed when
+      # any earlier lint/test step fails.
       - name: Build
         if: ${{ always() }}
         run: pnpm run build
@@ -111,9 +119,9 @@ jobs:
         run: pnpm exec prisma validate
 
   web:
-    name: Web typecheck
+    name: Web typecheck · build
     runs-on: ubuntu-latest
-    timeout-minutes: 15
+    timeout-minutes: 20
     defaults:
       run:
         working-directory: apps/web
@@ -140,3 +148,7 @@ jobs:
 
       - name: Typecheck
         run: pnpm run typecheck
+
+      - name: Build
+        if: ${{ always() }}
+        run: pnpm run build
