@@ -14,7 +14,10 @@ import {
 export { TRIAL_DURATION_DAYS } from './venue-packs';
 export const TRIAL_DURATION_DAYS_PACK = PACK_TRIAL_DAYS;
 
-/** Free trial employee seat cap (no purchase required during trial). */
+/** Post-trial operational grace before modules are locked. */
+export const TRIAL_GRACE_PERIOD_DAYS = 7;
+
+/** Free trial employee seat cap (no purchase required during trial/grace). */
 export const TRIAL_STAFF_SEAT_LIMIT = 3;
 
 /** All feature keys referenced in the dashboard UI */
@@ -116,13 +119,15 @@ type SeatSubRow = {
 } | null;
 
 /**
- * Trial: up to 3 seats when Team accounts is enabled.
- * Paid: purchased quantity. Locked / expired: 0 (modules already empty).
+ * Trial/grace: up to 3 seats when Team accounts is enabled.
+ * Paid: purchased quantity. Locked: 0 (modules already empty).
  */
 export function resolveStaffSeatLimit(subscription: SeatSubRow): number {
   const access = resolveSubscriptionAccess(subscription);
   if (!moduleHasFeature(access.enabledModules, 'roles')) return 0;
-  if (access.trialActive) return TRIAL_STAFF_SEAT_LIMIT;
+  if (access.trialActive || access.trialGraceActive) {
+    return TRIAL_STAFF_SEAT_LIMIT;
+  }
   return staffSeatLimitFromQuantity(subscription?.staffSeatQuantity);
 }
 
@@ -146,16 +151,26 @@ export type SubscriptionAccess = {
   billedTier: SubscriptionTier;
   effectiveTier: SubscriptionTier;
   trialActive: boolean;
+  /** Trial end date has passed (includes the grace window). */
   trialExpired: boolean;
+  /** Trial ended, but the 7-day grace window is still operational. */
+  trialGraceActive: boolean;
+  /** Trial + grace have both ended; paid modules are locked. */
+  trialLocked: boolean;
   trialEndsAt: Date | null;
+  trialGraceEndsAt: Date | null;
   trialDaysRemaining: number;
+  trialGraceDaysRemaining: number;
   packId: VenuePackId | null;
   addOns: string;
   enabledModules: Set<ModuleKey>;
 };
 
-function trialExpiredAt(trialEndsAt: Date | null): boolean {
-  return !!trialEndsAt && trialEndsAt.getTime() < Date.now();
+function graceEndForTrial(trialEndsAt: Date | null): Date | null {
+  if (!trialEndsAt) return null;
+  return new Date(
+    trialEndsAt.getTime() + TRIAL_GRACE_PERIOD_DAYS * 24 * 60 * 60 * 1000,
+  );
 }
 
 function syntheticTierFromModules(modules: Set<string>): SubscriptionTier {
@@ -226,8 +241,12 @@ export function resolveSubscriptionAccess(
     effectiveTier: SubscriptionTier.FREE,
     trialActive: false,
     trialExpired: false,
+    trialGraceActive: false,
+    trialLocked: false,
     trialEndsAt: null,
+    trialGraceEndsAt: null,
     trialDaysRemaining: 0,
+    trialGraceDaysRemaining: 0,
     packId: null,
     addOns: '',
     enabledModules: new Set(),
@@ -236,29 +255,46 @@ export function resolveSubscriptionAccess(
   if (!subscription) return empty;
 
   const { status, trialEndsAt, tier } = subscription;
-  const expired = trialExpiredAt(trialEndsAt);
+  const now = Date.now();
+  const trialEnded = !!trialEndsAt && trialEndsAt.getTime() < now;
+  const trialGraceEndsAt = graceEndForTrial(trialEndsAt);
   const activeTrial =
-    status === SubscriptionStatus.TRIAL && !!trialEndsAt && !expired;
+    status === SubscriptionStatus.TRIAL && !!trialEndsAt && !trialEnded;
+  const graceActive =
+    status === SubscriptionStatus.TRIAL &&
+    trialEnded &&
+    !!trialGraceEndsAt &&
+    trialGraceEndsAt.getTime() >= now;
+  const trialLocked =
+    status === SubscriptionStatus.TRIAL &&
+    trialEnded &&
+    (!trialGraceEndsAt || trialGraceEndsAt.getTime() < now);
 
   const daysRemaining =
-    trialEndsAt && !expired
+    trialEndsAt && !trialEnded
       ? Math.max(
           0,
-          Math.ceil(
-            (trialEndsAt.getTime() - Date.now()) / (24 * 60 * 60 * 1000),
-          ),
+          Math.ceil((trialEndsAt.getTime() - now) / (24 * 60 * 60 * 1000)),
         )
       : 0;
+  const graceDaysRemaining = graceActive
+    ? Math.max(
+        0,
+        Math.ceil(
+          (trialGraceEndsAt!.getTime() - now) / (24 * 60 * 60 * 1000),
+        ),
+      )
+    : 0;
 
   // PAUSED locks paid modules (same as PAST_DUE) — billing UI stays reachable.
   const locked =
     status === SubscriptionStatus.CANCELED ||
     status === SubscriptionStatus.PAST_DUE ||
     status === SubscriptionStatus.PAUSED ||
-    (status === SubscriptionStatus.TRIAL && !!trialEndsAt && expired);
+    trialLocked;
 
-  // Trial + paid ACTIVE: visibility follows saved features (never wipe data).
-  // Expired trial / past_due / paused / canceled: all modules off until they pay.
+  // Trial, trial grace, and paid ACTIVE: visibility follows saved features.
+  // After grace / past_due / paused / canceled: modules are hidden but data is retained.
   const modules = locked
     ? new Set<ModuleKey>()
     : resolveModules(subscription);
@@ -270,10 +306,14 @@ export function resolveSubscriptionAccess(
     billedTier: tier,
     effectiveTier,
     trialEndsAt,
+    trialGraceEndsAt,
     trialActive: activeTrial,
     trialExpired:
-      status === SubscriptionStatus.TRIAL && !!trialEndsAt && expired,
+      status === SubscriptionStatus.TRIAL && !!trialEndsAt && trialEnded,
+    trialGraceActive: graceActive,
+    trialLocked,
     trialDaysRemaining: daysRemaining,
+    trialGraceDaysRemaining: graceDaysRemaining,
     packId: (subscription.packId as VenuePackId) ?? null,
     addOns: locked ? '' : effectiveAddOnsForSubscription(subscription),
     enabledModules: modules,
