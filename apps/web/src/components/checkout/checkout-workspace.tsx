@@ -1,8 +1,12 @@
 "use client";
 
-import { Loader2, RefreshCw } from "lucide-react";
+import { Loader2, Plus, RefreshCw } from "lucide-react";
 import { useCallback, useEffect, useState } from "react";
-import { fetchGuestChecks, type GuestCheck } from "@/lib/guest-check-client";
+import {
+  createGuestCheck,
+  fetchGuestChecks,
+  type GuestCheck,
+} from "@/lib/guest-check-client";
 import { formatCheckoutMoney } from "./checkout-presenter";
 import { CheckoutDrawer } from "./checkout-drawer";
 import { SettlementStatus } from "./settlement-status";
@@ -19,6 +23,7 @@ export function CheckoutWorkspace({
   const [checks, setChecks] = useState<GuestCheck[]>([]);
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [loading, setLoading] = useState(canRead);
+  const [creating, setCreating] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   const loadChecks = useCallback(async () => {
@@ -37,7 +42,7 @@ export function CheckoutWorkspace({
     } catch (loadError) {
       setChecks([]);
       setSelectedId(null);
-      setError(loadError instanceof Error ? loadError.message : "Could not load open guest checks.");
+      setError(loadError instanceof Error ? loadError.message : "Could not load open checks.");
     } finally {
       setLoading(false);
     }
@@ -47,6 +52,25 @@ export function CheckoutWorkspace({
     void loadChecks();
   }, [loadChecks]);
 
+  async function onCreateCheck() {
+    if (!canWrite || creating) return;
+    setCreating(true);
+    setError(null);
+    try {
+      const created = await createGuestCheck({});
+      await loadChecks();
+      setSelectedId(created.id);
+    } catch (createError) {
+      setError(
+        createError instanceof Error
+          ? createError.message
+          : "Could not create a new check.",
+      );
+    } finally {
+      setCreating(false);
+    }
+  }
+
   if (!canRead) {
     return <SettlementStatus issue="unauthorized" />;
   }
@@ -55,7 +79,7 @@ export function CheckoutWorkspace({
     return (
       <div className="flex min-h-[18rem] items-center justify-center gap-2 rounded-2xl border border-white/8 bg-zinc-950/60 text-sm text-zinc-400">
         <Loader2 className="h-4 w-4 animate-spin" />
-        Loading open checks…
+        Loading checks…
       </div>
     );
   }
@@ -79,10 +103,25 @@ export function CheckoutWorkspace({
   if (checks.length === 0) {
     return (
       <div className="rounded-2xl border border-dashed border-zinc-700 bg-zinc-950/40 px-5 py-16 text-center">
-        <p className="text-base font-semibold text-zinc-200">No open guest checks</p>
+        <p className="text-base font-semibold text-zinc-200">No open checks</p>
         <p className="mt-2 text-sm text-zinc-500">
-          Open a Guest Tab and attach play, orders, or bookings before checkout.
+          Start a new check here. Play, orders, and bookings can then flow into the same checkout.
         </p>
+        {canWrite ? (
+          <button
+            type="button"
+            onClick={() => void onCreateCheck()}
+            disabled={creating}
+            className="mt-5 inline-flex min-h-11 items-center gap-2 rounded-xl bg-emerald-400 px-4 py-2 text-sm font-semibold text-zinc-950 transition hover:bg-emerald-300 disabled:opacity-50"
+          >
+            {creating ? (
+              <Loader2 className="h-4 w-4 animate-spin" />
+            ) : (
+              <Plus className="h-4 w-4" />
+            )}
+            New check
+          </button>
+        ) : null}
       </div>
     );
   }
@@ -99,15 +138,32 @@ export function CheckoutWorkspace({
             </p>
             <p className="mt-1 text-xs text-zinc-600">{checks.length} available</p>
           </div>
-          <button
-            type="button"
-            title="Refresh guest checks"
-            onClick={() => void loadChecks()}
-            disabled={loading}
-            className="rounded-lg p-2 text-zinc-500 transition hover:bg-white/5 hover:text-zinc-200 disabled:opacity-40"
-          >
-            <RefreshCw className={`h-4 w-4 ${loading ? "animate-spin" : ""}`} />
-          </button>
+          <div className="flex items-center gap-1">
+            {canWrite ? (
+              <button
+                type="button"
+                title="New check"
+                onClick={() => void onCreateCheck()}
+                disabled={creating}
+                className="rounded-lg p-2 text-zinc-500 transition hover:bg-white/5 hover:text-emerald-300 disabled:opacity-40"
+              >
+                {creating ? (
+                  <Loader2 className="h-4 w-4 animate-spin" />
+                ) : (
+                  <Plus className="h-4 w-4" />
+                )}
+              </button>
+            ) : null}
+            <button
+              type="button"
+              title="Refresh checks"
+              onClick={() => void loadChecks()}
+              disabled={loading}
+              className="rounded-lg p-2 text-zinc-500 transition hover:bg-white/5 hover:text-zinc-200 disabled:opacity-40"
+            >
+              <RefreshCw className={`h-4 w-4 ${loading ? "animate-spin" : ""}`} />
+            </button>
+          </div>
         </div>
         <ul className="max-h-[68vh] space-y-1 overflow-y-auto">
           {checks.map((check) => {

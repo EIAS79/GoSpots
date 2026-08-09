@@ -34,6 +34,14 @@ export const FEATURE_KEYS = [
 
 export type FeatureKey = (typeof FEATURE_KEYS)[number];
 
+/**
+ * Product-default features are active when there is no Shop override row.
+ * An explicit ShopFeatureFlag row still wins, including `enabled = false`, so
+ * operations keeps an emergency per-Shop kill switch without forcing every
+ * venue through a rollout flag after the feature becomes the standard system.
+ */
+const DEFAULT_ENABLED_FEATURES = new Set<FeatureKey>(['checkout_v2']);
+
 function parseDevFallback(raw: string | undefined): Set<string> {
   return new Set(
     String(raw ?? '')
@@ -46,8 +54,10 @@ function parseDevFallback(raw: string | undefined): Set<string> {
 /**
  * Central per-Shop feature-rollout decision point.
  *
- * Database rows are authoritative. Missing rows default to disabled in production.
- * Development may opt into named flags with FEATURE_FLAGS_DEV_ENABLED=a,b,c.
+ * Database rows are authoritative. Product-default features are enabled when
+ * the row is missing; other missing rows stay disabled in production.
+ * Development may additionally opt into named flags with
+ * FEATURE_FLAGS_DEV_ENABLED=a,b,c.
  */
 @Injectable()
 export class FeatureFlagService {
@@ -64,6 +74,8 @@ export class FeatureFlagService {
       select: { enabled: true },
     });
     if (row) return row.enabled;
+
+    if (DEFAULT_ENABLED_FEATURES.has(feature)) return true;
 
     if (this.config.get<string>('NODE_ENV') === 'production') return false;
 
