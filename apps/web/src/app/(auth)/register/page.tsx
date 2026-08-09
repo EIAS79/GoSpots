@@ -61,13 +61,19 @@ const STEP_KEYS = [
 export default function RegisterPage() {
   const router = useRouter();
   const { reload } = useAuth();
-  const { t } = usePublicPrefs();
+  const { t, locale } = usePublicPrefs();
+  const pl = locale === "pl";
 
   const [step, setStep] = useState(0);
   const [email, setEmail] = useState("");
   const [name, setName] = useState("");
   const [password, setPassword] = useState("");
   const [confirm, setConfirm] = useState("");
+  const [businessLegalName, setBusinessLegalName] = useState("");
+  const [businessCountryCode, setBusinessCountryCode] = useState(
+    locale === "pl" ? "PL" : "",
+  );
+  const [businessId, setBusinessId] = useState("");
   const [shopName, setShopName] = useState("");
   const [shopSlug, setShopSlug] = useState("");
   const [slugTouched, setSlugTouched] = useState(false);
@@ -89,6 +95,19 @@ export default function RegisterPage() {
       if (score.score < 2) return t("auth.register.passwordWeak");
     }
     if (step === 1) {
+      if (!businessLegalName.trim()) {
+        return pl ? "Podaj prawną nazwę firmy." : "Enter the legal business name.";
+      }
+      if (!/^[A-Za-z]{2}$/.test(businessCountryCode.trim())) {
+        return pl
+          ? "Kod kraju firmy musi mieć 2 litery, np. PL."
+          : "Business country code must be 2 letters, for example PL.";
+      }
+      if (businessId.trim().replace(/[^A-Za-z0-9]/g, "").length < 4) {
+        return pl
+          ? "Podaj prawidłowy NIP lub numer rejestracyjny firmy."
+          : "Enter a valid tax/VAT/company registration ID.";
+      }
       if (!shopName.trim()) return t("auth.register.venueNameRequired");
       if (!effectiveSlug) return t("auth.register.slugRequired");
     }
@@ -123,6 +142,9 @@ export default function RegisterPage() {
         email: email.trim(),
         password,
         name: name.trim() || undefined,
+        businessLegalName: businessLegalName.trim(),
+        businessCountryCode: businessCountryCode.trim().toUpperCase(),
+        businessId: businessId.trim(),
         shopName: shopName.trim(),
         shopSlug: effectiveSlug,
         packId,
@@ -259,20 +281,74 @@ export default function RegisterPage() {
 
       {step === 1 ? (
         <div className="flex flex-col gap-4">
-          <Field label={t("auth.register.venueName")}>
+          <div className="rounded-xl border border-amber-400/20 bg-amber-500/[0.07] p-3">
+            <p className="text-xs font-medium text-amber-100">
+              {pl ? "Dane firmy i okres próbny" : "Business identity & free trial"}
+            </p>
+            <p className="mt-1 text-[11px] leading-relaxed text-amber-200/75">
+              {pl
+                ? "Bezpłatny 90-dniowy okres próbny jest przyznawany raz na firmę, nie na adres e-mail ani oddział. W Polsce wpisz NIP. Kolejne oddziały tej samej firmy korzystają z tego samego terminu okresu próbnego."
+                : "The 90-day free trial is granted once per business, not per email or branch. Enter your tax/VAT/company registration ID. Additional branches share the same trial end date."}
+            </p>
+          </div>
+
+          <Field label={pl ? "Prawna nazwa firmy" : "Legal business name"}>
             <div className="relative">
               <Building2
                 size={14}
                 className="absolute left-3 top-1/2 -translate-y-1/2 text-zinc-500"
               />
               <input
-                value={shopName}
-                onChange={(e) => setShopName(e.target.value)}
+                value={businessLegalName}
+                onChange={(e) => setBusinessLegalName(e.target.value)}
                 className="w-full rounded-lg border border-white/10 bg-zinc-950 py-2.5 pl-9 pr-3 text-sm text-white"
-                placeholder={t("auth.register.venuePlaceholder")}
+                placeholder={pl ? "np. ABC Bilard Sp. z o.o." : "e.g. ABC Billiards Ltd"}
+                autoComplete="organization"
               />
             </div>
           </Field>
+
+          <div className="grid grid-cols-[110px_1fr] gap-3">
+            <Field label={pl ? "Kod kraju" : "Country code"}>
+              <input
+                value={businessCountryCode}
+                onChange={(e) =>
+                  setBusinessCountryCode(
+                    e.target.value.toUpperCase().replace(/[^A-Z]/g, "").slice(0, 2),
+                  )
+                }
+                className="w-full rounded-lg border border-white/10 bg-zinc-950 px-3 py-2.5 font-mono text-sm uppercase text-white"
+                placeholder="PL"
+                maxLength={2}
+              />
+            </Field>
+            <Field label={pl ? "NIP / numer rejestracyjny" : "Tax / company registration ID"}>
+              <input
+                value={businessId}
+                onChange={(e) => setBusinessId(e.target.value)}
+                className="w-full rounded-lg border border-white/10 bg-zinc-950 px-3 py-2.5 font-mono text-sm text-white"
+                placeholder={pl ? "NIP, np. 1234567890" : "VAT / tax / company ID"}
+                autoComplete="off"
+              />
+            </Field>
+          </div>
+
+          <div className="border-t border-white/10 pt-4">
+            <Field label={t("auth.register.venueName")}>
+              <div className="relative">
+                <Building2
+                  size={14}
+                  className="absolute left-3 top-1/2 -translate-y-1/2 text-zinc-500"
+                />
+                <input
+                  value={shopName}
+                  onChange={(e) => setShopName(e.target.value)}
+                  className="w-full rounded-lg border border-white/10 bg-zinc-950 py-2.5 pl-9 pr-3 text-sm text-white"
+                  placeholder={t("auth.register.venuePlaceholder")}
+                />
+              </div>
+            </Field>
+          </div>
           <Field label={t("auth.register.slug")}>
             <input
               value={effectiveSlug}
