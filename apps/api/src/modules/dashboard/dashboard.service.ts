@@ -11,6 +11,7 @@ import {
   resolveEffectiveTier,
   resolveStaffSeatLimit,
   resolveSubscriptionAccess,
+  TRIAL_GRACE_PERIOD_DAYS,
   TRIAL_STAFF_SEAT_LIMIT,
   tierForPack,
 } from '../../common/subscription-tier';
@@ -191,6 +192,9 @@ export class DashboardService {
             effectiveTier,
             status: shop.subscription.status,
             trialEndsAt: shop.subscription.trialEndsAt,
+            trialGraceEndsAt: access.trialGraceEndsAt,
+            trialGraceActive: access.trialGraceActive,
+            trialLocked: access.trialLocked,
             staffLimit: resolveStaffSeatLimit(shop.subscription),
             staffSeatQuantity:
               (shop.subscription as { staffSeatQuantity?: number })
@@ -205,6 +209,9 @@ export class DashboardService {
             effectiveTier,
             status: 'ACTIVE',
             trialEndsAt: null,
+            trialGraceEndsAt: null,
+            trialGraceActive: false,
+            trialLocked: false,
             staffLimit: 0,
             staffSeatQuantity: 0,
             staffUsed: staffCount,
@@ -317,7 +324,13 @@ export class DashboardService {
       billedTier: access.billedTier,
       trialActive: access.trialActive,
       trialExpired: access.trialExpired,
+      trialGraceActive: access.trialGraceActive,
+      trialLocked: access.trialLocked,
+      trialEndsAt: access.trialEndsAt,
+      trialGraceEndsAt: access.trialGraceEndsAt,
       trialDaysRemaining: access.trialDaysRemaining,
+      trialGraceDaysRemaining: access.trialGraceDaysRemaining,
+      trialGracePeriodDays: TRIAL_GRACE_PERIOD_DAYS,
       packId: access.packId,
       addOns: access.addOns,
       staffSeatQuantity,
@@ -349,7 +362,7 @@ export class DashboardService {
       packs: VENUE_PACK_LIST,
       addOnCatalog: VENUE_ADD_ON_LIST,
       dataRetentionNote:
-        'Turning features off only hides them from the dashboard. Your data stays and returns when you turn the feature back on.',
+        'When trial grace expires, paid features are hidden and writes are blocked by entitlements. Existing venue data is retained and returns after activation.',
     };
   }
 
@@ -489,7 +502,7 @@ export class DashboardService {
         sub.status === 'CANCELED' ||
         sub.status === 'PAST_DUE');
 
-    if (access.trialActive && hasTeam) {
+    if ((access.trialActive || access.trialGraceActive) && hasTeam) {
       staffSeatQuantity = Math.min(
         TRIAL_STAFF_SEAT_LIMIT,
         Math.max(1, staffSeatQuantity || TRIAL_STAFF_SEAT_LIMIT),

@@ -33,6 +33,23 @@ export class RegisterDto {
   @MaxLength(120)
   name?: string;
 
+  /** Legal business / organization name. Trial eligibility is organization-scoped. */
+  @IsString()
+  @Length(2, 160)
+  businessLegalName!: string;
+
+  /** ISO 3166-1 alpha-2 code, e.g. PL, DE, AE. */
+  @IsString()
+  @Matches(/^[A-Za-z]{2}$/, {
+    message: 'Business country must be a 2-letter country code.',
+  })
+  businessCountryCode!: string;
+
+  /** Tax/VAT/company-registration identifier used to prevent repeated trials. */
+  @IsString()
+  @Length(4, 64)
+  businessId!: string;
+
   @IsString()
   @MaxLength(60)
   @Matches(/^[a-z0-9-]+$/i, { message: 'Slug must be alphanumeric/dash.' })
@@ -123,7 +140,7 @@ export class StaffForgotPasswordDto {
   @MaxLength(120)
   venueName!: string;
 
-  /** Staff login ID, e.g. anna@venue.gospots */
+  /** Staff login ID, e.g. anna@venue-slug.gospots */
   @IsString()
   @IsNotEmpty()
   @MaxLength(200)

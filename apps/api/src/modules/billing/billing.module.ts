@@ -13,6 +13,7 @@ import { BillingReconciliationService } from './billing-reconciliation.service';
 import { BillingService } from './billing.service';
 import { BillingWebhookProcessor } from './billing-webhook.processor';
 import { BillingWebhookService } from './billing-webhook.service';
+import { TrialCheckoutGuard } from './guards/trial-checkout.guard';
 import { LemonSqueezyClient } from './lemon-squeezy.client';
 import { MollieBillingAdapter } from './providers/mollie.adapter';
 import { StripeBillingAdapter } from './providers/stripe.adapter';
@@ -34,6 +35,7 @@ import { StripeBillingAdapter } from './providers/stripe.adapter';
     BillingWebhookProcessor,
     BillingJobsProcessor,
     BillingReconciliationService,
+    TrialCheckoutGuard,
   ],
   exports: [
     BillingService,

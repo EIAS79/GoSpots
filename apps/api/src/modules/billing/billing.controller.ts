@@ -34,6 +34,7 @@ import {
   PauseDto,
   SwitchProviderDto,
 } from './dto/billing.dto';
+import { TrialCheckoutGuard } from './guards/trial-checkout.guard';
 
 @ApiTags('billing')
 @Controller('billing')
@@ -167,9 +168,10 @@ export class BillingController {
 
   /**
    * Dual checkout when BILLING_ENABLED; otherwise Lemon (soft-gated).
+   * TrialCheckoutGuard guarantees a genuinely free trial for both paths.
    */
   @Post('checkout')
-  @UseGuards(JwtAuthGuard)
+  @UseGuards(JwtAuthGuard, TrialCheckoutGuard)
   checkout(
     @CurrentUser() user: JwtAccessPayload,
     @Body() dto: CheckoutDto,
@@ -266,8 +268,9 @@ export class BillingController {
     );
   }
 
+  /** Switching provider creates a new hosted checkout, so it is also blocked during trial. */
   @Post('subscription/switch-provider')
-  @UseGuards(JwtAuthGuard)
+  @UseGuards(JwtAuthGuard, TrialCheckoutGuard)
   switchProvider(
     @CurrentUser() user: JwtAccessPayload,
     @Body() dto: SwitchProviderDto,
@@ -281,8 +284,9 @@ export class BillingController {
     );
   }
 
+  /** Manual renewal creates a payment checkout and must never run during the free trial. */
   @Post('manual-renewal/checkout')
-  @UseGuards(JwtAuthGuard)
+  @UseGuards(JwtAuthGuard, TrialCheckoutGuard)
   manualRenewal(
     @CurrentUser() user: JwtAccessPayload,
     @Headers('idempotency-key') idempotencyKey?: string,
@@ -294,8 +298,9 @@ export class BillingController {
     );
   }
 
+  /** Keep payment-method setup disabled during the free trial as well. */
   @Post('payment-method/update')
-  @UseGuards(JwtAuthGuard)
+  @UseGuards(JwtAuthGuard, TrialCheckoutGuard)
   updatePaymentMethod(
     @CurrentUser() user: JwtAccessPayload,
     @Headers('idempotency-key') idempotencyKey?: string,

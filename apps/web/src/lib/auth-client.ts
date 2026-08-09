@@ -97,6 +97,9 @@ export async function register(input: {
   email: string;
   password: string;
   name?: string;
+  businessLegalName: string;
+  businessCountryCode: string;
+  businessId: string;
   shopSlug?: string;
   shopName?: string;
   packId?: string;
@@ -116,6 +119,8 @@ export async function register(input: {
     has_phone: Boolean(input.phone),
   });
 
+  // Business identity is deliberately sent only to the authenticated API payload.
+  // It is never copied into analytics events.
   const session = await api<AuthSessionResponse>("/auth/register", {
     method: "POST",
     body: JSON.stringify(input),
