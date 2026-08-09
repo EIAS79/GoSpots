@@ -23,10 +23,17 @@ export type SubscriptionTier =
   | "PRO"
   | "ENTERPRISE";
 
-export type SubscriptionStatus = "TRIAL" | "ACTIVE" | "PAST_DUE" | "CANCELED";
+export type SubscriptionStatus =
+  | "TRIAL"
+  | "ACTIVE"
+  | "PAST_DUE"
+  | "CANCELED"
+  | "PAUSED";
 
 /** Free trial employee seat cap. */
 export const TRIAL_STAFF_SEAT_LIMIT = 3;
+/** Operational grace after the free trial ends. */
+export const TRIAL_GRACE_PERIOD_DAYS = 7;
 
 export const ALL_FEATURES = [
   "menu",
@@ -104,8 +111,12 @@ export type SubscriptionAccess = {
   effectiveTier: SubscriptionTier;
   trialActive: boolean;
   trialExpired: boolean;
+  trialGraceActive: boolean;
+  trialLocked: boolean;
   trialEndsAt: string | null;
+  trialGraceEndsAt: string | null;
   trialDaysRemaining: number;
+  trialGraceDaysRemaining: number;
   enabledModules: Set<ModuleKey>;
   packId: string | null;
   addOns: string;
@@ -121,10 +132,6 @@ type SubInput = {
   addOnRows?: { addOnId: string }[] | null;
   staffSeatQuantity?: number | null;
 } | null;
-
-function trialExpiredAt(trialEndsAt: string | null): boolean {
-  return !!trialEndsAt && new Date(trialEndsAt).getTime() < Date.now();
-}
 
 function syntheticTier(modules: Set<string>): SubscriptionTier {
   if (modules.has("multi_shop") || modules.has("integrations"))
@@ -180,31 +187,61 @@ export function resolveSubscriptionAccess(sub: SubInput): SubscriptionAccess {
     effectiveTier: "FREE",
     trialActive: false,
     trialExpired: false,
+    trialGraceActive: false,
+    trialLocked: false,
     trialEndsAt: null,
+    trialGraceEndsAt: null,
     trialDaysRemaining: 0,
+    trialGraceDaysRemaining: 0,
     enabledModules: new Set(),
     packId: null,
     addOns: "",
   };
   if (!sub) return empty;
 
-  const expired = trialExpiredAt(sub.trialEndsAt);
-  const trialActive = sub.status === "TRIAL" && !!sub.trialEndsAt && !expired;
-  const daysRemaining =
-    sub.trialEndsAt && !expired
-      ? Math.max(
-          0,
-          Math.ceil(
-            (new Date(sub.trialEndsAt).getTime() - Date.now()) /
-              (24 * 60 * 60 * 1000),
-          ),
-        )
-      : 0;
+  const now = Date.now();
+  const trialEndsMs = sub.trialEndsAt
+    ? new Date(sub.trialEndsAt).getTime()
+    : Number.NaN;
+  const hasTrialEnd = Number.isFinite(trialEndsMs);
+  const trialEnded = hasTrialEnd && trialEndsMs < now;
+  const trialGraceEndsMs = hasTrialEnd
+    ? trialEndsMs + TRIAL_GRACE_PERIOD_DAYS * 24 * 60 * 60 * 1000
+    : Number.NaN;
+  const trialGraceEndsAt = Number.isFinite(trialGraceEndsMs)
+    ? new Date(trialGraceEndsMs).toISOString()
+    : null;
+
+  const trialActive =
+    sub.status === "TRIAL" && hasTrialEnd && !trialEnded;
+  const trialGraceActive =
+    sub.status === "TRIAL" &&
+    trialEnded &&
+    Number.isFinite(trialGraceEndsMs) &&
+    trialGraceEndsMs >= now;
+  const trialLocked =
+    sub.status === "TRIAL" &&
+    trialEnded &&
+    (!Number.isFinite(trialGraceEndsMs) || trialGraceEndsMs < now);
+
+  const daysRemaining = trialActive
+    ? Math.max(
+        0,
+        Math.ceil((trialEndsMs - now) / (24 * 60 * 60 * 1000)),
+      )
+    : 0;
+  const trialGraceDaysRemaining = trialGraceActive
+    ? Math.max(
+        0,
+        Math.ceil((trialGraceEndsMs - now) / (24 * 60 * 60 * 1000)),
+      )
+    : 0;
 
   const locked =
     sub.status === "CANCELED" ||
     sub.status === "PAST_DUE" ||
-    (sub.status === "TRIAL" && !!sub.trialEndsAt && expired);
+    sub.status === "PAUSED" ||
+    trialLocked;
 
   const effectiveAddOns = locked ? "" : effectiveAddOnsForSubscription(sub);
   const modules = locked
@@ -215,9 +252,13 @@ export function resolveSubscriptionAccess(sub: SubInput): SubscriptionAccess {
     billedTier: sub.tier,
     effectiveTier: locked ? "FREE" : syntheticTier(modules),
     trialEndsAt: sub.trialEndsAt,
+    trialGraceEndsAt,
     trialActive,
-    trialExpired: sub.status === "TRIAL" && !!sub.trialEndsAt && expired,
+    trialExpired: sub.status === "TRIAL" && hasTrialEnd && trialEnded,
+    trialGraceActive,
+    trialLocked,
     trialDaysRemaining: daysRemaining,
+    trialGraceDaysRemaining,
     enabledModules: modules,
     packId: sub.packId ?? null,
     addOns: effectiveAddOns,
@@ -237,7 +278,9 @@ export function resolveStaffSeatLimit(
 ): number {
   const access = resolveSubscriptionAccess(sub);
   if (!access.enabledModules.has("roles")) return 0;
-  if (access.trialActive) return TRIAL_STAFF_SEAT_LIMIT;
+  if (access.trialActive || access.trialGraceActive) {
+    return TRIAL_STAFF_SEAT_LIMIT;
+  }
   return Math.max(0, Math.floor(sub?.staffSeatQuantity ?? 0));
 }
 
