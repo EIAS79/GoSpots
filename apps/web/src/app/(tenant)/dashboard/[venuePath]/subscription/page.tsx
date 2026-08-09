@@ -45,8 +45,7 @@ function paymentMethodLabel(
   t: (key: string, vars?: Record<string, string | number>) => string,
 ) {
   const methods = sub.billingAccount?.paymentMethods ?? [];
-  const pm =
-    methods.find((m) => m.isDefault) ?? methods[0] ?? null;
+  const pm = methods.find((m) => m.isDefault) ?? methods[0] ?? null;
   if (!pm) return t("subscription.paymentMethodNone");
   if (pm.last4) {
     const brand = pm.cardBrand || pm.type || "Card";
@@ -123,8 +122,7 @@ function SubscriptionPageInner() {
 
     if (!shouldConfirm) return;
 
-    const operationId =
-      opFromQuery || peekPendingBillingOperation() || null;
+    const operationId = opFromQuery || peekPendingBillingOperation() || null;
 
     if (!operationId && billing === "success") {
       // Legacy Lemon return — soft success only.
@@ -220,6 +218,8 @@ function SubscriptionPageInner() {
   const packName = t(`pack.${packId}.name`);
   const trialActive = data?.trialActive ?? false;
   const trialExpired = data?.trialExpired ?? false;
+  const trialGraceActive = data?.trialGraceActive ?? false;
+  const trialLocked = data?.trialLocked ?? false;
   const staffLimit = data?.staffLimit ?? 0;
   const staffUsed = data?.staffUsed ?? 0;
   const billingSuccess =
@@ -235,7 +235,8 @@ function SubscriptionPageInner() {
     [data?.addOns],
   );
 
-  const graceActive =
+  // Provider payment-failure grace is distinct from the one-time free-trial grace.
+  const paymentGraceActive =
     !!dualSub?.gracePeriodEndsAt &&
     new Date(dualSub.gracePeriodEndsAt).getTime() > Date.now() &&
     (dualSub.canonicalStatus === "PAST_DUE" ||
@@ -276,7 +277,7 @@ function SubscriptionPageInner() {
             </p>
           ) : null}
 
-          {graceActive && dualSub?.gracePeriodEndsAt ? (
+          {paymentGraceActive && dualSub?.gracePeriodEndsAt ? (
             <div className="flex gap-3 rounded-xl border border-amber-400/30 bg-amber-500/10 px-4 py-3 text-sm text-amber-100">
               <AlertTriangle
                 size={18}
@@ -330,18 +331,31 @@ function SubscriptionPageInner() {
                   {t("subscription.trialBody", {
                     seats: data.trialStaffSeatLimit ?? 3,
                     ends: data.subscription?.trialEndsAt
-                      ? new Date(
-                          data.subscription.trialEndsAt,
-                        ).toLocaleDateString()
+                      ? new Date(data.subscription.trialEndsAt).toLocaleDateString()
                       : t("subscription.trialEndsFallback"),
                     price: formatFromEur(data.monthlyTotal),
                   })}
+                </p>
+                <p className="mt-2 text-xs font-medium text-emerald-100">
+                  No payment is required during the free trial. Checkout is disabled until the trial ends.
                 </p>
               </div>
             </div>
           ) : null}
 
-          {trialExpired ? (
+          {trialGraceActive ? (
+            <div className="flex gap-3 rounded-xl border border-amber-400/30 bg-amber-500/10 px-4 py-3 text-sm text-amber-100">
+              <AlertTriangle size={18} className="mt-0.5 shrink-0 text-amber-400" />
+              <div>
+                <p className="font-medium">Free trial ended — grace period active</p>
+                <p className="mt-1 text-xs text-amber-200/80">
+                  Your selected features remain active for {data.trialGraceDaysRemaining} more day{data.trialGraceDaysRemaining === 1 ? "" : "s"}, until {formatPeriodDate(data.trialGraceEndsAt)}. Activate billing before then to avoid a temporary feature lock.
+                </p>
+              </div>
+            </div>
+          ) : null}
+
+          {trialExpired && trialLocked ? (
             <div className="flex gap-3 rounded-xl border border-rose-400/25 bg-rose-500/10 px-4 py-3 text-sm text-rose-100">
               <AlertTriangle
                 size={18}
@@ -354,6 +368,9 @@ function SubscriptionPageInner() {
                     price: formatFromEur(data.monthlyTotal),
                   })}
                 </p>
+                <p className="mt-2 text-xs text-rose-100/90">
+                  Paid features are temporarily hidden. Your venue data has not been deleted and will return after subscription activation.
+                </p>
               </div>
             </div>
           ) : null}
@@ -365,6 +382,11 @@ function SubscriptionPageInner() {
               {trialActive ? (
                 <span className="inline-flex items-center gap-1 rounded-full bg-emerald-500/15 px-2 py-0.5 text-xs text-emerald-200">
                   <Sparkles size={12} /> {t("subscription.activeTrial")}
+                </span>
+              ) : null}
+              {trialGraceActive ? (
+                <span className="rounded-full bg-amber-500/15 px-2 py-0.5 text-xs text-amber-200">
+                  Grace period
                 </span>
               ) : null}
               {data.subscription?.status === "ACTIVE" && !trialActive ? (
@@ -460,13 +482,27 @@ function SubscriptionPageInner() {
             }}
           />
 
-          {!needsFeatureSetup ? (
+          {trialActive ? (
+            <section className="rounded-xl border border-emerald-400/20 bg-emerald-500/[0.06] p-5">
+              <h2 className="text-lg font-semibold text-white">Billing starts after your free trial</h2>
+              <p className="mt-2 text-sm text-zinc-400">
+                You have {data.trialDaysRemaining} trial day{data.trialDaysRemaining === 1 ? "" : "s"} remaining. GoSpots will not create a Stripe checkout or charge you during the active 90-day trial.
+              </p>
+              <button
+                type="button"
+                disabled
+                className="mt-4 rounded-lg border border-white/10 bg-white/[0.03] px-4 py-2.5 text-sm text-zinc-500 opacity-60"
+              >
+                Payment disabled during free trial
+              </button>
+            </section>
+          ) : !needsFeatureSetup ? (
             <BillingCheckoutCard
               monthlyTotal={data.monthlyTotal}
               configured={data.billingConfigured ?? dualEnabled}
               missingEnv={data.billingMissingEnv}
               hasLemonSub={!!data.lemonSubscriptionId}
-              trialActive={trialActive}
+              trialActive={false}
               trialExpired={trialExpired}
               packId={data.packId ?? packId}
               addOnIds={addOnIds}
