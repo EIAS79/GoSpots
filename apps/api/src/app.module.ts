@@ -35,6 +35,7 @@ import { TenantRlsInterceptor } from './common/tenant-rls.interceptor';
 import { RequestLoggingInterceptor } from './common/request-logging.interceptor';
 import { SentryExceptionFilter } from './common/sentry-exception.filter';
 import { CaptchaAwareThrottlerGuard } from './common/captcha-throttler.guard';
+import { TrialAccessGuard } from './common/trial-access.guard';
 import {
   isThrottleDisabled,
   parsePositiveInt,
@@ -102,6 +103,7 @@ import { RolesGuard } from './modules/auth/guards/roles.guard';
     { provide: APP_GUARD, useClass: CsrfGuard },
     { provide: APP_GUARD, useClass: JwtAuthGuard },
     { provide: APP_GUARD, useClass: RolesGuard },
+    { provide: APP_GUARD, useClass: TrialAccessGuard },
     { provide: APP_INTERCEPTOR, useClass: RequestLoggingInterceptor },
     { provide: APP_INTERCEPTOR, useClass: VenueContextInterceptor },
     { provide: APP_INTERCEPTOR, useClass: TenantRlsInterceptor },
