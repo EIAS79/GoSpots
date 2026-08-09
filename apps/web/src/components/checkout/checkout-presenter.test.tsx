@@ -74,14 +74,14 @@ test("owner and checkout operator receive the expected access", () => {
   );
 });
 
-test("unauthorized staff is read/write denied and sees disabled tenders", () => {
+test("unauthorized staff is read/write denied and payment controls stay disabled", () => {
   assert.deepEqual(checkoutAccess("STAFF", "reservation.read"), {
     read: false,
     write: false,
   });
   const html = renderToStaticMarkup(<TenderButtons canWrite={false} />);
   assert.match(html, /disabled/);
-  assert.match(html, /checkout.write/);
+  assert.match(html, /Not connected yet/);
 });
 
 test("state conflicts use the required reload message", () => {
@@ -112,7 +112,9 @@ test("loading and empty charge states render explicitly", () => {
   const empty = renderToStaticMarkup(
     <ChargeGroups lines={[]} currency="PLN" />,
   );
-  assert.match(empty, /No charges on this check/);
+  assert.match(empty, /This check is empty/);
+  assert.match(empty, /add a menu item/i);
+  assert.match(empty, /reservation/i);
 });
 
 test("large check item counts render without a second checkout implementation", () => {
@@ -130,5 +132,6 @@ test("amount due is rendered from the server preview without client summation", 
   const html = renderToStaticMarkup(<CheckoutTotals preview={preview} />);
   assert.match(html, /Amount due/);
   assert.match(html, /123\.45/);
-  assert.match(html, /Server-authoritative total/);
+  assert.match(html, /Check total/);
+  assert.match(html, /Live bill/);
 });
