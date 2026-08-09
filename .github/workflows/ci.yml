@@ -50,6 +50,7 @@ jobs:
       # remains visible/documented and can be burned down separately without
       # mixing hundreds of unrelated edits into this safety PR.
       - name: Lint changed API TypeScript
+        working-directory: .
         env:
           BASE_SHA: ${{ github.event.pull_request.base.sha || github.event.before }}
         run: |
@@ -63,7 +64,7 @@ jobs:
             exit 0
           fi
           printf 'Linting changed files:\n%s\n' "${files[*]}"
-          pnpm exec eslint "${files[@]}"
+          pnpm --dir apps/api exec eslint "${files[@]}"
 
       - name: Test
         if: ${{ always() }}
