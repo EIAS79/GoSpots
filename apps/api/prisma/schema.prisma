@@ -1264,7 +1264,7 @@ model CheckSettlement {
   updatedAt      DateTime             @updatedAt
   snapshots      ChargeSnapshot[]
 
-  @@unique([guestCheckId, sourceHash])
+  @@index([guestCheckId, sourceHash])
   @@unique([guestCheckId, checkVersion])
   @@index([shopId, state, createdAt])
   @@index([shopId, guestCheckId, createdAt])
