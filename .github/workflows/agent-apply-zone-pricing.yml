@@ -1,0 +1,63 @@
+name: Agent apply zone pricing
+
+on:
+  push:
+    branches:
+      - agent/zone-hourly-price-addon
+
+permissions:
+  contents: write
+
+jobs:
+  apply-and-validate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: agent/zone-hourly-price-addon
+          fetch-depth: 0
+
+      - name: Apply implementation
+        run: python3 scripts/apply-zone-hourly-price-addon.py
+
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 10.12.1
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+          cache: pnpm
+          cache-dependency-path: pnpm-lock.yaml
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Prisma generate and validate
+        working-directory: apps/api
+        env:
+          DATABASE_URL: postgresql://ci:ci@localhost:5432/ci?schema=public
+        run: |
+          pnpm exec prisma generate
+          pnpm exec prisma validate
+
+      - name: API build
+        working-directory: apps/api
+        env:
+          DATABASE_URL: postgresql://ci:ci@localhost:5432/ci?schema=public
+        run: pnpm run build
+
+      - name: Web typecheck
+        working-directory: apps/web
+        run: pnpm run typecheck
+
+      - name: Commit implementation
+        run: |
+          rm scripts/apply-zone-hourly-price-addon.py
+          rm .github/workflows/agent-apply-zone-pricing.yml
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add -A
+          git commit -m "feat: add hourly zone pricing surcharge"
+          git push origin HEAD:agent/zone-hourly-price-addon
