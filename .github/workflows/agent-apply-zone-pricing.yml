@@ -24,6 +24,7 @@ jobs:
           from pathlib import Path
           p = Path('scripts/apply-zone-hourly-price-addon.py')
           s = p.read_text()
+
           old = '''replace(
               public_dialog,
               "price: formatEstPrice(estimatedPrice),",
@@ -42,7 +43,19 @@ jobs:
           )'''.replace('              ', '    ')
           if old not in s:
               raise SystemExit('public estimated-price patch call not found')
-          p.write_text(s.replace(old, new, 1))
+          s = s.replace(old, new, 1)
+
+          s = s.replace(
+              'r"(                            showTableCapacity=\\{isDining\\}\\n)",',
+              'r"(?m)^(                            showTableCapacity=\\{isDining\\}\\n)",',
+              1,
+          )
+          s = s.replace(
+              'r"(                      showTableCapacity=\\{isDining\\}\\n)",',
+              'r"(?m)^(                      showTableCapacity=\\{isDining\\}\\n)",',
+              1,
+          )
+          p.write_text(s)
           PY
 
       - name: Apply implementation
