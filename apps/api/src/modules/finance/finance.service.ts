@@ -1,6 +1,8 @@
 import {
   Injectable,
 } from '@nestjs/common';
+import { assertShopFeature } from '../../common/subscription-feature.util';
+import { requireShopId } from '../../common/tenant';
 import { PrismaService } from '../../prisma/prisma.service';
 import { AuditService } from '../audit/audit.service';
 import type { JwtAccessPayload } from '../auth/auth.types';
@@ -48,6 +50,12 @@ export class FinanceService {
     private readonly playSessions: PlaySessionService,
   ) {}
 
+  private async requireMenuOrders(actor: JwtAccessPayload) {
+    const shopId = requireShopId(actor);
+    await assertShopFeature(this.prisma, shopId, 'menu');
+    await assertShopFeature(this.prisma, shopId, 'transaction');
+  }
+
   async listTransactions(actor: JwtAccessPayload, take = 40) {
     return this.transactions.listTransactions(actor, take);
   }
@@ -79,22 +87,27 @@ export class FinanceService {
       take?: number;
     } = {},
   ) {
+    await this.requireMenuOrders(actor);
     return this.shopOrders.listShopOrders(actor, opts);
   }
 
   async archiveShopOrders(actor: JwtAccessPayload, dto: BulkOrderIdsDto) {
+    await this.requireMenuOrders(actor);
     return this.shopOrders.archiveShopOrders(actor, dto);
   }
 
   async unarchiveShopOrders(actor: JwtAccessPayload, dto: BulkOrderIdsDto) {
+    await this.requireMenuOrders(actor);
     return this.shopOrders.unarchiveShopOrders(actor, dto);
   }
 
   async getShopOrder(actor: JwtAccessPayload, id: string) {
+    await this.requireMenuOrders(actor);
     return this.shopOrders.getShopOrder(actor, id);
   }
 
   async createShopOrder(actor: JwtAccessPayload, dto: CreateShopOrderDto) {
+    await this.requireMenuOrders(actor);
     return this.shopOrders.createShopOrder(actor, dto);
   }
 
@@ -103,6 +116,7 @@ export class FinanceService {
     id: string,
     dto: UpdateShopOrderDto,
   ) {
+    await this.requireMenuOrders(actor);
     return this.shopOrders.updateShopOrder(actor, id, dto);
   }
 
@@ -111,6 +125,7 @@ export class FinanceService {
     orderId: string,
     dto: AddShopOrderLineDto,
   ) {
+    await this.requireMenuOrders(actor);
     return this.shopOrders.addShopOrderLine(actor, orderId, dto);
   }
 
@@ -120,6 +135,7 @@ export class FinanceService {
     lineId: string,
     dto: PatchShopOrderLineDto,
   ) {
+    await this.requireMenuOrders(actor);
     return this.shopOrders.patchShopOrderLine(actor, orderId, lineId, dto);
   }
 
@@ -128,10 +144,12 @@ export class FinanceService {
     orderId: string,
     lineId: string,
   ) {
+    await this.requireMenuOrders(actor);
     return this.shopOrders.deleteShopOrderLine(actor, orderId, lineId);
   }
 
   async deleteShopOrder(actor: JwtAccessPayload, id: string) {
+    await this.requireMenuOrders(actor);
     return this.shopOrders.deleteShopOrder(actor, id);
   }
 
@@ -218,6 +236,4 @@ export class FinanceService {
   ) {
     return this.playSessions.updatePlaySession(actor, id, dto);
   }
-
-
 }
