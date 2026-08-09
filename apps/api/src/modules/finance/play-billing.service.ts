@@ -87,7 +87,7 @@ export class PlayBillingService {
     private readonly notifications: NotificationsService,
   ) {}
 
-  private mapPlayBillingRow(
+  mapPlayBillingRow(
     row: {
       id: string;
       guestName: string;

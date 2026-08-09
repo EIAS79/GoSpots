@@ -22,7 +22,8 @@
     "start:prod": "node dist/main.js",
     "migrate:deploy": "prisma migrate deploy",
     "postbuild": "prisma generate",
-    "lint": "eslint \"{src,apps,libs}/**/*.ts\" --fix",
+    "lint": "eslint \"{src,apps,libs}/**/*.ts\"",
+    "lint:fix": "eslint \"{src,apps,libs}/**/*.ts\" --fix",
     "test": "jest --config jest.config.cjs",
     "test:billing": "jest --config jest.config.cjs --testPathPattern=modules/billing"
   },

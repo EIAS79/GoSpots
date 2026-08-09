@@ -260,6 +260,10 @@ model Shop {
   billingPayments BillingPayment[]
   billingOperations BillingOperation[]
   billingNotificationDeliveries BillingNotificationDelivery[]
+  featureFlags ShopFeatureFlag[]
+  domainEventOutbox DomainEventOutbox[]
+  checkSettlements CheckSettlement[]
+  chargeSnapshots ChargeSnapshot[]
 }
 
 /// Compressed venue images (menu, gallery, gaming, cover, etc.)
@@ -541,6 +545,43 @@ model MailOutbox {
   @@unique([idempotencyKey])
   @@index([status, nextAttemptAt])
   @@index([shopId, createdAt])
+}
+
+/// Per-Shop rollout override. Missing row means disabled unless development fallback is explicitly enabled.
+model ShopFeatureFlag {
+  id        String   @id @default(cuid())
+  shopId    String
+  shop      Shop     @relation(fields: [shopId], references: [id], onDelete: Cascade)
+  feature   String
+  enabled   Boolean  @default(false)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([shopId, feature])
+  @@index([feature, enabled])
+}
+
+/// Durable application-domain event outbox. Created in the same DB transaction as aggregate mutations.
+/// Status: PENDING | PROCESSING | PROCESSED | FAILED | DEAD.
+model DomainEventOutbox {
+  id            String   @id @default(cuid())
+  shopId        String
+  shop          Shop     @relation(fields: [shopId], references: [id], onDelete: Cascade)
+  aggregateType String
+  aggregateId   String
+  eventType     String
+  payload       Json
+  occurredAt    DateTime @default(now())
+  status        String   @default("PENDING")
+  attemptCount  Int      @default(0)
+  lastError     String?
+  processedAt   DateTime?
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  @@index([shopId, status, occurredAt])
+  @@index([aggregateType, aggregateId, occurredAt])
+  @@index([status, occurredAt])
 }
 
 // ─────────────────────────────────────────────────────────────────
@@ -1175,13 +1216,83 @@ model GuestCheck {
   createdById   String?
   createdAt     DateTime         @default(now())
   updatedAt     DateTime         @updatedAt
+  /// Optimistic concurrency token for checkout-sensitive GuestCheck mutations.
+  version       Int              @default(1)
+  /// Current immutable checkout snapshot; legacy GuestCheck settlement remains unchanged.
+  currentSettlementId String?    @unique
+  currentSettlement   CheckSettlement? @relation("GuestCheckCurrentSettlement", fields: [currentSettlementId], references: [id], onDelete: SetNull)
 
   shopOrders   ShopOrder[]
   playSessions PlaySession[]
   reservations Reservation[]
   ledgerEntries LedgerEntry[]
+  settlements CheckSettlement[] @relation("GuestCheckSettlements")
 
   @@index([shopId, status, openedAt])
+  @@index([shopId, version])
+}
+
+enum CheckSettlementState {
+  OPEN
+  CALCULATED
+  PARTIALLY_PAID
+  PAID
+  CLOSED
+  VOID
+}
+
+/// Immutable checkout calculation for a GuestCheck. No tender/provider charge is created here.
+model CheckSettlement {
+  id             String               @id @default(cuid())
+  shopId         String
+  shop           Shop                 @relation(fields: [shopId], references: [id], onDelete: Cascade)
+  guestCheckId   String
+  guestCheck     GuestCheck           @relation("GuestCheckSettlements", fields: [guestCheckId], references: [id], onDelete: Restrict)
+  currentForCheck GuestCheck?         @relation("GuestCheckCurrentSettlement")
+  state          CheckSettlementState @default(CALCULATED)
+  checkVersion   Int
+  sourceHash     String
+  subtotal       Decimal              @db.Decimal(19, 4)
+  adjustments    Decimal              @default(0) @db.Decimal(19, 4)
+  taxAmount      Decimal              @default(0) @db.Decimal(19, 4)
+  depositAmount  Decimal              @default(0) @db.Decimal(19, 4)
+  total          Decimal              @db.Decimal(19, 4)
+  amountDue      Decimal              @db.Decimal(19, 4)
+  currency       String
+  createdById    String?
+  createdAt      DateTime             @default(now())
+  updatedAt      DateTime             @updatedAt
+  snapshots      ChargeSnapshot[]
+
+  @@index([guestCheckId, sourceHash])
+  @@unique([guestCheckId, checkVersion])
+  @@index([shopId, state, createdAt])
+  @@index([shopId, guestCheckId, createdAt])
+}
+
+/// Frozen settlement line. Rows are append-only after settlement creation.
+model ChargeSnapshot {
+  id              String          @id @default(cuid())
+  shopId          String
+  shop            Shop            @relation(fields: [shopId], references: [id], onDelete: Cascade)
+  settlementId    String
+  settlement      CheckSettlement @relation(fields: [settlementId], references: [id], onDelete: Cascade)
+  position        Int             @default(0)
+  sourceType      String
+  sourceId        String
+  lineReference   String?
+  description     String
+  quantity        Int             @default(1)
+  unitAmount      Decimal         @db.Decimal(19, 4)
+  grossAmount     Decimal         @db.Decimal(19, 4)
+  discountAmount  Decimal         @default(0) @db.Decimal(19, 4)
+  finalAmount     Decimal         @db.Decimal(19, 4)
+  currency        String
+  pricingMetadata Json?
+  createdAt       DateTime        @default(now())
+
+  @@index([settlementId, position])
+  @@index([shopId, sourceType, sourceId])
 }
 
 /// Walk-in or linked booking: billiard, PC, tables — players, duration, price.

@@ -2,8 +2,10 @@ import { Prisma } from '@prisma/client';
 
 /**
  * Shared money helpers for Prisma `Decimal(19,4)` commercial amounts.
- * Convert at calculation / JSON boundaries; prefer `toPrismaDecimal` on writes.
- * API wire: fixed-scale decimal **strings** via `serializeMoney`.
+ *
+ * Canonical venue-money representation is Prisma Decimal + explicit ISO currency.
+ * Authoritative calculations should use the exact Decimal helpers below. The
+ * number-returning helpers are retained for legacy/display compatibility only.
  */
 
 /** Values Prisma may return or accept for Decimal money columns. */
@@ -12,13 +14,86 @@ export type MoneyInput = Prisma.Decimal | number | string | null | undefined;
 /** Canonical JSON money wire (4 fractional digits). */
 export type MoneyWire = string;
 
+export type Money = Readonly<{
+  amount: Prisma.Decimal;
+  currency: string;
+}>;
+
 function isPrismaDecimal(value: unknown): value is Prisma.Decimal {
   return Prisma.Decimal.isDecimal(value);
 }
 
+export function normalizeMoneyCurrency(currency: string): string {
+  const normalized = String(currency ?? '').trim().toUpperCase();
+  if (!/^[A-Z]{3}$/.test(normalized)) {
+    throw new TypeError(`Invalid ISO 4217 currency: ${currency}`);
+  }
+  return normalized;
+}
+
+export function makeMoney(amount: MoneyInput, currency: string): Money {
+  return {
+    amount: toPrismaDecimal(amount),
+    currency: normalizeMoneyCurrency(currency),
+  };
+}
+
+/** Exact Decimal addition; never converts through IEEE-754 number arithmetic. */
+export function sumMoneyDecimal(...parts: MoneyInput[]): Prisma.Decimal {
+  return parts.reduce<Prisma.Decimal>(
+    (sum, part) => sum.add(toPrismaDecimal(part)),
+    new Prisma.Decimal(0),
+  );
+}
+
+/** Exact Decimal multiplication for quantity × unit price. */
+export function lineTotalDecimal(
+  quantity: number,
+  unitPrice: MoneyInput,
+): Prisma.Decimal {
+  if (!Number.isInteger(quantity)) {
+    throw new TypeError('lineTotalDecimal quantity must be an integer');
+  }
+  return toPrismaDecimal(unitPrice).mul(quantity);
+}
+
+/** Explicit HALF_UP rounding for currency/tax boundaries. */
+export function roundMoneyDecimal(
+  value: MoneyInput,
+  decimals = 2,
+): Prisma.Decimal {
+  if (!Number.isInteger(decimals) || decimals < 0 || decimals > 4) {
+    throw new TypeError('roundMoneyDecimal decimals must be an integer from 0 to 4');
+  }
+  return toPrismaDecimal(value).toDecimalPlaces(
+    decimals,
+    Prisma.Decimal.ROUND_HALF_UP,
+  );
+}
+
+export function isMoneyZero(value: MoneyInput): boolean {
+  return toPrismaDecimal(value).isZero();
+}
+
+export function addCanonicalMoney(...values: Money[]): Money {
+  if (values.length === 0) {
+    throw new TypeError('addCanonicalMoney requires at least one Money value');
+  }
+  const currency = normalizeMoneyCurrency(values[0].currency);
+  for (const value of values) {
+    if (normalizeMoneyCurrency(value.currency) !== currency) {
+      throw new TypeError('Cannot add money values with different currencies');
+    }
+  }
+  return {
+    currency,
+    amount: sumMoneyDecimal(...values.map((value) => value.amount)),
+  };
+}
+
 /**
  * Decimal | number | string | null/undefined → finite number.
- * Uses `.toNumber()` for Prisma.Decimal. Nullish → 0.
+ * Legacy/display boundary helper. Do not use for authoritative calculations.
  */
 export function toMoneyNumber(value: MoneyInput): number {
   if (value == null) return 0;
@@ -46,7 +121,11 @@ export function toMoneyNumber(value: MoneyInput): number {
 export function toPrismaDecimal(value: MoneyInput): Prisma.Decimal {
   if (isPrismaDecimal(value)) return value;
   if (value == null) return new Prisma.Decimal(0);
-  return new Prisma.Decimal(value);
+  const decimal = new Prisma.Decimal(value);
+  if (!decimal.isFinite()) {
+    throw new TypeError('toPrismaDecimal: non-finite money value');
+  }
+  return decimal;
 }
 
 /**
@@ -85,7 +164,7 @@ export function serializeMoneyOrNull(value: MoneyInput): MoneyWire | null {
   return serializeMoney(value);
 }
 
-/** Round half-away-from-zero to `decimals` places (default 2 for currency display). */
+/** Legacy/display-only number rounding. */
 export function roundMoney(value: number, decimals = 2): number {
   if (!Number.isFinite(value)) {
     throw new TypeError('roundMoney expects a finite number');
@@ -94,17 +173,17 @@ export function roundMoney(value: number, decimals = 2): number {
   return Math.round((value + Number.EPSILON * Math.sign(value)) * factor) / factor;
 }
 
-/** Add amounts with fixed-scale rounding (mitigates 0.1 + 0.2 style drift for display/sum). */
+/** Legacy/display-only number sum. Prefer sumMoneyDecimal for authoritative money. */
 export function addMoney(...parts: MoneyInput[]): number {
   return roundMoney(parts.reduce<number>((s, n) => s + toMoneyNumber(n), 0));
 }
 
-/** Multiply quantity × unit price with money rounding. */
+/** Legacy/display-only number line total. Prefer lineTotalDecimal. */
 export function lineTotal(quantity: number, unitPrice: MoneyInput): number {
   return roundMoney(quantity * toMoneyNumber(unitPrice));
 }
 
-/** Apply a discount percent (0–100) to a base amount. */
+/** Apply a discount percent (0–100) to a base amount. Legacy number API. */
 export function applyDiscountPercent(
   baseAmount: MoneyInput,
   discountPercent: number,

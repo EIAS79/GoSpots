@@ -12,6 +12,7 @@
     "start": "next start",
     "lint": "eslint",
     "typecheck": "tsc --noEmit",
+    "test:checkout": "tsx --test src/components/checkout/checkout-presenter.test.tsx",
     "i18n:check": "node scripts/i18n-check.mjs",
     "analyze": "next build",
     "perf:smoke": "node scripts/perf-smoke.mjs"

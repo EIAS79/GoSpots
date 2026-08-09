@@ -16,7 +16,13 @@
     "build:vercel": "pnpm --filter @gospots/web run build",
     "build:api": "pnpm --filter @gospots/api run build",
     "build:web": "pnpm --filter @gospots/web run build",
-    "lint": "pnpm --filter @gospots/api run lint && pnpm --filter @gospots/web run lint"
+    "lint": "pnpm --filter @gospots/api run lint && pnpm --filter @gospots/web run lint",
+    "test": "pnpm --filter @gospots/api run test",
+    "test:api": "pnpm --filter @gospots/api run test",
+    "test:checkout": "pnpm --filter @gospots/web run test:checkout",
+    "typecheck:web": "pnpm --filter @gospots/web run typecheck",
+    "verify": "pnpm test && pnpm test:checkout && pnpm build",
+    "verify:strict": "pnpm lint && pnpm verify"
   },
   "devDependencies": {
     "concurrently": "^9.2.1",

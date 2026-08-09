@@ -7,6 +7,7 @@ import { ThrottlerModule } from '@nestjs/throttler';
 import { AppController } from './app.controller';
 import { AppService } from './app.service';
 import { PrismaModule } from './prisma/prisma.module';
+import { FoundationModule } from './modules/foundation/foundation.module';
 import { MailModule } from './modules/mail/mail.module';
 import { HealthModule } from './modules/health/health.module';
 import { MetricsModule } from './modules/metrics/metrics.module';
@@ -29,9 +30,11 @@ import { MediaModule } from './modules/media/media.module';
 import { NotesModule } from './modules/notes/notes.module';
 import { GdprModule } from './modules/gdpr/gdpr.module';
 import { GuestCheckModule } from './modules/guest-check/guest-check.module';
+import { CheckoutModule } from './modules/checkout/checkout.module';
 import { StaffApprovalsModule } from './modules/staff-approvals/staff-approvals.module';
 import { VenueContextInterceptor } from './common/venue-context.interceptor';
 import { TenantRlsInterceptor } from './common/tenant-rls.interceptor';
+import { CorrelationIdInterceptor } from './common/correlation-id.interceptor';
 import { RequestLoggingInterceptor } from './common/request-logging.interceptor';
 import { SentryExceptionFilter } from './common/sentry-exception.filter';
 import { CaptchaAwareThrottlerGuard } from './common/captcha-throttler.guard';
@@ -70,6 +73,7 @@ import { RolesGuard } from './modules/auth/guards/roles.guard';
     }),
     ScheduleModule.forRoot(),
     PrismaModule,
+    FoundationModule,
     MailModule,
     MediaModule,
     AuditModule,
@@ -91,6 +95,7 @@ import { RolesGuard } from './modules/auth/guards/roles.guard';
     NotesModule,
     GdprModule,
     GuestCheckModule,
+    CheckoutModule,
     StaffApprovalsModule,
     HealthModule,
     MetricsModule,
@@ -104,6 +109,7 @@ import { RolesGuard } from './modules/auth/guards/roles.guard';
     { provide: APP_GUARD, useClass: JwtAuthGuard },
     { provide: APP_GUARD, useClass: RolesGuard },
     { provide: APP_GUARD, useClass: TrialAccessGuard },
+    { provide: APP_INTERCEPTOR, useClass: CorrelationIdInterceptor },
     { provide: APP_INTERCEPTOR, useClass: RequestLoggingInterceptor },
     { provide: APP_INTERCEPTOR, useClass: VenueContextInterceptor },
     { provide: APP_INTERCEPTOR, useClass: TenantRlsInterceptor },
