@@ -187,7 +187,7 @@ const NAV_GROUPS: NavGroup[] = [
         feature: "menu",
       },
       {
-        segment: "/guest-checks",
+        segment: "/checkout",
         labelKey: "nav.guestChecks",
         icon: Receipt,
         perms: ["transaction.read"],
