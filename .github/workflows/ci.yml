@@ -123,6 +123,12 @@ jobs:
     defaults:
       run:
         working-directory: apps/web
+    # These values are public routing configuration, not secrets. Keep CI aligned
+    # with the same-origin production setup documented for Vercel.
+    env:
+      NEXT_PUBLIC_SITE_URL: https://www.gospots.eu
+      NEXT_PUBLIC_API_BASE_URL: /api/v1
+      API_PROXY_TARGET: https://gospots-api.onrender.com
 
     steps:
       - name: Checkout
