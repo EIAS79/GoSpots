@@ -184,7 +184,7 @@ const NAV_GROUPS: NavGroup[] = [
         labelKey: "nav.orders",
         icon: ShoppingCart,
         perms: ["transaction.read"],
-        feature: "transaction",
+        feature: "menu",
       },
       {
         segment: "/guest-checks",
