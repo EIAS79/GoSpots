@@ -71,7 +71,7 @@ jobs:
         working-directory: apps/api
     services:
       postgres:
-        image: postgres:16
+        image: postgres:17
         env:
           POSTGRES_USER: ci
           POSTGRES_PASSWORD: ci
