@@ -91,3 +91,15 @@ SELECT
   NOW()
 FROM "Shop" s
 ON CONFLICT ("shopId") DO NOTHING;
+
+-- Make the ledger authoritative for legacy trial expiry too. Without this update,
+-- a branch created later under the same owner could retain a later Subscription
+-- trialEndsAt even though OrganizationTrial correctly stores the earliest end.
+UPDATE "Subscription" sub
+SET "trialEndsAt" = org."trialEndsAt"
+FROM "OrganizationTrialShop" link
+JOIN "OrganizationTrial" org
+  ON org."id" = link."organizationTrialId"
+WHERE sub."shopId" = link."shopId"
+  AND sub."status" = 'TRIAL'
+  AND sub."trialEndsAt" IS DISTINCT FROM org."trialEndsAt";
