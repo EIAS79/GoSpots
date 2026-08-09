@@ -382,7 +382,12 @@ export function TenantShell({ children }: { children: ReactNode }) {
     sub
       ? {
           tier: sub.tier as SubscriptionTier,
-          status: sub.status as "TRIAL" | "ACTIVE" | "PAST_DUE" | "CANCELED",
+          status: sub.status as
+            | "TRIAL"
+            | "ACTIVE"
+            | "PAST_DUE"
+            | "CANCELED"
+            | "PAUSED",
           trialEndsAt: sub.trialEndsAt,
           packId: sub.packId,
           addOns: sub.addOns,
@@ -399,6 +404,16 @@ export function TenantShell({ children }: { children: ReactNode }) {
   const isOwner = currentMembership?.role === "OWNER";
 
   const canSee = (item: NavItem) => {
+    // After the trial + grace window, keep only account recovery/activation
+    // surfaces visible. Operational paid features return after activation.
+    if (
+      access.trialLocked &&
+      item.segment !== "" &&
+      item.segment !== "/subscription" &&
+      item.segment !== "/settings"
+    ) {
+      return false;
+    }
     if (item.ownerOnly) return isOwner;
     if (item.gamingOnly && !gamingUi) return false;
     if (item.diningOnly && !diningUi) return false;
