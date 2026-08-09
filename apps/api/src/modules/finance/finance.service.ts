@@ -1,12 +1,12 @@
-import {
-  Injectable,
-} from '@nestjs/common';
+import { Injectable } from '@nestjs/common';
+import type { PlaySessionStatus, ShopOrderStatus } from '@prisma/client';
 import { assertShopFeature } from '../../common/subscription-feature.util';
 import { requireShopId } from '../../common/tenant';
 import { PrismaService } from '../../prisma/prisma.service';
 import { AuditService } from '../audit/audit.service';
 import type { JwtAccessPayload } from '../auth/auth.types';
 import { NotificationsService } from '../notifications/notifications.service';
+import { BulkOrderIdsDto } from './dto/bulk-orders.dto';
 import { CreateLossDto, CreateTransactionDto } from './dto/finance.dto';
 import {
   AddShopOrderLineDto,
@@ -14,27 +14,22 @@ import {
   PatchShopOrderLineDto,
   UpdateShopOrderDto,
 } from './dto/orders.dto';
-import { BulkOrderIdsDto } from './dto/bulk-orders.dto';
-import { FinanceReportsService } from './finance-reports.service';
-import { FinanceTransactionService } from './finance-transaction.service';
-import { ShopLossService } from './shop-loss.service';
-import { ShopOrderService } from './shop-order.service';
-import { PlayBillingService } from './play-billing.service';
-import { PlaySessionService } from './play-session.service';
-import {
-  type PlaySessionStatus,
-  type ShopOrderStatus,
-} from '@prisma/client';
-import {
-  CreatePlaySessionDto,
-  UpdatePlaySessionDto,
-} from './dto/play-sessions.dto';
 import {
   CancelPlayBillingDto,
   MarkPlayBillingPaidDto,
   UpdatePlayBillingDto,
 } from './dto/play-billing.dto';
 import type { PlayBillingTabDto } from './dto/play-billing.dto';
+import {
+  CreatePlaySessionDto,
+  UpdatePlaySessionDto,
+} from './dto/play-sessions.dto';
+import { FinanceReportsService } from './finance-reports.service';
+import { FinanceTransactionService } from './finance-transaction.service';
+import { PlayBillingService } from './play-billing.service';
+import { PlaySessionService } from './play-session.service';
+import { ShopLossService } from './shop-loss.service';
+import { ShopOrderService } from './shop-order.service';
 
 @Injectable()
 export class FinanceService {
