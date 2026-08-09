@@ -191,28 +191,35 @@ The repository already has:
 
 Later feature-flag work must integrate with this system rather than scatter tier/add-on conditions through UI components.
 
-## 9. Test baseline
+## 9. Test and lint baseline
 
-Before Chunk 00, the API Jest configuration searched:
+The API already had a Jest suite before Chunk 00, but the root package had no aggregate `test` command and GitHub Actions did not execute the Jest suite.
 
-```text
-apps/api/src/**/*.spec.ts
-```
+The first Chunk 00 CI execution discovered eight pre-existing Jest suites plus the new GuestCheck regression suite. At that point:
 
-but the repository had no discoverable Jest test cases and the root package had no `test` command.
+- 8 suites passed;
+- 1 existing billing-catalog suite failed because its EUR FX-call expectation no longer matched the current service behavior;
+- the new GuestCheck mixed-total regression suite passed;
+- 37 individual tests passed and 1 existing test failed.
 
-Chunk 00 establishes the minimum executable baseline by:
+Chunk 00 fixes the stale billing-catalog expectation to match the current intentional EUR short-circuit and adds the root `pnpm test` command.
 
-- adding a root `pnpm test` command targeting the API Jest suite;
-- adding a regression test for the current GuestCheck mixed-total anti-double-count contract;
-- adding API tests to CI;
-- adding web production build to CI.
+### Lint debt
 
-This is only the beginning of the regression harness. The smoke checklist remains required because many critical flows are integration/E2E flows and cannot be honestly represented by one unit test.
+A full API ESLint diagnostic on the captured baseline exposed approximately 800 pre-existing errors, dominated by formatting plus a smaller set of type-aware lint findings. Fixing hundreds of unrelated files inside Chunk 00 would violate the chunk isolation rule and make the safety PR unsafe to review.
+
+Therefore Chunk 00 adopts a ratchet:
+
+- changed API TypeScript files are lint-gated in CI;
+- existing full-repository lint debt remains documented rather than hidden;
+- spec files are connected to the existing `tsconfig.spec.json` so changed tests can be type-aware linted;
+- a dedicated cleanup effort can reduce the inherited debt without mixing that rewrite into settlement/payment architecture.
+
+The existing root `pnpm lint` command remains available as the full diagnostic and is expected to expose inherited debt until that cleanup is completed.
 
 ## 10. CI baseline
 
-`.github/workflows/ci.yml` currently uses GitHub Actions and an ephemeral PostgreSQL service for migration validation.
+`.github/workflows/ci.yml` uses GitHub Actions and an ephemeral PostgreSQL service for migration validation.
 
 The migration job performs:
 
@@ -222,7 +229,16 @@ The migration job performs:
 4. `prisma migrate status`;
 5. `prisma validate`.
 
-Before Chunk 00, CI ran API lint/build and web typecheck but did not execute Jest tests or the web production build. Chunk 00 closes those gaps.
+Before Chunk 00, CI ran API lint/build and web typecheck but did not execute Jest tests or the web production build.
+
+Chunk 00 changes CI to:
+
+- lint changed API TypeScript as a no-new-debt ratchet;
+- run the API Jest suite;
+- build the API;
+- run the migration dry-run on PostgreSQL 17 to match production Neon;
+- typecheck and production-build the web app;
+- provide a non-routable CI proxy target required by production `next.config.ts` validation.
 
 ## 11. Neon production baseline
 
@@ -292,8 +308,9 @@ The coexistence of GuestCheck, ledger, auth/session and billing migrations is wh
 
 These are documented, not silently fixed in Chunk 00:
 
-- automated test coverage is extremely thin;
+- automated test coverage is still thin relative to the product surface;
 - no web test runner is currently configured;
+- full API lint has substantial inherited debt, while CI now prevents new debt in changed API TypeScript;
 - current money utilities contain some number-based calculation helpers that need a stronger canonical convention in Chunk 01;
 - existing idempotency primitives must be consolidated before adding a new generic mechanism;
 - production Neon branch protection is not enabled;
