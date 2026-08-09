@@ -458,42 +458,39 @@ export class PlayBillingService {
       case 'in_progress':
         return { startsAt: { lte: now }, endsAt: { gt: now } };
       case 'paid':
-        return { billedAt: { not: null }, startsAt: { lte: now } };
+        return {
+          billedAt: { not: null },
+          startsAt: { lte: now },
+          endsAt: { lte: now },
+        };
       case 'awaiting_payment':
         return {
           billedAt: null,
           startsAt: { lte: now },
-          OR: [{ status: 'COMPLETED' }, { endsAt: { lte: now } }],
+          endsAt: { lte: now },
         };
       case 'all':
         return { startsAt: { lte: now } };
     }
   }
 
-  /** SQL predicates aligned with `classifyWalkInBillingRow` (duration edge cases refined in map). */
+  /**
+   * Walk-ins need JS bucket refinement because a planned duration is stored as
+   * `startedAt + durationMinutes`; Prisma cannot express that column arithmetic in a
+   * portable where clause. These predicates are therefore supersets and
+   * `mergePlayBillingItems` performs the authoritative classification.
+   */
   private walkInPlayBillingTabWhere(
     tab: PlayBillingListTab,
-    now: Date,
+    _now: Date,
   ): Prisma.PlaySessionWhereInput {
     switch (tab) {
       case 'in_progress':
+      case 'awaiting_payment':
         return { status: 'ACTIVE' };
       case 'paid':
         return {
           OR: [{ status: 'COMPLETED' }, { completedAt: { not: null } }],
-        };
-      case 'awaiting_payment':
-        return {
-          completedAt: null,
-          status: { notIn: ['CANCELED', 'COMPLETED'] },
-          NOT: {
-            AND: [
-              { status: 'ACTIVE' },
-              {
-                OR: [{ endedAt: null }, { endedAt: { gt: now } }],
-              },
-            ],
-          },
         };
       case 'all':
         return {};
@@ -584,14 +581,11 @@ export class PlayBillingService {
     const [
       reservationRows,
       walkInRows,
-      reservationCount,
-      walkInCount,
       summaryInProgressRes,
-      summaryInProgressWi,
       summaryAwaitingRes,
-      summaryAwaitingWi,
       summaryPaidRes,
-      summaryPaidWi,
+      summaryActiveWalkIns,
+      summaryCompletedWalkIns,
     ] = await Promise.all([
       this.prisma.reservation.findMany({
         where: reservationWhere,
@@ -605,21 +599,11 @@ export class PlayBillingService {
         orderBy: { startedAt: 'desc' },
         take: listTake,
       }),
-      this.prisma.reservation.count({ where: reservationWhere }),
-      this.prisma.playSession.count({ where: walkInWhere }),
       this.prisma.reservation.count({
         where: {
           AND: [
             summaryReservationBase,
             this.reservationPlayBillingTabWhere('in_progress', now),
-          ],
-        },
-      }),
-      this.prisma.playSession.count({
-        where: {
-          AND: [
-            summaryWalkInBase,
-            this.walkInPlayBillingTabWhere('in_progress', now),
           ],
         },
       }),
@@ -631,14 +615,6 @@ export class PlayBillingService {
           ],
         },
       }),
-      this.prisma.playSession.count({
-        where: {
-          AND: [
-            summaryWalkInBase,
-            this.walkInPlayBillingTabWhere('awaiting_payment', now),
-          ],
-        },
-      }),
       this.prisma.reservation.count({
         where: {
           AND: [
@@ -647,15 +623,44 @@ export class PlayBillingService {
           ],
         },
       }),
+      this.prisma.playSession.findMany({
+        where: {
+          AND: [summaryWalkInBase, { status: 'ACTIVE' }],
+        },
+        select: {
+          status: true,
+          completedAt: true,
+          startedAt: true,
+          endedAt: true,
+          durationMinutes: true,
+        },
+      }),
       this.prisma.playSession.count({
         where: {
-          AND: [
-            summaryWalkInBase,
-            this.walkInPlayBillingTabWhere('paid', now),
-          ],
+          AND: [summaryWalkInBase, { status: 'COMPLETED' }],
         },
       }),
     ]);
+
+    const activeWalkInBuckets = summaryActiveWalkIns.map((row) =>
+      classifyWalkInBillingRow(
+        row.status,
+        row.completedAt,
+        row.startedAt,
+        row.endedAt,
+        row.durationMinutes,
+        now,
+      ),
+    );
+    const summaryInProgressWi = activeWalkInBuckets.filter(
+      (bucket) => bucket === 'in_progress',
+    ).length;
+    const summaryAwaitingWi = activeWalkInBuckets.filter(
+      (bucket) => bucket === 'awaiting_payment',
+    ).length;
+    const summaryPaidWi =
+      summaryCompletedWalkIns +
+      activeWalkInBuckets.filter((bucket) => bucket === 'paid').length;
 
     const filtered = this.mergePlayBillingItems(
       reservationRows,
@@ -663,11 +668,11 @@ export class PlayBillingService {
       now,
       tab,
     );
-    const hitFetchCap =
-      reservationRows.length >= listTake || walkInRows.length >= listTake;
-    const total = hitFetchCap
-      ? filtered.length
-      : reservationCount + walkInCount;
+
+    // SQL is only a candidate query for walk-ins. The mapped bucket is authoritative,
+    // so totals/pagination must be based on the exact same filtered collection that is
+    // rendered. This prevents `total: 1` with `items: []` after a timed walk-in expires.
+    const total = filtered.length;
     const pageCount = Math.max(1, Math.ceil(total / pageSize));
     const safePage = Math.min(page, pageCount);
     const start = (safePage - 1) * pageSize;
@@ -1051,7 +1056,6 @@ export class PlayBillingService {
 
     return { ok: true, reason, reservationId };
   }
-
 
   private walkInBillingInclude() {
     return {
