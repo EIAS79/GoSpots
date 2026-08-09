@@ -1,0 +1,32 @@
+name: Checkout default navigation patch
+
+on:
+  push:
+    branches: [fix/checkout-default-system]
+    paths:
+      - '.github/scripts/checkout-default-system-patch.mjs'
+      - '.github/workflows/checkout-default-system-patch.yml'
+
+permissions:
+  contents: write
+
+jobs:
+  patch:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          ref: fix/checkout-default-system
+          fetch-depth: 0
+
+      - name: Apply patch
+        run: node .github/scripts/checkout-default-system-patch.mjs
+
+      - name: Commit patch
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add apps/web/src/components/layout/tenant-shell.tsx apps/web/src/lib/i18n.ts
+          git commit -m "Make Checkout the primary operator navigation" || exit 0
+          git push origin HEAD:fix/checkout-default-system
