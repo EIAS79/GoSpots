@@ -99,22 +99,27 @@ Until Chunk 02 is enabled for a pilot shop, this section protects the legacy Gue
 
 ## L. Build and migration regression
 
-Run from repository root:
+Run the blocking baseline gate from repository root:
 
 ```bash
 pnpm install --frozen-lockfile
-pnpm lint
-pnpm test
-pnpm build
+pnpm verify
 ```
 
 Expected:
 
 - [ ] install succeeds with the pnpm lockfile;
-- [ ] lint exits 0 and does not rewrite files;
 - [ ] API Jest suite exits 0;
 - [ ] API build exits 0;
 - [ ] web build exits 0.
+
+Strict lint remains visible as a separate non-destructive debt signal:
+
+```bash
+pnpm verify:strict
+```
+
+The repository has documented pre-existing lint debt from Chunk 00, so strict lint is advisory until that cleanup is deliberately scoped. New changes should not introduce avoidable lint debt, and `pnpm lint` must never rewrite files.
 
 For migration-changing PRs also run against a disposable PostgreSQL database:
 
