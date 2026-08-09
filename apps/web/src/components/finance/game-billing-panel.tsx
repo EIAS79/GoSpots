@@ -34,6 +34,7 @@ import { publishLiveEvent } from "@/lib/live-events";
 import { BowlingModePicker } from "@/components/gaming/bowling-mode-picker";
 import {
   buildBowlingNotes,
+  estimateTimedRatesPrice,
   suggestBowlingWalkInAmount,
 } from "@/lib/bowling-booking";
 import {
@@ -46,6 +47,8 @@ import { useLiveData } from "@/lib/use-live-data";
 import { useVenueHref } from "@/lib/venue-context";
 import { useVenueSettings } from "@/lib/venue-settings-context";
 import type { MessageKey } from "@/lib/i18n";
+import { coerceMoney } from "@/lib/money";
+import { applyZoneHourlyAddon } from "@/lib/zone-pricing";
 import { GameBillingEditDialog } from "./game-billing-edit-dialog";
 
 const PAGE_SIZE = 10;
@@ -195,6 +198,8 @@ export function GameBillingPanel({ canWrite }: { canWrite: boolean }) {
           offeringConfig: c.offeringConfig,
           slotMinutes: c.slotMinutes,
           rates: c.rates,
+          hourlyRate: r.hourlyRate,
+          section: r.section,
         })),
       ) ?? [],
     [catalog],
@@ -262,13 +267,24 @@ export function GameBillingPanel({ canWrite }: { canWrite: boolean }) {
     if (!wiSelectedUnit || wiAmountTouched) return;
     const duration = Math.max(1, parseInt(wiMinutes, 10) || 60);
     const players = Math.max(1, parseInt(wiPlayers, 10) || 1);
-    const suggested = wiIsBowling && wiSelectedMode
+    const baseSuggested = wiIsBowling && wiSelectedMode
       ? suggestBowlingWalkInAmount(
           wiSelectedMode,
           players,
           duration,
         )
-      : null;
+      : wiSelectedUnit.rates.length > 0
+        ? estimateTimedRatesPrice(wiSelectedUnit.rates, duration)
+        : coerceMoney(wiSelectedUnit.hourlyRate) > 0
+          ? Math.round(
+              coerceMoney(wiSelectedUnit.hourlyRate) * (duration / 60) * 100,
+            ) / 100
+          : null;
+    const suggested = applyZoneHourlyAddon(
+      baseSuggested,
+      wiSelectedUnit.section?.hourlyPriceAddon,
+      duration,
+    );
     if (suggested != null) {
       setWiAmount(String(suggested));
     }
@@ -353,10 +369,25 @@ export function GameBillingPanel({ canWrite }: { canWrite: boolean }) {
           )
         : 1;
       let amount = wiAmount.trim() ? Number(wiAmount) : 0;
-      if (!wiAmount.trim() && wiIsBowling && wiSelectedMode) {
-        const suggested = suggestBowlingWalkInAmount(
-          wiSelectedMode,
-          players,
+      if (!wiAmount.trim() && wiSelectedUnit) {
+        const baseSuggested = wiIsBowling && wiSelectedMode
+          ? suggestBowlingWalkInAmount(
+              wiSelectedMode,
+              players,
+              durationMinutes,
+            )
+          : wiSelectedUnit.rates.length > 0
+            ? estimateTimedRatesPrice(wiSelectedUnit.rates, durationMinutes)
+            : coerceMoney(wiSelectedUnit.hourlyRate) > 0
+              ? Math.round(
+                  coerceMoney(wiSelectedUnit.hourlyRate) *
+                    (durationMinutes / 60) *
+                    100,
+                ) / 100
+              : null;
+        const suggested = applyZoneHourlyAddon(
+          baseSuggested,
+          wiSelectedUnit.section?.hourlyPriceAddon,
           durationMinutes,
         );
         if (suggested != null) amount = suggested;

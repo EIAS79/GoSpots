@@ -22,6 +22,14 @@ export type ResourceUnit = {
   status: ResourceStatus;
   sortOrder: number;
   categoryId: string | null;
+  sectionId: string | null;
+  section: {
+    id: string;
+    name: string;
+    floor: number;
+    isVip: boolean;
+    hourlyPriceAddon: MoneyWire;
+  } | null;
 };
 
 export type ResourceCategory = {
