@@ -20,7 +20,8 @@
     "test": "pnpm --filter @gospots/api run test",
     "test:api": "pnpm --filter @gospots/api run test",
     "typecheck:web": "pnpm --filter @gospots/web run typecheck",
-    "verify": "pnpm lint && pnpm test && pnpm build"
+    "verify": "pnpm test && pnpm build",
+    "verify:strict": "pnpm lint && pnpm verify"
   },
   "devDependencies": {
     "concurrently": "^9.2.1",
