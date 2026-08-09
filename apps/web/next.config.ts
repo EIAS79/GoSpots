@@ -89,24 +89,17 @@ const nextConfig: NextConfig = {
   },
   async redirects() {
     if (!isProd) return [];
-    const canonical = "https://www.gospots.eu/:path*";
     return [
       {
         source: "/:path*",
-        has: [{ type: "host", value: "gospots.pl" }],
-        destination: canonical,
-        permanent: true,
-      },
-      {
-        source: "/:path*",
-        has: [{ type: "host", value: "www.gospots.pl" }],
-        destination: canonical,
-        permanent: true,
-      },
-      {
-        source: "/:path*",
         has: [{ type: "host", value: "gospots.eu" }],
-        destination: canonical,
+        destination: "https://www.gospots.eu/:path*",
+        permanent: true,
+      },
+      {
+        source: "/:path*",
+        has: [{ type: "host", value: "gospots.pl" }],
+        destination: "https://www.gospots.pl/:path*",
         permanent: true,
       },
     ];

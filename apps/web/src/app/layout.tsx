@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import { headers } from "next/headers";
 import { Geist, Geist_Mono } from "next/font/google";
 import { GoogleTagManager } from "@/components/analytics/google-tag-manager";
 import { PublicContactLinkTracker } from "@/components/analytics/public-contact-link-tracker";
@@ -6,6 +7,7 @@ import { CookieConsent } from "@/components/consent/cookie-consent";
 import { AppProviders } from "@/components/layout/app-providers";
 import { OfflineBanner } from "@/components/layout/offline-banner";
 import { BRAND_NAME, BRAND_TAGLINE } from "@/lib/brand";
+import { publicDefaultsForHost } from "@/lib/domain-defaults";
 import {
   organizationJsonLd,
   softwareApplicationJsonLd,
@@ -89,14 +91,19 @@ function JsonLd({ data }: { data: object }) {
   );
 }
 
-export default function RootLayout({
+export default async function RootLayout({
   children,
 }: Readonly<{
   children: React.ReactNode;
 }>) {
+  const requestHeaders = await headers();
+  const host =
+    requestHeaders.get("x-forwarded-host") ?? requestHeaders.get("host");
+  const publicDefaults = publicDefaultsForHost(host);
+
   return (
     <html
-      lang="en"
+      lang={publicDefaults.locale}
       suppressHydrationWarning
       className={`${geistSans.variable} ${geistMono.variable} relative h-full antialiased dark`}
       data-theme="dark"
@@ -107,7 +114,7 @@ export default function RootLayout({
         <JsonLd data={softwareApplicationJsonLd()} />
         <GoogleTagManager />
         <PublicContactLinkTracker />
-        <AppProviders>
+        <AppProviders publicDefaults={publicDefaults}>
           <OfflineBanner />
           {children}
           <CookieConsent />

@@ -41,17 +41,28 @@ function roundMoney(n: number) {
 
 type RateCache = Record<string, number>;
 
-export function PublicPrefsProvider({ children }: { children: ReactNode }) {
+export function PublicPrefsProvider({
+  children,
+  defaultLocale = "en",
+  defaultCurrency = "EUR",
+}: {
+  children: ReactNode;
+  defaultLocale?: PublicLocale;
+  defaultCurrency?: PublicCurrency;
+}) {
   const pathname = usePathname();
   const isAppShell =
     pathname?.startsWith("/dashboard") ||
     pathname?.startsWith("/admin") ||
     pathname?.startsWith("/login") ||
     pathname?.startsWith("/register");
-  const [locale, setLocaleState] = useState<PublicLocale>("en");
-  const [currency, setCurrencyState] = useState<PublicCurrency>("EUR");
+  const [locale, setLocaleState] = useState<PublicLocale>(defaultLocale);
+  const [currency, setCurrencyState] =
+    useState<PublicCurrency>(defaultCurrency);
   const [hydrated, setHydrated] = useState(false);
-  const [ratesToDisplay, setRatesToDisplay] = useState<RateCache>({ EUR: 1 });
+  const [ratesToDisplay, setRatesToDisplay] = useState<RateCache>({
+    [defaultCurrency]: 1,
+  });
 
   useEffect(() => {
     try {
@@ -185,7 +196,9 @@ export function PublicPrefsProvider({ children }: { children: ReactNode }) {
     (amount: MoneyWire, fromCurrency = "EUR") => {
       const n = coerceMoney(amount);
       const from = fromCurrency.toUpperCase();
-      const hasRate = from === currency || (ratesToDisplay[from] != null && ratesToDisplay[from]! > 0);
+      const hasRate =
+        from === currency ||
+        (ratesToDisplay[from] != null && ratesToDisplay[from]! > 0);
       // Until FX loads, keep the source currency so we don't label €8 as "8 zł".
       const displayCurrency = hasRate ? currency : from;
       const converted = hasRate ? convertAmount(n, from) : roundMoney(n);
