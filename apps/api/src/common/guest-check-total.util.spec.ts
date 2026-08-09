@@ -54,9 +54,9 @@ describe('computeGuestCheckRunningTotal', () => {
       excluded: true,
       reason: 'linked_play_excluded_bill_on_reservation',
     });
-    expect(result.lines.some((line) => line.sourceId === 'order-canceled')).toBe(
-      false,
-    );
+    expect(
+      result.lines.some((line) => line.sourceId === 'order-canceled'),
+    ).toBe(false);
   });
 
   it('keeps unbilled reservations visible without increasing the total', () => {
