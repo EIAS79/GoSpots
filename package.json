@@ -19,8 +19,9 @@
     "lint": "pnpm --filter @gospots/api run lint && pnpm --filter @gospots/web run lint",
     "test": "pnpm --filter @gospots/api run test",
     "test:api": "pnpm --filter @gospots/api run test",
+    "test:checkout": "pnpm --filter @gospots/web run test:checkout",
     "typecheck:web": "pnpm --filter @gospots/web run typecheck",
-    "verify": "pnpm test && pnpm build",
+    "verify": "pnpm test && pnpm test:checkout && pnpm build",
     "verify:strict": "pnpm lint && pnpm verify"
   },
   "devDependencies": {

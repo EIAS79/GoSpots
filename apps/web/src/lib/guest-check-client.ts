@@ -16,6 +16,8 @@ export type GuestCheck = {
   id: string;
   shopId: string;
   status: GuestCheckStatus;
+  version: number;
+  currentSettlementId: string | null;
   guestName: string | null;
   guestEmail: string | null;
   guestPhone: string | null;
