@@ -42,6 +42,7 @@ import { coerceMoney } from "@/lib/money";
 import { useLiveData } from "@/lib/use-live-data";
 import { useVenueSettings } from "@/lib/venue-settings-context";
 import { formatVenueDayKey } from "@/lib/venue-timezone";
+import { downloadXlsxFile, financeReportToXlsx } from "@/lib/xlsx-report";
 
 const DAY_OPTS = [1, 7, 30, 90] as const;
 
@@ -144,7 +145,23 @@ export function FinanceReportsPanel({
     requestAnimationFrame(() => window.print());
   }
 
-  function handleDownload() {
+  function handleDownloadExcel() {
+    if (!data) return;
+    const now = new Date();
+    const date = now.toISOString().slice(0, 10);
+    downloadXlsxFile(
+      `${reportFilename(venueName)}-finance-${days}d-${date}.xlsx`,
+      financeReportToXlsx(data, venueName, salesByItem, {
+        currency,
+        locale,
+        periodLabel,
+        generatedAt: now,
+        paymentMethodLabel,
+      }),
+    );
+  }
+
+  function handleDownloadCsv() {
     if (!data) return;
     const now = new Date();
     const date = now.toISOString().slice(0, 10);
@@ -210,11 +227,21 @@ export function FinanceReportsPanel({
         </button>
         <button
           type="button"
-          onClick={handleDownload}
-          className="inline-flex items-center gap-1.5 rounded-lg border border-emerald-400/30 bg-emerald-500/10 px-3 py-1.5 text-xs font-medium text-emerald-200"
+          onClick={handleDownloadExcel}
+          title="Formatted Excel workbook with organized sheets, styled tables, wrapping, and fitted columns"
+          className="inline-flex items-center gap-1.5 rounded-lg border border-emerald-400/30 bg-emerald-500/10 px-3 py-1.5 text-xs font-medium text-emerald-200 hover:bg-emerald-500/15"
         >
           <Download size={14} />
-          {t("finance.reportDownloadCsv")}
+          Excel
+        </button>
+        <button
+          type="button"
+          onClick={handleDownloadCsv}
+          title="Raw CSV data for import, filtering, and integrations"
+          className="inline-flex items-center gap-1.5 rounded-lg border border-white/15 px-3 py-1.5 text-xs font-medium text-zinc-400 hover:bg-white/5 hover:text-zinc-200"
+        >
+          <Download size={14} />
+          Raw CSV
         </button>
         <button
           type="button"
