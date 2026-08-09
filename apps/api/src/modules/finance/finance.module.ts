@@ -21,5 +21,6 @@ import { PlaySessionService } from './play-session.service';
     PlaySessionService,
     FinanceService,
   ],
+  exports: [PlayBillingService],
 })
 export class FinanceModule {}

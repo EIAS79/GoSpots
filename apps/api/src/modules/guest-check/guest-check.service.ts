@@ -96,6 +96,8 @@ export class GuestCheckService {
       id: check.id,
       shopId: check.shopId,
       status: check.status,
+      version: check.version,
+      currentSettlementId: check.currentSettlementId,
       guestName: check.guestName,
       guestEmail: check.guestEmail,
       guestPhone: check.guestPhone,
@@ -159,6 +161,16 @@ export class GuestCheckService {
   private assertOpen(check: Pick<GuestCheck, 'status'>) {
     if (check.status !== 'OPEN') {
       throw new ConflictException('Guest check is not open');
+    }
+  }
+
+  private async invalidateCurrentSettlement(shopId: string, id: string) {
+    const result = await this.prisma.guestCheck.updateMany({
+      where: { id, shopId, status: 'OPEN' },
+      data: { currentSettlementId: null, version: { increment: 1 } },
+    });
+    if (result.count !== 1) {
+      throw new ConflictException('Guest check changed while it was being updated');
     }
   }
 
@@ -255,6 +267,8 @@ export class GuestCheckService {
           ? { label: dto.label?.trim() || null }
           : {}),
         ...(dto.note !== undefined ? { note: dto.note?.trim() || null } : {}),
+        currentSettlementId: null,
+        version: { increment: 1 },
       },
     });
 
@@ -282,7 +296,12 @@ export class GuestCheckService {
       });
       await tx.guestCheck.updateMany({
         where: { id, shopId, status: 'OPEN' },
-        data: { status: 'VOID', voidedAt: new Date() },
+        data: {
+          status: 'VOID',
+          voidedAt: new Date(),
+          currentSettlementId: null,
+          version: { increment: 1 },
+        },
       });
       return tx.guestCheck.findFirst({
         where: { id, shopId },
@@ -354,6 +373,8 @@ export class GuestCheckService {
         data: {
           status: 'SETTLED',
           settledAt: new Date(),
+          currentSettlementId: null,
+          version: { increment: 1 },
           ...(dto.paymentMethod !== undefined
             ? { paymentMethod: dto.paymentMethod?.trim() || null }
             : {}),
@@ -443,6 +464,8 @@ export class GuestCheckService {
       });
     }
 
+    await this.invalidateCurrentSettlement(shopId, id);
+
     await this.audit.record(actor, {
       section: 'operations',
       action: 'guest_check.attach',
@@ -492,6 +515,8 @@ export class GuestCheckService {
         throw new NotFoundException('Reservation not attached to this check');
       }
     }
+
+    await this.invalidateCurrentSettlement(shopId, id);
 
     await this.audit.record(actor, {
       section: 'operations',

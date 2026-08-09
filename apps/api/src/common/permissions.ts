@@ -12,6 +12,8 @@ export const PERMISSIONS = {
   RESERVATION_WRITE: 'reservation.write',
   TRANSACTION_READ: 'transaction.read',
   TRANSACTION_WRITE: 'transaction.write',
+  CHECKOUT_READ: 'checkout.read',
+  CHECKOUT_WRITE: 'checkout.write',
   GALLERY_READ: 'gallery.read',
   GALLERY_WRITE: 'gallery.write',
   STAFF_READ: 'staff.read',
