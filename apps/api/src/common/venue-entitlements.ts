@@ -111,7 +111,8 @@ export async function assertShopHasFeature(
 
 /**
  * First venue is always allowed. A second+ venue requires `multi_shop` on an
- * owned shop, or an active trial on an owned shop (acquisition funnel).
+ * owned shop, or the one-time business trial/grace acquisition window.
+ * Additional venues never reset the organization's trial clock.
  */
 export async function assertOwnerMayAddVenue(
   prisma: PrismaService,
@@ -127,7 +128,7 @@ export async function assertOwnerMayAddVenue(
 
   const allowed = shops.some((s) => {
     const e = getVenueEntitlements(s.subscription);
-    return e.trialActive || hasFeature(e, 'multi_shop');
+    return e.trialActive || e.trialGraceActive || hasFeature(e, 'multi_shop');
   });
   if (!allowed) {
     throw apiForbiddenException(
@@ -139,8 +140,8 @@ export async function assertOwnerMayAddVenue(
 }
 
 /**
- * Linking / accessing more than one venue requires multi_shop or an active
- * trial on a shop the account already owns (or is about to link).
+ * Linking / accessing more than one venue requires multi_shop or the active
+ * business trial/grace window on a shop the account already owns/is linking.
  */
 export function assertMultiVenueEntitlement(
   subscriptions: VenueEntitlementInput[],
@@ -150,7 +151,7 @@ export function assertMultiVenueEntitlement(
   if (currentVenueCount + addingCount <= 1) return;
   const allowed = subscriptions.some((sub) => {
     const e = getVenueEntitlements(sub);
-    return e.trialActive || hasFeature(e, 'multi_shop');
+    return e.trialActive || e.trialGraceActive || hasFeature(e, 'multi_shop');
   });
   if (!allowed) {
     throw apiForbiddenException(
