@@ -173,11 +173,20 @@ pnpm lint
 pnpm test
 pnpm build
 pnpm verify
+pnpm verify:strict
 ```
 
-`pnpm verify` is the local aggregate gate: lint → API tests → API build → web build.
+- `pnpm verify` is the blocking regression gate for the current baseline: API Jest tests, API build and web production build.
+- `pnpm verify:strict` additionally runs strict lint first.
+- `pnpm lint` is deliberately non-destructive. It never rewrites source files.
 
 The API has Jest tests, including billing state-machine/catalog/webhook coverage. The web currently has typecheck/lint/build tooling but no established unit-test runner, so root `test` intentionally runs the API suite only. A future web test framework should be added deliberately, not faked with a no-op command.
+
+### Existing lint debt
+
+The first non-destructive baseline scan exposed **806 existing API lint findings (801 errors, 5 warnings)**, of which 738 were reported as auto-fixable. Most are Prettier/formatting findings, with additional existing typed-ESLint findings. The pre-Chunk-00 `lint` script used `--fix`, which hid this debt by mutating the tree whenever lint was run.
+
+Chunk 00 does not mass-reformat or semantically edit hundreds of unrelated files because that would make the safety-baseline PR itself high-risk and difficult to review. CI therefore reports API lint as an advisory baseline signal while tests/build/migration remain blocking. New chunks should avoid increasing this debt, and lint cleanup should be handled as a deliberately scoped cleanup series rather than mixed into money-domain work.
 
 ## 11. Critical invariants for Chunk 01+
 
@@ -188,12 +197,13 @@ The API has Jest tests, including billing state-machine/catalog/webhook coverage
 5. Existing finance behavior must remain unchanged with new feature flags disabled.
 6. No authoritative money calculations move into client-only code.
 7. New migrations are expand-first and production-forward-safe.
-8. CI must stay green before a dependent chunk starts.
+8. Blocking CI gates must stay green before a dependent chunk starts.
 
 ## 12. Known baseline risks / debt
 
 - Root had no aggregate `test` command before Chunk 00.
 - API `lint` previously used `--fix`, so a validation command could mutate source; Chunk 00 splits validation from `lint:fix`.
+- API strict lint has 806 pre-existing findings; it is visible but not silently auto-fixed.
 - CI previously typechecked the web but did not build it, and did not run the API Jest suite.
 - Both pnpm and npm lockfiles exist at repository root; pnpm remains canonical.
 - The schema contains mature SaaS payment abstractions that could be confused with the future guest payment domain. Preserve the bounded-context separation.
