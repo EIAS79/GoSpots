@@ -16,6 +16,9 @@ export type DashboardOverview = {
     tier: string;
     status: string;
     trialEndsAt: string | null;
+    trialGraceEndsAt?: string | null;
+    trialGraceActive?: boolean;
+    trialLocked?: boolean;
     staffLimit: number;
     staffUsed: number;
     features: { key: string; unlocked: boolean }[];
@@ -87,7 +90,13 @@ export type SubscriptionResponse = {
   billedTier: string;
   trialActive: boolean;
   trialExpired: boolean;
+  trialGraceActive: boolean;
+  trialLocked: boolean;
+  trialEndsAt?: string | null;
+  trialGraceEndsAt: string | null;
   trialDaysRemaining: number;
+  trialGraceDaysRemaining: number;
+  trialGracePeriodDays: number;
   packId: string | null;
   addOns: string;
   pendingPackId?: string | null;
@@ -101,7 +110,7 @@ export type SubscriptionResponse = {
   enabledModules: string[];
   monthlyTotal: number;
   billingConfigured?: boolean;
-  /** Missing Lemon env var names (never values). */
+  /** Missing billing env var names (never values). */
   billingMissingEnv?: string[];
   lemonSubscriptionId?: string | null;
   features: { key: string; unlocked: boolean }[];
