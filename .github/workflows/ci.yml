@@ -11,7 +11,7 @@ concurrency:
 
 jobs:
   api:
-    name: API lint · build
+    name: API lint · test · build
     runs-on: ubuntu-latest
     timeout-minutes: 20
     defaults:
@@ -44,10 +44,16 @@ jobs:
           DATABASE_URL: postgresql://ci:ci@localhost:5432/ci?schema=public
 
       - name: Lint
-        run: npx eslint "{src,apps,libs}/**/*.ts"
+        run: pnpm run lint
 
-      # Keep lint failures visible, but never let existing lint debt prevent the
-      # TypeScript/Nest build from running. The job still fails when lint fails.
+      # Keep independent baseline signals visible. A lint/test failure must not hide
+      # whether the TypeScript/Nest build itself still succeeds.
+      - name: Test
+        if: ${{ always() }}
+        run: pnpm run test -- --runInBand
+        env:
+          DATABASE_URL: postgresql://ci:ci@localhost:5432/ci?schema=public
+
       - name: Build
         if: ${{ always() }}
         run: pnpm run build
@@ -111,9 +117,9 @@ jobs:
         run: pnpm exec prisma validate
 
   web:
-    name: Web typecheck
+    name: Web typecheck · build
     runs-on: ubuntu-latest
-    timeout-minutes: 15
+    timeout-minutes: 20
     defaults:
       run:
         working-directory: apps/web
@@ -140,3 +146,7 @@ jobs:
 
       - name: Typecheck
         run: pnpm run typecheck
+
+      - name: Build
+        if: ${{ always() }}
+        run: pnpm run build
