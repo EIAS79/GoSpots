@@ -6,6 +6,7 @@ import {
 } from '@nestjs/common';
 import { ReservationStatus, Prisma } from '@prisma/client';
 import { PrismaService } from '../../prisma/prisma.service';
+import { serializeMoney } from '../../common/money.util';
 import { requireShopId } from '../../common/tenant';
 import { assertShopFeature } from '../../common/subscription-feature.util';
 import type { JwtAccessPayload } from '../auth/auth.service';
@@ -71,6 +72,7 @@ export class ReservationsScheduleService {
               floor: true,
               isVip: true,
               seatsPerRow: true,
+              hourlyPriceAddon: true,
               zone: true,
             },
           },
@@ -93,6 +95,7 @@ export class ReservationsScheduleService {
           floor: true,
           isVip: true,
           seatsPerRow: true,
+              hourlyPriceAddon: true,
           sortOrder: true,
           zone: true,
         },
@@ -308,6 +311,7 @@ export class ReservationsScheduleService {
             name: s.name,
             floor: s.floor,
             isVip: s.isVip,
+            hourlyPriceAddon: serializeMoney(s.hourlyPriceAddon),
             seatsPerRow: s.seatsPerRow,
             sortOrder: s.sortOrder,
             zone: s.zone ?? null,
@@ -353,6 +357,9 @@ export class ReservationsScheduleService {
                     name: unit.section.name,
                     floor: unit.section.floor,
                     isVip: unit.section.isVip,
+                    hourlyPriceAddon: serializeMoney(
+                      unit.section.hourlyPriceAddon,
+                    ),
                     seatsPerRow: unit.section.seatsPerRow,
                     zone: unit.section.zone ?? null,
                   }

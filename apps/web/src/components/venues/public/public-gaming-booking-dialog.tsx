@@ -46,6 +46,7 @@ import {
   venueDayKey,
 } from "@/lib/venue-timezone";
 import type { ScheduleCategory, ScheduleUnit } from "@/lib/reservations-client";
+import { applyZoneHourlyAddon } from "@/lib/zone-pricing";
 
 function minutesBetweenLocal(
   date: string,
@@ -337,6 +338,16 @@ export function PublicGamingBookingDialog({
     estimatedDurationMinutes,
   ]);
 
+  const estimatedPriceWithZoneAddon = useMemo(
+    () =>
+      applyZoneHourlyAddon(
+        estimatedPrice,
+        unit.section?.hourlyPriceAddon,
+        estimatedDurationMinutes,
+      ),
+    [estimatedPrice, unit.section?.hourlyPriceAddon, estimatedDurationMinutes],
+  );
+
   function applyStartTime(next: string) {
     setStartTime(next);
     if (!isDining) {
@@ -589,10 +600,10 @@ export function PublicGamingBookingDialog({
                     {!isDining ? ` – ${endTime}` : ""}
                   </span>
                 </div>
-                {estimatedPrice != null ? (
+                {estimatedPriceWithZoneAddon != null ? (
                   <span className="mt-1 block text-xs text-emerald-300/80">
                     {t("venuePage.booking.estPrice", {
-                      price: formatEstPrice(estimatedPrice),
+                      price: formatEstPrice(estimatedPriceWithZoneAddon),
                     })}
                   </span>
                 ) : null}
@@ -760,10 +771,10 @@ export function PublicGamingBookingDialog({
                 </p>
               )}
 
-              {!isDining && estimatedPrice != null ? (
+              {!isDining && estimatedPriceWithZoneAddon != null ? (
                 <p className="rounded-lg border border-emerald-500/25 bg-emerald-500/10 px-3 py-2 text-sm font-medium text-emerald-800 dark:text-emerald-200">
                   {t("venuePage.booking.estPrice", {
-                    price: formatEstPrice(estimatedPrice),
+                    price: formatEstPrice(estimatedPriceWithZoneAddon),
                   })}
                   <span className="mt-0.5 block text-[11px] font-normal text-emerald-800/80 dark:text-emerald-200/70">
                     {t("venuePage.booking.priceFromSetup", {

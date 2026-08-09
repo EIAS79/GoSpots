@@ -1,5 +1,6 @@
 import { ApiError, api, credentialedFetch } from "./api";
 import type { ResourceType } from "./resource-types";
+import type { MoneyWire } from "./money";
 import type { SeatingZone } from "./seating-zone";
 
 export type GamingSectionUnit = {
@@ -31,6 +32,7 @@ export type GamingSectionDetail = {
   name: string;
   floor: number;
   isVip: boolean;
+  hourlyPriceAddon: MoneyWire;
   seatsPerRow: number;
   sortOrder: number;
   seatCount: number;
@@ -47,6 +49,7 @@ export type GamingSectionSummary = {
   name: string;
   floor: number;
   isVip: boolean;
+  hourlyPriceAddon: MoneyWire;
   seatsPerRow: number;
   sortOrder: number;
   seatCount: number;
@@ -62,6 +65,7 @@ export function createGamingSection(body: {
   name: string;
   floor?: number;
   isVip?: boolean;
+  hourlyPriceAddon?: number;
   seatsPerRow?: number;
   seatCount?: number;
   defaultTableCapacity?: number;
@@ -80,6 +84,7 @@ export function updateGamingSection(
     name?: string;
     floor?: number;
     isVip?: boolean;
+  hourlyPriceAddon?: number;
     seatsPerRow?: number;
     seatCount?: number;
     sortOrder?: number;
