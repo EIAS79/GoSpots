@@ -17,6 +17,10 @@ type CsvContext = {
 };
 
 type CsvRecord = {
+  report?: string;
+  venue?: string;
+  period?: string;
+  generatedAt?: string;
   section?: string;
   date?: string;
   metric?: string;
@@ -41,7 +45,6 @@ type CsvRecord = {
 
 const LABELS = {
   en: {
-    meta: "Metadata",
     summary: "Summary",
     payments: "Payment methods",
     revenueByDay: "Revenue by day",
@@ -52,10 +55,6 @@ const LABELS = {
     topItems: "Top items",
     reservationsList: "Recent reservations",
     activity: "Recent activity",
-    venue: "Venue",
-    period: "Period",
-    generatedAt: "Generated at",
-    reportType: "Report type",
     financeReport: "Finance report",
     overviewReport: "Overview report",
     totalRevenue: "Total revenue",
@@ -83,6 +82,10 @@ const LABELS = {
     venueViews7d: "Venue views - last 7 days",
     menuViews7d: "Menu views - last 7 days",
     bookingClicks7d: "Booking clicks - last 7 days",
+    report: "Report",
+    venue: "Venue",
+    period: "Period",
+    generatedAt: "Generated at",
     section: "Section",
     date: "Date / timestamp",
     metric: "Metric",
@@ -105,7 +108,6 @@ const LABELS = {
     details: "Details",
   },
   pl: {
-    meta: "Metadane",
     summary: "Podsumowanie",
     payments: "Metody płatności",
     revenueByDay: "Przychód dzienny",
@@ -116,10 +118,6 @@ const LABELS = {
     topItems: "Najlepsze pozycje",
     reservationsList: "Ostatnie rezerwacje",
     activity: "Ostatnia aktywność",
-    venue: "Lokal",
-    period: "Okres",
-    generatedAt: "Wygenerowano",
-    reportType: "Typ raportu",
     financeReport: "Raport finansowy",
     overviewReport: "Raport przeglądowy",
     totalRevenue: "Przychód łącznie",
@@ -147,6 +145,10 @@ const LABELS = {
     venueViews7d: "Wyświetlenia lokalu - ostatnie 7 dni",
     menuViews7d: "Wyświetlenia menu - ostatnie 7 dni",
     bookingClicks7d: "Kliknięcia rezerwacji - ostatnie 7 dni",
+    report: "Raport",
+    venue: "Lokal",
+    period: "Okres",
+    generatedAt: "Wygenerowano",
     section: "Sekcja",
     date: "Data / czas",
     metric: "Wskaźnik",
@@ -191,17 +193,18 @@ function moneyCell(value: unknown, locale: string): string {
   }).format(coerceMoney(value));
 }
 
-function formatGeneratedAt(date: Date, locale: string): string {
-  return date.toLocaleString(locale, {
-    dateStyle: "medium",
-    timeStyle: "short",
-  });
-}
-
-function escapeCsvCell(value: string | number | null | undefined, delimiter: "," | ";") {
+function escapeCsvCell(
+  value: string | number | null | undefined,
+  delimiter: "," | ";",
+) {
   if (value == null) return "";
   const text = String(value);
-  if (text.includes(delimiter) || text.includes('"') || text.includes("\n") || text.includes("\r")) {
+  if (
+    text.includes(delimiter) ||
+    text.includes('"') ||
+    text.includes("\n") ||
+    text.includes("\r")
+  ) {
     return `"${text.replace(/"/g, '""')}"`;
   }
   return text;
@@ -210,6 +213,10 @@ function escapeCsvCell(value: string | number | null | undefined, delimiter: ","
 function serializeRecords(records: CsvRecord[], ctx: CsvContext): string {
   const labels = getLabels(ctx.locale);
   const columns: { key: keyof CsvRecord; label: string }[] = [
+    { key: "report", label: labels.report },
+    { key: "venue", label: labels.venue },
+    { key: "period", label: labels.period },
+    { key: "generatedAt", label: labels.generatedAt },
     { key: "section", label: labels.section },
     { key: "date", label: labels.date },
     { key: "metric", label: labels.metric },
@@ -231,28 +238,38 @@ function serializeRecords(records: CsvRecord[], ctx: CsvContext): string {
     { key: "marketingViews", label: labels.marketingViewsColumn },
     { key: "details", label: labels.details },
   ];
-  const lines = [columns.map((column) => escapeCsvCell(column.label, ctx.delimiter)).join(ctx.delimiter)];
+  const lines = [
+    columns
+      .map((column) => escapeCsvCell(column.label, ctx.delimiter))
+      .join(ctx.delimiter),
+  ];
   for (const record of records) {
-    lines.push(columns.map((column) => escapeCsvCell(record[column.key], ctx.delimiter)).join(ctx.delimiter));
+    lines.push(
+      columns
+        .map((column) => escapeCsvCell(record[column.key], ctx.delimiter))
+        .join(ctx.delimiter),
+    );
   }
   return lines.join("\r\n");
 }
 
-function metaRecords(
-  reportType: string,
-  venueName: string,
-  period: string,
-  generatedAt: Date,
-  ctx: CsvContext,
+function stampRecords(
+  records: CsvRecord[],
+  meta: {
+    report: string;
+    venue: string;
+    period: string;
+    generatedAt: Date;
+  },
 ): CsvRecord[] {
-  const labels = getLabels(ctx.locale);
-  return [
-    { section: labels.meta, metric: labels.reportType, details: reportType },
-    { section: labels.meta, metric: labels.venue, details: venueName },
-    { section: labels.meta, metric: labels.period, details: period },
-    { section: labels.meta, metric: labels.currency, details: ctx.currency },
-    { section: labels.meta, metric: labels.generatedAt, date: generatedAt.toISOString(), details: formatGeneratedAt(generatedAt, ctx.locale) },
-  ];
+  const generatedAt = meta.generatedAt.toISOString();
+  return records.map((record) => ({
+    report: meta.report,
+    venue: meta.venue,
+    period: meta.period,
+    generatedAt,
+    ...record,
+  }));
 }
 
 export function financeReportToCsv(
@@ -264,27 +281,31 @@ export function financeReportToCsv(
   const ctx = csvContext(options);
   const labels = getLabels(ctx.locale);
   const generatedAt = options.generatedAt ?? new Date();
+  const period = options.periodLabel ?? `${data.days} days`;
   const { summary } = data;
-  const records: CsvRecord[] = metaRecords(
-    labels.financeReport,
-    venueName,
-    options.periodLabel ?? `${data.days} days`,
-    generatedAt,
-    ctx,
-  );
+  const records: CsvRecord[] = [];
 
   const moneySummary: [string, unknown][] = [
     [labels.totalRevenue, summary.revenue],
     [labels.menuOrders, summary.revenueMenuOrders ?? summary.revenueOrders],
     [labels.tablesGames, summary.revenuePlaySessions ?? 0],
     [labels.reservations, summary.revenueReservations ?? 0],
-    [labels.quickSales, summary.revenueQuickSales ?? summary.revenueTransactions],
+    [
+      labels.quickSales,
+      summary.revenueQuickSales ?? summary.revenueTransactions,
+    ],
     [labels.losses, summary.losses],
     [labels.profit, summary.profit],
   ];
   for (const [metric, value] of moneySummary) {
-    records.push({ section: labels.summary, metric, amount: moneyCell(value, ctx.locale), currency: ctx.currency });
+    records.push({
+      section: labels.summary,
+      metric,
+      amount: moneyCell(value, ctx.locale),
+      currency: ctx.currency,
+    });
   }
+
   const countSummary: [string, number][] = [
     [labels.orders, summary.orderCount],
     [labels.completed, summary.completedOrderCount],
@@ -293,7 +314,9 @@ export function financeReportToCsv(
     [labels.playPlayers, summary.playPlayers ?? 0],
     [labels.marketingViews, summary.marketingViews ?? 0],
   ];
-  for (const [metric, count] of countSummary) records.push({ section: labels.summary, metric, count });
+  for (const [metric, count] of countSummary) {
+    records.push({ section: labels.summary, metric, count });
+  }
 
   for (const row of data.paymentMethodBreakdown ?? []) {
     records.push({
@@ -319,7 +342,12 @@ export function financeReportToCsv(
   }
 
   for (const row of data.lossesByDay) {
-    records.push({ section: labels.lossesByDay, date: row.day, amount: moneyCell(row.amount, ctx.locale), currency: ctx.currency });
+    records.push({
+      section: labels.lossesByDay,
+      date: row.day,
+      amount: moneyCell(row.amount, ctx.locale),
+      currency: ctx.currency,
+    });
   }
 
   for (const row of data.audienceByDay ?? []) {
@@ -345,7 +373,15 @@ export function financeReportToCsv(
     });
   }
 
-  return serializeRecords(records, ctx);
+  return serializeRecords(
+    stampRecords(records, {
+      report: labels.financeReport,
+      venue: venueName,
+      period,
+      generatedAt,
+    }),
+    ctx,
+  );
 }
 
 export function overviewReportToCsv(
@@ -355,15 +391,10 @@ export function overviewReportToCsv(
   const ctx = csvContext(options);
   const labels = getLabels(ctx.locale);
   const generatedAt = options.generatedAt ?? new Date();
+  const period = options.periodLabel ?? "7 days";
   const venueName = data.shop.name?.trim() || "GoSpots";
   const { kpis, charts } = data;
-  const records: CsvRecord[] = metaRecords(
-    labels.overviewReport,
-    venueName,
-    options.periodLabel ?? "7 days",
-    generatedAt,
-    ctx,
-  );
+  const records: CsvRecord[] = [];
 
   const moneySummary: [string, unknown][] = [
     [labels.revenueToday, kpis.revenueToday],
@@ -372,8 +403,14 @@ export function overviewReportToCsv(
     [labels.losses7d, kpis.lossesWeek],
   ];
   for (const [metric, value] of moneySummary) {
-    records.push({ section: labels.summary, metric, amount: moneyCell(value, ctx.locale), currency: ctx.currency });
+    records.push({
+      section: labels.summary,
+      metric,
+      amount: moneyCell(value, ctx.locale),
+      currency: ctx.currency,
+    });
   }
+
   const countSummary: [string, number][] = [
     [labels.ordersToday, kpis.ordersToday],
     [labels.completedOrders7d, kpis.completedOrdersWeek],
@@ -384,19 +421,44 @@ export function overviewReportToCsv(
     [labels.menuViews7d, kpis.menuViews7d],
     [labels.bookingClicks7d, kpis.reservationClicks7d],
   ];
-  for (const [metric, count] of countSummary) records.push({ section: labels.summary, metric, count });
+  for (const [metric, count] of countSummary) {
+    records.push({ section: labels.summary, metric, count });
+  }
 
   for (const row of charts.revenueByDay ?? []) {
-    records.push({ section: labels.revenueByDay, date: row.day, amount: moneyCell(row.total, ctx.locale), currency: ctx.currency });
+    records.push({
+      section: labels.revenueByDay,
+      date: row.day,
+      amount: moneyCell(row.total, ctx.locale),
+      currency: ctx.currency,
+    });
   }
+
   for (const row of charts.ordersByDay ?? []) {
-    records.push({ section: labels.ordersByDay, date: row.day, orders: row.count, guests: row.customers });
+    records.push({
+      section: labels.ordersByDay,
+      date: row.day,
+      orders: row.count,
+      guests: row.customers,
+    });
   }
+
   for (const row of charts.lossesByDay ?? []) {
-    records.push({ section: labels.lossesByDay, date: row.day, amount: moneyCell(row.amount, ctx.locale), currency: ctx.currency });
+    records.push({
+      section: labels.lossesByDay,
+      date: row.day,
+      amount: moneyCell(row.amount, ctx.locale),
+      currency: ctx.currency,
+    });
   }
+
   for (const row of charts.venueViewsByDay ?? []) {
-    records.push({ section: labels.audienceByDay, date: row.day, metric: labels.venueViews7d, count: row.count });
+    records.push({
+      section: labels.audienceByDay,
+      date: row.day,
+      metric: labels.venueViews7d,
+      count: row.count,
+    });
   }
 
   for (const row of data.topMenuItems) {
@@ -408,6 +470,7 @@ export function overviewReportToCsv(
       currency: ctx.currency,
     });
   }
+
   for (const row of data.recentReservations) {
     records.push({
       section: labels.reservationsList,
@@ -417,6 +480,7 @@ export function overviewReportToCsv(
       status: row.status,
     });
   }
+
   for (const row of data.recentAudit) {
     records.push({
       section: labels.activity,
@@ -426,7 +490,15 @@ export function overviewReportToCsv(
     });
   }
 
-  return serializeRecords(records, ctx);
+  return serializeRecords(
+    stampRecords(records, {
+      report: labels.overviewReport,
+      venue: venueName,
+      period,
+      generatedAt,
+    }),
+    ctx,
+  );
 }
 
 export function reportFilename(value: string) {
@@ -444,7 +516,10 @@ export function downloadTextFile(
   content: string,
   mime = "text/csv;charset=utf-8",
 ) {
-  const body = mime.startsWith("text/csv") && !content.startsWith("\uFEFF") ? `\uFEFF${content}` : content;
+  const body =
+    mime.startsWith("text/csv") && !content.startsWith("\uFEFF")
+      ? `\uFEFF${content}`
+      : content;
   const blob = new Blob([body], { type: mime });
   const url = URL.createObjectURL(blob);
   const a = document.createElement("a");
