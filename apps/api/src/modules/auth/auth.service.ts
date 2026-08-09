@@ -31,6 +31,15 @@ import {
   isVenueStaffLoginEmail,
   normalizeLoginIdentifier,
 } from '../../common/venue-account';
+import {
+  createOrganizationTrial,
+  findOrganizationTrialByIdentity,
+  getOrganizationTrialForOwner,
+  linkOwnerToOrganizationTrial,
+  linkShopToOrganizationTrial,
+  normalizeBusinessCountryCode,
+  normalizeBusinessIdentifier,
+} from '../../common/organization-trial';
 import { addTrialEndDate, tierForPack } from '../../common/subscription-tier';
 import {
   assertMultiVenueEntitlement,
@@ -187,6 +196,25 @@ export class AuthService {
     const existing = await this.prisma.user.findUnique({ where: { email } });
     if (existing) throw new ConflictException('Email already registered.');
 
+    const businessLegalName = dto.businessLegalName.trim();
+    if (!businessLegalName) {
+      throw new BadRequestException('Business legal name is required.');
+    }
+    const businessCountryCode = normalizeBusinessCountryCode(
+      dto.businessCountryCode,
+    );
+    const businessIdNormalized = normalizeBusinessIdentifier(dto.businessId);
+    const existingOrganization = await findOrganizationTrialByIdentity(
+      this.prisma,
+      businessCountryCode,
+      businessIdNormalized,
+    );
+    if (existingOrganization) {
+      throw new ConflictException(
+        'This business has already used or started a GoSpots free trial. Sign in with the existing owner account or ask an existing owner for access.',
+      );
+    }
+
     const passwordHash = await hashPassword(dto.password);
     const slug = dto.shopSlug.toLowerCase();
     const slugTaken = await this.prisma.shop.findUnique({ where: { slug } });
@@ -198,62 +226,79 @@ export class AuthService {
         ? serializeAddOns(dto.addOns as AddOnId[])
         : serializeAddOns(recommendedFeaturesForPack(packId));
     const tier = tierForPack(packId, addOnsCsv);
+    const trialStartedAt = new Date();
+    const trialEndsAt = addTrialEndDate(trialStartedAt);
 
-    const { user, shop } = await this.prisma.$transaction(async (tx) => {
-      const u = await tx.user.create({
-        data: {
-          email,
-          passwordHash,
-          name: dto.name ?? null,
-          accountType: 'VENUE_OWNER',
-        },
-      });
-      const s = await tx.shop.create({
-        data: {
-          slug,
-          ...dashboardKeyPersistFields(generateDashboardKey()),
-          name: dto.shopName,
-          ownerId: u.id,
-          venueType: dto.venueType ?? packId,
-          city: dto.city?.trim() || null,
-          country: dto.country?.trim() || null,
-          phone: dto.phone?.trim() || null,
-          subscription: {
-            create: {
-              tier,
-              status: 'TRIAL',
-              trialEndsAt: addTrialEndDate(),
-              packId,
+    const { user, shop, organizationTrial } = await this.prisma.$transaction(
+      async (tx) => {
+        const organizationTrial = await createOrganizationTrial(tx, {
+          legalName: businessLegalName,
+          countryCode: businessCountryCode,
+          businessIdNormalized,
+          businessIdDisplay: dto.businessId.trim(),
+          trialStartedAt,
+          trialEndsAt,
+        });
+
+        const u = await tx.user.create({
+          data: {
+            email,
+            passwordHash,
+            name: dto.name ?? null,
+            accountType: 'VENUE_OWNER',
+          },
+        });
+        await linkOwnerToOrganizationTrial(tx, u.id, organizationTrial.id);
+
+        const s = await tx.shop.create({
+          data: {
+            slug,
+            ...dashboardKeyPersistFields(generateDashboardKey()),
+            name: dto.shopName,
+            ownerId: u.id,
+            venueType: dto.venueType ?? packId,
+            city: dto.city?.trim() || null,
+            country: dto.country?.trim() || businessCountryCode,
+            phone: dto.phone?.trim() || null,
+            subscription: {
+              create: {
+                tier,
+                status: 'TRIAL',
+                trialEndsAt: organizationTrial.trialEndsAt,
+                packId,
+              },
+            },
+            /** Persist the same defaults the hours page shows, so public pages
+             *  have real data before the owner customizes the schedule. */
+            openingHours: {
+              create: [0, 1, 2, 3, 4, 5, 6].map((weekday) => ({
+                weekday,
+                opensAt: '09:00',
+                closesAt: '22:00',
+                isClosed: weekday === 0,
+              })),
             },
           },
-          /** Persist the same defaults the hours page shows, so public pages
-           *  have real data before the owner customizes the schedule. */
-          openingHours: {
-            create: [0, 1, 2, 3, 4, 5, 6].map((weekday) => ({
-              weekday,
-              opensAt: '09:00',
-              closesAt: '22:00',
-              isClosed: weekday === 0,
-            })),
+          include: { subscription: true },
+        });
+        await linkShopToOrganizationTrial(tx, s.id, organizationTrial.id);
+
+        if (s.subscription) {
+          await syncSubscriptionAddOnRows(tx, s.subscription.id, addOnsCsv);
+        }
+        const membership = await tx.membership.create({
+          data: {
+            userId: u.id,
+            shopId: s.id,
+            role: 'OWNER',
+            acceptedAt: new Date(),
+            isActive: true,
           },
-        },
-        include: { subscription: true },
-      });
-      if (s.subscription) {
-        await syncSubscriptionAddOnRows(tx, s.subscription.id, addOnsCsv);
-      }
-      const membership = await tx.membership.create({
-        data: {
-          userId: u.id,
-          shopId: s.id,
-          role: 'OWNER',
-          acceptedAt: new Date(),
-          isActive: true,
-        },
-      });
-      await syncMembershipPermissionRows(tx, membership.id, '*');
-      return { user: u, shop: s };
-    });
+        });
+        await syncMembershipPermissionRows(tx, membership.id, '*');
+        return { user: u, shop: s, organizationTrial };
+      },
+    );
 
     await this.notifications.seedWelcomeNotifications(
       shop.id,
@@ -264,8 +309,15 @@ export class AuthService {
     await this.audit.recordForShop(shop.id, {
       section: 'subscription',
       action: 'subscription.trial_start',
-      summary: `${packId} pack trial started (90 days)`,
-      meta: { tier, status: 'TRIAL', packId, addOns: addOnsCsv },
+      summary: `${packId} pack business trial started (90 days)`,
+      meta: {
+        tier,
+        status: 'TRIAL',
+        packId,
+        addOns: addOnsCsv,
+        organizationTrialId: organizationTrial.id,
+        trialEndsAt: organizationTrial.trialEndsAt.toISOString(),
+      },
       actorName: 'System',
     });
 
@@ -282,6 +334,18 @@ export class AuthService {
     if (user.accountType !== 'VENUE_OWNER') {
       throw new ForbiddenException(
         'Only venue owners can create additional venues.',
+      );
+    }
+
+    await assertOwnerMayAddVenue(this.prisma, userId);
+
+    const organizationTrial = await getOrganizationTrialForOwner(
+      this.prisma,
+      userId,
+    );
+    if (!organizationTrial) {
+      throw new BadRequestException(
+        'Business trial profile is missing. Contact GoSpots support before adding another venue.',
       );
     }
 
@@ -308,7 +372,9 @@ export class AuthService {
             create: {
               tier,
               status: 'TRIAL',
-              trialEndsAt: addTrialEndDate(),
+              // Never reset the free trial for an additional branch.
+              // Every venue owned by this business shares the original end date.
+              trialEndsAt: organizationTrial.trialEndsAt,
               packId,
             },
           },
@@ -328,6 +394,7 @@ export class AuthService {
           subscription: { select: { id: true } },
         },
       });
+      await linkShopToOrganizationTrial(tx, s.id, organizationTrial.id);
       if (s.subscription) {
         await syncSubscriptionAddOnRows(tx, s.subscription.id, addOnsCsv);
       }
@@ -352,9 +419,16 @@ export class AuthService {
 
     await this.audit.recordForShop(shop.id, {
       section: 'subscription',
-      action: 'subscription.trial_start',
-      summary: `${packId} pack trial started (90 days)`,
-      meta: { tier, status: 'TRIAL', packId, addOns: addOnsCsv },
+      action: 'subscription.trial_share',
+      summary: `${packId} pack added under the existing business trial`,
+      meta: {
+        tier,
+        status: 'TRIAL',
+        packId,
+        addOns: addOnsCsv,
+        organizationTrialId: organizationTrial.id,
+        sharedTrialEndsAt: organizationTrial.trialEndsAt.toISOString(),
+      },
       actorName: 'System',
     });
 
