@@ -1,7 +1,7 @@
 import {
-  addMoney,
+  isMoneyZero,
   serializeMoney,
-  toMoneyNumber,
+  sumMoneyDecimal,
   type MoneyInput,
   type MoneyWire,
 } from './money.util';
@@ -54,6 +54,8 @@ export type GuestCheckRunningTotalResult = {
 
 /**
  * Staff open-tab running total under Option A (ops container).
+ * Uses Prisma Decimal end-to-end for authoritative summation.
+ *
  * Mirrors finance-contract anti-double-count:
  * - Canceled orders ignored
  * - Linked play (`reservationId` set) never adds play amount
@@ -81,7 +83,7 @@ export function computeGuestCheckRunningTotal(
       amount: serializeMoney(o.total),
       excluded: false,
       reason:
-        toMoneyNumber(o.reservationFee) > 0
+        !isMoneyZero(o.reservationFee)
           ? 'reservationFee_embedded_in_order_total'
           : undefined,
     });
@@ -89,7 +91,7 @@ export function computeGuestCheckRunningTotal(
 
   for (const r of input.reservations) {
     const billed = r.billedAmount;
-    if (billed == null || toMoneyNumber(billed) === 0) {
+    if (billed == null || isMoneyZero(billed)) {
       lines.push({
         kind: 'FEE',
         sourceType: 'RESERVATION',
@@ -142,10 +144,10 @@ export function computeGuestCheckRunningTotal(
     });
   }
 
-  const menuTotal = addMoney(...menuParts);
-  const playTotal = addMoney(...playParts);
-  const reservationTotal = addMoney(...reservationParts);
-  const runningTotal = addMoney(menuTotal, playTotal, reservationTotal);
+  const menuTotal = sumMoneyDecimal(...menuParts);
+  const playTotal = sumMoneyDecimal(...playParts);
+  const reservationTotal = sumMoneyDecimal(...reservationParts);
+  const runningTotal = sumMoneyDecimal(menuTotal, playTotal, reservationTotal);
 
   return {
     runningTotal: serializeMoney(runningTotal),

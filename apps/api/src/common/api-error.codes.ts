@@ -14,9 +14,22 @@ export type ApiErrorCodeValue = (typeof ApiErrorCode)[keyof typeof ApiErrorCode]
 
 /**
  * Domain-specific codes (registry for integrators / OpenAPI).
- * Not all are wired at throw sites yet.
+ * Additive aliases preserve existing public codes while Chunk 01 establishes
+ * the cross-cutting taxonomy used by new mutation paths.
  */
 export const ApiDomainErrorCode = {
+  // Cross-cutting Chunk 01 taxonomy
+  VALIDATION_ERROR: 'VALIDATION_ERROR',
+  PERMISSION_DENIED: 'PERMISSION_DENIED',
+  STATE_CONFLICT: 'STATE_CONFLICT',
+  VERSION_CONFLICT: 'VERSION_CONFLICT',
+  IDEMPOTENCY_CONFLICT: 'IDEMPOTENCY_CONFLICT',
+  PROVIDER_UNAVAILABLE: 'PROVIDER_UNAVAILABLE',
+  PROVIDER_STATUS_UNKNOWN: 'PROVIDER_STATUS_UNKNOWN',
+  PAYMENT_DECLINED: 'PAYMENT_DECLINED',
+  COMPLIANCE_REQUIRED: 'COMPLIANCE_REQUIRED',
+  OFFLINE_UNSUPPORTED: 'OFFLINE_UNSUPPORTED',
+  RESOURCE_CONFLICT: 'RESOURCE_CONFLICT',
   // Booking
   RESERVATION_OVERLAP: 'RESERVATION_OVERLAP',
   WALK_IN_ACTIVE: 'WALK_IN_ACTIVE',
@@ -29,8 +42,7 @@ export const ApiDomainErrorCode = {
   MFA_REQUIRED: 'MFA_REQUIRED',
   MFA_INVALID: 'MFA_INVALID',
   VENUE_ACCESS_DENIED: 'VENUE_ACCESS_DENIED',
-  PERMISSION_DENIED: 'PERMISSION_DENIED',
-  // Commerce
+  // Commerce (legacy codes retained for compatibility)
   IDEMPOTENCY_PAYLOAD_MISMATCH: 'IDEMPOTENCY_PAYLOAD_MISMATCH',
   MENU_STOCK_INSUFFICIENT: 'MENU_STOCK_INSUFFICIENT',
   SHOP_ORDER_STATE: 'SHOP_ORDER_STATE',
@@ -69,7 +81,7 @@ const STATUS_TO_CODE: Partial<Record<number, ApiErrorCodeValue>> = {
 
 /**
  * Map HTTP status → stable envelope code.
- * Known 4xx use {@link ApiErrorCode}; 5xx → INTERNAL; others → `HTTP_<status>`.
+ * Known 4xx use ApiErrorCode; 5xx → INTERNAL; others → `HTTP_<status>`.
  */
 export function errorCodeForHttpStatus(status: number): string {
   if (status === HttpStatus.INTERNAL_SERVER_ERROR || status >= 500) {
@@ -77,4 +89,3 @@ export function errorCodeForHttpStatus(status: number): string {
   }
   return STATUS_TO_CODE[status] ?? `HTTP_${status}`;
 }
-
