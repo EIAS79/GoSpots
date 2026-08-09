@@ -34,6 +34,7 @@ import {
   PauseDto,
   SwitchProviderDto,
 } from './dto/billing.dto';
+import { TrialCheckoutGuard } from './guards/trial-checkout.guard';
 
 @ApiTags('billing')
 @Controller('billing')
@@ -167,9 +168,10 @@ export class BillingController {
 
   /**
    * Dual checkout when BILLING_ENABLED; otherwise Lemon (soft-gated).
+   * TrialCheckoutGuard guarantees a genuinely free trial for both paths.
    */
   @Post('checkout')
-  @UseGuards(JwtAuthGuard)
+  @UseGuards(JwtAuthGuard, TrialCheckoutGuard)
   checkout(
     @CurrentUser() user: JwtAccessPayload,
     @Body() dto: CheckoutDto,
