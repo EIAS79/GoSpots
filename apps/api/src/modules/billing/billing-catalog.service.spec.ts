@@ -79,9 +79,11 @@ describe('BillingCatalogService', () => {
     expect(quote.amountEur).toBe(expectedEur);
     expect(quote.amount).toBe(expectedEur);
     expect(quote.amountMinor).toBe(1700);
-    expect(rates.getRate).toHaveBeenCalledWith('EUR', 'EUR', {
-      forceRefresh: true,
-    });
+
+    // EUR is the canonical billing currency. The service deliberately
+    // short-circuits EUR->EUR instead of making an unnecessary FX dependency.
+    expect(rates.getRate).not.toHaveBeenCalled();
+    expect(rates.convertAmount).toHaveBeenCalledWith(expectedEur, 1);
   });
 
   it('prices team_accounts per seat and requires seatQuantity >= 1', async () => {
