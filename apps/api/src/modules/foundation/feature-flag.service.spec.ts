@@ -23,7 +23,7 @@ describe('FeatureFlagService', () => {
     return new FeatureFlagService(prisma, config);
   }
 
-  it('keeps feature rollout isolated by Shop', async () => {
+  it('keeps explicit feature overrides isolated by Shop', async () => {
     const flags = service({
       'shop-a:checkout_v2': true,
       'shop-b:checkout_v2': false,
@@ -37,7 +37,13 @@ describe('FeatureFlagService', () => {
     );
   });
 
-  it('defaults a missing production override to disabled', async () => {
+  it('defaults Checkout V2 to enabled when no Shop override exists', async () => {
+    await expect(
+      service({}).isFeatureEnabled('shop-a', 'checkout_v2'),
+    ).resolves.toBe(true);
+  });
+
+  it('still defaults non-product rollout flags to disabled in production', async () => {
     await expect(
       service({}).isFeatureEnabled('shop-a', 'payments_v1'),
     ).resolves.toBe(false);
