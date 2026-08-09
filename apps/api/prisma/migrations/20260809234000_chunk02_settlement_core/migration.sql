@@ -61,7 +61,7 @@ CREATE UNIQUE INDEX "GuestCheck_currentSettlementId_key"
 CREATE INDEX "GuestCheck_shopId_version_idx"
   ON "GuestCheck"("shopId", "version");
 
-CREATE UNIQUE INDEX "CheckSettlement_guestCheckId_sourceHash_key"
+CREATE INDEX "CheckSettlement_guestCheckId_sourceHash_idx"
   ON "CheckSettlement"("guestCheckId", "sourceHash");
 CREATE UNIQUE INDEX "CheckSettlement_guestCheckId_checkVersion_key"
   ON "CheckSettlement"("guestCheckId", "checkVersion");
