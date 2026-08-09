@@ -79,9 +79,10 @@ describe('BillingCatalogService', () => {
     expect(quote.amountEur).toBe(expectedEur);
     expect(quote.amount).toBe(expectedEur);
     expect(quote.amountMinor).toBe(1700);
-    expect(rates.getRate).toHaveBeenCalledWith('EUR', 'EUR', {
-      forceRefresh: true,
-    });
+    // EUR is the canonical catalog/billing currency, so resolveBillingRate uses
+    // the local 1:1 fast path instead of making an unnecessary FX request.
+    expect(quote.fxRate).toBe(1);
+    expect(rates.getRate).not.toHaveBeenCalled();
   });
 
   it('prices team_accounts per seat and requires seatQuantity >= 1', async () => {
