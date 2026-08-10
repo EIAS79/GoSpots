@@ -13,6 +13,7 @@
     "lint": "eslint",
     "typecheck": "tsc --noEmit",
     "test:checkout": "tsx --test src/components/checkout/checkout-presenter.test.tsx src/components/charts/chart-label.test.ts",
+    "test:offline": "tsx --test src/lib/offline-lite.test.ts",
     "i18n:check": "node scripts/i18n-check.mjs",
     "analyze": "next build",
     "perf:smoke": "node scripts/perf-smoke.mjs"
