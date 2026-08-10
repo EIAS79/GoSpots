@@ -14,7 +14,7 @@ function d(value: string | number) {
 }
 
 describe('CheckoutPaymentService', () => {
-  it('supports partial cash then manual-card remainder without finance duplication', async () => {
+  it('supports partial cash then manual-card remainder, links cash movement, and does not duplicate finance revenue', async () => {
     const settlement: any = {
       id: 'settlement-1',
       shopId: 'shop-1',
@@ -127,6 +127,10 @@ describe('CheckoutPaymentService', () => {
     const flags: any = { isFeatureEnabled: jest.fn().mockResolvedValue(true) };
     const outbox: any = { enqueue: jest.fn().mockResolvedValue(undefined) };
     const audit: any = { record: jest.fn().mockResolvedValue(undefined) };
+    const cash: any = {
+      requireSessionForCashPayment: jest.fn().mockResolvedValue('session-1'),
+      recordCashSale: jest.fn().mockResolvedValue({ id: 'movement-1' }),
+    };
     const service = new CheckoutPaymentService(
       prisma,
       flags,
@@ -134,6 +138,7 @@ describe('CheckoutPaymentService', () => {
       new SettlementStateService(),
       outbox,
       audit,
+      cash,
     );
     const actor = {
       sub: 'owner-1',
@@ -151,6 +156,17 @@ describe('CheckoutPaymentService', () => {
     expect(partial.state).toBe('PARTIALLY_PAID');
     expect(partial.amountDue).toBe('60.0000');
     expect(partial.guestCheckVersion).toBe(8);
+    expect(cash.requireSessionForCashPayment).toHaveBeenCalledTimes(1);
+    expect(cash.recordCashSale).toHaveBeenCalledTimes(1);
+    expect(cash.recordCashSale.mock.calls[0][1]).toMatchObject({
+      shopId: 'shop-1',
+      cashSessionId: 'session-1',
+      paymentId: 'payment-1',
+      currency: 'PLN',
+    });
+    expect(cash.recordCashSale.mock.calls[0][1].amount.toFixed(4)).toBe(
+      '40.0000',
+    );
 
     const complete = await service.createPayment(actor, settlement.id, {
       expectedCheckVersion: 8,
@@ -165,6 +181,8 @@ describe('CheckoutPaymentService', () => {
       CheckoutPaymentMethod.CASH,
       CheckoutPaymentMethod.MANUAL_CARD,
     ]);
+    expect(cash.requireSessionForCashPayment).toHaveBeenCalledTimes(1);
+    expect(cash.recordCashSale).toHaveBeenCalledTimes(1);
     expect(transactionCreate).not.toHaveBeenCalled();
     expect(ledgerEntryCreate).not.toHaveBeenCalled();
     expect(outbox.enqueue).toHaveBeenCalledTimes(2);
@@ -205,6 +223,10 @@ describe('CheckoutPaymentService', () => {
       $queryRaw: jest.fn(),
       checkSettlement: { findFirst: jest.fn().mockResolvedValue(settlement) },
     };
+    const cash: any = {
+      requireSessionForCashPayment: jest.fn().mockResolvedValue('session-1'),
+      recordCashSale: jest.fn(),
+    };
     const service = new CheckoutPaymentService(
       { $transaction: (fn: any) => fn(tx) } as any,
       { isFeatureEnabled: async () => true } as any,
@@ -212,6 +234,7 @@ describe('CheckoutPaymentService', () => {
       new SettlementStateService(),
       { enqueue: jest.fn() } as any,
       { record: jest.fn() } as any,
+      cash,
     );
     const actor = {
       sub: 'owner-1',
@@ -231,5 +254,6 @@ describe('CheckoutPaymentService', () => {
         ],
       }),
     ).rejects.toThrow(/Duplicate allocation/i);
+    expect(cash.recordCashSale).not.toHaveBeenCalled();
   });
 });

@@ -1,5 +1,6 @@
 import { Module } from '@nestjs/common';
 import { FinanceModule } from '../finance/finance.module';
+import { CashModule } from '../cash/cash.module';
 import { CheckoutController } from './checkout.controller';
 import { CheckoutService } from './checkout.service';
 import { ChargeCalculatorService } from './charge-calculator.service';
@@ -9,7 +10,7 @@ import { CheckoutPaymentService } from './checkout-payment.service';
 import { GuestCheckMergeService } from './guest-check-merge.service';
 
 @Module({
-  imports: [FinanceModule],
+  imports: [FinanceModule, CashModule],
   controllers: [CheckoutController],
   providers: [
     CheckoutService,
