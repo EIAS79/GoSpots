@@ -1,0 +1,30 @@
+name: Chunk 04 Prisma schema patch
+
+on:
+  push:
+    branches:
+      - feat/chunk04-split-merge-settlement
+
+permissions:
+  contents: write
+
+jobs:
+  patch-schema:
+    if: ${{ !contains(github.event.head_commit.message, '[schema-patch]') }}
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Patch Prisma schema
+        run: node .github/scripts/chunk04-schema-patch.mjs
+      - name: Commit schema patch
+        shell: bash
+        run: |
+          if git diff --quiet -- apps/api/prisma/schema.prisma; then
+            echo "Schema already patched"
+            exit 0
+          fi
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add apps/api/prisma/schema.prisma
+          git commit -m "Patch Prisma schema for Chunk 04 [schema-patch]"
+          git push
