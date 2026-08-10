@@ -3,6 +3,7 @@
 import type { ReactNode } from "react";
 import { AuroraBackground } from "@/components/effects/aurora-background";
 import { ScrollProgress } from "@/components/effects/scroll-progress";
+import { ServiceWorkerRegister } from "@/components/offline/service-worker-register";
 import { ThemeProvider } from "@/components/theme/theme-provider";
 import { ConnectivityProvider } from "@/lib/connectivity-context";
 import type { DomainPublicDefaults } from "@/lib/domain-defaults";
@@ -24,6 +25,7 @@ export function AppProviders({
       >
         <AuthProvider>
           <ConnectivityProvider>
+            <ServiceWorkerRegister />
             <AuroraBackground />
             <ScrollProgress />
             {children}
