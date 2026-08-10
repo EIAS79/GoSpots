@@ -61,6 +61,19 @@ describe('FeatureFlagService', () => {
     ).resolves.toBe(true);
   });
 
+  it('makes Chunk 05 cash sessions a product default with an isolated Shop kill switch', async () => {
+    await expect(
+      service({}).isFeatureEnabled('shop-a', 'cash_sessions'),
+    ).resolves.toBe(true);
+    const flags = service({ 'shop-a:cash_sessions': false });
+    await expect(flags.isFeatureEnabled('shop-a', 'cash_sessions')).resolves.toBe(
+      false,
+    );
+    await expect(flags.isFeatureEnabled('shop-b', 'cash_sessions')).resolves.toBe(
+      true,
+    );
+  });
+
   it('still defaults non-product rollout flags to disabled in production', async () => {
     await expect(
       service({}).isFeatureEnabled('shop-a', 'payments_v1'),
