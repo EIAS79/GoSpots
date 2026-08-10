@@ -3,6 +3,7 @@
 import { TenantPage } from "@/components/layout/tenant-page";
 import { AuthMfaPanel } from "@/components/settings/auth-mfa-panel";
 import { AuthSessionsPanel } from "@/components/settings/auth-sessions-panel";
+import { DeviceSettingsPanel } from "@/components/settings/device-settings-panel";
 import { MailOutboxPanel } from "@/components/settings/mail-outbox-panel";
 import { OpsOutageRunbookPanel } from "@/components/settings/ops-outage-runbook-panel";
 import { ShopSettingsPanel } from "@/components/settings/shop-settings-panel";
@@ -49,6 +50,7 @@ export default function SettingsPage() {
       ) : null}
       <div className="space-y-6">
         <ShopSettingsPanel canWrite={canWrite} />
+        <DeviceSettingsPanel canWrite={canWrite} />
         {showOwnerMfa || showStaffMfa ? <AuthMfaPanel /> : null}
         {state.status === "authed" ? <AuthSessionsPanel /> : null}
         {state.status === "authed" && isOwner ? <MailOutboxPanel /> : null}
