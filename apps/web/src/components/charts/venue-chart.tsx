@@ -14,6 +14,7 @@ import {
 } from "chart.js";
 import { Bar, Doughnut, Line } from "react-chartjs-2";
 import { useMemo } from "react";
+import { formatChartDayLabel } from "@/components/charts/chart-label";
 import { useVenueSettingsOptional } from "@/lib/venue-settings-context";
 
 ChartJS.register(
@@ -62,12 +63,6 @@ const baseOptions = {
   },
 };
 
-function formatDayLabel(day: string) {
-  if (day.length < 10) return day;
-  const d = new Date(day + "T12:00:00");
-  return d.toLocaleDateString(undefined, { weekday: "short", day: "numeric" });
-}
-
 export type ChartPoint = { label: string; value: number };
 
 export function VenueBarChart({
@@ -82,7 +77,7 @@ export function VenueBarChart({
   const vs = useVenueSettingsOptional();
   const chartData = useMemo(
     () => ({
-      labels: data.map((d) => formatDayLabel(d.label)),
+      labels: data.map((d) => formatChartDayLabel(d.label)),
       datasets: [
         {
           label,
@@ -123,7 +118,7 @@ export function VenueLineChart({
   const vs = useVenueSettingsOptional();
   const chartData = useMemo(
     () => ({
-      labels: data.map((d) => formatDayLabel(d.label)),
+      labels: data.map((d) => formatChartDayLabel(d.label)),
       datasets: [
         {
           label,
@@ -164,7 +159,7 @@ export function VenueMultiBarChart({
 }) {
   const chartData = useMemo(
     () => ({
-      labels: labels.map(formatDayLabel),
+      labels: labels.map((label) => formatChartDayLabel(label)),
       datasets: datasets.map((ds) => ({
         label: ds.label,
         data: ds.data,
