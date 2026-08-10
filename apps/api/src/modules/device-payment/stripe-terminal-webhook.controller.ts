@@ -3,9 +3,9 @@ import {
   Controller,
   Headers,
   Post,
-  RawBodyRequest,
   Req,
 } from '@nestjs/common';
+import type { RawBodyRequest } from '@nestjs/common';
 import { ApiTags } from '@nestjs/swagger';
 import { createHash } from 'crypto';
 import type { Request } from 'express';
@@ -14,20 +14,14 @@ import { PrismaService } from '../../prisma/prisma.service';
 import { StripeTerminalConnector } from './connectors/stripe-terminal.connector';
 import { PaymentDomainService } from './payment-domain.service';
 
-function webhookState(event: Stripe.Event):
-  | 'CAPTURED'
-  | 'AUTHORIZED'
-  | 'PROCESSING'
-  | 'FAILED'
-  | 'CANCELED'
-  | null {
+function webhookState(
+  event: Stripe.Event,
+): 'CAPTURED' | 'AUTHORIZED' | 'FAILED' | 'CANCELED' | null {
   switch (event.type) {
     case 'payment_intent.succeeded':
       return 'CAPTURED';
     case 'payment_intent.amount_capturable_updated':
       return 'AUTHORIZED';
-    case 'payment_intent.processing':
-      return 'PROCESSING';
     case 'payment_intent.payment_failed':
       return 'FAILED';
     case 'payment_intent.canceled':
@@ -54,7 +48,9 @@ export class StripeTerminalWebhookController {
     if (!request.rawBody?.length) {
       throw new BadRequestException('Raw Stripe webhook body is required');
     }
-    if (!signature) throw new BadRequestException('Stripe-Signature header is required');
+    if (!signature) {
+      throw new BadRequestException('Stripe-Signature header is required');
+    }
 
     let event: Stripe.Event;
     try {
@@ -64,12 +60,17 @@ export class StripeTerminalWebhookController {
     }
 
     const state = webhookState(event);
-    if (!state || !event.data?.object || typeof event.data.object !== 'object') {
+    if (
+      !state ||
+      !event.data?.object ||
+      typeof event.data.object !== 'object'
+    ) {
       return { received: true, applied: false };
     }
-    const providerPaymentId = 'id' in event.data.object && typeof event.data.object.id === 'string'
-      ? event.data.object.id
-      : null;
+    const providerPaymentId =
+      'id' in event.data.object && typeof event.data.object.id === 'string'
+        ? event.data.object.id
+        : null;
     if (!providerPaymentId) return { received: true, applied: false };
 
     const operation = await this.prisma.paymentOperation.findFirst({
