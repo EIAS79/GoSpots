@@ -20,7 +20,9 @@ import type {
 const RECEIPT_SCOPE = 'offline.sync.v1';
 
 function canonicalJson(value: unknown): string {
-  if (value === null || typeof value !== 'object') return JSON.stringify(value);
+  if (value === null || typeof value !== 'object') {
+    return JSON.stringify(value) ?? 'null';
+  }
   if (Array.isArray(value)) return `[${value.map(canonicalJson).join(',')}]`;
   const record = value as Record<string, unknown>;
   return `{${Object.keys(record)
@@ -136,7 +138,12 @@ export class OfflineSyncService {
     }
     const current = await tx.guestCheck.findFirst({
       where: { id: dto.entityId, shopId },
-      select: { id: true, version: true, status: true },
+      select: {
+        id: true,
+        version: true,
+        status: true,
+        currentSettlementId: true,
+      },
     });
     if (!current) throw new BadRequestException('Guest check not found');
     if (current.status !== 'OPEN') {
@@ -144,6 +151,17 @@ export class OfflineSyncService {
         ApiDomainErrorCode.STATE_CONFLICT,
         'Guest check is no longer open',
         { entityId: dto.entityId, status: current.status, currentVersion: current.version },
+      );
+    }
+    if (current.currentSettlementId) {
+      throw apiConflictException(
+        ApiDomainErrorCode.STATE_CONFLICT,
+        'Guest check settlement already started; offline edits cannot change it',
+        {
+          entityId: dto.entityId,
+          currentVersion: current.version,
+          currentSettlementId: current.currentSettlementId,
+        },
       );
     }
     if (current.version !== dto.expectedVersion) {
@@ -160,7 +178,6 @@ export class OfflineSyncService {
 
     const p = dto.payload;
     const data: Prisma.GuestCheckUpdateManyMutationInput = {
-      currentSettlementId: null,
       version: { increment: 1 },
     };
     if ('guestName' in p) data.guestName = trimmedString(p.guestName, 'guestName', 120);
@@ -176,6 +193,7 @@ export class OfflineSyncService {
         shopId,
         status: 'OPEN',
         version: dto.expectedVersion,
+        currentSettlementId: null,
       },
       data,
     });
