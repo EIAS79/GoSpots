@@ -57,14 +57,15 @@ jobs:
         shell: bash
         run: |
           set +e
-          pnpm run build 2>&1 | tee /tmp/api-build.log
+          NO_COLOR=1 FORCE_COLOR=0 pnpm exec tsc -p tsconfig.build.json --noEmit --pretty false 2>&1 | tee /tmp/api-tsc.log
           code=${PIPESTATUS[0]}
           if [ "$code" -ne 0 ]; then
             while IFS= read -r line; do
-              echo "::error title=API compiler::$line"
-            done < <(grep -E "error TS|src/.*:[0-9]+:[0-9]+" /tmp/api-build.log | head -40)
+              printf '::error title=API compiler::%s\n' "$line"
+            done < /tmp/api-tsc.log
+            exit "$code"
           fi
-          exit "$code"
+          pnpm run build
         env:
           DATABASE_URL: postgresql://ci:ci@localhost:5432/ci?schema=public
 
