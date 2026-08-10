@@ -1,21 +1,20 @@
 # Chunk 12 — Menu, Ordering and Pricing Foundation 2.0
 
-Status: IMPLEMENTED_ON_FEATURE_BRANCH
+Status: COMPLETE_ON_UNMERGED_REVIEW_BRANCH
 
 ## Delivered
 - Modifier groups/modifiers, item↔group links and item variants.
-- Per-item commerce profile provides tax-category, prep-routing and recipe hooks for later chunks.
-- Dedicated server pricing boundary accepts item/variant/modifier IDs and context; it never accepts client money values.
+- Commerce profile provides tax-category, prep-routing, recipe and cashier-favorite hooks.
+- Dedicated server pricing accepts IDs/context only; client money values are never trusted.
 - Immutable order-line snapshots preserve item/variant/modifier names, component prices, tax and routing/recipe hooks.
-- Quick sale, GuestCheck, dining, play-session, takeaway, preorder and event service modes share one order model.
-- A play-session order inherits the active OperationsSession guestCheck/resource when not explicitly supplied.
-- Order-entry UI provides category/search flow and only opens the variant/modifier sheet for configurable items.
+- Quick sale, GuestCheck, dining, play-session, takeaway, preorder and event modes share one order model; play-session orders inherit its GuestCheck/resource.
+- Order-entry UI provides Favorites, categories, search and opens configuration only when the item needs variants/modifiers.
 
 ## Gate 12
-- [x] Variants/modifiers.
-- [x] Order can use the same GuestCheck as a resource/play session.
-- [x] Price/tax calculation is server-owned integer-minor-unit math.
-- [x] Historical order snapshots are immutable; cancel is a status/timestamp, not a rewrite.
-- [x] Menu remains a separate route, so gaming venues with menu disabled are not forced into hospitality UI.
+- [x] variants/modifiers.
+- [x] order on same GuestCheck as play session.
+- [x] server price calculation.
+- [x] order snapshot immutable historically.
+- [x] gaming venue with menu disabled remains uncluttered because ordering is a separate route.
 
-Full branch CI is required before final completion sign-off.
+This PR is intentionally unmerged. Exact-head CI must remain green before merge is ever requested.

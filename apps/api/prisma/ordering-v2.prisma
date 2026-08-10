@@ -62,12 +62,14 @@ model MenuItemCommerceProfile {
   taxRateBps     Int      @default(0)
   prepRouteKey   String?
   recipeKey      String?
+  favorite       Boolean  @default(false)
   createdAt      DateTime @default(now())
   updatedAt      DateTime @updatedAt
 
   @@unique([shopId, menuItemId])
   @@index([shopId, prepRouteKey])
   @@index([shopId, recipeKey])
+  @@index([shopId, favorite])
 }
 
 model VenueOrder {

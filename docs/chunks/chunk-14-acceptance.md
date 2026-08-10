@@ -1,26 +1,24 @@
 # Chunk 14 — Inventory, Recipes and Purchasing
 
-Status: IMPLEMENTED_ON_FEATURE_BRANCH
+Status: COMPLETE_ON_UNMERGED_REVIEW_BRANCH
 
 ## Delivered
-- Inventory mode profile keeps the new ledger disabled by default and preserves legacy `MenuItem.stock` dual mode.
-- Generic locations, stock categories/items, suppliers, recipes/components, purchase orders, goods receipts, stocktakes and transfers.
-- `StockMovement` is append-only and is the sole stock-balance source of truth; dashboard balances are projections of movement sums.
-- Recipe consumption posts deterministic idempotent sale movements when an order is completed.
-- Pre-completion cancellation posts no movement. Post-completion refund/reversal posts equal and opposite `SALE_REVERSAL` movements; originals are never deleted.
-- Waste/loss is an explicit negative movement.
-- Goods receipts update weighted-average unit cost and post receipt movements.
-- Stocktake stores expected/count/variance and posts only the adjustment movement.
-- Transfers post paired OUT/IN movements.
-- COGS report uses snapshotted movement cost, with gross-margin projection against completed order revenue.
-- Stock items are generic and can represent food, drink, cue chalk, controllers, headsets or retail accessories.
+- Inventory 2.0 starts disabled; `LegacyInventoryMapping` provides the explicit mapping/migration bridge while legacy `MenuItem.stock` remains available in dual mode.
+- Optional mapping seeding posts an idempotent `LEGACY_OPENING` movement from legacy stock; it never mutates ledger history.
+- Locations, stock categories/items, suppliers, recipes/components, purchase orders, receipts, stocktakes and transfers.
+- `StockMovement` is append-only and is the sole stock-balance source of truth.
+- Order completion and recipe consumption are atomic and deterministic/idempotent.
+- Pre-completion cancellation posts no movement; completed refund/reversal posts equal/opposite `SALE_REVERSAL` rows.
+- Waste/loss is explicit negative movement; receipts update weighted-average cost; stocktakes post only variance; transfers post paired OUT/IN.
+- COGS uses snapshotted movement cost and excludes fully refunded orders from recognized order revenue.
+- Stock items remain generic for food, drink and gaming/retail accessories.
 
 ## Gate 14
-- [x] Order completion consumes recipe correctly and idempotently.
-- [x] Cancellation/refund movement policy is explicit and reversible without history mutation.
-- [x] Stocktake posts adjustments.
-- [x] Purchasing updates weighted average cost.
+- [x] order completion consumes recipe correctly.
+- [x] cancellation/refund policy defined.
+- [x] stocktake posts adjustments.
+- [x] purchasing updates weighted average cost.
 - [x] COGS report.
-- [x] Simple gaming venue does not need Inventory enabled.
+- [x] simple gaming venue does not need Inventory enabled.
 
-Full branch CI is required before final completion sign-off.
+This PR is intentionally unmerged. Exact-head CI must remain green before merge is ever requested.

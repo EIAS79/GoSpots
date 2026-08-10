@@ -1,31 +1,22 @@
 # Chunk 11 — Operations Workspace + Resource Engine 2.0
 
-Status: IMPLEMENTED_ON_FEATURE_BRANCH
+Status: COMPLETE_ON_UNMERGED_REVIEW_BRANCH
 
 ## Scope delivered
-
 - Unified Operations route with Floor, Visits, Reservations, Orders and Activity tabs.
-- Live resource cards expose active time context, accrued snapshot-priced amount, next reservation, maintenance and attached check.
-- State-machine commands: start, pause (with reason), resume, move, finish, attach guest check.
-- Session groups and resource-link history support multi-resource/group workflows without mutating historical billing.
-- Rate plan snapshot captures hourly/overtime rates, rounding, minimum, cap and membership hook at session start.
-- Resource moves retain the original rate snapshot; pause intervals are excluded from billed time.
-- Maintenance periods and state events make resource state auditable.
-- PostgreSQL advisory transaction locks prevent concurrent starts/moves onto the same resource.
-- The engine uses existing generic Resource types, so billiards and bowling lanes follow the same code path.
+- Live resource cards expose active time, accrued snapshot-priced amount, next reservation, maintenance and attached check.
+- State-machine commands: start, pause/reason, resume, move, finish and attach GuestCheck.
+- Session groups, grouped-session UI and resource-link history support multi-resource workflows without historical repricing.
+- Section availability is visible directly on the Floor.
+- Rate snapshots capture hourly/overtime, rounding, minimum, cap and membership hook at session start; moves retain the snapshot and pauses remove paused time.
+- Maintenance/state events are auditable; PostgreSQL advisory locks protect concurrent starts/moves.
+- Existing generic Resource types keep billiards and bowling on the same code path.
 
 ## Gate 11
+- [x] gaming worker can run shift mostly from Operations.
+- [x] move/pause preserves billing.
+- [x] resource state matches reservation/session.
+- [x] multi-venue navigation adapts through `[venuePath]`.
+- [x] common operation is one primary card action; grouped start is selectable from the same Floor.
 
-- [x] Gaming worker can run the core shift lifecycle mostly from Operations.
-- [x] Move/pause preserves billing via immutable session rate snapshots and pause accounting.
-- [x] Resource state is projected from maintenance, active session and reservation state.
-- [x] Multi-venue navigation adapts through the existing `[venuePath]` tenant route/context.
-- [x] Start/pause/resume/finish are one primary action from a resource card; move is one action to an available resource.
-
-## Validation
-
-`operations.service.spec.ts` covers pause exclusion, rate rounding/minimum/cap and overtime snapshot math. Full branch CI is required before final completion sign-off.
-
-## Non-goals preserved
-
-No inventory recipes, loyalty or events are implemented in this chunk. Edge remains prohibited from local money/compliance mutations; Resource Engine events are cloud-authoritative until a later explicit Edge command extension is reviewed.
+This PR is intentionally unmerged. Exact-head CI must remain green before merge is ever requested.

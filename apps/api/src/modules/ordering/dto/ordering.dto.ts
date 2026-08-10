@@ -31,6 +31,7 @@ export class UpsertCommerceProfileDto {
   @IsOptional() @Type(() => Number) @IsInt() @Min(0) @Max(10000) taxRateBps?: number;
   @IsOptional() @IsString() prepRouteKey?: string;
   @IsOptional() @IsString() recipeKey?: string;
+  @IsOptional() @IsBoolean() favorite?: boolean;
 }
 export class OrderLineInputDto {
   @IsString() menuItemId!: string;

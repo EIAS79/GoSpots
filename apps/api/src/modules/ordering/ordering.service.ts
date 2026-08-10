@@ -1,5 +1,4 @@
 import { ConflictException, Injectable, NotFoundException } from '@nestjs/common';
-import { Prisma } from '@prisma/client';
 import { requireShopId } from '../../common/tenant';
 import { PrismaService } from '../../prisma/prisma.service';
 import { AuditService } from '../audit/audit.service';
@@ -46,7 +45,11 @@ export class OrderingService {
   }
   async upsertProfile(actor: JwtAccessPayload, dto: UpsertCommerceProfileDto) {
     const shopId = requireShopId(actor); await this.requireMenuItem(shopId, dto.menuItemId);
-    return this.prisma.menuItemCommerceProfile.upsert({ where: { shopId_menuItemId: { shopId, menuItemId: dto.menuItemId } }, create: { shopId, menuItemId: dto.menuItemId, taxCategoryKey: dto.taxCategoryKey, taxRateBps: dto.taxRateBps ?? 0, prepRouteKey: dto.prepRouteKey, recipeKey: dto.recipeKey }, update: { taxCategoryKey: dto.taxCategoryKey, taxRateBps: dto.taxRateBps ?? 0, prepRouteKey: dto.prepRouteKey, recipeKey: dto.recipeKey } });
+    return this.prisma.menuItemCommerceProfile.upsert({
+      where: { shopId_menuItemId: { shopId, menuItemId: dto.menuItemId } },
+      create: { shopId, menuItemId: dto.menuItemId, taxCategoryKey: dto.taxCategoryKey, taxRateBps: dto.taxRateBps ?? 0, prepRouteKey: dto.prepRouteKey, recipeKey: dto.recipeKey, favorite: dto.favorite ?? false },
+      update: { taxCategoryKey: dto.taxCategoryKey, taxRateBps: dto.taxRateBps, prepRouteKey: dto.prepRouteKey, recipeKey: dto.recipeKey, favorite: dto.favorite },
+    });
   }
 
   async createOrder(actor: JwtAccessPayload, dto: CreateVenueOrderDto) {

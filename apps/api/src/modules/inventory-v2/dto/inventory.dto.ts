@@ -15,3 +15,4 @@ export class StocktakeLineDto { @IsString() stockItemId!:string; @Type(()=>Numbe
 export class PostStocktakeDto { @IsString() locationId!:string; @ValidateNested({each:true}) @Type(()=>StocktakeLineDto) @IsArray() @ArrayMinSize(1) lines!:StocktakeLineDto[]; }
 export class TransferDto { @IsString() stockItemId!:string; @IsString() fromLocationId!:string; @IsString() toLocationId!:string; @Type(()=>Number) @IsInt() @Min(1) quantityMilli!:number; }
 export class ReverseConsumptionDto { @IsString() reason!:string; }
+export class CreateLegacyInventoryMappingDto { @IsString() menuItemId!:string; @IsString() stockItemId!:string; @IsOptional() @IsString() locationId?:string; @IsOptional() @IsBoolean() seedOpeningBalance?:boolean; }

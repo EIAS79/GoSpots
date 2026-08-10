@@ -1,0 +1,16 @@
+// Chunk 14 staged migration bridge from legacy MenuItem.stock.
+model LegacyInventoryMapping {
+  id          String   @id @default(cuid())
+  shopId      String
+  menuItemId  String
+  stockItemId String
+  locationId  String?
+  migratedAt  DateTime?
+  createdById String
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@unique([shopId, menuItemId])
+  @@index([shopId, stockItemId])
+  @@index([shopId, migratedAt])
+}

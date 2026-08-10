@@ -1,22 +1,22 @@
 # Chunk 13 — KDS / Production
 
-Status: IMPLEMENTED_ON_FEATURE_BRANCH
+Status: COMPLETE_ON_UNMERGED_REVIEW_BRANCH
 
 ## Delivered
 - Prep stations (kitchen/bar/dessert/other), route keys, tickets, ticket lines, status history and display-device registry.
-- Order snapshots carry `prepRouteKey`; KDS deterministically materializes station tickets from open/sent orders and idempotently upserts lines.
+- Immutable order snapshots carry `prepRouteKey`; KDS deterministically materializes station tickets and idempotently routes lines.
 - Core state machine: NEW → PREPARING → READY → COLLECTED, with CANCELED from active states.
-- Line-level cancellation propagates back to the immutable order line as cancellation metadata, never a price rewrite.
-- Ticket status is projected from line states and includes age/preparation timing metrics.
-- Dedicated full-screen touch route `/kds/[venuePath]` avoids dashboard chrome; primary ticket progress is one large touch action.
-- Authenticated SSE endpoint `/kitchen/stream` is available; KDS also uses resilient 2-second polling because browser EventSource cannot attach the tenant header.
-- Edge-safe KDS projection intentionally excludes money/payment/fiscal/KSeF data; unit test protects this boundary.
+- Line-level cancellation propagates cancellation metadata back to the order line without repricing history.
+- Ticket projection exposes age/preparation metrics and backend-generated READY/OVERDUE alert notifications based on station targets.
+- Dedicated full-screen touch route shows alert counts and highlights ready/overdue tickets; primary progress is one large touch action.
+- Authenticated SSE endpoint is available with resilient 2-second polling fallback for tenant-header browser constraints.
+- Edge-safe KDS projection excludes money/payment/fiscal/KSeF data; tests protect the boundary and alert projection.
 
 ## Gate 13
-- [x] Kitchen and bar routing via station kind + `prepRouteKey`.
-- [x] Line-level cancellation.
-- [x] Timing metrics.
+- [x] kitchen and bar routing.
+- [x] line-level cancellation.
+- [x] timing metrics and production alerts.
 - [x] KDS usable touch-only.
 - [x] Edge-enabled offline relay scenario represented/tested as a non-financial projection; local financial/compliance mutations remain prohibited.
 
-Full branch CI is required before final completion sign-off.
+This PR is intentionally unmerged. Exact-head CI must remain green before merge is ever requested.
