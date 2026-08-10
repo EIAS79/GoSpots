@@ -1,0 +1,12 @@
+{
+  "name": "@gospots/edge",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "engines": { "node": "24.x" },
+  "scripts": {
+    "start": "node src/server.js",
+    "build": "node --check src/canonical.js && node --check src/crypto.js && node --check src/store.js && node --check src/cloud-client.js && node --check src/hub.js && node --check src/server.js",
+    "test": "node --test test/*.test.js"
+  }
+}

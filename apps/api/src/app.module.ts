@@ -35,6 +35,7 @@ import { CashModule } from './modules/cash/cash.module';
 import { DevicePaymentModule } from './modules/device-payment/device-payment.module';
 import { ComplianceModule } from './modules/compliance/compliance.module';
 import { OfflineSyncModule } from './modules/offline-sync/offline-sync.module';
+import { EdgeHubModule } from './modules/edge-hub/edge-hub.module';
 import { StaffApprovalsModule } from './modules/staff-approvals/staff-approvals.module';
 import { VenueContextInterceptor } from './common/venue-context.interceptor';
 import { TenantRlsInterceptor } from './common/tenant-rls.interceptor';
@@ -104,6 +105,7 @@ import { RolesGuard } from './modules/auth/guards/roles.guard';
     DevicePaymentModule,
     ComplianceModule,
     OfflineSyncModule,
+    EdgeHubModule,
     StaffApprovalsModule,
     HealthModule,
     MetricsModule,

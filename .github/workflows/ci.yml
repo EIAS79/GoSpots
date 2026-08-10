@@ -144,3 +144,22 @@ jobs:
       - name: Build
         if: ${{ always() }}
         run: pnpm run build
+
+  edge:
+    name: Edge Hub test · build
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    defaults:
+      run:
+        working-directory: apps/edge
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+      - name: Test
+        run: node --test test/*.test.js
+      - name: Build
+        run: node --check src/canonical.js && node --check src/crypto.js && node --check src/store.js && node --check src/cloud-client.js && node --check src/hub.js && node --check src/server.js
