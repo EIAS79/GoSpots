@@ -1,0 +1,138 @@
+enum ComplianceDocumentKind {
+  RECEIPT
+  INVOICE
+  CORRECTION
+  REFUND
+}
+
+enum ComplianceDocumentState {
+  DRAFT
+  PENDING
+  SUBMITTED
+  ACCEPTED
+  REJECTED
+  UNKNOWN
+  DISABLED
+}
+
+enum ComplianceRequestState {
+  CREATED
+  SENDING
+  SUBMITTED
+  SUCCEEDED
+  FAILED
+  UNKNOWN
+}
+
+enum ComplianceProofType {
+  KSEF_REFERENCE
+  KSEF_NUMBER
+  UPO
+  FISCAL_RECEIPT
+  OTHER
+}
+
+/// Immutable fiscal/compliance snapshot. Corrections and refunds create children;
+/// an accepted original document is never overwritten or deleted by the workflow.
+model ComplianceDocument {
+  id                String                  @id @default(cuid())
+  shopId            String
+  jurisdiction      String
+  kind              ComplianceDocumentKind
+  state             ComplianceDocumentState @default(DRAFT)
+  sourceType        String
+  sourceId          String
+  sourceVersion     Int                     @default(1)
+  parentDocumentId  String?
+  parentDocument    ComplianceDocument?     @relation("ComplianceLineage", fields: [parentDocumentId], references: [id], onDelete: Restrict)
+  childDocuments    ComplianceDocument[]    @relation("ComplianceLineage")
+  documentNumber    String?
+  issueDate         DateTime
+  currency          String
+  netAmount         Decimal                 @db.Decimal(19, 4)
+  taxAmount         Decimal                 @db.Decimal(19, 4)
+  grossAmount       Decimal                 @db.Decimal(19, 4)
+  taxSummary        Json?
+  payloadHash       String
+  payloadXml        String?
+  externalSystem    String?
+  externalReference String?
+  ksefNumber        String?
+  createdById       String?
+  acceptedAt        DateTime?
+  rejectedAt        DateTime?
+  createdAt         DateTime                @default(now())
+  updatedAt         DateTime                @updatedAt
+  requests          ComplianceRequest[]
+  events            ComplianceEvent[]
+  proofs            ComplianceProof[]
+
+  @@unique([shopId, jurisdiction, kind, sourceType, sourceId, sourceVersion])
+  @@index([shopId, state, createdAt])
+  @@index([shopId, parentDocumentId])
+  @@index([shopId, externalSystem, externalReference])
+  @@index([shopId, ksefNumber])
+}
+
+/// Durable external-compliance operation. Idempotency is persisted before the
+/// remote call so retries/reconciliation cannot accidentally submit twice.
+model ComplianceRequest {
+  id                String                 @id @default(cuid())
+  shopId            String
+  documentId        String
+  document          ComplianceDocument     @relation(fields: [documentId], references: [id], onDelete: Restrict)
+  adapter           String
+  operation         String
+  idempotencyKey    String
+  requestHash       String
+  state             ComplianceRequestState @default(CREATED)
+  externalReference String?
+  attemptCount      Int                    @default(0)
+  errorCode         String?
+  errorMessage      String?
+  responseHash      String?
+  reconciliationRequired Boolean           @default(false)
+  lastAttemptAt     DateTime?
+  retryAt           DateTime?
+  createdAt         DateTime               @default(now())
+  updatedAt         DateTime               @updatedAt
+
+  @@unique([shopId, adapter, idempotencyKey])
+  @@index([shopId, state, createdAt])
+  @@index([shopId, documentId, createdAt])
+  @@index([shopId, externalReference])
+}
+
+/// Append-only compliance event/proof metadata. Application code only inserts.
+model ComplianceEvent {
+  id            String             @id @default(cuid())
+  shopId        String
+  documentId    String
+  document      ComplianceDocument @relation(fields: [documentId], references: [id], onDelete: Restrict)
+  eventType     String
+  payloadHash   String
+  payload       Json?
+  correlationId String?
+  createdAt     DateTime           @default(now())
+
+  @@index([shopId, documentId, createdAt])
+  @@index([shopId, eventType, createdAt])
+}
+
+/// Immutable external evidence: KSeF references/numbers, UPO, fiscal receipt proof.
+model ComplianceProof {
+  id                String              @id @default(cuid())
+  shopId            String
+  documentId        String
+  document          ComplianceDocument  @relation(fields: [documentId], references: [id], onDelete: Restrict)
+  type              ComplianceProofType
+  externalReference String?
+  contentHash       String
+  content           String?
+  metadata          Json?
+  createdAt         DateTime            @default(now())
+
+  @@unique([shopId, documentId, type, contentHash])
+  @@index([shopId, documentId, createdAt])
+  @@index([shopId, externalReference])
+}
