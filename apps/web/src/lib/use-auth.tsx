@@ -14,6 +14,7 @@ import {
   registerAuthGuestHandler,
 } from "./auth-session";
 import { clearCachedCsrfToken } from "./csrf";
+import { purgeAllOfflineLiteEntitlements } from "./offline-entitlement";
 import { purgeAllOfflineData } from "./offline-outbox";
 import {
   type AuthUser,
@@ -36,6 +37,11 @@ interface AuthCtx {
 }
 
 const AuthContext = createContext<AuthCtx | null>(null);
+
+async function purgeOfflineSessionData() {
+  purgeAllOfflineLiteEntitlements();
+  await purgeAllOfflineData().catch(() => undefined);
+}
 
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [state, setState] = useState<State>({ status: "loading", user: null });
@@ -66,14 +72,14 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       await apiLogout();
     } finally {
       clearCachedCsrfToken();
-      await purgeAllOfflineData().catch(() => undefined);
+      await purgeOfflineSessionData();
       setState({ status: "guest", user: null });
     }
   }, []);
 
   useEffect(() => {
     return registerAuthGuestHandler(() => {
-      void purgeAllOfflineData().finally(() => {
+      void purgeOfflineSessionData().finally(() => {
         setState({ status: "guest", user: null });
       });
     });
@@ -97,7 +103,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       } catch (err) {
         if (err instanceof ApiError && err.code === "SESSION_REVOKED") {
           notifySessionRevoked();
-          await purgeAllOfflineData().catch(() => undefined);
+          await purgeOfflineSessionData();
           setState({ status: "guest", user: null });
         }
       }
