@@ -1,6 +1,6 @@
 # Chunk 05 — Cash Drawer and Shift Reconciliation
 
-Status: **COMPLETE — pending final branch CI / merge**
+Status: **COMPLETE**
 
 Depends on: Chunk 04 payment/allocation settlement.
 
