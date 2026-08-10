@@ -50,14 +50,20 @@ function cacheableStatic(request, url) {
   );
 }
 
+async function replacePrivateNavigation(request, response) {
+  const cache = await caches.open(PRIVATE_NAV_CACHE);
+  const previous = await cache.keys();
+  await Promise.all(previous.map((key) => cache.delete(key)));
+  await cache.put(request, response);
+}
+
 self.addEventListener("fetch", (event) => {
   const request = event.request;
   const url = new URL(request.url);
 
   // Never cache API responses. Tenant operational data lives in the explicit
-  // user+Shop IndexedDB namespace. Only the already-open dashboard HTML shell
-  // may be cached, and the app purges that private navigation cache on logout,
-  // session revocation and venue switch.
+  // user+Shop IndexedDB namespace. Only the most recently opened dashboard HTML
+  // shell is retained; logout/revocation purges it.
   if (isApiRequest(url) || request.method !== "GET") return;
 
   if (request.mode === "navigate" && url.origin === self.location.origin) {
@@ -67,7 +73,7 @@ self.addEventListener("fetch", (event) => {
           const response = await fetch(request);
           if (response.ok && isDashboardNavigation(url)) {
             const copy = response.clone();
-            void caches.open(PRIVATE_NAV_CACHE).then((cache) => cache.put(request, copy));
+            void replacePrivateNavigation(request, copy);
           }
           return response;
         } catch {
