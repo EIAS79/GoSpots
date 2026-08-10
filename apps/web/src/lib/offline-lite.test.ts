@@ -42,9 +42,35 @@ test("elapsed timers are derived locally from startedAt instead of server ticks"
   assert.equal(formatElapsed(started, now), "01:02:03");
 });
 
-test("service worker never cache-intercepts API requests", async () => {
+test("service worker never cache-intercepts API requests and keeps one private dashboard shell", async () => {
   const source = await readFile(new URL("../../public/sw.js", import.meta.url), "utf8");
   assert.match(source, /url\.pathname\.startsWith\("\/api\/"\)/);
   assert.match(source, /if \(isApiRequest\(url\) \|\| request\.method !== "GET"\) return;/);
+  assert.match(source, /PRIVATE_NAV_CACHE/);
+  assert.match(source, /replacePrivateNavigation/);
+  assert.match(source, /previous\.map\(\(key\) => cache\.delete\(key\)\)/);
   assert.match(source, /_next\/static/);
+});
+
+test("hard-refresh WAN recovery uses credential-free auth and venue snapshots", async () => {
+  const auth = await readFile(new URL("./use-auth.tsx", import.meta.url), "utf8");
+  const gate = await readFile(
+    new URL("../components/layout/venue-gate.tsx", import.meta.url),
+    "utf8",
+  );
+  assert.match(auth, /readOfflineAuthSnapshot/);
+  assert.match(auth, /err\.status === 0/);
+  assert.match(gate, /readOfflineShopSnapshot/);
+  assert.match(gate, /requestError\.status === 0/);
+  assert.match(gate, /offlineLiteEnabledFor/);
+});
+
+test("an ambiguous online GuestCheck mutation is not converted into a second local create", async () => {
+  const source = await readFile(new URL("./guest-check-client.ts", import.meta.url), "utf8");
+  const createStart = source.indexOf("export async function createGuestCheck");
+  const updateStart = source.indexOf("export async function updateGuestCheck", createStart);
+  assert.ok(createStart >= 0 && updateStart > createStart);
+  const createBlock = source.slice(createStart, updateStart);
+  assert.doesNotMatch(createBlock, /catch\s*\(/);
+  assert.match(createBlock, /if \(offlineNow\(\)\) return createGuestCheckOffline/);
 });
