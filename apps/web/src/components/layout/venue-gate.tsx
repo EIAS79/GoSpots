@@ -3,7 +3,7 @@
 import { Loader2 } from "lucide-react";
 import { useParams, usePathname, useRouter } from "next/navigation";
 import { useEffect, useState, type ReactNode } from "react";
-import { api } from "@/lib/api";
+import { api, ApiError } from "@/lib/api";
 import {
   dashboardBase,
   dashboardHref,
@@ -12,6 +12,11 @@ import {
   venuePathHasSecret,
 } from "@/lib/venue-dashboard";
 import { translate } from "@/lib/i18n";
+import { offlineLiteEnabledFor } from "@/lib/offline-entitlement";
+import {
+  readOfflineShopSnapshot,
+  saveOfflineShopSnapshot,
+} from "@/lib/offline-shell-snapshot";
 import type { ShopSettings } from "@/lib/shop-settings-client";
 import { VenuePathProvider } from "@/lib/venue-context";
 import {
@@ -57,8 +62,6 @@ export function VenueGate({ children }: { children: ReactNode }) {
 
     const bindPath = toPublicVenuePath(venuePath);
 
-    // Drop dashboard key from the address bar after we can resolve it from membership.
-    // Middleware usually redirects first; this covers client navigations that still carry a secret segment.
     if (venuePathHasSecret(venuePath)) {
       const publicPath = bindPath;
       const prefix = `/dashboard/${venuePath}`;
@@ -71,22 +74,44 @@ export function VenueGate({ children }: { children: ReactNode }) {
 
     let cancelled = false;
     setVerified(false);
+    setError(false);
     void api<{ shop: ShopSettings }>(
       `/auth/venue/${encodeURIComponent(bindPath)}/session`,
       { method: "POST" },
     )
       .then((res) => {
         if (!cancelled) {
+          saveOfflineShopSnapshot(state.user.id, bindPath, res.shop);
           setApiVenuePath(bindPath);
           setShopInfo(res.shop);
           setVerified(true);
         }
       })
-      .catch(() => {
-        if (!cancelled) {
-          setError(true);
-          void reload();
+      .catch((requestError: unknown) => {
+        if (cancelled) return;
+        const membership = state.user.memberships.find(
+          (row) => row.shop.slug === bindPath,
+        );
+        const canResumeOffline =
+          requestError instanceof ApiError &&
+          requestError.status === 0 &&
+          membership != null &&
+          offlineLiteEnabledFor({
+            userId: state.user.id,
+            shopId: membership.shop.id,
+          });
+        const cached = canResumeOffline
+          ? readOfflineShopSnapshot(state.user.id, bindPath)
+          : null;
+        if (cached) {
+          setApiVenuePath(bindPath);
+          setShopInfo(cached);
+          setVerified(true);
+          setError(false);
+          return;
         }
+        setError(true);
+        void reload();
       });
 
     return () => {

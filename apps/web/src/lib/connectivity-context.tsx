@@ -11,12 +11,11 @@ import {
   type ReactNode,
 } from "react";
 import { getApiBaseUrl } from "./api-base-url";
-
-/**
- * Client connectivity for bible #32 Modes A–C + F.
- * Mode A: browser offline. Mode B: API unreachable. Mode C: API up, DB/ready failing.
- * Mode F: live polls failing while /ready still looks OK (stale read).
- */
+import {
+  countOfflineOperations,
+  syncOfflineOutbox,
+  type OfflineCounts,
+} from "./offline-outbox";
 
 export type ConnectivityMode =
   | "ok"
@@ -28,19 +27,21 @@ export type ConnectivityMode =
 type ConnectivityContextValue = {
   mode: ConnectivityMode;
   browserOnline: boolean;
-  /** Report a live-poll outcome from `useLiveData` (Mode F when streak ≥ 2). */
+  pending: number;
+  conflict: number;
+  failed: number;
   reportLivePollResult: (ok: boolean) => void;
+  refreshOfflineCounts: () => Promise<void>;
+  syncNow: () => Promise<void>;
 };
 
 const READY_POLL_MS = 60_000;
-/** Avoid flashing Mode B/C on a single transient blip. */
+const OUTBOX_POLL_MS = 15_000;
 const FAIL_STREAK_TO_BANNER = 2;
-/** Live-poll fail streak before Mode F (when A–C not already active). */
 const LIVE_POLL_FAIL_STREAK_TO_STALE = 2;
+const EMPTY_COUNTS: OfflineCounts = { pending: 0, conflict: 0, failed: 0 };
 
-const ConnectivityContext = createContext<ConnectivityContextValue | null>(
-  null,
-);
+const ConnectivityContext = createContext<ConnectivityContextValue | null>(null);
 
 type ReadyProbeResult =
   | { kind: "ok" }
@@ -56,26 +57,14 @@ async function probeReady(): Promise<ReadyProbeResult> {
       credentials: "omit",
       headers: { Accept: "application/json" },
     });
-
-    if (res.status === 502 || res.status === 504) {
-      return { kind: "unreachable" };
-    }
-    if (res.status === 503) {
-      return { kind: "unavailable" };
-    }
-    if (!res.ok) {
-      // Unexpected non-OK — treat as unreachable (proxy/misconfig), not auth.
-      return { kind: "unreachable" };
-    }
-
-    let body: { status?: string; database?: string } | null = null;
+    if (res.status === 502 || res.status === 504) return { kind: "unreachable" };
+    if (res.status === 503) return { kind: "unavailable" };
+    if (!res.ok) return { kind: "unreachable" };
     try {
-      body = (await res.json()) as { status?: string; database?: string };
+      const body = (await res.json()) as { status?: string; database?: string };
+      if (body?.status === "error" || body?.database === "down") return { kind: "unavailable" };
     } catch {
-      return { kind: "ok" };
-    }
-    if (body?.status === "error" || body?.database === "down") {
-      return { kind: "unavailable" };
+      // A successful ready response with an unexpected body still proves reachability.
     }
     return { kind: "ok" };
   } catch {
@@ -89,9 +78,26 @@ export function ConnectivityProvider({ children }: { children: ReactNode }) {
     "ok" | "api_unreachable" | "api_unavailable"
   >("ok");
   const [livePollStale, setLivePollStale] = useState(false);
+  const [offlineCounts, setOfflineCounts] = useState<OfflineCounts>(EMPTY_COUNTS);
   const failStreakRef = useRef(0);
   const livePollFailStreakRef = useRef(0);
   const inFlightRef = useRef(false);
+
+  const refreshOfflineCounts = useCallback(async () => {
+    try {
+      setOfflineCounts(await countOfflineOperations());
+    } catch {
+      setOfflineCounts(EMPTY_COUNTS);
+    }
+  }, []);
+
+  const syncNow = useCallback(async () => {
+    try {
+      setOfflineCounts(await syncOfflineOutbox());
+    } catch {
+      await refreshOfflineCounts();
+    }
+  }, [refreshOfflineCounts]);
 
   const applyProbe = useCallback((result: ReadyProbeResult) => {
     if (result.kind === "ok") {
@@ -108,17 +114,17 @@ export function ConnectivityProvider({ children }: { children: ReactNode }) {
 
   const runProbe = useCallback(async () => {
     if (typeof navigator !== "undefined" && !navigator.onLine) return;
-    if (typeof document !== "undefined" && document.visibilityState === "hidden") {
-      return;
-    }
+    if (typeof document !== "undefined" && document.visibilityState === "hidden") return;
     if (inFlightRef.current) return;
     inFlightRef.current = true;
     try {
-      applyProbe(await probeReady());
+      const result = await probeReady();
+      applyProbe(result);
+      if (result.kind === "ok") await syncNow();
     } finally {
       inFlightRef.current = false;
     }
-  }, [applyProbe]);
+  }, [applyProbe, syncNow]);
 
   const reportLivePollResult = useCallback((ok: boolean) => {
     if (ok) {
@@ -137,11 +143,11 @@ export function ConnectivityProvider({ children }: { children: ReactNode }) {
       const online = navigator.onLine;
       setBrowserOnline(online);
       if (online) {
-        // Re-check API ASAP after coming back.
         void runProbe();
       } else {
         failStreakRef.current = 0;
         setServerMode("ok");
+        void refreshOfflineCounts();
       }
     };
     syncOnline();
@@ -151,26 +157,30 @@ export function ConnectivityProvider({ children }: { children: ReactNode }) {
       window.removeEventListener("online", syncOnline);
       window.removeEventListener("offline", syncOnline);
     };
-  }, [runProbe]);
+  }, [runProbe, refreshOfflineCounts]);
 
   useEffect(() => {
+    void refreshOfflineCounts();
     void runProbe();
-    const id = window.setInterval(() => {
-      void runProbe();
-    }, READY_POLL_MS);
-
+    const readyId = window.setInterval(() => void runProbe(), READY_POLL_MS);
+    const outboxId = window.setInterval(() => {
+      if (navigator.onLine) void syncNow();
+      else void refreshOfflineCounts();
+    }, OUTBOX_POLL_MS);
     const onVisibility = () => {
-      if (document.visibilityState === "visible") void runProbe();
+      if (document.visibilityState === "visible") {
+        void refreshOfflineCounts();
+        void runProbe();
+      }
     };
     document.addEventListener("visibilitychange", onVisibility);
-
     return () => {
-      window.clearInterval(id);
+      window.clearInterval(readyId);
+      window.clearInterval(outboxId);
       document.removeEventListener("visibilitychange", onVisibility);
     };
-  }, [runProbe]);
+  }, [runProbe, refreshOfflineCounts, syncNow]);
 
-  // Priority: A (offline) > B/C (server) > F (stale polls) > ok
   const mode: ConnectivityMode = !browserOnline
     ? "offline"
     : serverMode !== "ok"
@@ -180,8 +190,24 @@ export function ConnectivityProvider({ children }: { children: ReactNode }) {
         : "ok";
 
   const value = useMemo(
-    () => ({ mode, browserOnline, reportLivePollResult }),
-    [mode, browserOnline, reportLivePollResult],
+    () => ({
+      mode,
+      browserOnline,
+      pending: offlineCounts.pending,
+      conflict: offlineCounts.conflict,
+      failed: offlineCounts.failed,
+      reportLivePollResult,
+      refreshOfflineCounts,
+      syncNow,
+    }),
+    [
+      mode,
+      browserOnline,
+      offlineCounts,
+      reportLivePollResult,
+      refreshOfflineCounts,
+      syncNow,
+    ],
   );
 
   return (
@@ -193,13 +219,10 @@ export function ConnectivityProvider({ children }: { children: ReactNode }) {
 
 export function useConnectivity(): ConnectivityContextValue {
   const ctx = useContext(ConnectivityContext);
-  if (!ctx) {
-    throw new Error("useConnectivity must be used inside ConnectivityProvider");
-  }
+  if (!ctx) throw new Error("useConnectivity must be used inside ConnectivityProvider");
   return ctx;
 }
 
-/** Soft read when banner may render outside the provider (should not happen). */
 export function useConnectivityOptional(): ConnectivityContextValue | null {
   return useContext(ConnectivityContext);
 }

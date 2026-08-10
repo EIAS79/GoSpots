@@ -15,13 +15,21 @@ import {
 } from "./auth-session";
 import { clearCachedCsrfToken } from "./csrf";
 import {
+  purgeOfflineAuthSnapshot,
+  readOfflineAuthSnapshot,
+  saveOfflineAuthSnapshot,
+} from "./offline-auth-snapshot";
+import { purgeAllOfflineLiteEntitlements } from "./offline-entitlement";
+import { purgeAllOfflineData } from "./offline-outbox";
+import { purgeOfflinePrivateNavigationCache } from "./offline-service-worker";
+import { purgeOfflineShopSnapshots } from "./offline-shell-snapshot";
+import {
   type AuthUser,
   fetchMe,
   logout as apiLogout,
   refresh as apiRefresh,
 } from "./auth-client";
 
-/** Keep idle clock + cookies sliding while the dashboard tab is visible. */
 const PROACTIVE_REFRESH_MS = 10 * 60 * 1000;
 
 type State =
@@ -37,23 +45,48 @@ interface AuthCtx {
 
 const AuthContext = createContext<AuthCtx | null>(null);
 
+async function purgeOfflineSessionData() {
+  purgeOfflineAuthSnapshot();
+  purgeAllOfflineLiteEntitlements();
+  purgeOfflineShopSnapshots();
+  await Promise.all([
+    purgeAllOfflineData().catch(() => undefined),
+    purgeOfflinePrivateNavigationCache().catch(() => undefined),
+  ]);
+}
+
+function rememberUser(user: AuthUser) {
+  saveOfflineAuthSnapshot(user);
+  return user;
+}
+
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [state, setState] = useState<State>({ status: "loading", user: null });
 
   const reload = useCallback(async () => {
     await ensureCsrf();
     try {
-      const user = await fetchMe();
+      const user = rememberUser(await fetchMe());
       setState({ status: "authed", user });
     } catch {
       try {
         await ensureCsrf();
         await apiRefresh();
-        const user = await fetchMe();
+        const user = rememberUser(await fetchMe());
         setState({ status: "authed", user });
       } catch (err) {
         if (err instanceof ApiError && err.code === "SESSION_REVOKED") {
           notifySessionRevoked();
+          await purgeOfflineSessionData();
+          setState({ status: "guest", user: null });
+          return;
+        }
+        if (err instanceof ApiError && err.status === 0) {
+          const cached = readOfflineAuthSnapshot();
+          if (cached) {
+            setState({ status: "authed", user: cached });
+            return;
+          }
         }
         setState({ status: "guest", user: null });
       }
@@ -66,13 +99,16 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       await apiLogout();
     } finally {
       clearCachedCsrfToken();
+      await purgeOfflineSessionData();
       setState({ status: "guest", user: null });
     }
   }, []);
 
   useEffect(() => {
     return registerAuthGuestHandler(() => {
-      setState({ status: "guest", user: null });
+      void purgeOfflineSessionData().finally(() => {
+        setState({ status: "guest", user: null });
+      });
     });
   }, []);
 
@@ -94,6 +130,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       } catch (err) {
         if (err instanceof ApiError && err.code === "SESSION_REVOKED") {
           notifySessionRevoked();
+          await purgeOfflineSessionData();
           setState({ status: "guest", user: null });
         }
       }

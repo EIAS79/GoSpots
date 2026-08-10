@@ -20,8 +20,9 @@
     "test": "pnpm --filter @gospots/api run test",
     "test:api": "pnpm --filter @gospots/api run test",
     "test:checkout": "pnpm --filter @gospots/web run test:checkout",
+    "test:offline": "pnpm --filter @gospots/web run test:offline",
     "typecheck:web": "pnpm --filter @gospots/web run typecheck",
-    "verify": "pnpm test && pnpm test:checkout && pnpm build",
+    "verify": "pnpm test && pnpm test:checkout && pnpm test:offline && pnpm build",
     "verify:strict": "pnpm lint && pnpm verify"
   },
   "devDependencies": {
