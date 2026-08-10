@@ -43,6 +43,9 @@ jobs:
         env:
           DATABASE_URL: postgresql://ci:ci@localhost:5432/ci?schema=public
 
+      # Legacy baseline currently contains existing lint debt. Keep the complete
+      # non-destructive result visible without allowing unrelated formatting/type
+      # cleanup to block Chunk 00's build/test/migration acceptance gate.
       - name: Lint (baseline advisory)
         continue-on-error: true
         run: pnpm run lint
@@ -54,21 +57,7 @@ jobs:
 
       - name: Build
         if: ${{ always() }}
-        shell: bash
-        run: |
-          set +e
-          pnpm run build > /tmp/api-build.log 2>&1
-          status=$?
-          cat /tmp/api-build.log
-          if [ "$status" -ne 0 ]; then
-            while IFS= read -r line; do
-              safe=${line//'%'/'%25'}
-              safe=${safe//$'\r'/'%0D'}
-              safe=${safe//$'\n'/'%0A'}
-              echo "::error title=API compiler::${safe}"
-            done < /tmp/api-build.log
-          fi
-          exit "$status"
+        run: pnpm run build
         env:
           DATABASE_URL: postgresql://ci:ci@localhost:5432/ci?schema=public
 
@@ -99,25 +88,32 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v4
+
       - name: Setup pnpm
         uses: pnpm/action-setup@v4
         with:
           version: 10.12.1
+
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
           node-version: '24'
           cache: pnpm
           cache-dependency-path: pnpm-lock.yaml
+
       - name: Install dependencies
         working-directory: .
         run: pnpm install --frozen-lockfile
+
       - name: Prisma generate
         run: pnpm exec prisma generate
+
       - name: Migrate deploy (empty DB)
         run: pnpm exec prisma migrate deploy
+
       - name: Migrate status (no pending)
         run: pnpm exec prisma migrate status
+
       - name: Prisma validate
         run: pnpm exec prisma validate
 
@@ -128,6 +124,8 @@ jobs:
     defaults:
       run:
         working-directory: apps/web
+    # These values are public routing configuration, not secrets. Keep CI aligned
+    # with the same-origin production setup documented for Vercel.
     env:
       NEXT_PUBLIC_SITE_URL: https://www.gospots.eu
       NEXT_PUBLIC_API_BASE_URL: /api/v1
@@ -136,23 +134,29 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v4
+
       - name: Setup pnpm
         uses: pnpm/action-setup@v4
         with:
           version: 10.12.1
+
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
           node-version: '24'
           cache: pnpm
           cache-dependency-path: pnpm-lock.yaml
+
       - name: Install dependencies
         working-directory: .
         run: pnpm install --frozen-lockfile
+
       - name: Checkout UI tests
         run: pnpm run test:checkout
+
       - name: Typecheck
         run: pnpm run typecheck
+
       - name: Build
         if: ${{ always() }}
         run: pnpm run build
