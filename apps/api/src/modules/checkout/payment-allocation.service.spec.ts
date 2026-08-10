@@ -78,6 +78,28 @@ describe('PaymentAllocationService', () => {
     expect(total(result.groups)).toBe('10.0000');
   });
 
+  it('creates four exact guest payment groups for the cashier shortcut', () => {
+    const result = service.previewGroups(
+      PaymentAllocationKind.EQUAL,
+      [snapshot('1', '100.0000', { quantity: 4 })],
+      { parts: 4 },
+    );
+    expect(result.groups).toHaveLength(4);
+    expect(result.groups.map((group) => group.amount)).toEqual([
+      '25.0000',
+      '25.0000',
+      '25.0000',
+      '25.0000',
+    ]);
+    expect(result.groups.map((group) => group.allocations[0].quantity)).toEqual([
+      '1.0000',
+      '1.0000',
+      '1.0000',
+      '1.0000',
+    ]);
+    expect(total(result.groups)).toBe('100.0000');
+  });
+
   it('calculates percentage, custom, and remaining modes from the current remainder', () => {
     const rows = [snapshot('1', '40.0000'), snapshot('2', '60.0000')];
     expect(
