@@ -54,7 +54,17 @@ jobs:
 
       - name: Build
         if: ${{ always() }}
-        run: pnpm run build
+        shell: bash
+        run: |
+          set +e
+          pnpm run build 2>&1 | tee /tmp/api-build.log
+          code=${PIPESTATUS[0]}
+          if [ "$code" -ne 0 ]; then
+            while IFS= read -r line; do
+              echo "::error title=API compiler::$line"
+            done < <(grep -E "error TS|src/.*:[0-9]+:[0-9]+" /tmp/api-build.log | head -40)
+          fi
+          exit "$code"
         env:
           DATABASE_URL: postgresql://ci:ci@localhost:5432/ci?schema=public
 
@@ -85,32 +95,25 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v4
-
       - name: Setup pnpm
         uses: pnpm/action-setup@v4
         with:
           version: 10.12.1
-
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
           node-version: '24'
           cache: pnpm
           cache-dependency-path: pnpm-lock.yaml
-
       - name: Install dependencies
         working-directory: .
         run: pnpm install --frozen-lockfile
-
       - name: Prisma generate
         run: pnpm exec prisma generate
-
       - name: Migrate deploy (empty DB)
         run: pnpm exec prisma migrate deploy
-
       - name: Migrate status (no pending)
         run: pnpm exec prisma migrate status
-
       - name: Prisma validate
         run: pnpm exec prisma validate
 
@@ -129,32 +132,25 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v4
-
       - name: Setup pnpm
         uses: pnpm/action-setup@v4
         with:
           version: 10.12.1
-
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
           node-version: '24'
           cache: pnpm
           cache-dependency-path: pnpm-lock.yaml
-
       - name: Install dependencies
         working-directory: .
         run: pnpm install --frozen-lockfile
-
       - name: Checkout UI tests
         run: pnpm run test:checkout
-
       - name: Offline Lite tests
         run: pnpm run test:offline
-
       - name: Typecheck
         run: pnpm run typecheck
-
       - name: Build
         if: ${{ always() }}
         run: pnpm run build
