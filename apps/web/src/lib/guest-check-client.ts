@@ -228,32 +228,22 @@ export async function fetchGuestCheck(id: string) {
 
 export async function createGuestCheck(body: GuestCheckMutation) {
   if (offlineNow()) return createGuestCheckOffline(body);
-  try {
-    const check = await api<GuestCheck>("/guest-checks", {
-      method: "POST",
-      body: JSON.stringify(body),
-    });
-    await putLocalOpenCheck(check).catch(() => undefined);
-    return check;
-  } catch (error) {
-    if (isNetworkFailure(error)) return createGuestCheckOffline(body);
-    throw error;
-  }
+  const check = await api<GuestCheck>("/guest-checks", {
+    method: "POST",
+    body: JSON.stringify(body),
+  });
+  await putLocalOpenCheck(check).catch(() => undefined);
+  return check;
 }
 
 export async function updateGuestCheck(id: string, body: GuestCheckMutation) {
   if (offlineNow()) return updateGuestCheckOffline(id, body);
-  try {
-    const check = await api<GuestCheck>(`/guest-checks/${id}`, {
-      method: "PATCH",
-      body: JSON.stringify(body),
-    });
-    await putLocalOpenCheck(check).catch(() => undefined);
-    return check;
-  } catch (error) {
-    if (isNetworkFailure(error)) return updateGuestCheckOffline(id, body);
-    throw error;
-  }
+  const check = await api<GuestCheck>(`/guest-checks/${id}`, {
+    method: "PATCH",
+    body: JSON.stringify(body),
+  });
+  await putLocalOpenCheck(check).catch(() => undefined);
+  return check;
 }
 
 function requireOnline(label: string) {
