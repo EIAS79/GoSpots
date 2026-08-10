@@ -32,26 +32,89 @@ enum ComplianceProofType {
   OTHER
 }
 
+/// Poland venue compliance configuration. Provider secrets are encrypted; the
+/// profile contains only the minimum data required to create deterministic
+/// fiscal snapshots and authenticate an explicitly enabled KSeF pilot.
+model ComplianceProfile {
+  id                     String   @id @default(cuid())
+  shopId                 String   @unique
+  jurisdiction           String   @default("PL")
+  legalName              String
+  taxId                   String
+  streetAddress           String
+  postalCode              String
+  city                    String
+  countryCode             String   @default("PL")
+  defaultTaxCategoryCode  String?
+  ksefEnvironment         String   @default("TEST")
+  ksefTokenEncrypted      String?
+  nextInvoiceSequence     Int      @default(1)
+  nextReceiptSequence     Int      @default(1)
+  createdAt               DateTime @default(now())
+  updatedAt               DateTime @updatedAt
+
+  @@index([shopId, jurisdiction])
+}
+
+/// Effective venue tax catalogue. Rates are snapshotted onto fiscal lines so a
+/// later configuration change cannot mutate historical documents.
+model TaxCategory {
+  id          String   @id @default(cuid())
+  shopId      String
+  code        String
+  label       String
+  ratePercent Decimal  @db.Decimal(7, 4)
+  active      Boolean  @default(true)
+  validFrom   DateTime?
+  validTo     DateTime?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@unique([shopId, code])
+  @@index([shopId, active])
+}
+
+/// Fiscal-device/provider binding for receipt fiscalization. KSeF invoices are
+/// separate from cash-register fiscal receipts and never reuse this identifier.
+model FiscalDevice {
+  id               String   @id @default(cuid())
+  shopId           String
+  label            String
+  provider         String
+  externalDeviceId String?
+  enabled          Boolean  @default(true)
+  metadata         Json?
+  lastSeenAt       DateTime?
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
+
+  @@unique([shopId, label])
+  @@unique([shopId, provider, externalDeviceId])
+  @@index([shopId, enabled])
+}
+
 /// Immutable fiscal/compliance snapshot. Corrections and refunds create children;
 /// an accepted original document is never overwritten or deleted by the workflow.
 model ComplianceDocument {
-  id                String                  @id @default(cuid())
+  id                String                   @id @default(cuid())
   shopId            String
   jurisdiction      String
   kind              ComplianceDocumentKind
   state             ComplianceDocumentState @default(DRAFT)
   sourceType        String
   sourceId          String
-  sourceVersion     Int                     @default(1)
+  sourceVersion     Int                      @default(1)
   parentDocumentId  String?
-  parentDocument    ComplianceDocument?     @relation("ComplianceLineage", fields: [parentDocumentId], references: [id], onDelete: Restrict)
-  childDocuments    ComplianceDocument[]    @relation("ComplianceLineage")
+  parentDocument    ComplianceDocument?      @relation("ComplianceLineage", fields: [parentDocumentId], references: [id], onDelete: Restrict)
+  childDocuments    ComplianceDocument[]     @relation("ComplianceLineage")
   documentNumber    String?
   issueDate         DateTime
   currency          String
-  netAmount         Decimal                 @db.Decimal(19, 4)
-  taxAmount         Decimal                 @db.Decimal(19, 4)
-  grossAmount       Decimal                 @db.Decimal(19, 4)
+  buyerName         String?
+  buyerTaxId        String?
+  netAmount         Decimal                  @db.Decimal(19, 4)
+  taxAmount         Decimal                  @db.Decimal(19, 4)
+  grossAmount       Decimal                  @db.Decimal(19, 4)
   taxSummary        Json?
   payloadHash       String
   payloadXml        String?
@@ -61,17 +124,46 @@ model ComplianceDocument {
   createdById       String?
   acceptedAt        DateTime?
   rejectedAt        DateTime?
-  createdAt         DateTime                @default(now())
-  updatedAt         DateTime                @updatedAt
+  createdAt         DateTime                 @default(now())
+  updatedAt         DateTime                 @updatedAt
   requests          ComplianceRequest[]
   events            ComplianceEvent[]
   proofs            ComplianceProof[]
+  lines             ComplianceDocumentLine[]
 
   @@unique([shopId, jurisdiction, kind, sourceType, sourceId, sourceVersion])
+  @@unique([shopId, jurisdiction, documentNumber])
   @@index([shopId, state, createdAt])
   @@index([shopId, parentDocumentId])
   @@index([shopId, externalSystem, externalReference])
   @@index([shopId, ksefNumber])
+}
+
+/// Immutable line-level tax/source lineage derived from ChargeSnapshot.
+model ComplianceDocumentLine {
+  id              String             @id @default(cuid())
+  shopId          String
+  documentId      String
+  document        ComplianceDocument @relation(fields: [documentId], references: [id], onDelete: Restrict)
+  position        Int
+  snapshotId      String?
+  sourceType      String
+  sourceId        String
+  lineReference   String?
+  description     String
+  quantity        Decimal            @db.Decimal(19, 4)
+  taxCategoryCode String
+  taxRatePercent  Decimal            @db.Decimal(7, 4)
+  netAmount       Decimal            @db.Decimal(19, 4)
+  taxAmount       Decimal            @db.Decimal(19, 4)
+  grossAmount     Decimal            @db.Decimal(19, 4)
+  currency        String
+  createdAt       DateTime           @default(now())
+
+  @@unique([documentId, position])
+  @@index([shopId, documentId])
+  @@index([shopId, snapshotId])
+  @@index([shopId, taxCategoryCode])
 }
 
 /// Durable external-compliance operation. Idempotency is persisted before the
