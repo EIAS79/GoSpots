@@ -9,11 +9,13 @@ import {
   AddComplianceProofDto,
   ConfigureComplianceProfileDto,
   CreateComplianceDocumentDto,
+  FiscalizeReceiptDto,
   GenerateSettlementComplianceDocumentDto,
   UpsertFiscalDeviceDto,
   UpsertTaxCategoryDto,
 } from './dto/compliance.dto';
 import { FiscalDocumentService } from './fiscal-document.service';
+import { FiscalizationService } from './fiscal/fiscalization.service';
 
 @ApiTags('compliance')
 @Controller('compliance')
@@ -23,6 +25,7 @@ export class ComplianceController {
     private readonly compliance: ComplianceService,
     private readonly profiles: ComplianceProfileService,
     private readonly fiscal: FiscalDocumentService,
+    private readonly fiscalization: FiscalizationService,
   ) {}
 
   @Get('profile')
@@ -31,10 +34,7 @@ export class ComplianceController {
   }
 
   @Put('profile')
-  configureProfile(
-    @CurrentUser() user: JwtAccessPayload,
-    @Body() dto: ConfigureComplianceProfileDto,
-  ) {
+  configureProfile(@CurrentUser() user: JwtAccessPayload, @Body() dto: ConfigureComplianceProfileDto) {
     return this.profiles.configureProfile(user, dto);
   }
 
@@ -44,10 +44,7 @@ export class ComplianceController {
   }
 
   @Put('tax-categories')
-  upsertTaxCategory(
-    @CurrentUser() user: JwtAccessPayload,
-    @Body() dto: UpsertTaxCategoryDto,
-  ) {
+  upsertTaxCategory(@CurrentUser() user: JwtAccessPayload, @Body() dto: UpsertTaxCategoryDto) {
     return this.profiles.upsertTaxCategory(user, dto);
   }
 
@@ -57,10 +54,7 @@ export class ComplianceController {
   }
 
   @Put('fiscal-devices')
-  upsertFiscalDevice(
-    @CurrentUser() user: JwtAccessPayload,
-    @Body() dto: UpsertFiscalDeviceDto,
-  ) {
+  upsertFiscalDevice(@CurrentUser() user: JwtAccessPayload, @Body() dto: UpsertFiscalDeviceDto) {
     return this.profiles.upsertFiscalDevice(user, dto);
   }
 
@@ -74,16 +68,28 @@ export class ComplianceController {
   }
 
   @Get('settlements/:settlementId/status')
-  settlementStatus(
-    @CurrentUser() user: JwtAccessPayload,
-    @Param('settlementId') settlementId: string,
-  ) {
+  settlementStatus(@CurrentUser() user: JwtAccessPayload, @Param('settlementId') settlementId: string) {
     return this.fiscal.settlementStatus(user, settlementId);
   }
 
   @Get('reconciliation')
   reconciliation(@CurrentUser() user: JwtAccessPayload) {
     return this.fiscal.reconciliation(user);
+  }
+
+  @Post('documents/:id/fiscalize')
+  fiscalizeReceipt(
+    @CurrentUser() user: JwtAccessPayload,
+    @Param('id') id: string,
+    @Body() dto: FiscalizeReceiptDto,
+    @Headers('idempotency-key') idempotencyKey?: string,
+  ) {
+    return this.fiscalization.submitReceipt(user, id, dto, idempotencyKey);
+  }
+
+  @Post('fiscal-requests/:id/reconcile')
+  reconcileFiscal(@CurrentUser() user: JwtAccessPayload, @Param('id') id: string) {
+    return this.fiscalization.reconcileReceipt(user, id);
   }
 
   @Post('documents')
