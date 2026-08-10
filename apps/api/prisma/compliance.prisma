@@ -1,0 +1,217 @@
+enum ComplianceDocumentKind {
+  RECEIPT
+  INVOICE
+  CORRECTION
+  REFUND
+}
+
+enum ComplianceDocumentState {
+  DRAFT
+  PENDING
+  SUBMITTED
+  ACCEPTED
+  REJECTED
+  UNKNOWN
+  DISABLED
+}
+
+enum ComplianceRequestState {
+  CREATED
+  SENDING
+  SUBMITTED
+  SUCCEEDED
+  FAILED
+  UNKNOWN
+}
+
+enum ComplianceProofType {
+  KSEF_REFERENCE
+  KSEF_NUMBER
+  UPO
+  FISCAL_RECEIPT
+  OTHER
+}
+
+model ComplianceProfile {
+  id                     String   @id @default(cuid())
+  shopId                 String   @unique
+  jurisdiction           String   @default("PL")
+  legalName              String
+  taxId                   String
+  streetAddress           String
+  postalCode              String
+  city                    String
+  countryCode             String   @default("PL")
+  defaultTaxCategoryCode  String?
+  ksefEnvironment         String   @default("TEST")
+  ksefTokenEncrypted      String?
+  nextInvoiceSequence     Int      @default(1)
+  nextReceiptSequence     Int      @default(1)
+  createdAt               DateTime @default(now())
+  updatedAt               DateTime @updatedAt
+
+  @@index([shopId, jurisdiction])
+}
+
+model TaxCategory {
+  id          String   @id @default(cuid())
+  shopId      String
+  code        String
+  label       String
+  ratePercent Decimal  @db.Decimal(7, 4)
+  active      Boolean  @default(true)
+  validFrom   DateTime?
+  validTo     DateTime?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@unique([shopId, code])
+  @@index([shopId, active])
+}
+
+model FiscalDevice {
+  id               String   @id @default(cuid())
+  shopId           String
+  label            String
+  provider         String
+  externalDeviceId String?
+  enabled          Boolean  @default(true)
+  metadata         Json?
+  lastSeenAt       DateTime?
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
+
+  @@unique([shopId, label])
+  @@unique([shopId, provider, externalDeviceId])
+  @@index([shopId, enabled])
+}
+
+model ComplianceDocument {
+  id                String                   @id @default(cuid())
+  shopId            String
+  jurisdiction      String
+  kind              ComplianceDocumentKind
+  state             ComplianceDocumentState @default(DRAFT)
+  sourceType        String
+  sourceId          String
+  sourceVersion     Int                      @default(1)
+  parentDocumentId  String?
+  parentDocument    ComplianceDocument?      @relation("ComplianceLineage", fields: [parentDocumentId], references: [id], onDelete: Restrict)
+  childDocuments    ComplianceDocument[]     @relation("ComplianceLineage")
+  documentNumber    String?
+  issueDate         DateTime
+  currency          String
+  buyerName         String?
+  buyerTaxId        String?
+  netAmount         Decimal                  @db.Decimal(19, 4)
+  taxAmount         Decimal                  @db.Decimal(19, 4)
+  grossAmount       Decimal                  @db.Decimal(19, 4)
+  taxSummary        Json?
+  payloadHash       String
+  payloadXml        String?
+  externalSystem    String?
+  externalReference String?
+  ksefNumber        String?
+  createdById       String?
+  acceptedAt        DateTime?
+  rejectedAt        DateTime?
+  createdAt         DateTime                 @default(now())
+  updatedAt         DateTime                 @updatedAt
+  requests          ComplianceRequest[]
+  events            ComplianceEvent[]
+  proofs            ComplianceProof[]
+  lines             ComplianceDocumentLine[]
+
+  @@unique([shopId, jurisdiction, kind, sourceType, sourceId, sourceVersion])
+  @@unique([shopId, jurisdiction, documentNumber])
+  @@index([shopId, state, createdAt])
+  @@index([shopId, parentDocumentId])
+  @@index([shopId, externalSystem, externalReference])
+  @@index([shopId, ksefNumber])
+}
+
+model ComplianceDocumentLine {
+  id              String             @id @default(cuid())
+  shopId          String
+  documentId      String
+  document        ComplianceDocument @relation(fields: [documentId], references: [id], onDelete: Restrict)
+  position        Int
+  snapshotId      String?
+  sourceType      String
+  sourceId        String
+  lineReference   String?
+  description     String
+  quantity        Decimal            @db.Decimal(19, 4)
+  taxCategoryCode String
+  taxRatePercent  Decimal            @db.Decimal(7, 4)
+  netAmount       Decimal            @db.Decimal(19, 4)
+  taxAmount       Decimal            @db.Decimal(19, 4)
+  grossAmount     Decimal            @db.Decimal(19, 4)
+  currency        String
+  createdAt       DateTime           @default(now())
+
+  @@unique([documentId, position])
+  @@index([shopId, documentId])
+  @@index([shopId, snapshotId])
+  @@index([shopId, taxCategoryCode])
+}
+
+model ComplianceRequest {
+  id                String                 @id @default(cuid())
+  shopId            String
+  documentId        String
+  document          ComplianceDocument     @relation(fields: [documentId], references: [id], onDelete: Restrict)
+  adapter           String
+  operation         String
+  idempotencyKey    String
+  requestHash       String
+  state             ComplianceRequestState @default(CREATED)
+  externalReference String?
+  attemptCount      Int                    @default(0)
+  errorCode         String?
+  errorMessage      String?
+  responseHash      String?
+  reconciliationRequired Boolean           @default(false)
+  lastAttemptAt     DateTime?
+  retryAt           DateTime?
+  createdAt         DateTime               @default(now())
+  updatedAt         DateTime               @updatedAt
+
+  @@unique([shopId, adapter, idempotencyKey])
+  @@unique([documentId, adapter, operation])
+  @@index([shopId, state, createdAt])
+  @@index([shopId, documentId, createdAt])
+  @@index([shopId, externalReference])
+}
+
+model ComplianceEvent {
+  id            String             @id @default(cuid())
+  shopId        String
+  documentId    String
+  document      ComplianceDocument @relation(fields: [documentId], references: [id], onDelete: Restrict)
+  eventType     String
+  payloadHash   String
+  payload       Json?
+  correlationId String?
+  createdAt     DateTime           @default(now())
+
+  @@index([shopId, documentId, createdAt])
+  @@index([shopId, eventType, createdAt])
+}
+
+model ComplianceProof {
+  id                String              @id @default(cuid())
+  shopId            String
+  documentId        String
+  document          ComplianceDocument  @relation(fields: [documentId], references: [id], onDelete: Restrict)
+  type              ComplianceProofType
+  externalReference String?
+  contentHash       String
+  content           String?
+  metadata          Json?
+  createdAt         DateTime            @default(now())
+
+  @@unique([shopId, documentId, type, contentHash])
+  @@index([shopId, documentId, createdAt])
+  @@index([shopId, externalReference])
+}
