@@ -30,17 +30,21 @@ function sha256Base64(data: Buffer): string {
 
 @Injectable()
 export class KsefCryptoService {
-  createSessionMaterial(publicKeyPem: string, publicKeyId?: string): KsefEncryptionMaterial {
-    const key = randomBytes(32);
-    const iv = randomBytes(16);
-    const encryptedKey = publicEncrypt(
+  private rsaOaepSha256(publicKeyPem: string, value: Buffer): Buffer {
+    return publicEncrypt(
       {
         key: publicKeyPem,
         padding: constants.RSA_PKCS1_OAEP_PADDING,
         oaepHash: 'sha256',
       },
-      key,
+      value,
     );
+  }
+
+  createSessionMaterial(publicKeyPem: string, publicKeyId?: string): KsefEncryptionMaterial {
+    const key = randomBytes(32);
+    const iv = randomBytes(16);
+    const encryptedKey = this.rsaOaepSha256(publicKeyPem, key);
     return {
       key,
       iv,
@@ -48,6 +52,11 @@ export class KsefCryptoService {
       initializationVector: iv.toString('base64'),
       ...(publicKeyId?.trim() ? { publicKeyId: publicKeyId.trim() } : {}),
     };
+  }
+
+  encryptKsefToken(publicKeyPem: string, token: string, timestampMs: number): string {
+    const plaintext = Buffer.from(`${token}|${timestampMs}`, 'utf8');
+    return this.rsaOaepSha256(publicKeyPem, plaintext).toString('base64');
   }
 
   encryptInvoice(xml: Buffer, material: Pick<KsefEncryptionMaterial, 'key' | 'iv'>): KsefEncryptedInvoice {
