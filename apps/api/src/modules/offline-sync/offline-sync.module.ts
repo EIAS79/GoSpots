@@ -5,5 +5,6 @@ import { OfflineSyncService } from './offline-sync.service';
 @Module({
   controllers: [OfflineSyncController],
   providers: [OfflineSyncService],
+  exports: [OfflineSyncService],
 })
 export class OfflineSyncModule {}

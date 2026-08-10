@@ -71,6 +71,12 @@ export class OfflineSyncService {
     }
   }
 
+  private async requireEdgeEnabled(shopId: string) {
+    if (!(await this.flags.isFeatureEnabled(shopId, 'edge_hub'))) {
+      throw new ForbiddenException('Edge Hub is not enabled for this venue');
+    }
+  }
+
   private validateHash(dto: ApplyOfflineOperationDto) {
     const calculated = sha256(canonicalJson(dto.payload));
     if (dto.payloadHash.toLowerCase() !== calculated) {
@@ -90,7 +96,7 @@ export class OfflineSyncService {
   private async applyCheckCreate(
     tx: Prisma.TransactionClient,
     shopId: string,
-    actor: JwtAccessPayload,
+    createdById: string | null,
     dto: ApplyOfflineOperationDto,
   ) {
     if (dto.expectedVersion !== undefined) {
@@ -121,7 +127,7 @@ export class OfflineSyncService {
         note: trimmedString(p.note, 'note', 500),
         partySize: optionalPartySize(p.partySize) ?? 1,
         currency: shop.currency,
-        createdById: actor.sub,
+        createdById,
       },
       select: { id: true, version: true, status: true },
     });
@@ -214,23 +220,24 @@ export class OfflineSyncService {
   private apply(
     tx: Prisma.TransactionClient,
     shopId: string,
-    actor: JwtAccessPayload,
+    createdById: string | null,
     dto: ApplyOfflineOperationDto,
   ) {
     const handlers: Record<
       OfflineOperationType,
       () => Promise<{ entityId: string; version: number; status: string }>
     > = {
-      CHECK_CREATE: () => this.applyCheckCreate(tx, shopId, actor, dto),
+      CHECK_CREATE: () => this.applyCheckCreate(tx, shopId, createdById, dto),
       CHECK_UPDATE: () => this.applyCheckUpdate(tx, shopId, dto),
     };
     return handlers[dto.operationType]();
   }
 
-  async applyOperation(actor: JwtAccessPayload, dto: ApplyOfflineOperationDto) {
-    this.assertWrite(actor);
-    const shopId = requireShopId(actor);
-    await this.requireEnabled(shopId);
+  private async applyForShop(
+    shopId: string,
+    createdById: string | null,
+    dto: ApplyOfflineOperationDto,
+  ) {
     const requestHash = this.validateHash(dto);
     const receiptKey = `${dto.deviceId}:${dto.operationId}`;
 
@@ -275,7 +282,7 @@ export class OfflineSyncService {
         });
       }
 
-      const result = await this.apply(tx, shopId, actor, dto);
+      const result = await this.apply(tx, shopId, createdById, dto);
       const response = {
         operationId: dto.operationId,
         deviceId: dto.deviceId,
@@ -289,5 +296,21 @@ export class OfflineSyncService {
       });
       return response;
     });
+  }
+
+  async applyOperation(actor: JwtAccessPayload, dto: ApplyOfflineOperationDto) {
+    this.assertWrite(actor);
+    const shopId = requireShopId(actor);
+    await this.requireEnabled(shopId);
+    return this.applyForShop(shopId, actor.sub, dto);
+  }
+
+  async applyEdgeOperation(
+    shopId: string,
+    edgeDeviceId: string,
+    dto: ApplyOfflineOperationDto,
+  ) {
+    await this.requireEdgeEnabled(shopId);
+    return this.applyForShop(shopId, `edge:${edgeDeviceId}`, dto);
   }
 }
