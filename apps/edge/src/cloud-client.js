@@ -1,9 +1,15 @@
 import { randomUUID } from 'node:crypto';
 import { signCloudRequest } from './crypto.js';
 
+function normalizeApiBase(baseUrl) {
+  if (!baseUrl) return null;
+  const trimmed = baseUrl.replace(/\/$/, '');
+  return trimmed.endsWith('/api/v1') ? trimmed : `${trimmed}/api/v1`;
+}
+
 export class CloudClient {
   constructor({ baseUrl, store, privateKeyPem, publicKeyPem, fetchImpl = fetch }) {
-    this.baseUrl = baseUrl?.replace(/\/$/, '') ?? null;
+    this.baseUrl = normalizeApiBase(baseUrl);
     this.store = store;
     this.privateKeyPem = privateKeyPem;
     this.publicKeyPem = publicKeyPem;
@@ -72,8 +78,11 @@ export class CloudClient {
           synced += 1;
           continue;
         }
-        if (response.status === 409) {
-          this.store.markCloudConflict(event.eventId, data?.message ?? 'Cloud conflict');
+        if (response.status === 409 || response.status === 400 || response.status === 422) {
+          this.store.markCloudConflict(
+            event.eventId,
+            data?.message ?? `Cloud permanently rejected event (HTTP ${response.status})`,
+          );
           conflicts += 1;
           continue;
         }

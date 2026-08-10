@@ -132,20 +132,6 @@ export class EdgeHubService {
     const separator = dto.provisioningToken.indexOf('.');
     if (separator <= 0) throw new UnauthorizedException('Invalid Edge Hub provisioning token');
     const deviceId = dto.provisioningToken.slice(0, separator);
-    const device = await this.prisma.device.findFirst({
-      where: { id: deviceId, type: DeviceType.EDGE_HUB, status: DeviceStatus.ACTIVE },
-    });
-    if (!device) throw new UnauthorizedException('Invalid Edge Hub provisioning token');
-    await this.requireEnabled(device.shopId);
-
-    const edge = edgeMetadata(device.metadata);
-    if (!edge.provisionTokenHash || sha256(dto.provisioningToken) !== edge.provisionTokenHash) {
-      throw new UnauthorizedException('Invalid Edge Hub provisioning token');
-    }
-    if (!edge.provisionExpiresAt || Date.parse(edge.provisionExpiresAt) <= Date.now()) {
-      throw new UnauthorizedException('Edge Hub provisioning token expired');
-    }
-    if (edge.provisionUsedAt) throw new UnauthorizedException('Edge Hub provisioning token already used');
 
     let key;
     try {
@@ -156,35 +142,73 @@ export class EdgeHubService {
     if (key.asymmetricKeyType !== 'ed25519') {
       throw new BadRequestException('Edge Hub public key must use Ed25519');
     }
-    const publicDer = key.export({ type: 'spki', format: 'der' });
-    const now = new Date();
-    const fingerprint = sha256(publicDer);
-    const nextEdge: EdgeMetadata = {
-      ...edge,
-      provisionTokenHash: undefined,
-      provisionExpiresAt: undefined,
-      provisionUsedAt: now.toISOString(),
-      publicKeyPem: dto.publicKeyPem,
-      fingerprint,
-      registeredAt: now.toISOString(),
-      version: dto.version,
-      hostname: dto.hostname?.trim() || undefined,
-    };
-    await this.prisma.device.update({
-      where: { id: device.id },
-      data: {
-        metadata: withEdgeMetadata(device.metadata, nextEdge),
-        lastSeenAt: now,
-      },
+    const fingerprint = sha256(key.export({ type: 'spki', format: 'der' }));
+
+    const initial = await this.prisma.device.findFirst({
+      where: { id: deviceId, type: DeviceType.EDGE_HUB, status: DeviceStatus.ACTIVE },
+      select: { shopId: true },
     });
-    await this.audit.recordForShop(device.shopId, {
+    if (!initial) throw new UnauthorizedException('Invalid Edge Hub provisioning token');
+    await this.requireEnabled(initial.shopId);
+
+    const registered = await this.prisma.$transaction(async (tx) => {
+      await tx.$queryRaw`SELECT pg_advisory_xact_lock(hashtextextended(${deviceId}, 0))`;
+      const device = await tx.device.findFirst({
+        where: { id: deviceId, type: DeviceType.EDGE_HUB, status: DeviceStatus.ACTIVE },
+      });
+      if (!device) throw new UnauthorizedException('Invalid Edge Hub provisioning token');
+
+      const edge = edgeMetadata(device.metadata);
+      if (!edge.provisionTokenHash || sha256(dto.provisioningToken) !== edge.provisionTokenHash) {
+        throw new UnauthorizedException('Invalid Edge Hub provisioning token');
+      }
+      if (!edge.provisionExpiresAt || Date.parse(edge.provisionExpiresAt) <= Date.now()) {
+        throw new UnauthorizedException('Edge Hub provisioning token expired');
+      }
+      if (edge.provisionUsedAt) {
+        throw new UnauthorizedException('Edge Hub provisioning token already used');
+      }
+
+      const now = new Date();
+      const nextEdge: EdgeMetadata = {
+        ...edge,
+        provisionTokenHash: undefined,
+        provisionExpiresAt: undefined,
+        provisionUsedAt: now.toISOString(),
+        publicKeyPem: dto.publicKeyPem,
+        fingerprint,
+        registeredAt: now.toISOString(),
+        version: dto.version,
+        hostname: dto.hostname?.trim() || undefined,
+      };
+      await tx.device.update({
+        where: { id: device.id },
+        data: {
+          metadata: withEdgeMetadata(device.metadata, nextEdge),
+          lastSeenAt: now,
+        },
+      });
+      return { device, registeredAt: now };
+    });
+
+    await this.audit.recordForShop(registered.device.shopId, {
       section: 'system',
       action: 'edge.registered',
-      summary: `Edge Hub ${device.label} registered with signed device identity`,
-      actorName: `Edge Hub ${device.label}`,
-      meta: { deviceId: device.id, fingerprint, version: dto.version, hostname: dto.hostname ?? null },
+      summary: `Edge Hub ${registered.device.label} registered with signed device identity`,
+      actorName: `Edge Hub ${registered.device.label}`,
+      meta: {
+        deviceId: registered.device.id,
+        fingerprint,
+        version: dto.version,
+        hostname: dto.hostname ?? null,
+      },
     });
-    return { deviceId: device.id, shopId: device.shopId, fingerprint, registeredAt: now.toISOString() };
+    return {
+      deviceId: registered.device.id,
+      shopId: registered.device.shopId,
+      fingerprint,
+      registeredAt: registered.registeredAt.toISOString(),
+    };
   }
 
   private header(headers: Record<string, string | string[] | undefined>, name: string): string {
@@ -204,7 +228,8 @@ export class EdgeHubService {
     const nonce = this.header(headers, 'x-edge-nonce');
     const signature = this.header(headers, 'x-edge-signature');
     const parsedTimestamp = Date.parse(timestamp);
-    if (!Number.isFinite(parsedTimestamp) || Math.abs(Date.now() - parsedTimestamp) > SIGNATURE_CLOCK_SKEW_MS) {
+    const now = Date.now();
+    if (!Number.isFinite(parsedTimestamp) || Math.abs(now - parsedTimestamp) > SIGNATURE_CLOCK_SKEW_MS) {
       throw new UnauthorizedException('Edge Hub signature timestamp is stale');
     }
     if (nonce.length > 120) throw new UnauthorizedException('Invalid Edge Hub nonce');
@@ -231,6 +256,14 @@ export class EdgeHubService {
     }
     if (!valid) throw new UnauthorizedException('Invalid Edge Hub signature');
 
+    await this.prisma.idempotencyReceipt.deleteMany({
+      where: {
+        shopId: device.shopId,
+        scope: NONCE_SCOPE,
+        expiresAt: { lt: new Date(now) },
+      },
+    });
+    const nonceExpiresAt = new Date(parsedTimestamp + SIGNATURE_CLOCK_SKEW_MS);
     try {
       await this.prisma.idempotencyReceipt.create({
         data: {
@@ -239,7 +272,7 @@ export class EdgeHubService {
           key: `${device.id}:${nonce}`,
           requestHash: sha256(message),
           status: 'COMPLETED',
-          expiresAt: new Date(Date.now() + SIGNATURE_CLOCK_SKEW_MS * 2),
+          expiresAt: nonceExpiresAt,
         },
       });
     } catch (error) {

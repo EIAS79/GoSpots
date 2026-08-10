@@ -45,16 +45,47 @@ describe('EdgeHubService', () => {
     expect(metadata.edge.provisionTokenHash).not.toContain(result.provisioningToken);
   });
 
-  it('authenticates an Ed25519 signed replay and namespaces LAN device identity', async () => {
+  it('consumes provisioning under a transaction-scoped advisory lock', async () => {
+    const { publicKey } = generateKeyPairSync('ed25519');
+    const publicKeyPem = publicKey.export({ type: 'spki', format: 'pem' }).toString();
+    const provisioningToken = `edge-1.${'secret-token-material'.repeat(2)}`;
+    const device: any = {
+      id: 'edge-1', shopId: 'shop-1', label: 'Venue Edge', type: 'EDGE_HUB', status: 'ACTIVE',
+      metadata: { edge: { provisionTokenHash: sha256(provisioningToken), provisionExpiresAt: new Date(Date.now() + 60_000).toISOString() } },
+    };
+    const tx: any = {
+      $queryRaw: jest.fn().mockResolvedValue([{ locked: true }]),
+      device: {
+        findFirst: jest.fn().mockResolvedValue(device),
+        update: jest.fn().mockResolvedValue({}),
+      },
+    };
+    const prisma: any = {
+      device: { findFirst: jest.fn().mockResolvedValue({ shopId: 'shop-1' }) },
+      $transaction: jest.fn(async (fn: any) => fn(tx)),
+    };
+    const service = new EdgeHubService(prisma, flags, audit, {} as any);
+    const result = await service.register({ provisioningToken, publicKeyPem, version: '0.1.0', hostname: 'edge-host' });
+    expect(tx.$queryRaw).toHaveBeenCalledTimes(1);
+    expect(tx.device.findFirst).toHaveBeenCalledTimes(1);
+    const update = tx.device.update.mock.calls[0][0];
+    expect(update.data.metadata.edge.provisionTokenHash).toBeUndefined();
+    expect(update.data.metadata.edge.provisionUsedAt).toEqual(expect.any(String));
+    expect(result).toMatchObject({ deviceId: 'edge-1', shopId: 'shop-1' });
+  });
+
+  it('authenticates an Ed25519 signed replay, cleans expired nonces and namespaces LAN device identity', async () => {
     const { publicKey, privateKey } = generateKeyPairSync('ed25519');
     const publicKeyPem = publicKey.export({ type: 'spki', format: 'pem' }).toString();
     const device = {
       id: 'edge-1', shopId: 'shop-1', label: 'Venue Edge', type: 'EDGE_HUB', status: 'ACTIVE',
       metadata: { edge: { publicKeyPem, registeredAt: new Date().toISOString() } },
     };
+    const deleteMany = jest.fn().mockResolvedValue({ count: 2 });
+    const create = jest.fn().mockResolvedValue({});
     const prisma: any = {
       device: { findFirst: jest.fn().mockResolvedValue(device), update: jest.fn() },
-      idempotencyReceipt: { create: jest.fn().mockResolvedValue({}) },
+      idempotencyReceipt: { deleteMany, create },
     };
     const offline: any = { applyEdgeOperation: jest.fn().mockResolvedValue({ syncState: 'SYNCED' }) };
     const service = new EdgeHubService(prisma, flags, audit, offline);
@@ -64,6 +95,10 @@ describe('EdgeHubService', () => {
     };
     const headers = signedHeaders('edge-1', privateKey, '/edge-hub/cloud/replay', body);
     await expect(service.replay(headers, body)).resolves.toEqual({ syncState: 'SYNCED' });
+    expect(deleteMany).toHaveBeenCalledWith(expect.objectContaining({
+      where: expect.objectContaining({ shopId: 'shop-1', scope: 'edge.auth.nonce.v1' }),
+    }));
+    expect(create.mock.calls[0][0].data.expiresAt).toBeInstanceOf(Date);
     expect(offline.applyEdgeOperation).toHaveBeenCalledWith(
       'shop-1', 'edge-1', expect.objectContaining({ deviceId: 'edge:edge-1:pos-a' }),
     );
@@ -74,7 +109,10 @@ describe('EdgeHubService', () => {
     const publicKeyPem = publicKey.export({ type: 'spki', format: 'pem' }).toString();
     const prisma: any = {
       device: { findFirst: jest.fn().mockResolvedValue({ id: 'edge-1', shopId: 'shop-1', type: 'EDGE_HUB', status: 'ACTIVE', metadata: { edge: { publicKeyPem, registeredAt: new Date().toISOString() } } }) },
-      idempotencyReceipt: { create: jest.fn().mockResolvedValueOnce({}).mockRejectedValueOnce({ code: 'P2002' }) },
+      idempotencyReceipt: {
+        deleteMany: jest.fn().mockResolvedValue({ count: 0 }),
+        create: jest.fn().mockResolvedValueOnce({}).mockRejectedValueOnce({ code: 'P2002' }),
+      },
     };
     const offline: any = { applyEdgeOperation: jest.fn().mockResolvedValue({ syncState: 'SYNCED' }) };
     const service = new EdgeHubService(prisma, flags, audit, offline);

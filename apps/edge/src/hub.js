@@ -51,9 +51,10 @@ export class EdgeHub {
     if (!device || device.revoked_at) throw new Error('Unknown or revoked Edge client');
     const parsed = Date.parse(timestamp);
     if (!Number.isFinite(parsed) || Math.abs(Date.now() - parsed) > MAX_CLOCK_SKEW_MS) throw new Error('Stale Edge client timestamp');
-    if (!nonce || !this.store.consumeNonce(clientId, nonce)) throw new Error('Replayed Edge client nonce');
+    if (!nonce) throw new Error('Missing Edge client nonce');
     const secret = decryptSecret(device.secret_cipher, this.masterKey);
     if (!verifyLanSignature(secret, signature, method, path, body, timestamp, nonce)) throw new Error('Invalid Edge client signature');
+    if (!this.store.consumeNonce(clientId, nonce)) throw new Error('Replayed Edge client nonce');
     this.store.touchLanDevice(clientId);
     return device;
   }
