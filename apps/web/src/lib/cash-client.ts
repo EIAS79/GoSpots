@@ -100,7 +100,11 @@ export function updateCashPolicy(body: Partial<CashPolicy>) {
   });
 }
 
-function idempotent<T>(action: string, body: unknown, run: (key: string) => Promise<T>) {
+function idempotent<T>(
+  action: string,
+  body: Record<string, unknown>,
+  run: (key: string) => Promise<T>,
+) {
   const actionKey = idempotencyActionKey(action, body);
   return withIdempotentFinanceCall(actionKey, run);
 }
