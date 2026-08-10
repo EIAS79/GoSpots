@@ -43,9 +43,6 @@ jobs:
         env:
           DATABASE_URL: postgresql://ci:ci@localhost:5432/ci?schema=public
 
-      # Legacy baseline currently contains existing lint debt. Keep the complete
-      # non-destructive result visible without allowing unrelated formatting/type
-      # cleanup to block Chunk 00's build/test/migration acceptance gate.
       - name: Lint (baseline advisory)
         continue-on-error: true
         run: pnpm run lint
@@ -118,14 +115,12 @@ jobs:
         run: pnpm exec prisma validate
 
   web:
-    name: Web checkout test · typecheck · build
+    name: Web checkout + offline tests · typecheck · build
     runs-on: ubuntu-latest
     timeout-minutes: 20
     defaults:
       run:
         working-directory: apps/web
-    # These values are public routing configuration, not secrets. Keep CI aligned
-    # with the same-origin production setup documented for Vercel.
     env:
       NEXT_PUBLIC_SITE_URL: https://www.gospots.eu
       NEXT_PUBLIC_API_BASE_URL: /api/v1
@@ -153,6 +148,9 @@ jobs:
 
       - name: Checkout UI tests
         run: pnpm run test:checkout
+
+      - name: Offline Lite tests
+        run: pnpm run test:offline
 
       - name: Typecheck
         run: pnpm run typecheck
