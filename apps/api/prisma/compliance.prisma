@@ -32,9 +32,6 @@ enum ComplianceProofType {
   OTHER
 }
 
-/// Poland venue compliance configuration. Provider secrets are encrypted; the
-/// profile contains only the minimum data required to create deterministic
-/// fiscal snapshots and authenticate an explicitly enabled KSeF pilot.
 model ComplianceProfile {
   id                     String   @id @default(cuid())
   shopId                 String   @unique
@@ -56,8 +53,6 @@ model ComplianceProfile {
   @@index([shopId, jurisdiction])
 }
 
-/// Effective venue tax catalogue. Rates are snapshotted onto fiscal lines so a
-/// later configuration change cannot mutate historical documents.
 model TaxCategory {
   id          String   @id @default(cuid())
   shopId      String
@@ -74,8 +69,6 @@ model TaxCategory {
   @@index([shopId, active])
 }
 
-/// Fiscal-device/provider binding for receipt fiscalization. KSeF invoices are
-/// separate from cash-register fiscal receipts and never reuse this identifier.
 model FiscalDevice {
   id               String   @id @default(cuid())
   shopId           String
@@ -93,8 +86,6 @@ model FiscalDevice {
   @@index([shopId, enabled])
 }
 
-/// Immutable fiscal/compliance snapshot. Corrections and refunds create children;
-/// an accepted original document is never overwritten or deleted by the workflow.
 model ComplianceDocument {
   id                String                   @id @default(cuid())
   shopId            String
@@ -139,7 +130,6 @@ model ComplianceDocument {
   @@index([shopId, ksefNumber])
 }
 
-/// Immutable line-level tax/source lineage derived from ChargeSnapshot.
 model ComplianceDocumentLine {
   id              String             @id @default(cuid())
   shopId          String
@@ -166,8 +156,6 @@ model ComplianceDocumentLine {
   @@index([shopId, taxCategoryCode])
 }
 
-/// Durable external-compliance operation. Idempotency is persisted before the
-/// remote call so retries/reconciliation cannot accidentally submit twice.
 model ComplianceRequest {
   id                String                 @id @default(cuid())
   shopId            String
@@ -190,12 +178,12 @@ model ComplianceRequest {
   updatedAt         DateTime               @updatedAt
 
   @@unique([shopId, adapter, idempotencyKey])
+  @@unique([documentId, adapter, operation])
   @@index([shopId, state, createdAt])
   @@index([shopId, documentId, createdAt])
   @@index([shopId, externalReference])
 }
 
-/// Append-only compliance event/proof metadata. Application code only inserts.
 model ComplianceEvent {
   id            String             @id @default(cuid())
   shopId        String
@@ -211,7 +199,6 @@ model ComplianceEvent {
   @@index([shopId, eventType, createdAt])
 }
 
-/// Immutable external evidence: KSeF references/numbers, UPO, fiscal receipt proof.
 model ComplianceProof {
   id                String              @id @default(cuid())
   shopId            String
