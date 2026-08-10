@@ -1,0 +1,100 @@
+// Chunk 15 — Workforce
+// Existing Membership remains employee identity/venue access. Workforce rows
+// reference membershipId scalarly to keep auth and labor history independently auditable.
+model JobRole {
+  id        String   @id @default(cuid())
+  shopId    String
+  name      String
+  code      String?
+  active    Boolean  @default(true)
+  sortOrder Int      @default(0)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([shopId, name])
+  @@unique([shopId, code])
+  @@index([shopId, active, sortOrder])
+}
+
+model EmployeeRate {
+  id              String   @id @default(cuid())
+  shopId          String
+  membershipId    String
+  jobRoleId       String
+  hourlyRateMinor Int
+  currency        String
+  effectiveFrom   DateTime
+  effectiveTo     DateTime?
+  createdById     String
+  createdAt       DateTime @default(now())
+
+  @@index([shopId, membershipId, jobRoleId, effectiveFrom])
+  @@index([shopId, effectiveFrom, effectiveTo])
+}
+
+model ScheduleEntry {
+  id           String   @id @default(cuid())
+  shopId       String
+  membershipId String
+  jobRoleId    String
+  startsAt     DateTime
+  endsAt       DateTime
+  status       String   @default("SCHEDULED")
+  note         String?
+  createdById  String
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  @@index([shopId, membershipId, startsAt])
+  @@index([shopId, startsAt, endsAt])
+}
+
+model TimePunch {
+  id              String   @id @default(cuid())
+  shopId          String
+  membershipId    String
+  scheduleEntryId String?
+  jobRoleId       String
+  employeeRateId  String
+  hourlyRateMinor Int
+  currency        String
+  startedAt       DateTime
+  endedAt         DateTime?
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  @@index([shopId, membershipId, startedAt])
+  @@index([shopId, startedAt, endedAt])
+}
+
+model BreakRecord {
+  id          String   @id @default(cuid())
+  shopId      String
+  timePunchId String
+  startedAt   DateTime
+  endedAt     DateTime?
+  paid        Boolean  @default(false)
+  note        String?
+  createdAt   DateTime @default(now())
+
+  @@index([shopId, timePunchId, startedAt])
+}
+
+model TimeAdjustment {
+  id                   String   @id @default(cuid())
+  shopId               String
+  timePunchId          String
+  proposedStartedAt    DateTime?
+  proposedEndedAt      DateTime?
+  proposedUnpaidBreakSeconds Int?
+  reason               String
+  status               String   @default("PENDING")
+  requestedById        String
+  decidedById          String?
+  decisionNote         String?
+  decidedAt            DateTime?
+  createdAt            DateTime @default(now())
+
+  @@index([shopId, timePunchId, status, createdAt])
+  @@index([shopId, status, createdAt])
+}
