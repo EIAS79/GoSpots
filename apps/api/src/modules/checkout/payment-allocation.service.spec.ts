@@ -15,7 +15,7 @@ function snapshot(
 ) {
   return {
     id,
-    position: options.position ?? Number(id.replace(/\D/g, '')) || 0,
+    position: options.position ?? (Number(id.replace(/\D/g, '')) || 0),
     sourceType: options.sourceType ?? 'SHOP_ORDER',
     sourceId: options.sourceId ?? `source-${id}`,
     lineReference: id,
@@ -39,7 +39,10 @@ describe('PaymentAllocationService', () => {
   it('splits by line and preserves each remaining charge exactly', () => {
     const result = service.previewGroups(
       PaymentAllocationKind.LINE,
-      [snapshot('1', '10.0000'), snapshot('2', '7.5000', { allocatedAmount: '2.5000' })],
+      [
+        snapshot('1', '10.0000'),
+        snapshot('2', '7.5000', { allocatedAmount: '2.5000' }),
+      ],
     );
     expect(result.remainingTotal).toBe('15.0000');
     expect(result.groups.map((group) => group.amount)).toEqual([
@@ -52,7 +55,10 @@ describe('PaymentAllocationService', () => {
     const result = service.previewGroups(PaymentAllocationKind.SOURCE, [
       snapshot('1', '4.0000', { sourceId: 'order-a' }),
       snapshot('2', '6.0000', { sourceId: 'order-a' }),
-      snapshot('3', '5.0000', { sourceType: 'PLAY_SESSION', sourceId: 'play-b' }),
+      snapshot('3', '5.0000', {
+        sourceType: 'PLAY_SESSION',
+        sourceId: 'play-b',
+      }),
     ]);
     expect(result.groups).toHaveLength(2);
     expect(total(result.groups)).toBe('15.0000');
@@ -111,7 +117,10 @@ describe('PaymentAllocationService', () => {
 
   it('conserves money across many equal split combinations', () => {
     for (let units = 1; units <= 125; units += 1) {
-      const amount = new Prisma.Decimal(units).div(7).toDecimalPlaces(4).toFixed(4);
+      const amount = new Prisma.Decimal(units)
+        .div(7)
+        .toDecimalPlaces(4)
+        .toFixed(4);
       for (let parts = 2; parts <= 8; parts += 1) {
         const decimal = new Prisma.Decimal(amount);
         if (decimal.div(parts).lt('0.0001')) continue;
