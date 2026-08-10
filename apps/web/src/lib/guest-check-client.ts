@@ -1,4 +1,5 @@
 import { api, ApiError } from "./api";
+import { offlineLiteEnabled } from "./offline-entitlement";
 import {
   cacheOfflineValue,
   getOfflineContext,
@@ -94,6 +95,14 @@ function offlineNow() {
   return typeof navigator !== "undefined" && navigator.onLine === false;
 }
 
+function requireOfflineLite() {
+  if (!offlineLiteEnabled()) {
+    throw new Error(
+      "Offline Lite is not enabled for this venue. Reconnect before continuing.",
+    );
+  }
+}
+
 function isNetworkFailure(error: unknown) {
   return error instanceof ApiError && error.status === 0;
 }
@@ -154,6 +163,7 @@ function localCheck(body: GuestCheckMutation): GuestCheck {
 }
 
 async function createGuestCheckOffline(body: GuestCheckMutation): Promise<GuestCheck> {
+  requireOfflineLite();
   const check = localCheck(body);
   await queueOfflineOperation({
     operationType: "CHECK_CREATE",
@@ -165,6 +175,7 @@ async function createGuestCheckOffline(body: GuestCheckMutation): Promise<GuestC
 }
 
 async function updateGuestCheckOffline(id: string, body: GuestCheckMutation): Promise<GuestCheck> {
+  requireOfflineLite();
   const cached = await readOfflineValue<GuestCheck>(`guest-check:${id}`);
   if (!cached) throw new Error("This check is not available in the offline cache.");
   if (cached.status !== "OPEN") throw new Error("This check is no longer open.");
@@ -194,6 +205,7 @@ async function updateGuestCheckOffline(id: string, body: GuestCheckMutation): Pr
 export async function fetchGuestChecks(status: GuestCheckStatus | "ALL" = "OPEN") {
   const q = status === "OPEN" ? "" : `?status=${status}`;
   if (offlineNow()) {
+    requireOfflineLite();
     if (status !== "OPEN") return { checks: [], canWrite: false } satisfies GuestCheckListResponse;
     return cachedOpenChecks();
   }
@@ -202,13 +214,16 @@ export async function fetchGuestChecks(status: GuestCheckStatus | "ALL" = "OPEN"
     if (status === "OPEN") await cacheOpenChecks(response);
     return response;
   } catch (error) {
-    if (status === "OPEN" && isNetworkFailure(error)) return cachedOpenChecks();
+    if (status === "OPEN" && isNetworkFailure(error) && offlineLiteEnabled()) {
+      return cachedOpenChecks();
+    }
     throw error;
   }
 }
 
 export async function fetchGuestCheck(id: string) {
   if (offlineNow()) {
+    requireOfflineLite();
     const cached = await readOfflineValue<GuestCheck>(`guest-check:${id}`);
     if (!cached) throw new Error("This check is not available offline.");
     return cached;
@@ -218,7 +233,7 @@ export async function fetchGuestCheck(id: string) {
     await cacheOfflineValue(`guest-check:${id}`, check).catch(() => undefined);
     return check;
   } catch (error) {
-    if (isNetworkFailure(error)) {
+    if (isNetworkFailure(error) && offlineLiteEnabled()) {
       const cached = await readOfflineValue<GuestCheck>(`guest-check:${id}`);
       if (cached) return cached;
     }
