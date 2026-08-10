@@ -14,6 +14,7 @@ import {
   registerAuthGuestHandler,
 } from "./auth-session";
 import { clearCachedCsrfToken } from "./csrf";
+import { purgeAllOfflineData } from "./offline-outbox";
 import {
   type AuthUser,
   fetchMe,
@@ -21,7 +22,6 @@ import {
   refresh as apiRefresh,
 } from "./auth-client";
 
-/** Keep idle clock + cookies sliding while the dashboard tab is visible. */
 const PROACTIVE_REFRESH_MS = 10 * 60 * 1000;
 
 type State =
@@ -66,13 +66,16 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       await apiLogout();
     } finally {
       clearCachedCsrfToken();
+      await purgeAllOfflineData().catch(() => undefined);
       setState({ status: "guest", user: null });
     }
   }, []);
 
   useEffect(() => {
     return registerAuthGuestHandler(() => {
-      setState({ status: "guest", user: null });
+      void purgeAllOfflineData().finally(() => {
+        setState({ status: "guest", user: null });
+      });
     });
   }, []);
 
@@ -94,6 +97,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       } catch (err) {
         if (err instanceof ApiError && err.code === "SESSION_REVOKED") {
           notifySessionRevoked();
+          await purgeAllOfflineData().catch(() => undefined);
           setState({ status: "guest", user: null });
         }
       }
