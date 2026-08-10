@@ -46,6 +46,7 @@ export type ConnectorPaymentResult = {
 export type ConnectorPaymentLookup = {
   providerPaymentId: string;
   operationId?: string;
+  terminalExternalId?: string | null;
 };
 
 export type ConnectorRefundRequest = {
@@ -71,8 +72,8 @@ export type ConnectorHealth = {
 };
 
 /**
- * Chunk 06 provider-neutral boundary. Checkout and domain services consume this
- * contract only; provider-specific SDKs belong in later connector modules.
+ * Provider-neutral payment boundary. Checkout and domain services consume this
+ * contract only; provider-specific SDKs stay behind connector implementations.
  */
 export interface PaymentConnector {
   readonly provider: string;
