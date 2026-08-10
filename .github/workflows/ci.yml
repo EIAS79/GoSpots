@@ -54,18 +54,7 @@ jobs:
 
       - name: Build
         if: ${{ always() }}
-        shell: bash
-        run: |
-          set +e
-          NO_COLOR=1 FORCE_COLOR=0 pnpm exec tsc -p tsconfig.build.json --noEmit --pretty false 2>&1 | tee /tmp/api-tsc.log
-          code=${PIPESTATUS[0]}
-          if [ "$code" -ne 0 ]; then
-            while IFS= read -r line; do
-              printf '::error title=API compiler::%s\n' "$line"
-            done < /tmp/api-tsc.log
-            exit "$code"
-          fi
-          pnpm run build
+        run: pnpm run build
         env:
           DATABASE_URL: postgresql://ci:ci@localhost:5432/ci?schema=public
 
