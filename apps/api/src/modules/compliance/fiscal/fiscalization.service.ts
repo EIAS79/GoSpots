@@ -229,11 +229,20 @@ export class FiscalizationService {
       throw error;
     }
 
+    const documentNumber = document.documentNumber;
+    const externalDeviceId = device.externalDeviceId;
+    if (!documentNumber) {
+      throw new ConflictException('Receipt document has no document number');
+    }
+    if (!externalDeviceId) {
+      throw new ConflictException('Fiscal device has no external device id');
+    }
+
     const connector = this.connectors.get(device.provider);
     const result = await connector.submit({
       documentId: document.id,
-      documentNumber: document.documentNumber,
-      externalDeviceId: device.externalDeviceId,
+      documentNumber,
+      externalDeviceId,
       currency: document.currency,
       grossAmount: document.grossAmount.toString(),
       lines: document.lines.map((line) => ({
