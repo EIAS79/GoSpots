@@ -1,18 +1,25 @@
-import { Body, Controller, Get, Post } from '@nestjs/common';
+import { Body, Controller, ForbiddenException, Get, Post } from '@nestjs/common';
 import { ApiTags } from '@nestjs/swagger';
 import { CurrentUser } from '../auth/decorators/current-user.decorator';
 import type { JwtAccessPayload } from '../auth/auth.service';
+import { FeatureFlagService } from '../foundation/feature-flag.service';
 import { ApplyOfflineOperationDto } from './dto/offline-operation.dto';
 import { OfflineSyncService } from './offline-sync.service';
 
 @ApiTags('offline-sync')
 @Controller('offline-sync')
 export class OfflineSyncController {
-  constructor(private readonly offlineSync: OfflineSyncService) {}
+  constructor(
+    private readonly offlineSync: OfflineSyncService,
+    private readonly flags: FeatureFlagService,
+  ) {}
 
   @Get('status')
-  status(@CurrentUser() actor: JwtAccessPayload) {
-    return this.offlineSync.status(actor);
+  async status(@CurrentUser() actor: JwtAccessPayload) {
+    if (!actor.shopId) throw new ForbiddenException();
+    return {
+      enabled: await this.flags.isFeatureEnabled(actor.shopId, 'offline_lite'),
+    };
   }
 
   @Post('operations')
