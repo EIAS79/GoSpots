@@ -21,6 +21,8 @@ import {
 } from "./offline-auth-snapshot";
 import { purgeAllOfflineLiteEntitlements } from "./offline-entitlement";
 import { purgeAllOfflineData } from "./offline-outbox";
+import { purgeOfflinePrivateNavigationCache } from "./offline-service-worker";
+import { purgeOfflineShopSnapshots } from "./offline-shell-snapshot";
 import {
   type AuthUser,
   fetchMe,
@@ -46,7 +48,11 @@ const AuthContext = createContext<AuthCtx | null>(null);
 async function purgeOfflineSessionData() {
   purgeOfflineAuthSnapshot();
   purgeAllOfflineLiteEntitlements();
-  await purgeAllOfflineData().catch(() => undefined);
+  purgeOfflineShopSnapshots();
+  await Promise.all([
+    purgeAllOfflineData().catch(() => undefined),
+    purgeOfflinePrivateNavigationCache().catch(() => undefined),
+  ]);
 }
 
 function rememberUser(user: AuthUser) {
