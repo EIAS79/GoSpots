@@ -67,12 +67,21 @@ export class EdgeHub {
   subscribe(listener) { this.listeners.add(listener); return () => this.listeners.delete(listener); }
 
   status() {
+    const diagnostics = this.store.diagnostics();
     return {
       service: 'gospots-edge', version: EDGE_VERSION,
       cloudRegistered: Boolean(this.cloud.registeredDeviceId),
       cloudDeviceId: this.cloud.registeredDeviceId,
       shopId: this.store.getMeta('shopId'),
-      pendingEvents: this.store.pendingEvents(1000).length,
+      pendingEvents: diagnostics.events.pending,
+      lastSequence: diagnostics.events.lastSequence,
+    };
+  }
+
+  diagnostics() {
+    return {
+      ...this.status(),
+      ...this.store.diagnostics(),
     };
   }
 

@@ -13,6 +13,8 @@
 - Refactored Offline Sync so Edge replay and browser replay share the same idempotent/versioned cloud mutation core.
 - Added signed cloud heartbeat and signed replay endpoints.
 - Added explicit no-money/no-fiscal Edge safety boundary for this chunk.
+- Added authenticated status and diagnostics surfaces without exposing secrets.
+- Added local UUID validation so committed events are always cloud-replay-compatible.
 - Added Edge Node 24 tests/build to CI and root verification scripts.
 - Added installation/security/recovery operational documentation.
 
@@ -28,11 +30,12 @@ No new cloud table is required. The existing tenant-scoped `Device.metadata` sto
 
 Local Edge test suite covers:
 
-1. ordered multi-client sequencing and deterministic version conflict;
+1. two distinct authenticated LAN POS clients sharing one ordered stream and deterministic versions;
 2. restart durability;
 3. same-event idempotency and changed-content conflict;
 4. explicit rejection of money/compliance operations;
 5. LAN nonce replay rejection;
-6. cloud reconnect stable-ID replay exactly once logically.
+6. cloud reconnect stable-ID replay exactly once logically;
+7. rejection of invalid event IDs before unsyncable work can be committed.
 
 Final completion requires the exact PR head CI and post-merge main CI checks recorded in `chunk-10-acceptance.md`.

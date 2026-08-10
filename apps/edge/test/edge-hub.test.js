@@ -16,24 +16,73 @@ function fixture() {
   return { dir, dbPath, keyPath, hub, close() { try { hub.close(); } finally { rmSync(dir, { recursive: true, force: true }); } } };
 }
 
-function event(operationType, entityId, payload, expectedVersion) {
+function event(operationType, entityId, payload, expectedVersion, sourceDeviceId = 'client-a') {
   return {
-    eventId: randomUUID(), sourceDeviceId: 'client-a', operationType, entityId,
+    eventId: randomUUID(), sourceDeviceId, operationType, entityId,
     ...(expectedVersion === undefined ? {} : { expectedVersion }),
     payload, payloadHash: sha256(canonicalJson(payload)), occurredAt: new Date().toISOString(),
   };
 }
 
-test('two LAN clients observe one durable sequence and optimistic conflicts are deterministic', () => {
+test('two authenticated LAN clients share one durable sequence and deterministic versions', () => {
   const f = fixture();
   try {
+    const posA = f.hub.registerLanClient('pair-me', 'POS A');
+    const posB = f.hub.registerLanClient('pair-me', 'POS B');
     const checkId = 'check-1';
-    const created = f.hub.appendEvent(event('CHECK_CREATE', checkId, { label: 'Table 4' }));
-    const updated = f.hub.appendEvent(event('CHECK_UPDATE', checkId, { note: '2 players' }, 1));
+
+    const createBody = event('CHECK_CREATE', checkId, { label: 'Table 4' }, undefined, posA.clientId);
+    const createTimestamp = new Date().toISOString();
+    const createNonce = randomUUID();
+    const createPath = '/v1/events';
+    f.hub.authenticateLan({
+      clientId: posA.clientId,
+      timestamp: createTimestamp,
+      nonce: createNonce,
+      signature: signLanRequest(posA.secret, 'POST', createPath, createBody, createTimestamp, createNonce),
+      method: 'POST',
+      path: createPath,
+      body: createBody,
+    });
+    const created = f.hub.appendEvent(createBody);
+
+    const readTimestamp = new Date().toISOString();
+    const readNonce = randomUUID();
+    const readPath = '/v1/events?after=0';
+    f.hub.authenticateLan({
+      clientId: posB.clientId,
+      timestamp: readTimestamp,
+      nonce: readNonce,
+      signature: signLanRequest(posB.secret, 'GET', readPath, {}, readTimestamp, readNonce),
+      method: 'GET',
+      path: readPath,
+      body: {},
+    });
+    assert.equal(f.hub.store.listEvents(0)[0].eventId, created.eventId);
+
+    const updateBody = event('CHECK_UPDATE', checkId, { note: '2 players' }, 1, posB.clientId);
+    const updateTimestamp = new Date().toISOString();
+    const updateNonce = randomUUID();
+    f.hub.authenticateLan({
+      clientId: posB.clientId,
+      timestamp: updateTimestamp,
+      nonce: updateNonce,
+      signature: signLanRequest(posB.secret, 'POST', createPath, updateBody, updateTimestamp, updateNonce),
+      method: 'POST',
+      path: createPath,
+      body: updateBody,
+    });
+    const updated = f.hub.appendEvent(updateBody);
+
     assert.equal(created.sequence + 1, updated.sequence);
     assert.equal(f.hub.store.getAggregate(checkId).version, 2);
-    assert.throws(() => f.hub.appendEvent(event('CHECK_UPDATE', checkId, { note: 'stale' }, 1)), /VERSION_CONFLICT/);
+    assert.throws(() => f.hub.appendEvent(event('CHECK_UPDATE', checkId, { note: 'stale' }, 1, posA.clientId)), /VERSION_CONFLICT/);
     assert.deepEqual(f.hub.store.listEvents(0).map((x) => x.sequence), [created.sequence, updated.sequence]);
+
+    const diagnostics = f.hub.diagnostics();
+    assert.equal(diagnostics.lanDevices.active, 2);
+    assert.equal(diagnostics.events.total, 2);
+    assert.equal(diagnostics.lastSequence, updated.sequence);
   } finally { f.close(); }
 });
 
@@ -106,4 +155,14 @@ test('cloud reconnect replays each committed event once and keeps stable operati
     assert.equal(replayCalls.length, 1);
     assert.equal(replayCalls[0].body.operationId, saved.eventId);
   } finally { hub.close(); rmSync(dir, { recursive: true, force: true }); }
+});
+
+test('rejects non-UUID event IDs before they can become unsyncable cloud work', () => {
+  const f = fixture();
+  try {
+    const invalid = event('CHECK_CREATE', 'check-bad-id', { label: 'Bad id' });
+    invalid.eventId = 'not-a-uuid';
+    assert.throws(() => f.hub.appendEvent(invalid), /eventId must be a UUID/);
+    assert.equal(f.hub.store.listEvents(0).length, 0);
+  } finally { f.close(); }
 });

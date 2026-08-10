@@ -70,12 +70,13 @@ Authenticated LAN:
 - `GET /v1/events?after=<sequence>`
 - `GET /v1/stream?after=<sequence>` — SSE live event stream
 - `GET /v1/status`
+- `GET /v1/diagnostics`
 - `POST /v1/cloud/register`
 - `POST /v1/cloud/sync`
 
 ## Sequencing and durability
 
-`POST /v1/events` commits under a SQLite `BEGIN IMMEDIATE` transaction. The aggregate version update and event append succeed or fail together. Events have a monotonically increasing local sequence and a globally stable UUID `eventId`.
+`POST /v1/events` commits under a SQLite `BEGIN IMMEDIATE` transaction. The aggregate version update and event append succeed or fail together. Events have a monotonically increasing local sequence and a globally stable UUID `eventId`. Non-UUID event IDs are rejected locally so an event cannot be committed in a form the cloud replay DTO would reject later.
 
 Supported Chunk 10 operations are intentionally limited to:
 
@@ -109,12 +110,15 @@ Do not implement application-level self-replacement until signed release/update 
 
 ## Diagnostics
 
-`GET /v1/status` reports:
+`GET /v1/status` reports the concise health surface:
 
 - Edge version
 - cloud registration state
 - registered Device ID
 - Shop ID
 - pending event count
+- latest local sequence
+
+`GET /v1/diagnostics` adds operational counts for total/pending/synced/conflicted events and paired/active LAN clients. It does not expose stored secrets or the Edge private key.
 
 The cloud Device registry receives heartbeat updates through `lastSeenAt`, so the existing Devices screen remains the owner-facing health surface.

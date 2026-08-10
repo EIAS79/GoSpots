@@ -3,6 +3,7 @@ import { canonicalJson, sha256 } from './canonical.js';
 
 const SAFE_OPERATIONS = new Set(['CHECK_CREATE', 'CHECK_UPDATE']);
 const SAFE_FIELDS = new Set(['guestName', 'guestEmail', 'guestPhone', 'label', 'note', 'partySize']);
+const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 
 function nowIso() { return new Date().toISOString(); }
 
@@ -108,6 +109,37 @@ export class EdgeStore {
     return this.db.prepare("SELECT * FROM events WHERE cloud_state='PENDING' ORDER BY sequence ASC LIMIT ?").all(limit).map(this.#eventRow);
   }
 
+  diagnostics() {
+    const eventCounts = this.db.prepare(`
+      SELECT
+        COUNT(*) AS total,
+        SUM(CASE WHEN cloud_state='PENDING' THEN 1 ELSE 0 END) AS pending,
+        SUM(CASE WHEN cloud_state='SYNCED' THEN 1 ELSE 0 END) AS synced,
+        SUM(CASE WHEN cloud_state='CONFLICT' THEN 1 ELSE 0 END) AS conflicts,
+        MAX(sequence) AS last_sequence
+      FROM events
+    `).get();
+    const deviceCounts = this.db.prepare(`
+      SELECT
+        COUNT(*) AS paired,
+        SUM(CASE WHEN revoked_at IS NULL THEN 1 ELSE 0 END) AS active
+      FROM lan_devices
+    `).get();
+    return {
+      events: {
+        total: Number(eventCounts.total ?? 0),
+        pending: Number(eventCounts.pending ?? 0),
+        synced: Number(eventCounts.synced ?? 0),
+        conflicts: Number(eventCounts.conflicts ?? 0),
+        lastSequence: Number(eventCounts.last_sequence ?? 0),
+      },
+      lanDevices: {
+        paired: Number(deviceCounts.paired ?? 0),
+        active: Number(deviceCounts.active ?? 0),
+      },
+    };
+  }
+
   markCloudSynced(eventId) {
     this.db.prepare("UPDATE events SET cloud_state='SYNCED', cloud_attempts=cloud_attempts+1, cloud_error=NULL WHERE event_id=?").run(eventId);
   }
@@ -125,8 +157,10 @@ export class EdgeStore {
     const payload = sanitizePayload(input.payload);
     const calculatedHash = sha256(canonicalJson(payload));
     if (calculatedHash !== String(input.payloadHash).toLowerCase()) throw new Error('payloadHash does not match payload');
+    const eventId = String(input.eventId ?? '');
+    if (!UUID_RE.test(eventId)) throw new Error('eventId must be a UUID');
     const normalized = {
-      eventId: String(input.eventId),
+      eventId,
       sourceDeviceId: String(input.sourceDeviceId),
       operationType: input.operationType,
       entityId: String(input.entityId),

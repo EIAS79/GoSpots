@@ -82,6 +82,11 @@ const server = createServer(async (req, res) => {
       return send(res, 200, hub.status());
     }
 
+    if (req.method === 'GET' && url.pathname === '/v1/diagnostics') {
+      authHeaders(req, 'GET', path, {});
+      return send(res, 200, hub.diagnostics());
+    }
+
     if (req.method === 'POST' && url.pathname === '/v1/cloud/register') {
       const body = await readJson(req);
       authHeaders(req, 'POST', path, body);
