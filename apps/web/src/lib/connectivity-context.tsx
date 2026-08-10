@@ -32,9 +32,10 @@ type ConnectivityContextValue = {
   reportLivePollResult: (ok: boolean) => void;
 };
 
-const READY_POLL_MS = 60_000;
-/** Avoid flashing Mode B/C on a single transient blip. */
-const FAIL_STREAK_TO_BANNER = 2;
+const READY_POLL_MS = 30_000;
+const READY_PROBE_TIMEOUT_MS = 8_000;
+/** One bounded readiness failure is enough to surface a real proxy/API outage. */
+const FAIL_STREAK_TO_BANNER = 1;
 /** Live-poll fail streak before Mode F (when A–C not already active). */
 const LIVE_POLL_FAIL_STREAK_TO_STALE = 2;
 
@@ -55,6 +56,7 @@ async function probeReady(): Promise<ReadyProbeResult> {
       cache: "no-store",
       credentials: "omit",
       headers: { Accept: "application/json" },
+      signal: AbortSignal.timeout(READY_PROBE_TIMEOUT_MS),
     });
 
     if (res.status === 502 || res.status === 504) {

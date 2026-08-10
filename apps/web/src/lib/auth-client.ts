@@ -55,6 +55,20 @@ export type MfaLoginChallengeResponse = {
 
 export type LoginResponse = AuthSessionResponse | MfaLoginChallengeResponse;
 
+/**
+ * Session bootstrap calls must fail fast when the same-origin API proxy cannot
+ * reach Render. Without a client deadline Vercel can hold these requests for
+ * roughly two minutes before surfacing a 502, which makes auth look frozen.
+ */
+const SESSION_REQUEST_TIMEOUT_MS = 12_000;
+
+function sessionRequest(init: RequestInit = {}): RequestInit {
+  return {
+    ...init,
+    signal: init.signal ?? AbortSignal.timeout(SESSION_REQUEST_TIMEOUT_MS),
+  };
+}
+
 export function login(
   login: string,
   password: string,
@@ -147,17 +161,18 @@ export async function register(input: {
 }
 
 export function logout() {
-  return api<void>("/auth/logout", { method: "POST" });
+  return api<void>("/auth/logout", sessionRequest({ method: "POST" }));
 }
 
 export function refresh() {
-  return api("/auth/refresh", { method: "POST" });
+  return api("/auth/refresh", sessionRequest({ method: "POST" }));
 }
 
 export function fetchMe() {
-  return api<AuthUser & { venuePath: string | null }>("/auth/me", {
-    method: "GET",
-  });
+  return api<AuthUser & { venuePath: string | null }>(
+    "/auth/me",
+    sessionRequest({ method: "GET" }),
+  );
 }
 
 export function createVenue(input: {
