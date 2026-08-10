@@ -2,6 +2,10 @@
 
 import { useEffect, useRef } from "react";
 import {
+  purgeOfflineLiteEntitlement,
+  refreshOfflineLiteEntitlement,
+} from "@/lib/offline-entitlement";
+import {
   configureOfflineContext,
   purgeOfflineNamespace,
   type OfflineNamespace,
@@ -31,10 +35,15 @@ export function OfflineContextBridge() {
       // Venue switches intentionally purge the previous tenant namespace. The
       // user must not carry another Shop's cached operational data forward.
       void purgeOfflineNamespace(previous);
+      purgeOfflineLiteEntitlement(previous);
     }
 
     previousRef.current = next;
     configureOfflineContext(next);
+
+    if (next && connectivity?.browserOnline !== false) {
+      void refreshOfflineLiteEntitlement().catch(() => undefined);
+    }
     void connectivity?.refreshOfflineCounts();
   }, [state, membership, connectivity]);
 
