@@ -1,0 +1,175 @@
+enum DeviceType {
+  POS
+  PAYMENT_TERMINAL
+  EDGE_HUB
+  PRINTER
+  KDS
+}
+
+enum DeviceStatus {
+  ACTIVE
+  DISABLED
+}
+
+enum PaymentOperationState {
+  CREATED
+  PROCESSING
+  REQUIRES_ACTION
+  AUTHORIZED
+  CAPTURED
+  FAILED
+  CANCELED
+  UNKNOWN
+  PARTIALLY_REFUNDED
+  REFUNDED
+}
+
+enum RefundState {
+  CREATED
+  PROCESSING
+  SUCCEEDED
+  FAILED
+  CANCELED
+  UNKNOWN
+}
+
+enum PaymentWebhookStatus {
+  RECEIVED
+  APPLIED
+  IGNORED
+}
+
+/// Tenant-scoped physical/logical device registry. Provider credentials never live here.
+model Device {
+  id         String       @id @default(cuid())
+  shopId     String
+  label      String
+  type       DeviceType
+  provider   String?
+  status     DeviceStatus @default(ACTIVE)
+  metadata   Json?
+  lastSeenAt DateTime?
+  createdAt  DateTime     @default(now())
+  updatedAt  DateTime     @updatedAt
+  terminal   PaymentTerminal?
+
+  @@unique([shopId, label])
+  @@index([shopId, type, status])
+  @@index([shopId, lastSeenAt])
+}
+
+/// Provider-neutral terminal assignment. Real provider behavior is supplied by a connector.
+model PaymentTerminal {
+  id                 String   @id @default(cuid())
+  shopId             String
+  deviceId           String   @unique
+  device             Device   @relation(fields: [deviceId], references: [id], onDelete: Cascade)
+  provider           String
+  externalTerminalId String?
+  capabilities       Json?
+  enabled            Boolean  @default(true)
+  createdAt          DateTime @default(now())
+  updatedAt          DateTime @updatedAt
+
+  @@unique([shopId, provider, externalTerminalId])
+  @@index([shopId, provider, enabled])
+}
+
+/// Durable provider-facing lifecycle, intentionally separate from the finalized Checkout Payment tender row.
+model PaymentOperation {
+  id                     String                @id @default(cuid())
+  shopId                 String
+  settlementId           String?
+  checkoutPaymentId      String?
+  terminalId             String?
+  provider               String
+  providerPaymentId      String?
+  idempotencyKey         String
+  requestHash            String
+  state                  PaymentOperationState @default(CREATED)
+  amount                 Decimal               @db.Decimal(19, 4)
+  currency               String
+  reconciliationRequired Boolean               @default(false)
+  providerPayload        Json?
+  errorCode              String?
+  errorMessage           String?
+  createdById            String?
+  capturedAt             DateTime?
+  canceledAt             DateTime?
+  failedAt               DateTime?
+  lastReconciledAt       DateTime?
+  createdAt              DateTime              @default(now())
+  updatedAt              DateTime              @updatedAt
+  refunds                Refund[]
+
+  @@unique([shopId, provider, idempotencyKey])
+  @@unique([shopId, provider, providerPaymentId])
+  @@index([shopId, state, createdAt])
+  @@index([shopId, settlementId, createdAt])
+  @@index([checkoutPaymentId])
+  @@index([terminalId])
+}
+
+/// Provider refund lifecycle for a captured PaymentOperation.
+model Refund {
+  id                 String      @id @default(cuid())
+  shopId             String
+  paymentOperationId String
+  paymentOperation   PaymentOperation @relation(fields: [paymentOperationId], references: [id], onDelete: Restrict)
+  providerRefundId   String?
+  idempotencyKey     String
+  requestHash        String
+  state              RefundState @default(CREATED)
+  amount             Decimal     @db.Decimal(19, 4)
+  currency           String
+  reason             String?
+  providerPayload    Json?
+  errorCode          String?
+  errorMessage       String?
+  createdById        String?
+  succeededAt        DateTime?
+  failedAt           DateTime?
+  lastReconciledAt   DateTime?
+  createdAt          DateTime    @default(now())
+  updatedAt          DateTime    @updatedAt
+  allocations        RefundAllocation[]
+
+  @@unique([shopId, paymentOperationId, idempotencyKey])
+  @@unique([shopId, providerRefundId])
+  @@index([shopId, state, createdAt])
+  @@index([paymentOperationId, createdAt])
+}
+
+/// Immutable refund allocation lineage back to checkout allocations/snapshots.
+model RefundAllocation {
+  id                  String   @id @default(cuid())
+  shopId              String
+  refundId            String
+  refund              Refund   @relation(fields: [refundId], references: [id], onDelete: Cascade)
+  paymentAllocationId String?
+  snapshotId          String?
+  amount              Decimal  @db.Decimal(19, 4)
+  createdAt           DateTime @default(now())
+
+  @@index([shopId, refundId])
+  @@index([paymentAllocationId])
+  @@index([snapshotId])
+}
+
+/// Normalized provider event receipt. Unique event IDs make duplicate delivery harmless.
+model PaymentWebhookEvent {
+  id                 String               @id @default(cuid())
+  shopId             String
+  provider           String
+  eventId            String
+  eventType          String?
+  payloadHash        String
+  paymentOperationId String?
+  status             PaymentWebhookStatus @default(RECEIVED)
+  receivedAt         DateTime             @default(now())
+  processedAt        DateTime?
+
+  @@unique([shopId, provider, eventId])
+  @@index([shopId, status, receivedAt])
+  @@index([paymentOperationId])
+}

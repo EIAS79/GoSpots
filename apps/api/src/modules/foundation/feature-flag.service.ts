@@ -44,6 +44,7 @@ const DEFAULT_ENABLED_FEATURES = new Set<FeatureKey>([
   'checkout_v2',
   'checkout_split',
   'cash_sessions',
+  'device_registry',
 ]);
 
 function parseDevFallback(raw: string | undefined): Set<string> {
