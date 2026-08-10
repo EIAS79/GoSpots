@@ -5,11 +5,7 @@ import {
   Injectable,
   NotFoundException,
 } from '@nestjs/common';
-import {
-  CheckoutPaymentStatus,
-  PaymentAllocationKind,
-  Prisma,
-} from '@prisma/client';
+import { CheckoutPaymentStatus, Prisma } from '@prisma/client';
 import { assertExpectedVersion } from '../../common/optimistic-concurrency.util';
 import {
   hasPermission,
