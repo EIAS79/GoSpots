@@ -25,6 +25,7 @@ describe('CashService approved close path', () => {
       drawerId: 'drawer-1',
       status: CashSessionStatus.OPEN,
       openedById: 'cashier-1',
+      openedAt: new Date('2026-08-10T08:00:00Z'),
       openingFloat: d(100),
       currency: 'PLN',
       version: 1,
