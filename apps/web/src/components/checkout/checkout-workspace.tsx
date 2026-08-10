@@ -132,8 +132,8 @@ export function CheckoutWorkspace({
   const selected = checks.find((check) => check.id === selectedId) ?? checks[0];
 
   return (
-    <div className="grid min-h-[38rem] flex-1 overflow-hidden rounded-2xl border border-white/10 bg-zinc-950/45 lg:grid-cols-[15rem_minmax(0,1fr)]">
-      <aside className="min-h-0 border-b border-white/8 bg-black/15 p-3 lg:border-b-0 lg:border-r">
+    <div className="grid h-full min-h-[32rem] flex-1 overflow-hidden rounded-2xl border border-white/10 bg-zinc-950/45 lg:grid-cols-[15rem_minmax(0,1fr)]">
+      <aside className="flex min-h-0 flex-col border-b border-white/8 bg-black/15 p-3 lg:border-b-0 lg:border-r">
         <div className="mb-3 flex items-center justify-between gap-2 px-1">
           <div>
             <p className="text-xs font-semibold uppercase tracking-[0.16em] text-zinc-500">
@@ -173,7 +173,7 @@ export function CheckoutWorkspace({
           </div>
         </div>
 
-        <ul className="flex gap-2 overflow-x-auto lg:max-h-[72vh] lg:flex-col lg:overflow-y-auto lg:overflow-x-hidden">
+        <ul className="flex min-h-0 gap-2 overflow-x-auto lg:flex-1 lg:flex-col lg:overflow-y-auto lg:overflow-x-hidden lg:overscroll-contain lg:pr-1">
           {checks.map((check) => {
             const active = check.id === selected.id;
             const currency = check.currency ?? "PLN";
