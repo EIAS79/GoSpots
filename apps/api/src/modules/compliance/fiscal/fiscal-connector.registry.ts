@@ -11,7 +11,7 @@ export class FiscalConnectorRegistry {
     simulated: SimulatedFiscalConnector,
     http: HttpFiscalConnector,
   ) {
-    this.connectors = new Map([
+    this.connectors = new Map<string, FiscalConnector>([
       [simulated.provider, simulated],
       [http.provider, http],
     ]);
