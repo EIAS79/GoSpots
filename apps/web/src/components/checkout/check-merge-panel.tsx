@@ -1,8 +1,9 @@
 "use client";
 
-import { ArrowLeftRight, Loader2, Merge, X } from "lucide-react";
+import { ArrowLeftRight, History, Loader2, Merge, X } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 import {
+  fetchGuestCheckMergeHistory,
   mergeGuestChecks,
   moveGuestCheckCharges,
 } from "@/lib/checkout-client";
@@ -14,6 +15,9 @@ import { formatCheckoutMoney } from "./checkout-presenter";
 
 type Direction = "INTO_CURRENT" | "OUT_OF_CURRENT";
 type MoveKind = "orders" | "play" | "reservations";
+type MergeHistoryEvent = Awaited<
+  ReturnType<typeof fetchGuestCheckMergeHistory>
+>["events"][number];
 
 function checkName(check: GuestCheck) {
   return (
@@ -21,6 +25,14 @@ function checkName(check: GuestCheck) {
     check.guestName?.trim() ||
     `Check #${check.id.slice(0, 8)}`
   );
+}
+
+function historyCheckName(check: {
+  id: string;
+  label: string | null;
+  guestName: string | null;
+}) {
+  return check.label?.trim() || check.guestName?.trim() || `#${check.id.slice(0, 8)}`;
 }
 
 function errorMessage(error: unknown) {
@@ -43,10 +55,12 @@ export function CheckMergePanel({
   onClose: () => void;
 }) {
   const [checks, setChecks] = useState<GuestCheck[]>([]);
+  const [history, setHistory] = useState<MergeHistoryEvent[]>([]);
   const [selectedId, setSelectedId] = useState("");
   const [direction, setDirection] = useState<Direction>("INTO_CURRENT");
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [loading, setLoading] = useState(true);
+  const [historyLoading, setHistoryLoading] = useState(true);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -69,8 +83,21 @@ export function CheckMergePanel({
     }
   }
 
+  async function loadHistory() {
+    setHistoryLoading(true);
+    try {
+      const result = await fetchGuestCheckMergeHistory(currentCheck.id);
+      setHistory(result.events);
+    } catch {
+      setHistory([]);
+    } finally {
+      setHistoryLoading(false);
+    }
+  }
+
   useEffect(() => {
     void loadChecks();
+    void loadHistory();
     // currentCheck.id is the stable boundary for reopening the panel.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [currentCheck.id]);
@@ -139,6 +166,7 @@ export function CheckMergePanel({
     } catch (err) {
       setError(errorMessage(err));
       await loadChecks();
+      await loadHistory();
     } finally {
       setBusy(false);
     }
@@ -294,7 +322,11 @@ export function CheckMergePanel({
                   onClick={() => void handleMerge()}
                   className="inline-flex min-h-10 items-center gap-2 rounded-xl border border-sky-400/30 bg-sky-400/10 px-3 text-xs font-bold text-sky-200 transition hover:bg-sky-400/15 disabled:opacity-40"
                 >
-                  {busy ? <Loader2 className="h-4 w-4 animate-spin" /> : <Merge className="h-4 w-4" />}
+                  {busy ? (
+                    <Loader2 className="h-4 w-4 animate-spin" />
+                  ) : (
+                    <Merge className="h-4 w-4" />
+                  )}
                   Merge all
                 </button>
               </div>
@@ -366,7 +398,13 @@ export function CheckMergePanel({
 
               <button
                 type="button"
-                disabled={locked || busy || selected.size === 0 || !source || !destination}
+                disabled={
+                  locked ||
+                  busy ||
+                  selected.size === 0 ||
+                  !source ||
+                  !destination
+                }
                 onClick={() => void handleMove()}
                 className="mt-3 inline-flex min-h-10 items-center gap-2 rounded-xl bg-sky-400 px-3 text-xs font-bold text-sky-950 transition hover:bg-sky-300 disabled:opacity-40"
               >
@@ -380,6 +418,46 @@ export function CheckMergePanel({
             </div>
           </>
         )}
+
+        <div className="border-t border-white/8 pt-4">
+          <div className="mb-2 flex items-center gap-2">
+            <History className="h-4 w-4 text-zinc-500" />
+            <p className="text-xs font-semibold uppercase tracking-[0.14em] text-zinc-500">
+              Merge history
+            </p>
+          </div>
+          {historyLoading ? (
+            <div className="flex items-center gap-2 py-3 text-xs text-zinc-600">
+              <Loader2 className="h-3.5 w-3.5 animate-spin" /> Loading history…
+            </div>
+          ) : history.length === 0 ? (
+            <p className="py-2 text-xs text-zinc-600">
+              No merge events for this check.
+            </p>
+          ) : (
+            <div className="space-y-2">
+              {history.map((event) => {
+                const movedCount =
+                  event.movedShopOrderIds.length +
+                  event.movedPlaySessionIds.length +
+                  event.movedReservationIds.length;
+                return (
+                  <div
+                    key={event.id}
+                    className="rounded-xl border border-white/7 bg-white/[0.02] px-3 py-2.5"
+                  >
+                    <p className="text-xs font-semibold text-zinc-300">
+                      {historyCheckName(event.sourceCheck)} → {historyCheckName(event.destinationCheck)}
+                    </p>
+                    <p className="mt-1 text-[11px] text-zinc-600">
+                      {movedCount} moved source{movedCount === 1 ? "" : "s"} · {new Date(event.createdAt).toLocaleString(locale)}
+                    </p>
+                  </div>
+                );
+              })}
+            </div>
+          )}
+        </div>
 
         {error ? (
           <div className="rounded-xl border border-red-400/20 bg-red-400/8 px-3 py-2.5 text-xs leading-5 text-red-200">
