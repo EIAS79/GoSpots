@@ -59,10 +59,49 @@ test("hard-refresh WAN recovery uses credential-free auth and venue snapshots", 
     "utf8",
   );
   assert.match(auth, /readOfflineAuthSnapshot/);
-  assert.match(auth, /err\.status === 0/);
+  assert.match(auth, /error\.status === 0/);
   assert.match(gate, /readOfflineShopSnapshot/);
   assert.match(gate, /requestError\.status === 0/);
   assert.match(gate, /offlineLiteEnabledFor/);
+});
+
+test("auth cold-start recovery is bounded and never performs a second manual refresh", async () => {
+  const authClient = await readFile(new URL("./auth-client.ts", import.meta.url), "utf8");
+  const auth = await readFile(new URL("./use-auth.tsx", import.meta.url), "utf8");
+
+  assert.match(authClient, /SESSION_REQUEST_TIMEOUT_MS = 12_000/);
+  assert.match(authClient, /AbortSignal\.timeout\(SESSION_REQUEST_TIMEOUT_MS\)/);
+  assert.match(authClient, /sessionRequest\(\{ method: "GET" \}\)/);
+  assert.match(auth, /TRANSIENT_AUTH_RETRY_MS = 3_000/);
+  assert.match(auth, /isTransientAuthFailure/);
+  assert.match(auth, /error\.status >= 500/);
+  assert.match(auth, /readOfflineAuthSnapshot/);
+
+  const reloadStart = auth.indexOf("const reload = useCallback");
+  const signOutStart = auth.indexOf("const signOut = useCallback", reloadStart);
+  assert.ok(reloadStart >= 0 && signOutStart > reloadStart);
+  const reloadBlock = auth.slice(reloadStart, signOutStart);
+  assert.doesNotMatch(reloadBlock, /apiRefresh\(/);
+});
+
+test("readiness probes and Render wakes have bounded recovery paths", async () => {
+  const connectivity = await readFile(
+    new URL("./connectivity-context.tsx", import.meta.url),
+    "utf8",
+  );
+  const render = await readFile(
+    new URL("../../../../render.yaml", import.meta.url),
+    "utf8",
+  );
+
+  assert.match(connectivity, /READY_POLL_MS = 30_000/);
+  assert.match(connectivity, /READY_PROBE_TIMEOUT_MS = 8_000/);
+  assert.match(connectivity, /AbortSignal\.timeout\(READY_PROBE_TIMEOUT_MS\)/);
+  assert.match(render, /pnpm --filter @gospots\/api exec prisma migrate deploy/);
+
+  const startCommand = render.slice(render.indexOf("startCommand:"), render.indexOf("healthCheckPath:"));
+  assert.doesNotMatch(startCommand, /prisma migrate deploy/);
+  assert.match(startCommand, /node dist\/main\.js/);
 });
 
 test("an ambiguous online GuestCheck mutation is not converted into a second local create", async () => {

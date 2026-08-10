@@ -5,6 +5,7 @@ import {
   useCallback,
   useContext,
   useEffect,
+  useRef,
   useState,
   type ReactNode,
 } from "react";
@@ -31,6 +32,8 @@ import {
 } from "./auth-client";
 
 const PROACTIVE_REFRESH_MS = 10 * 60 * 1000;
+/** Retry bootstrap while a sleeping/unreachable API is warming up. */
+const TRANSIENT_AUTH_RETRY_MS = 3_000;
 
 type State =
   | { status: "loading"; user: null }
@@ -60,40 +63,81 @@ function rememberUser(user: AuthUser) {
   return user;
 }
 
+function isTransientAuthFailure(error: unknown): boolean {
+  return (
+    error instanceof ApiError &&
+    (error.status === 0 ||
+      error.status === 408 ||
+      error.status === 429 ||
+      error.status >= 500)
+  );
+}
+
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [state, setState] = useState<State>({ status: "loading", user: null });
+  const [retryTick, setRetryTick] = useState(0);
+  const retryTimerRef = useRef<number | null>(null);
 
-  const reload = useCallback(async () => {
-    await ensureCsrf();
-    try {
-      const user = rememberUser(await fetchMe());
-      setState({ status: "authed", user });
-    } catch {
-      try {
-        await ensureCsrf();
-        await apiRefresh();
-        const user = rememberUser(await fetchMe());
-        setState({ status: "authed", user });
-      } catch (err) {
-        if (err instanceof ApiError && err.code === "SESSION_REVOKED") {
-          notifySessionRevoked();
-          await purgeOfflineSessionData();
-          setState({ status: "guest", user: null });
-          return;
-        }
-        if (err instanceof ApiError && err.status === 0) {
-          const cached = readOfflineAuthSnapshot();
-          if (cached) {
-            setState({ status: "authed", user: cached });
-            return;
-          }
-        }
-        setState({ status: "guest", user: null });
-      }
-    }
+  const clearRetry = useCallback(() => {
+    if (retryTimerRef.current === null) return;
+    window.clearTimeout(retryTimerRef.current);
+    retryTimerRef.current = null;
   }, []);
 
+  const scheduleRetry = useCallback(() => {
+    if (retryTimerRef.current !== null) return;
+    retryTimerRef.current = window.setTimeout(() => {
+      retryTimerRef.current = null;
+      setRetryTick((value) => value + 1);
+    }, TRANSIENT_AUTH_RETRY_MS);
+  }, []);
+
+  const reload = useCallback(async () => {
+    clearRetry();
+    setState((current) =>
+      current.status === "authed"
+        ? current
+        : { status: "loading", user: null },
+    );
+
+    try {
+      // `api()` already performs one refresh attempt for a genuine 401.
+      // Do not issue a second refresh for 502/network failures: that turns a
+      // temporary Render cold start into a false logout and extra delay.
+      const user = rememberUser(await fetchMe());
+      setState({ status: "authed", user });
+    } catch (err) {
+      if (isTransientAuthFailure(err)) {
+        const cached = readOfflineAuthSnapshot();
+        // Preserve a known identity while the backend wakes up. On a hard
+        // refresh Offline Lite may recover the credential-free cached identity.
+        setState((current) =>
+          current.status === "authed"
+            ? current
+            : cached
+              ? { status: "authed", user: cached }
+              : { status: "loading", user: null },
+        );
+        scheduleRetry();
+        return;
+      }
+
+      if (
+        err instanceof ApiError &&
+        (err.code === "SESSION_REVOKED" || err.status === 401)
+      ) {
+        if (err.code === "SESSION_REVOKED") notifySessionRevoked();
+        await purgeOfflineSessionData();
+        setState({ status: "guest", user: null });
+        return;
+      }
+
+      setState({ status: "guest", user: null });
+    }
+  }, [clearRetry, scheduleRetry]);
+
   const signOut = useCallback(async () => {
+    clearRetry();
     try {
       await ensureCsrf();
       await apiLogout();
@@ -102,19 +146,22 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       await purgeOfflineSessionData();
       setState({ status: "guest", user: null });
     }
-  }, []);
+  }, [clearRetry]);
 
   useEffect(() => {
     return registerAuthGuestHandler(() => {
+      clearRetry();
       void purgeOfflineSessionData().finally(() => {
         setState({ status: "guest", user: null });
       });
     });
-  }, []);
+  }, [clearRetry]);
 
   useEffect(() => {
     void reload();
-  }, [reload]);
+  }, [reload, retryTick]);
+
+  useEffect(() => clearRetry, [clearRetry]);
 
   useEffect(() => {
     if (state.status !== "authed") return;
@@ -128,8 +175,15 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         await ensureCsrf();
         await apiRefresh();
       } catch (err) {
-        if (err instanceof ApiError && err.code === "SESSION_REVOKED") {
-          notifySessionRevoked();
+        // Temporary 5xx/timeouts must not log the user out. A subsequent
+        // request/visibility tick will retry once the service is available.
+        if (isTransientAuthFailure(err)) return;
+        if (
+          err instanceof ApiError &&
+          (err.code === "SESSION_REVOKED" || err.status === 401)
+        ) {
+          if (err.code === "SESSION_REVOKED") notifySessionRevoked();
+          clearRetry();
           await purgeOfflineSessionData();
           setState({ status: "guest", user: null });
         }
@@ -150,7 +204,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       window.clearInterval(id);
       document.removeEventListener("visibilitychange", onVisible);
     };
-  }, [state.status]);
+  }, [clearRetry, state.status]);
 
   return (
     <AuthContext.Provider value={{ state, reload, signOut }}>
