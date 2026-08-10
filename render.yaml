@@ -11,10 +11,12 @@ services:
       pnpm install --frozen-lockfile &&
       pnpm --filter @gospots/api exec prisma generate &&
       pnpm --filter @gospots/api run build &&
-      test -f apps/api/dist/main.js
+      test -f apps/api/dist/main.js &&
+      pnpm --filter @gospots/api exec prisma migrate deploy
+    # Free Render services wake after idle. Keep the wake path to starting Node;
+    # migrations run once during deployment instead of on every cold start.
     startCommand: >-
       cd apps/api &&
-      npx prisma migrate deploy &&
       node dist/main.js
     healthCheckPath: /api/v1/ready
     envVars:
