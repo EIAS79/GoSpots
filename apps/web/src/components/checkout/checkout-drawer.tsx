@@ -1,6 +1,6 @@
 "use client";
 
-import { ArrowLeftRight, RefreshCw, ReceiptText } from "lucide-react";
+import { ArrowLeftRight, CheckCircle2, RefreshCw, ReceiptText } from "lucide-react";
 import { useCallback, useEffect, useState } from "react";
 import {
   createCheckSettlement,
@@ -12,15 +12,20 @@ import {
   type CheckoutPaymentState,
   type CheckoutPreview,
 } from "@/lib/checkout-client";
-import type { GuestCheck } from "@/lib/guest-check-client";
+import {
+  settleGuestCheck,
+  type GuestCheck,
+} from "@/lib/guest-check-client";
 import { ChargeGroups } from "./charge-groups";
 import { CheckMergePanel } from "./check-merge-panel";
 import { CheckoutSourcePicker } from "./checkout-source-picker";
 import { CheckoutTotals } from "./checkout-totals";
 import {
   classifyCheckoutError,
+  formatCheckoutMoney,
   type CheckoutIssueKind,
 } from "./checkout-presenter";
+import { PaymentConfirmation } from "./payment-confirmation";
 import { SettlementStatus } from "./settlement-status";
 import { SplitPaymentPanel } from "./split-payment-panel";
 import {
@@ -46,6 +51,13 @@ function tenderMethod(tender: CheckoutTender): CheckoutPaymentMethod | null {
   return null;
 }
 
+function paymentMethodLabel(method: string) {
+  if (method === "CASH") return "Cash";
+  if (method === "MANUAL_CARD") return "Manual card";
+  if (method === "OTHER") return "Other";
+  return method.replaceAll("_", " ").toLowerCase();
+}
+
 export function CheckoutDrawer({
   check,
   canWrite,
@@ -64,6 +76,9 @@ export function CheckoutDrawer({
   const [paymentBusy, setPaymentBusy] = useState(false);
   const [splitOpen, setSplitOpen] = useState(false);
   const [mergeOpen, setMergeOpen] = useState(false);
+  const [pendingTender, setPendingTender] = useState<CheckoutTender | null>(null);
+  const [closingCheck, setClosingCheck] = useState(false);
+  const [closeError, setCloseError] = useState<string | null>(null);
   const [issue, setIssue] = useState<CheckoutIssueKind | null>(null);
   const [detail, setDetail] = useState<string | null>(null);
   const [paymentError, setPaymentError] = useState<string | null>(null);
@@ -139,7 +154,9 @@ export function CheckoutDrawer({
   useEffect(() => {
     setSplitOpen(false);
     setMergeOpen(false);
+    setPendingTender(null);
     setPaymentError(null);
+    setCloseError(null);
     if (check.currentSettlementId) {
       void loadPaymentState(check.currentSettlementId);
     } else {
@@ -150,6 +167,7 @@ export function CheckoutDrawer({
   async function handleSourceChanged() {
     setPaymentState(null);
     setSplitOpen(false);
+    setPendingTender(null);
     setPaymentError(null);
     await onCheckChanged();
     await loadPreview(false);
@@ -175,19 +193,43 @@ export function CheckoutDrawer({
   async function handleTender(tender: CheckoutTender) {
     if (!preview || paymentBusy) return;
     setPaymentError(null);
+    setCloseError(null);
+
+    if (tender !== "Split") {
+      setPendingTender(tender);
+      setSplitOpen(false);
+      setMergeOpen(false);
+      return;
+    }
+
+    setPendingTender(null);
     setPaymentBusy(true);
     try {
       const state = await ensureSettlement();
       if (state.state === "PAID" || state.amountDue === "0.0000") return;
+      setSplitOpen(true);
+      setMergeOpen(false);
+    } catch (error) {
+      setPaymentError(errorDetail(error) ?? "Unable to prepare split payment.");
+    } finally {
+      setPaymentBusy(false);
+    }
+  }
 
-      if (tender === "Split") {
-        setSplitOpen(true);
-        setMergeOpen(false);
+  async function confirmPendingTender() {
+    if (!pendingTender || !preview || paymentBusy) return;
+    const method = tenderMethod(pendingTender);
+    if (!method) return;
+
+    setPaymentBusy(true);
+    setPaymentError(null);
+    try {
+      const state = await ensureSettlement();
+      if (state.state === "PAID" || state.amountDue === "0.0000") {
+        setPendingTender(null);
         return;
       }
 
-      const method = tenderMethod(tender);
-      if (!method) return;
       const groups = await previewPaymentGroups(state.settlementId, {
         mode: "REMAINING",
       });
@@ -204,6 +246,7 @@ export function CheckoutDrawer({
         })),
       });
       setPaymentState(next);
+      setPendingTender(null);
       await onCheckChanged();
       await loadPreview(false);
     } catch (error) {
@@ -223,9 +266,28 @@ export function CheckoutDrawer({
   async function handleMergeChanged() {
     setPaymentState(null);
     setSplitOpen(false);
+    setPendingTender(null);
     setPaymentError(null);
     await onCheckChanged();
     await loadPreview(false);
+  }
+
+  async function finishCheck() {
+    if (!fullyPaid || closingCheck) return;
+    setClosingCheck(true);
+    setCloseError(null);
+    try {
+      await settleGuestCheck(check.id);
+      await onCheckChanged();
+    } catch (error) {
+      const message = errorDetail(error);
+      setCloseError(
+        message ??
+          "Payment is complete, but attached activity must be completed before this check can close.",
+      );
+    } finally {
+      setClosingCheck(false);
+    }
   }
 
   const blockingIssue =
@@ -245,6 +307,9 @@ export function CheckoutDrawer({
     !blockingIssue &&
     !fullyPaid &&
     hasPositiveAmount(paymentState?.amountDue ?? preview?.amountDue);
+  const pendingMethod = pendingTender ? tenderMethod(pendingTender) : null;
+  const pendingAmount = paymentState?.amountDue ?? preview?.amountDue ?? "0.0000";
+  const paymentCurrency = paymentState?.currency ?? preview?.currency ?? check.currency ?? "PLN";
 
   return (
     <div className="flex min-h-0 min-w-0 flex-1 flex-col bg-zinc-950/20">
@@ -265,17 +330,20 @@ export function CheckoutDrawer({
           </div>
         </div>
         <div className="flex flex-wrap items-center gap-2">
-          <button
-            type="button"
-            onClick={() => {
-              setMergeOpen((current) => !current);
-              setSplitOpen(false);
-            }}
-            className="inline-flex min-h-10 items-center gap-2 rounded-xl border border-white/10 bg-white/[0.04] px-3 py-2 text-xs font-semibold text-zinc-300 transition hover:border-sky-400/30 hover:bg-sky-400/10"
-          >
-            <ArrowLeftRight className="h-3.5 w-3.5" />
-            Merge / move
-          </button>
+          {billEditable ? (
+            <button
+              type="button"
+              onClick={() => {
+                setMergeOpen((current) => !current);
+                setSplitOpen(false);
+                setPendingTender(null);
+              }}
+              className="inline-flex min-h-10 items-center gap-2 rounded-xl border border-white/10 bg-white/[0.04] px-3 py-2 text-xs font-semibold text-zinc-300 transition hover:border-sky-400/30 hover:bg-sky-400/10"
+            >
+              <ArrowLeftRight className="h-3.5 w-3.5" />
+              Merge / move
+            </button>
+          ) : null}
           <button
             type="button"
             onClick={() => void loadPreview(false)}
@@ -313,19 +381,34 @@ export function CheckoutDrawer({
             />
           ) : null}
 
-          {paymentStarted ? (
+          {fullyPaid ? (
+            <div className="rounded-xl border border-emerald-400/25 bg-emerald-400/[0.08] px-3 py-3 text-xs leading-5 text-emerald-100">
+              <div className="flex items-start gap-2.5">
+                <CheckCircle2 className="mt-0.5 h-4 w-4 shrink-0 text-emerald-300" />
+                <div>
+                  <p className="font-bold text-emerald-200">Payment complete</p>
+                  <p className="mt-0.5 text-emerald-100/75">
+                    No balance remains. The check stays operationally open until its
+                    attached order, play session, or booking is finished.
+                  </p>
+                </div>
+              </div>
+            </div>
+          ) : paymentStarted ? (
             <div className="rounded-xl border border-amber-400/20 bg-amber-400/[0.06] px-3 py-2.5 text-xs leading-5 text-amber-100">
-              Payment has started. Bill sources are locked so paid allocations cannot
-              be changed or moved.
+              Partially paid. Bill sources are locked so recorded payment allocations
+              cannot be changed or moved.
             </div>
           ) : null}
 
-          <CheckoutSourcePicker
-            check={check}
-            canWrite={billEditable}
-            locale={locale}
-            onChanged={handleSourceChanged}
-          />
+          {!fullyPaid ? (
+            <CheckoutSourcePicker
+              check={check}
+              canWrite={billEditable}
+              locale={locale}
+              onChanged={handleSourceChanged}
+            />
+          ) : null}
 
           <SettlementStatus
             loading={loading && !preview}
@@ -372,13 +455,67 @@ export function CheckoutDrawer({
                 locale={locale}
               />
             ) : null}
-            {preview && !blockingIssue ? (
+
+            {paymentState?.payments.length ? (
+              <section className="rounded-2xl border border-white/8 bg-white/[0.025] p-3">
+                <p className="text-xs font-semibold uppercase tracking-[0.16em] text-zinc-500">
+                  Recorded payments
+                </p>
+                <div className="mt-2 divide-y divide-white/7">
+                  {paymentState.payments.map((payment) => (
+                    <div key={payment.id} className="flex items-center justify-between gap-3 py-2 text-xs">
+                      <span className="font-medium text-zinc-300">
+                        {paymentMethodLabel(payment.method)}
+                      </span>
+                      <span className="font-bold tabular-nums text-emerald-300">
+                        {formatCheckoutMoney(payment.amount, payment.currency, locale)}
+                      </span>
+                    </div>
+                  ))}
+                </div>
+              </section>
+            ) : null}
+
+            {pendingMethod && preview && !fullyPaid ? (
+              <PaymentConfirmation
+                method={pendingMethod}
+                amount={pendingAmount}
+                currency={paymentCurrency}
+                locale={locale}
+                busy={paymentBusy}
+                onCancel={() => setPendingTender(null)}
+                onConfirm={() => void confirmPendingTender()}
+              />
+            ) : preview && !blockingIssue && !fullyPaid ? (
               <TenderButtons
                 canWrite={canWrite}
                 busy={loading || paymentBusy}
                 paymentsEnabled={paymentsEnabled}
                 onSelect={(tender) => void handleTender(tender)}
               />
+            ) : null}
+
+            {fullyPaid ? (
+              <section className="rounded-2xl border border-emerald-400/20 bg-emerald-400/[0.055] p-3">
+                <p className="text-sm font-bold text-emerald-200">Paid in full</p>
+                <p className="mt-1 text-xs leading-5 text-zinc-400">
+                  Finish the check when the attached operational activity is complete.
+                  If something is still active, GoSpots will keep the check open.
+                </p>
+                {closeError ? (
+                  <div className="mt-3 rounded-xl border border-amber-400/20 bg-amber-400/[0.07] px-3 py-2 text-xs leading-5 text-amber-100">
+                    {closeError}
+                  </div>
+                ) : null}
+                <button
+                  type="button"
+                  disabled={!canWrite || closingCheck}
+                  onClick={() => void finishCheck()}
+                  className="mt-3 min-h-11 w-full rounded-xl bg-emerald-400 px-3 text-sm font-bold text-emerald-950 transition hover:bg-emerald-300 disabled:opacity-45"
+                >
+                  {closingCheck ? "Checking…" : "Finish check"}
+                </button>
+              </section>
             ) : null}
           </div>
         </aside>

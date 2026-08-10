@@ -12,6 +12,7 @@ import {
   type PaymentGroupsPreview,
 } from "@/lib/checkout-client";
 import { formatCheckoutMoney } from "./checkout-presenter";
+import { PaymentConfirmation } from "./payment-confirmation";
 
 const MODES: Array<{
   key: PaymentAllocationKind;
@@ -69,6 +70,10 @@ export function SplitPaymentPanel({
     initialState,
   );
   const [paidGroupKeys, setPaidGroupKeys] = useState<Set<string>>(new Set());
+  const [pending, setPending] = useState<{
+    group: PaymentGroupPreview;
+    method: CheckoutPaymentMethod;
+  } | null>(null);
   const [building, setBuilding] = useState(false);
   const [payingKey, setPayingKey] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -93,6 +98,7 @@ export function SplitPaymentPanel({
   async function buildGroups() {
     setBuilding(true);
     setError(null);
+    setPending(null);
     try {
       const next = await previewPaymentGroups(settlementId, request);
       setPreview(next);
@@ -125,9 +131,11 @@ export function SplitPaymentPanel({
       });
       setPaymentState(next);
       setPaidGroupKeys((current) => new Set([...current, group.key]));
+      setPending(null);
       await onPaymentRecorded(next);
       if (next.state === "PAID") {
         setPreview(null);
+        onClose();
       }
     } catch (err) {
       setError(errorMessage(err));
@@ -146,9 +154,9 @@ export function SplitPaymentPanel({
           <div>
             <h3 className="font-bold text-white">Split & mixed payment</h3>
             <p className="mt-1 max-w-xl text-xs leading-5 text-zinc-500">
-              Build payment groups on the server, then choose a tender for each
-              group. Manual card records a card payment only; it does not contact
-              a payment terminal.
+              Build payment groups on the server, then choose and confirm a tender
+              for each group. Manual card only records an externally approved card
+              payment; it does not contact a terminal.
             </p>
           </div>
         </div>
@@ -172,6 +180,7 @@ export function SplitPaymentPanel({
                 onClick={() => {
                   setMode(item.key);
                   setPreview(null);
+                  setPending(null);
                   setPaidGroupKeys(new Set());
                 }}
                 className={`rounded-xl border p-3 text-left transition ${
@@ -284,6 +293,7 @@ export function SplitPaymentPanel({
             <div className="space-y-2">
               {preview.groups.map((group, index) => {
                 const paid = paidGroupKeys.has(group.key);
+                const confirming = pending?.group.key === group.key;
                 return (
                   <article
                     key={group.key}
@@ -317,25 +327,36 @@ export function SplitPaymentPanel({
                         </p>
                       </div>
 
-                      {!paid ? (
+                      {!paid && !confirming ? (
                         <div className="flex flex-wrap gap-1.5">
-                          {METHODS.map((method) => {
-                            const key = `${group.key}:${method.key}`;
-                            return (
-                              <button
-                                key={method.key}
-                                type="button"
-                                disabled={Boolean(payingKey)}
-                                onClick={() => void payGroup(group, method.key)}
-                                className="min-h-9 rounded-lg border border-white/10 bg-white/[0.04] px-2.5 text-xs font-semibold text-zinc-200 transition hover:border-emerald-400/40 hover:bg-emerald-400/10 disabled:opacity-40"
-                              >
-                                {payingKey === key ? "Recording…" : method.label}
-                              </button>
-                            );
-                          })}
+                          {METHODS.map((method) => (
+                            <button
+                              key={method.key}
+                              type="button"
+                              disabled={Boolean(payingKey || pending)}
+                              onClick={() => setPending({ group, method: method.key })}
+                              className="min-h-9 rounded-lg border border-white/10 bg-white/[0.04] px-2.5 text-xs font-semibold text-zinc-200 transition hover:border-emerald-400/40 hover:bg-emerald-400/10 disabled:opacity-40"
+                            >
+                              {method.label}
+                            </button>
+                          ))}
                         </div>
                       ) : null}
                     </div>
+
+                    {confirming && pending ? (
+                      <div className="mt-3">
+                        <PaymentConfirmation
+                          method={pending.method}
+                          amount={group.amount}
+                          currency={group.currency}
+                          locale={locale}
+                          busy={payingKey !== null}
+                          onCancel={() => setPending(null)}
+                          onConfirm={() => void payGroup(group, pending.method)}
+                        />
+                      </div>
+                    ) : null}
                   </article>
                 );
               })}

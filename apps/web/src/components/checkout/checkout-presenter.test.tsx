@@ -8,6 +8,7 @@ import type {
 } from "@/lib/checkout-client";
 import { ChargeGroups } from "./charge-groups";
 import { CheckoutTotals } from "./checkout-totals";
+import { PaymentConfirmation } from "./payment-confirmation";
 import {
   checkoutAccess,
   classifyCheckoutError,
@@ -109,6 +110,38 @@ test("Chunk 04 tenders clearly expose manual payment methods", () => {
   assert.match(html, /Split/);
   assert.match(html, /Other/);
   assert.match(html, /does not contact a terminal/);
+});
+
+test("manual card confirmation makes the external-provider boundary explicit", () => {
+  const html = renderToStaticMarkup(
+    <PaymentConfirmation
+      method="MANUAL_CARD"
+      amount="200.0000"
+      currency="PLN"
+      onConfirm={() => undefined}
+      onCancel={() => undefined}
+    />,
+  );
+  assert.match(html, /Confirm payment/);
+  assert.match(html, /200\.00/);
+  assert.match(html, /external terminal or processor has approved/i);
+  assert.match(html, /does not charge the card/i);
+  assert.match(html, /Record manual card/);
+  assert.match(html, /Cancel/);
+});
+
+test("cash confirmation states that the amount is posted to the cash shift", () => {
+  const html = renderToStaticMarkup(
+    <PaymentConfirmation
+      method="CASH"
+      amount="40.0000"
+      currency="PLN"
+      onConfirm={() => undefined}
+      onCancel={() => undefined}
+    />,
+  );
+  assert.match(html, /Confirm cash received/);
+  assert.match(html, /open cash shift/i);
 });
 
 test("state conflicts use the required reload message", () => {
