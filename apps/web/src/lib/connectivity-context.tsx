@@ -35,9 +35,10 @@ type ConnectivityContextValue = {
   syncNow: () => Promise<void>;
 };
 
-const READY_POLL_MS = 60_000;
+const READY_POLL_MS = 30_000;
+const READY_PROBE_TIMEOUT_MS = 8_000;
 const OUTBOX_POLL_MS = 15_000;
-const FAIL_STREAK_TO_BANNER = 2;
+const FAIL_STREAK_TO_BANNER = 1;
 const LIVE_POLL_FAIL_STREAK_TO_STALE = 2;
 const EMPTY_COUNTS: OfflineCounts = { pending: 0, conflict: 0, failed: 0 };
 
@@ -56,6 +57,7 @@ async function probeReady(): Promise<ReadyProbeResult> {
       cache: "no-store",
       credentials: "omit",
       headers: { Accept: "application/json" },
+      signal: AbortSignal.timeout(READY_PROBE_TIMEOUT_MS),
     });
     if (res.status === 502 || res.status === 504) return { kind: "unreachable" };
     if (res.status === 503) return { kind: "unavailable" };
