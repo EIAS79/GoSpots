@@ -151,7 +151,7 @@ export class FiscalDocumentService {
         sourceId: snapshot.sourceId,
         lineReference: snapshot.lineReference,
         description: snapshot.description,
-        quantity: snapshot.quantity,
+        quantity: new Prisma.Decimal(snapshot.quantity),
         taxCategoryCode: category.code,
         taxRatePercent: category.ratePercent,
         netAmount: net,
