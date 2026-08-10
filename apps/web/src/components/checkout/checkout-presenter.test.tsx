@@ -1,7 +1,11 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import { renderToStaticMarkup } from "react-dom/server";
-import type { CheckoutChargeLine, CheckoutPreview } from "@/lib/checkout-client";
+import type {
+  CheckoutChargeLine,
+  CheckoutPaymentState,
+  CheckoutPreview,
+} from "@/lib/checkout-client";
 import { ChargeGroups } from "./charge-groups";
 import { CheckoutTotals } from "./checkout-totals";
 import {
@@ -46,6 +50,18 @@ const preview: CheckoutPreview = {
   lines: [],
 };
 
+const partialPayment: CheckoutPaymentState = {
+  settlementId: "settlement-1",
+  guestCheckId: "check-1",
+  guestCheckVersion: 9,
+  state: "PARTIALLY_PAID",
+  currency: "PLN",
+  total: "123.4500",
+  paidAmount: "40.0000",
+  amountDue: "83.4500",
+  payments: [],
+};
+
 test("renders one checkout surface with mixed charge groups", () => {
   const html = renderToStaticMarkup(
     <ChargeGroups
@@ -81,7 +97,18 @@ test("unauthorized staff is read/write denied and payment controls stay disabled
   });
   const html = renderToStaticMarkup(<TenderButtons canWrite={false} />);
   assert.match(html, /disabled/);
-  assert.match(html, /Not connected yet/);
+  assert.match(html, /Add at least one charge/);
+});
+
+test("Chunk 04 tenders clearly expose manual payment methods", () => {
+  const html = renderToStaticMarkup(
+    <TenderButtons canWrite paymentsEnabled />,
+  );
+  assert.match(html, /Cash/);
+  assert.match(html, /Manual card/);
+  assert.match(html, /Split/);
+  assert.match(html, /Other/);
+  assert.match(html, /does not contact a terminal/);
 });
 
 test("state conflicts use the required reload message", () => {
@@ -119,7 +146,11 @@ test("loading and empty charge states render explicitly", () => {
 
 test("large check item counts render without a second checkout implementation", () => {
   const lines = Array.from({ length: 120 }, (_, index) =>
-    line(index, index % 2 === 0 ? "SHOP_ORDER" : "PLAY_SESSION", `Item ${index + 1}`),
+    line(
+      index,
+      index % 2 === 0 ? "SHOP_ORDER" : "PLAY_SESSION",
+      `Item ${index + 1}`,
+    ),
   );
   const html = renderToStaticMarkup(
     <ChargeGroups lines={lines} currency="PLN" />,
@@ -134,4 +165,13 @@ test("amount due is rendered from the server preview without client summation", 
   assert.match(html, /123\.45/);
   assert.match(html, /Check total/);
   assert.match(html, /Live bill/);
+});
+
+test("partial payment totals use settlement progress rather than the original bill due", () => {
+  const html = renderToStaticMarkup(
+    <CheckoutTotals preview={preview} paymentState={partialPayment} />,
+  );
+  assert.match(html, /Partially paid/);
+  assert.match(html, /40\.00/);
+  assert.match(html, /83\.45/);
 });
