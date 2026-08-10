@@ -1,4 +1,4 @@
-import { Body, Controller, Post } from '@nestjs/common';
+import { Body, Controller, Get, Post } from '@nestjs/common';
 import { ApiTags } from '@nestjs/swagger';
 import { CurrentUser } from '../auth/decorators/current-user.decorator';
 import type { JwtAccessPayload } from '../auth/auth.service';
@@ -9,6 +9,11 @@ import { OfflineSyncService } from './offline-sync.service';
 @Controller('offline-sync')
 export class OfflineSyncController {
   constructor(private readonly offlineSync: OfflineSyncService) {}
+
+  @Get('status')
+  status(@CurrentUser() actor: JwtAccessPayload) {
+    return this.offlineSync.status(actor);
+  }
 
   @Post('operations')
   applyOperation(
