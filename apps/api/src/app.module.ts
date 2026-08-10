@@ -33,6 +33,7 @@ import { GuestCheckModule } from './modules/guest-check/guest-check.module';
 import { CheckoutModule } from './modules/checkout/checkout.module';
 import { CashModule } from './modules/cash/cash.module';
 import { DevicePaymentModule } from './modules/device-payment/device-payment.module';
+import { ComplianceModule } from './modules/compliance/compliance.module';
 import { StaffApprovalsModule } from './modules/staff-approvals/staff-approvals.module';
 import { VenueContextInterceptor } from './common/venue-context.interceptor';
 import { TenantRlsInterceptor } from './common/tenant-rls.interceptor';
@@ -100,6 +101,7 @@ import { RolesGuard } from './modules/auth/guards/roles.guard';
     CheckoutModule,
     CashModule,
     DevicePaymentModule,
+    ComplianceModule,
     StaffApprovalsModule,
     HealthModule,
     MetricsModule,
