@@ -1,7 +1,9 @@
 import type { PrismaService } from '../../prisma/prisma.service';
 import { clearIdempotencyMemoryCache } from '../../common/idempotency.util';
 import { CheckoutController } from './checkout.controller';
+import type { CheckoutPaymentService } from './checkout-payment.service';
 import type { CheckoutService } from './checkout.service';
+import type { GuestCheckMergeService } from './guest-check-merge.service';
 
 type Receipt = {
   status: string;
@@ -18,7 +20,9 @@ function fakePrisma() {
   };
   return {
     idempotencyReceipt: {
-      findUnique: jest.fn(async ({ where }: any) => store.get(composite(where)) ?? null),
+      findUnique: jest.fn(
+        async ({ where }: any) => store.get(composite(where)) ?? null,
+      ),
       create: jest.fn(async ({ data }: any) => {
         const key = `${data.shopId}:${data.scope}:${data.key}`;
         if (store.has(key)) {
@@ -48,6 +52,23 @@ function fakePrisma() {
   } as unknown as PrismaService;
 }
 
+function makeController(
+  checkout: CheckoutService,
+  payments = {} as CheckoutPaymentService,
+  merges = {} as GuestCheckMergeService,
+) {
+  return new CheckoutController(checkout, payments, merges, fakePrisma());
+}
+
+const owner = {
+  sub: 'owner-1',
+  shopId: 'shop-a',
+  shopRole: 'OWNER',
+  perms: '*',
+} as any;
+
+const req = { correlationId: 'corr_12345678' };
+
 describe('CheckoutController settlement idempotency', () => {
   beforeEach(() => clearIdempotencyMemoryCache());
 
@@ -59,24 +80,17 @@ describe('CheckoutController settlement idempotency', () => {
         total: '42.0000',
       }),
     } as unknown as CheckoutService;
-    const controller = new CheckoutController(checkout, fakePrisma());
-    const user = {
-      sub: 'owner-1',
-      shopId: 'shop-a',
-      shopRole: 'OWNER',
-      perms: '*',
-    } as any;
-    const req = { correlationId: 'corr_12345678' };
+    const controller = makeController(checkout);
 
     const first = await controller.createSettlement(
-      user,
+      owner,
       'check-1',
       { expectedVersion: 3 },
       'settle-key-123',
       req,
     );
     const second = await controller.createSettlement(
-      user,
+      owner,
       'check-1',
       { expectedVersion: 3 },
       'settle-key-123',
@@ -91,23 +105,54 @@ describe('CheckoutController settlement idempotency', () => {
     const checkout = {
       createSettlement: jest.fn(),
     } as unknown as CheckoutService;
-    const controller = new CheckoutController(checkout, fakePrisma());
-    const user = {
-      sub: 'owner-1',
-      shopId: 'shop-a',
-      shopRole: 'OWNER',
-      perms: '*',
-    } as any;
+    const controller = makeController(checkout);
 
     await expect(
       controller.createSettlement(
-        user,
+        owner,
         'check-1',
         { expectedVersion: 3 },
         undefined,
-        { correlationId: 'corr_12345678' },
+        req,
       ),
     ).rejects.toThrow('Idempotency-Key header is required');
     expect(checkout.createSettlement).not.toHaveBeenCalled();
+  });
+
+  it('replays a repeated allocation request instead of recording a second payment', async () => {
+    const checkout = {} as CheckoutService;
+    const payments = {
+      createPayment: jest.fn().mockResolvedValue({
+        settlementId: 'settlement-1',
+        state: 'PARTIALLY_PAID',
+        paidAmount: '25.0000',
+        amountDue: '75.0000',
+      }),
+    } as unknown as CheckoutPaymentService;
+    const controller = makeController(checkout, payments);
+    const dto = {
+      expectedCheckVersion: 8,
+      method: 'CASH',
+      allocationKind: 'CUSTOM',
+      allocations: [{ snapshotId: 'line-1', amount: '25.0000' }],
+    } as any;
+
+    const first = await controller.createPayment(
+      owner,
+      'settlement-1',
+      dto,
+      'payment-key-123',
+      req,
+    );
+    const replay = await controller.createPayment(
+      owner,
+      'settlement-1',
+      dto,
+      'payment-key-123',
+      req,
+    );
+
+    expect(replay).toEqual(first);
+    expect(payments.createPayment).toHaveBeenCalledTimes(1);
   });
 });

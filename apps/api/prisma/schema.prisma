@@ -264,6 +264,9 @@ model Shop {
   domainEventOutbox DomainEventOutbox[]
   checkSettlements CheckSettlement[]
   chargeSnapshots ChargeSnapshot[]
+  checkoutPayments Payment[]
+  paymentAllocations PaymentAllocation[]
+  guestCheckMergeEvents GuestCheckMergeEvent[]
 }
 
 /// Compressed venue images (menu, gallery, gaming, cover, etc.)
@@ -1221,15 +1224,44 @@ model GuestCheck {
   /// Current immutable checkout snapshot; legacy GuestCheck settlement remains unchanged.
   currentSettlementId String?    @unique
   currentSettlement   CheckSettlement? @relation("GuestCheckCurrentSettlement", fields: [currentSettlementId], references: [id], onDelete: SetNull)
+  /// Merge lineage: a source check can be absorbed into another open check.
+  mergedIntoCheckId String?
+  mergedIntoCheck   GuestCheck? @relation("GuestCheckMergeLineage", fields: [mergedIntoCheckId], references: [id], onDelete: SetNull)
+  mergedChecks      GuestCheck[] @relation("GuestCheckMergeLineage")
 
   shopOrders   ShopOrder[]
   playSessions PlaySession[]
   reservations Reservation[]
   ledgerEntries LedgerEntry[]
   settlements CheckSettlement[] @relation("GuestCheckSettlements")
+  mergeEventsAsSource GuestCheckMergeEvent[] @relation("GuestCheckMergeSource")
+  mergeEventsAsDestination GuestCheckMergeEvent[] @relation("GuestCheckMergeDestination")
 
   @@index([shopId, status, openedAt])
   @@index([shopId, version])
+  @@index([mergedIntoCheckId])
+}
+
+enum CheckoutPaymentMethod {
+  CASH
+  MANUAL_CARD
+  OTHER
+}
+
+enum CheckoutPaymentStatus {
+  PENDING
+  SUCCESS
+  FAILED
+  VOID
+}
+
+enum PaymentAllocationKind {
+  LINE
+  SOURCE
+  EQUAL
+  PERCENTAGE
+  CUSTOM
+  REMAINING
 }
 
 enum CheckSettlementState {
@@ -1263,6 +1295,8 @@ model CheckSettlement {
   createdAt      DateTime             @default(now())
   updatedAt      DateTime             @updatedAt
   snapshots      ChargeSnapshot[]
+  payments        Payment[]
+  paymentAllocations PaymentAllocation[]
 
   @@index([guestCheckId, sourceHash])
   @@unique([guestCheckId, checkVersion])
@@ -1290,6 +1324,7 @@ model ChargeSnapshot {
   currency        String
   pricingMetadata Json?
   createdAt       DateTime        @default(now())
+  allocations     PaymentAllocation[]
 
   @@index([settlementId, position])
   @@index([shopId, sourceType, sourceId])
@@ -1751,4 +1786,73 @@ model StaffActionRequest {
   @@index([shopId, status, createdAt])
   @@index([shopId, requesterUserId, createdAt])
   @@index([expiresAt])
+}
+
+
+/// Venue checkout payment recorded against one immutable settlement.
+/// Provider/terminal details are intentionally deferred to later payment connector chunks.
+model Payment {
+  id            String                @id @default(cuid())
+  shopId        String
+  shop          Shop                  @relation(fields: [shopId], references: [id], onDelete: Cascade)
+  settlementId  String
+  settlement    CheckSettlement       @relation(fields: [settlementId], references: [id], onDelete: Restrict)
+  method        CheckoutPaymentMethod
+  status        CheckoutPaymentStatus @default(PENDING)
+  amount        Decimal               @db.Decimal(19, 4)
+  currency      String
+  note          String?
+  createdById   String?
+  correlationId String?
+  succeededAt   DateTime?
+  failedAt      DateTime?
+  createdAt     DateTime              @default(now())
+  updatedAt     DateTime              @updatedAt
+  allocations   PaymentAllocation[]
+
+  @@index([shopId, status, createdAt])
+  @@index([settlementId, status, createdAt])
+}
+
+/// Exact mapping between a checkout payment and immutable charge snapshots.
+model PaymentAllocation {
+  id             String                @id @default(cuid())
+  shopId         String
+  shop           Shop                  @relation(fields: [shopId], references: [id], onDelete: Cascade)
+  paymentId      String
+  payment        Payment               @relation(fields: [paymentId], references: [id], onDelete: Cascade)
+  settlementId   String
+  settlement     CheckSettlement       @relation(fields: [settlementId], references: [id], onDelete: Restrict)
+  snapshotId     String
+  snapshot       ChargeSnapshot        @relation(fields: [snapshotId], references: [id], onDelete: Restrict)
+  allocationKind PaymentAllocationKind
+  amount         Decimal               @db.Decimal(19, 4)
+  quantity       Decimal               @default(0) @db.Decimal(19, 4)
+  sourceType     String?
+  sourceId       String?
+  createdAt      DateTime              @default(now())
+
+  @@unique([paymentId, snapshotId])
+  @@index([settlementId, snapshotId])
+  @@index([shopId, settlementId])
+}
+
+/// Durable audit lineage for a full GuestCheck merge.
+model GuestCheckMergeEvent {
+  id                     String     @id @default(cuid())
+  shopId                 String
+  shop                   Shop       @relation(fields: [shopId], references: [id], onDelete: Cascade)
+  sourceCheckId          String
+  sourceCheck            GuestCheck @relation("GuestCheckMergeSource", fields: [sourceCheckId], references: [id], onDelete: Restrict)
+  destinationCheckId     String
+  destinationCheck       GuestCheck @relation("GuestCheckMergeDestination", fields: [destinationCheckId], references: [id], onDelete: Restrict)
+  actorId                String?
+  movedShopOrderIds      Json
+  movedPlaySessionIds    Json
+  movedReservationIds    Json
+  createdAt              DateTime   @default(now())
+
+  @@index([shopId, createdAt])
+  @@index([sourceCheckId, createdAt])
+  @@index([destinationCheckId, createdAt])
 }

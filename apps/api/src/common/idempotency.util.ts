@@ -36,6 +36,9 @@ export const IDEMPOTENCY_SCOPES = {
   /** Tier C residual — catalog FX apply via settings (Lane TTTT); keys optional. */
   /** Checkout V2 settlement snapshot creation. Required even though no tender is charged yet. */
   CHECKOUT_SETTLEMENT_CREATE: 'checkout.settlements.create',
+  CHECKOUT_PAYMENT_CREATE: 'checkout.payments.create',
+  CHECKOUT_CHECK_MERGE: 'checkout.checks.merge',
+  CHECKOUT_CHARGES_MOVE: 'checkout.checks.move-charges',
   SHOP_CURRENCY_APPLY: 'shop.currency.apply',
   /** Onboarding template seed — derived key from templateId when header absent (Lane ONBOARD32). */
   SHOP_ONBOARDING_APPLY_TEMPLATE: 'shop.onboarding.apply-template',

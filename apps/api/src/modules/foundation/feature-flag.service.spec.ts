@@ -43,6 +43,24 @@ describe('FeatureFlagService', () => {
     ).resolves.toBe(true);
   });
 
+  it('makes Chunk 04 checkout split a product default with an explicit Shop kill switch', async () => {
+    await expect(
+      service({}).isFeatureEnabled('shop-a', 'checkout_split'),
+    ).resolves.toBe(true);
+    await expect(
+      service({ 'shop-a:checkout_split': false }).isFeatureEnabled(
+        'shop-a',
+        'checkout_split',
+      ),
+    ).resolves.toBe(false);
+    await expect(
+      service({ 'shop-a:checkout_split': false }).isFeatureEnabled(
+        'shop-b',
+        'checkout_split',
+      ),
+    ).resolves.toBe(true);
+  });
+
   it('still defaults non-product rollout flags to disabled in production', async () => {
     await expect(
       service({}).isFeatureEnabled('shop-a', 'payments_v1'),
