@@ -1,4 +1,84 @@
-import { IsDateString, IsIn, IsInt, IsObject, IsOptional, IsString, MaxLength, Min } from 'class-validator';
+import {
+  IsBoolean,
+  IsDateString,
+  IsIn,
+  IsInt,
+  IsObject,
+  IsOptional,
+  IsString,
+  Matches,
+  MaxLength,
+  Min,
+} from 'class-validator';
+
+export class ConfigureComplianceProfileDto {
+  @IsString() @MaxLength(240)
+  legalName!: string;
+
+  @IsString() @Matches(/^\d{10}$/)
+  taxId!: string;
+
+  @IsString() @MaxLength(240)
+  streetAddress!: string;
+
+  @IsString() @Matches(/^\d{2}-\d{3}$/)
+  postalCode!: string;
+
+  @IsString() @MaxLength(120)
+  city!: string;
+
+  @IsOptional() @IsString() @MaxLength(40)
+  defaultTaxCategoryCode?: string;
+
+  @IsOptional() @IsIn(['TEST', 'DEMO', 'PRD'])
+  ksefEnvironment?: 'TEST' | 'DEMO' | 'PRD';
+
+  /** KSeF system token. It is encrypted before persistence and never returned. */
+  @IsOptional() @IsString() @MaxLength(2048)
+  ksefToken?: string;
+}
+
+export class UpsertTaxCategoryDto {
+  @IsString() @MaxLength(40)
+  code!: string;
+
+  @IsString() @MaxLength(120)
+  label!: string;
+
+  @IsString() @Matches(/^\d{1,3}(?:\.\d{1,4})?$/)
+  ratePercent!: string;
+
+  @IsOptional() @IsBoolean()
+  active?: boolean;
+}
+
+export class UpsertFiscalDeviceDto {
+  @IsString() @MaxLength(120)
+  label!: string;
+
+  @IsString() @MaxLength(80)
+  provider!: string;
+
+  @IsOptional() @IsString() @MaxLength(200)
+  externalDeviceId?: string;
+
+  @IsOptional() @IsBoolean()
+  enabled?: boolean;
+
+  @IsOptional() @IsObject()
+  metadata?: Record<string, unknown>;
+}
+
+export class GenerateSettlementComplianceDocumentDto {
+  @IsIn(['RECEIPT', 'INVOICE'])
+  kind!: 'RECEIPT' | 'INVOICE';
+
+  @IsOptional() @IsString() @MaxLength(240)
+  buyerName?: string;
+
+  @IsOptional() @IsString() @Matches(/^\d{10}$/)
+  buyerTaxId?: string;
+}
 
 export class CreateComplianceDocumentDto {
   @IsIn(['RECEIPT', 'INVOICE', 'CORRECTION', 'REFUND'])
