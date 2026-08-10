@@ -1,0 +1,39 @@
+name: Chunk 05 integration patch
+
+on:
+  push:
+    branches:
+      - feat/chunk05-cash-drawer-shift-reconciliation
+
+permissions:
+  contents: write
+
+jobs:
+  patch-integration:
+    if: ${{ !contains(github.event.head_commit.message, '[chunk05-patch]') }}
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Patch Chunk 05 integration files
+        run: node .github/scripts/chunk05-integration-patch.mjs
+      - name: Commit integration patch
+        shell: bash
+        run: |
+          if git diff --quiet; then
+            echo "Chunk 05 integration already patched"
+            exit 0
+          fi
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add \
+            apps/api/prisma/schema.prisma \
+            apps/api/src/common/permissions.ts \
+            apps/api/src/common/idempotency.util.ts \
+            apps/api/src/app.module.ts \
+            apps/api/src/modules/foundation/feature-flag.service.ts \
+            apps/api/src/modules/checkout/checkout.module.ts \
+            apps/api/src/modules/checkout/checkout-payment.service.ts \
+            apps/web/src/components/layout/tenant-shell.tsx \
+            apps/web/src/lib/i18n.ts
+          git commit -m "Patch Chunk 05 integration files [chunk05-patch]"
+          git push
