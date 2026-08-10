@@ -71,6 +71,7 @@ test("an ambiguous online GuestCheck mutation is not converted into a second loc
   const updateStart = source.indexOf("export async function updateGuestCheck", createStart);
   assert.ok(createStart >= 0 && updateStart > createStart);
   const createBlock = source.slice(createStart, updateStart);
-  assert.doesNotMatch(createBlock, /catch\s*\(/);
-  assert.match(createBlock, /if \(offlineNow\(\)\) return createGuestCheckOffline/);
+  assert.match(createBlock, /if \(offlineNow\(\)\) return createGuestCheckOffline\(body\)/);
+  assert.equal((createBlock.match(/createGuestCheckOffline\(body\)/g) ?? []).length, 1);
+  assert.doesNotMatch(createBlock, /isNetworkFailure/);
 });
