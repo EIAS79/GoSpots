@@ -1,5 +1,9 @@
 # Chunk 10 — GoSpots Edge Hub Completion Record
 
+## Status
+
+**DONE.** Chunk 10 is merged and post-merge verified. PR #23 exact head `282a32cabb925f7877b2ede04734e7ed4d697556` passed GitHub Actions CI #265; merge commit `dba833a830495b42fe0043eab3d60bc9d6d9352d` passed post-merge `main` CI #266. Vercel production deployment for the merge commit completed successfully.
+
 ## Scope delivered
 
 - Added `apps/edge`, a small Node.js 24 Edge service using built-in SQLite.
@@ -28,7 +32,7 @@ No new cloud table is required. The existing tenant-scoped `Device.metadata` sto
 
 ## Verification
 
-Local Edge test suite covers:
+The final Edge suite covers:
 
 1. two distinct authenticated LAN POS clients sharing one ordered stream and deterministic versions;
 2. restart durability;
@@ -36,6 +40,31 @@ Local Edge test suite covers:
 4. explicit rejection of money/compliance operations;
 5. LAN nonce replay rejection;
 6. cloud reconnect stable-ID replay exactly once logically;
-7. rejection of invalid event IDs before unsyncable work can be committed.
+7. rejection of invalid event IDs before unsyncable work can be committed;
+8. automatic `/api/v1` normalization when `EDGE_CLOUD_URL` is configured as an API origin;
+9. permanent cloud validation rejection quarantine without poisoning later ordered events;
+10. invalid LAN signatures cannot consume/store a nonce before signature verification.
 
-Final completion requires the exact PR head CI and post-merge main CI checks recorded in `chunk-10-acceptance.md`.
+API tests additionally cover transaction-serialized one-time provisioning and expired nonce-receipt cleanup.
+
+## Review hardening
+
+Before merge, five actionable automated review findings were fixed and all review threads were resolved:
+
+- missing global API prefix in cloud requests;
+- permanent 4xx queue poisoning;
+- unbounded cloud-auth nonce receipt growth;
+- non-atomic one-time provisioning;
+- LAN nonce persistence before signature verification.
+
+## Final verification record
+
+- PR: #23 `Chunk 10 — GoSpots Edge Hub`.
+- Exact PR head: `282a32cabb925f7877b2ede04734e7ed4d697556`.
+- Exact-head GitHub Actions: CI #265 — success.
+- Merge commit: `dba833a830495b42fe0043eab3d60bc9d6d9352d`.
+- Post-merge `main` GitHub Actions: CI #266 — success.
+- Vercel production deployment: success.
+- Cloud DB migration: none required; migration dry-run and Prisma validation remained green.
+
+The engineering gate in `chunk-10-acceptance.md` is fully satisfied. The deliberate safety boundary remains: terminal payment, refund, settlement, cash, fiscal and KSeF mutations are not executed through Chunk 10 Edge replay.

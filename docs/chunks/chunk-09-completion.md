@@ -2,7 +2,7 @@
 
 ## Status
 
-Engineering implementation complete behind the per-Shop `offline_lite` feature flag, subject to the exact-head and post-merge CI gates recorded on PR #22.
+**DONE.** Engineering implementation is merged behind the per-Shop `offline_lite` feature flag. Exact PR-head CI #261 passed on `03dfe8d5e43b7cf870ecd057215bbfbaecfabc9a`; post-merge `main` CI #262 passed on merge commit `5b28738e567f9f6fca33bb8d391a9d47dc8e1213`.
 
 ## Delivered
 
@@ -92,6 +92,13 @@ Checkout tenders display an online-only state during WAN/API loss.
 - ambiguous online GuestCheck mutation is not converted to a second local create;
 - local elapsed-time math;
 - service worker API-cache prohibition.
+
+## Verification record
+
+- PR #22 exact head: `03dfe8d5e43b7cf870ecd057215bbfbaecfabc9a`.
+- Exact-head GitHub Actions: CI #261 — success.
+- Merge commit: `5b28738e567f9f6fca33bb8d391a9d47dc8e1213`.
+- Post-merge `main` GitHub Actions: CI #262 — success.
 
 ## Rollout
 
