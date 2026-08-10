@@ -1,0 +1,125 @@
+// Chunk 11 — Operations Workspace + Resource Engine 2.0
+// Scalar tenant/resource references are intentional: this file extends the existing
+// Resource/Reservation/GuestCheck domain without forcing inverse-relation churn.
+
+model OperationsRatePlan {
+  id                   String   @id @default(cuid())
+  shopId               String
+  resourceId           String?
+  resourceCategoryId   String?
+  name                 String
+  hourlyRateMinor      Int
+  overtimeRateMinor    Int?
+  overtimeAfterMinutes Int?
+  roundingMinutes      Int      @default(1)
+  minimumMinutes       Int      @default(0)
+  capMinor             Int?
+  membershipHookKey    String?
+  active               Boolean  @default(true)
+  createdAt            DateTime @default(now())
+  updatedAt            DateTime @updatedAt
+
+  @@index([shopId, active])
+  @@index([shopId, resourceId, active])
+  @@index([shopId, resourceCategoryId, active])
+}
+
+model SessionGroup {
+  id           String   @id @default(cuid())
+  shopId       String
+  name         String?
+  guestCheckId String?
+  createdById  String
+  createdAt    DateTime @default(now())
+
+  @@index([shopId, createdAt])
+  @@index([shopId, guestCheckId])
+}
+
+model OperationsSession {
+  id                   String   @id @default(cuid())
+  shopId               String
+  resourceId           String
+  groupId              String?
+  guestCheckId          String?
+  reservationId        String?
+  ratePlanId           String?
+  status               String   @default("ACTIVE")
+  startedAt            DateTime @default(now())
+  pausedAt             DateTime?
+  finishedAt           DateTime?
+  totalPausedSeconds   Int      @default(0)
+  hourlyRateMinor      Int
+  overtimeRateMinor    Int?
+  overtimeAfterMinutes Int?
+  roundingMinutes      Int      @default(1)
+  minimumMinutes       Int      @default(0)
+  capMinor             Int?
+  rateSnapshot         Json
+  accruedMinor         Int      @default(0)
+  currency             String
+  version              Int      @default(1)
+  createdById          String
+  createdAt            DateTime @default(now())
+  updatedAt            DateTime @updatedAt
+
+  @@index([shopId, status, resourceId])
+  @@index([shopId, groupId])
+  @@index([shopId, guestCheckId])
+  @@index([shopId, reservationId])
+}
+
+model OperationsSessionPause {
+  id          String   @id @default(cuid())
+  shopId      String
+  sessionId   String
+  reason      String?
+  startedAt   DateTime @default(now())
+  endedAt     DateTime?
+  actorUserId String
+  createdAt   DateTime @default(now())
+
+  @@index([shopId, sessionId, startedAt])
+}
+
+model SessionResourceLink {
+  id           String   @id @default(cuid())
+  shopId       String
+  sessionId    String
+  resourceId   String
+  linkedAt     DateTime @default(now())
+  unlinkedAt   DateTime?
+  actorUserId  String
+
+  @@index([shopId, sessionId, linkedAt])
+  @@index([shopId, resourceId, unlinkedAt])
+}
+
+model ResourceMaintenancePeriod {
+  id          String   @id @default(cuid())
+  shopId      String
+  resourceId  String
+  reason      String
+  startsAt    DateTime @default(now())
+  endsAt      DateTime?
+  actorUserId String
+  createdAt   DateTime @default(now())
+
+  @@index([shopId, resourceId, endsAt])
+}
+
+model ResourceStateEvent {
+  id          String   @id @default(cuid())
+  shopId      String
+  resourceId  String
+  sessionId   String?
+  fromState   String?
+  toState     String
+  reason      String?
+  actorUserId String
+  metadata    Json?
+  createdAt   DateTime @default(now())
+
+  @@index([shopId, resourceId, createdAt])
+  @@index([shopId, sessionId, createdAt])
+}

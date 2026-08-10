@@ -37,6 +37,7 @@ import { ComplianceModule } from './modules/compliance/compliance.module';
 import { OfflineSyncModule } from './modules/offline-sync/offline-sync.module';
 import { EdgeHubModule } from './modules/edge-hub/edge-hub.module';
 import { StaffApprovalsModule } from './modules/staff-approvals/staff-approvals.module';
+import { OperationsModule } from './modules/operations/operations.module';
 import { VenueContextInterceptor } from './common/venue-context.interceptor';
 import { TenantRlsInterceptor } from './common/tenant-rls.interceptor';
 import { CorrelationIdInterceptor } from './common/correlation-id.interceptor';
@@ -107,6 +108,7 @@ import { RolesGuard } from './modules/auth/guards/roles.guard';
     OfflineSyncModule,
     EdgeHubModule,
     StaffApprovalsModule,
+    OperationsModule,
     HealthModule,
     MetricsModule,
   ],
