@@ -40,7 +40,10 @@ export type FeatureKey = (typeof FEATURE_KEYS)[number];
  * operations keeps an emergency per-Shop kill switch without forcing every
  * venue through a rollout flag after the feature becomes the standard system.
  */
-const DEFAULT_ENABLED_FEATURES = new Set<FeatureKey>(['checkout_v2']);
+const DEFAULT_ENABLED_FEATURES = new Set<FeatureKey>([
+  'checkout_v2',
+  'checkout_split',
+]);
 
 function parseDevFallback(raw: string | undefined): Set<string> {
   return new Set(
