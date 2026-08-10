@@ -18,6 +18,7 @@ import {
   Settings,
   ShieldCheck,
   ClipboardCheck,
+  CircleDollarSign,
   ShoppingCart,
   Star,
   StickyNote,
@@ -194,6 +195,12 @@ const NAV_GROUPS: NavGroup[] = [
         feature: "transaction",
       },
       {
+        segment: "/my-shift",
+        labelKey: "nav.myShift",
+        icon: CircleDollarSign,
+        perms: ["cash.open", "cash.movement", "cash.close"],
+      },
+      {
         segment: "/play-billing",
         labelKey: "nav.playBilling",
         icon: Gamepad2,
@@ -212,6 +219,12 @@ const NAV_GROUPS: NavGroup[] = [
         icon: Wallet,
         perms: ["transaction.read"],
         feature: "transaction",
+      },
+      {
+        segment: "/shift-reports",
+        labelKey: "nav.shiftReports",
+        icon: CircleDollarSign,
+        perms: ["cash.view_expected"],
       },
     ],
   },

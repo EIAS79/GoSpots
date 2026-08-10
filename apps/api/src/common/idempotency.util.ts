@@ -39,6 +39,11 @@ export const IDEMPOTENCY_SCOPES = {
   CHECKOUT_PAYMENT_CREATE: 'checkout.payments.create',
   CHECKOUT_CHECK_MERGE: 'checkout.checks.merge',
   CHECKOUT_CHARGES_MOVE: 'checkout.checks.move-charges',
+  CASH_SESSION_OPEN: 'cash.sessions.open',
+  CASH_MOVEMENT_CREATE: 'cash.movements.create',
+  CASH_COUNT_SUBMIT: 'cash.counts.submit',
+  CASH_VARIANCE_APPROVE: 'cash.variance.approve',
+  CASH_SESSION_CLOSE: 'cash.sessions.close',
   SHOP_CURRENCY_APPLY: 'shop.currency.apply',
   /** Onboarding template seed — derived key from templateId when header absent (Lane ONBOARD32). */
   SHOP_ONBOARDING_APPLY_TEMPLATE: 'shop.onboarding.apply-template',

@@ -5,7 +5,11 @@ import {
   Injectable,
   NotFoundException,
 } from '@nestjs/common';
-import { CheckoutPaymentStatus, Prisma } from '@prisma/client';
+import {
+  CheckoutPaymentMethod,
+  CheckoutPaymentStatus,
+  Prisma,
+} from '@prisma/client';
 import { assertExpectedVersion } from '../../common/optimistic-concurrency.util';
 import {
   hasPermission,
@@ -22,6 +26,7 @@ import { requireShopId } from '../../common/tenant';
 import { PrismaService } from '../../prisma/prisma.service';
 import { AuditService } from '../audit/audit.service';
 import type { JwtAccessPayload } from '../auth/auth.service';
+import { CashService } from '../cash/cash.service';
 import { DomainEventOutboxService } from '../foundation/domain-event-outbox.service';
 import { FeatureFlagService } from '../foundation/feature-flag.service';
 import {
@@ -73,6 +78,7 @@ export class CheckoutPaymentService {
     private readonly states: SettlementStateService,
     private readonly outbox: DomainEventOutboxService,
     private readonly audit: AuditService,
+    private readonly cash: CashService,
   ) {}
 
   private assertPermission(actor: JwtAccessPayload, permission: PermissionKey) {
@@ -238,6 +244,15 @@ export class CheckoutPaymentService {
         },
       );
 
+      const cashSessionId =
+        dto.method === CheckoutPaymentMethod.CASH
+          ? await this.cash.requireSessionForCashPayment(
+              tx,
+              actor,
+              settlement.currency,
+            )
+          : null;
+
       const remainingRows = this.allocator.buildRemainingSnapshots(
         this.allocationInputs(settlement),
       );
@@ -329,6 +344,18 @@ export class CheckoutPaymentService {
         },
       });
 
+      const cashMovement =
+        dto.method === CheckoutPaymentMethod.CASH
+          ? await this.cash.recordCashSale(tx, {
+              shopId,
+              cashSessionId,
+              actorId: actor.sub,
+              paymentId: payment.id,
+              amount: paymentAmount,
+              currency: settlement.currency,
+            })
+          : null;
+
       await tx.paymentAllocation.createMany({
         data: normalized.map(({ row, amount, quantity }) => ({
           shopId,
@@ -376,6 +403,8 @@ export class CheckoutPaymentService {
       if (!hydrated) throw new NotFoundException('Settlement not found');
       return {
         paymentId: payment.id,
+        cashSessionId,
+        cashMovementId: cashMovement?.id ?? null,
         settlement: hydrated,
       };
     });
@@ -388,6 +417,8 @@ export class CheckoutPaymentService {
         settlementId,
         guestCheckId: result.settlement.guestCheckId,
         paymentId: result.paymentId,
+        cashSessionId: result.cashSessionId,
+        cashMovementId: result.cashMovementId,
         method: dto.method,
         allocationKind: dto.allocationKind,
         amountDue: serializeMoney(result.settlement.amountDue),

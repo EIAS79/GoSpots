@@ -215,6 +215,12 @@ model Shop {
   floorCount    Int      @default(1)
   /// Commercial venue profile: gaming | dining | bar | hotel_fb | mixed
   venueType     String?
+  /// Require an OPEN cashier session before CASH checkout tender.
+  cashSessionRequired Boolean @default(true)
+  /// Hide expected drawer cash from cashiers until they submit a count.
+  cashBlindCountEnabled Boolean @default(true)
+  /// Absolute variance above this amount requires explicit approval before close.
+  cashVarianceApprovalThreshold Decimal @default(0) @db.Decimal(19, 4)
 
   ownerId       String
   owner         User     @relation("ShopOwner", fields: [ownerId], references: [id])
@@ -267,6 +273,11 @@ model Shop {
   checkoutPayments Payment[]
   paymentAllocations PaymentAllocation[]
   guestCheckMergeEvents GuestCheckMergeEvent[]
+  cashDrawers CashDrawer[]
+  cashSessions CashSession[]
+  cashMovements CashMovement[]
+  cashCounts CashCount[]
+  shiftCloseApprovals ShiftCloseApproval[]
 }
 
 /// Compressed venue images (menu, gallery, gaming, cover, etc.)
@@ -1242,6 +1253,24 @@ model GuestCheck {
   @@index([mergedIntoCheckId])
 }
 
+enum CashSessionStatus {
+  OPEN
+  CLOSED
+}
+
+enum CashMovementType {
+  CASH_SALE
+  PAY_IN
+  PAY_OUT
+  CASH_REFUND
+  SAFE_DROP
+}
+
+enum ShiftCloseApprovalStatus {
+  PENDING
+  APPROVED
+}
+
 enum CheckoutPaymentMethod {
   CASH
   MANUAL_CARD
@@ -1809,6 +1838,7 @@ model Payment {
   createdAt     DateTime              @default(now())
   updatedAt     DateTime              @updatedAt
   allocations   PaymentAllocation[]
+  cashMovement    CashMovement?
 
   @@index([shopId, status, createdAt])
   @@index([settlementId, status, createdAt])
@@ -1855,4 +1885,115 @@ model GuestCheckMergeEvent {
   @@index([shopId, createdAt])
   @@index([sourceCheckId, createdAt])
   @@index([destinationCheckId, createdAt])
+}
+
+
+/// Physical cash drawer. Sessions provide the operational shift boundary.
+model CashDrawer {
+  id        String   @id @default(cuid())
+  shopId    String
+  shop      Shop     @relation(fields: [shopId], references: [id], onDelete: Cascade)
+  name      String
+  isActive  Boolean  @default(true)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  sessions  CashSession[]
+
+  @@unique([shopId, name])
+  @@index([shopId, isActive])
+}
+
+/// One cashier's physical-cash shift on one drawer.
+model CashSession {
+  id                 String            @id @default(cuid())
+  shopId             String
+  shop               Shop              @relation(fields: [shopId], references: [id], onDelete: Cascade)
+  drawerId           String
+  drawer             CashDrawer        @relation(fields: [drawerId], references: [id], onDelete: Restrict)
+  status             CashSessionStatus @default(OPEN)
+  openedById         String
+  openedAt           DateTime          @default(now())
+  openingFloat       Decimal           @default(0) @db.Decimal(19, 4)
+  currency           String
+  version            Int               @default(1)
+  closedExpectedCash Decimal?          @db.Decimal(19, 4)
+  countedCash        Decimal?          @db.Decimal(19, 4)
+  variance           Decimal?          @db.Decimal(19, 4)
+  closedAt           DateTime?
+  closedById         String?
+  closeNote          String?
+  createdAt          DateTime          @default(now())
+  updatedAt          DateTime          @updatedAt
+  movements          CashMovement[]
+  counts             CashCount[]
+  approvals          ShiftCloseApproval[]
+
+  @@index([shopId, status, openedAt])
+  @@index([drawerId, status])
+}
+
+/// Immutable cash event inside an OPEN cash session. CASH_SALE links to Checkout Payment.
+model CashMovement {
+  id            String           @id @default(cuid())
+  shopId        String
+  shop          Shop             @relation(fields: [shopId], references: [id], onDelete: Cascade)
+  cashSessionId String
+  cashSession   CashSession      @relation(fields: [cashSessionId], references: [id], onDelete: Restrict)
+  type          CashMovementType
+  amount        Decimal          @db.Decimal(19, 4)
+  currency      String
+  reasonCategory String
+  note          String?
+  actorId       String
+  paymentId     String?          @unique
+  payment       Payment?         @relation(fields: [paymentId], references: [id], onDelete: Restrict)
+  occurredAt    DateTime         @default(now())
+  createdAt     DateTime         @default(now())
+
+  @@index([cashSessionId, occurredAt])
+  @@index([shopId, type, occurredAt])
+}
+
+/// Submitted physical drawer count. Expected value is captured atomically for reconciliation.
+model CashCount {
+  id                       String      @id @default(cuid())
+  shopId                   String
+  shop                     Shop        @relation(fields: [shopId], references: [id], onDelete: Cascade)
+  cashSessionId            String
+  cashSession              CashSession @relation(fields: [cashSessionId], references: [id], onDelete: Restrict)
+  countedAmount            Decimal     @db.Decimal(19, 4)
+  expectedCashAtSubmission Decimal     @db.Decimal(19, 4)
+  variance                 Decimal     @db.Decimal(19, 4)
+  blindCount               Boolean
+  actorId                  String
+  submittedAt              DateTime    @default(now())
+  createdAt                DateTime    @default(now())
+  approval                 ShiftCloseApproval?
+
+  @@index([cashSessionId, submittedAt])
+  @@index([shopId, submittedAt])
+}
+
+/// Explicit approval required when absolute close variance exceeds Shop threshold.
+model ShiftCloseApproval {
+  id            String                   @id @default(cuid())
+  shopId        String
+  shop          Shop                     @relation(fields: [shopId], references: [id], onDelete: Cascade)
+  cashSessionId String
+  cashSession   CashSession              @relation(fields: [cashSessionId], references: [id], onDelete: Restrict)
+  cashCountId   String                   @unique
+  cashCount     CashCount                @relation(fields: [cashCountId], references: [id], onDelete: Restrict)
+  status        ShiftCloseApprovalStatus @default(PENDING)
+  requestedById String
+  approvedById  String?
+  variance      Decimal                  @db.Decimal(19, 4)
+  threshold     Decimal                  @db.Decimal(19, 4)
+  note          String?
+  requestedAt   DateTime                 @default(now())
+  decidedAt     DateTime?
+  createdAt     DateTime                 @default(now())
+  updatedAt     DateTime                 @updatedAt
+
+  @@index([shopId, status, requestedAt])
+  @@index([cashSessionId, requestedAt])
 }

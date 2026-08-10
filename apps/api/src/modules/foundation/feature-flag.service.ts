@@ -43,6 +43,7 @@ export type FeatureKey = (typeof FEATURE_KEYS)[number];
 const DEFAULT_ENABLED_FEATURES = new Set<FeatureKey>([
   'checkout_v2',
   'checkout_split',
+  'cash_sessions',
 ]);
 
 function parseDevFallback(raw: string | undefined): Set<string> {

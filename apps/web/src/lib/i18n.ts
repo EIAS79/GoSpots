@@ -48,6 +48,8 @@ const en: DictTree = {
     sessions: "Reservations",
     orders: "Menu orders",
     guestChecks: "Checkout",
+    myShift: "My Shift",
+    shiftReports: "Shift Reports",
     playBilling: "Game billing",
     finance: "Finance",
     staff: "Employee accounts",

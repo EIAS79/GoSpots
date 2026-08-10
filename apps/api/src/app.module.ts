@@ -31,6 +31,7 @@ import { NotesModule } from './modules/notes/notes.module';
 import { GdprModule } from './modules/gdpr/gdpr.module';
 import { GuestCheckModule } from './modules/guest-check/guest-check.module';
 import { CheckoutModule } from './modules/checkout/checkout.module';
+import { CashModule } from './modules/cash/cash.module';
 import { StaffApprovalsModule } from './modules/staff-approvals/staff-approvals.module';
 import { VenueContextInterceptor } from './common/venue-context.interceptor';
 import { TenantRlsInterceptor } from './common/tenant-rls.interceptor';
@@ -96,6 +97,7 @@ import { RolesGuard } from './modules/auth/guards/roles.guard';
     GdprModule,
     GuestCheckModule,
     CheckoutModule,
+    CashModule,
     StaffApprovalsModule,
     HealthModule,
     MetricsModule,
