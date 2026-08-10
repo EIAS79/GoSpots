@@ -20,8 +20,16 @@ function installClient(connector: StripeTerminalConnector, client: unknown) {
 function baseClient() {
   return {
     paymentIntents: {
-      create: jest.fn().mockResolvedValue({ id: 'pi_1', status: 'requires_payment_method' }),
-      retrieve: jest.fn().mockResolvedValue({ id: 'pi_1', status: 'succeeded', amount_received: 4000 }),
+      create: jest
+        .fn()
+        .mockResolvedValue({ id: 'pi_1', status: 'requires_payment_method' }),
+      retrieve: jest
+        .fn()
+        .mockResolvedValue({
+          id: 'pi_1',
+          status: 'succeeded',
+          amount_received: 4000,
+        }),
       cancel: jest.fn().mockResolvedValue({ id: 'pi_1', status: 'canceled' }),
     },
     terminal: {
@@ -32,7 +40,6 @@ function baseClient() {
           action: { status: 'in_progress' },
         }),
         cancelAction: jest.fn().mockResolvedValue({ id: 'tmr_1' }),
-        retrieve: jest.fn().mockResolvedValue({ id: 'tmr_1', status: 'online' }),
       },
       locations: { list: jest.fn().mockResolvedValue({ data: [] }) },
     },
@@ -60,9 +67,16 @@ describe('StripeTerminalConnector', () => {
       terminalExternalId: 'tmr_1',
     });
 
-    expect(result).toMatchObject({ providerPaymentId: 'pi_1', state: 'PROCESSING' });
+    expect(result).toMatchObject({
+      providerPaymentId: 'pi_1',
+      state: 'PROCESSING',
+    });
     expect(client.paymentIntents.create).toHaveBeenCalledWith(
-      expect.objectContaining({ amount: 4000, currency: 'pln', payment_method_types: ['card_present'] }),
+      expect.objectContaining({
+        amount: 4000,
+        currency: 'pln',
+        payment_method_types: ['card_present'],
+      }),
       { idempotencyKey: 'gospots:terminal:pi:idem_1' },
     );
     expect(client.terminal.readers.processPaymentIntent).toHaveBeenCalledWith(
@@ -73,7 +87,10 @@ describe('StripeTerminalConnector', () => {
   });
 
   test('keeps an uncertain reader handoff UNKNOWN using the same PaymentIntent', async () => {
-    const connector = new StripeTerminalConnector(config(), new PaymentConnectorRegistry());
+    const connector = new StripeTerminalConnector(
+      config(),
+      new PaymentConnectorRegistry(),
+    );
     const client = baseClient();
     client.terminal.readers.processPaymentIntent.mockRejectedValue({
       type: 'StripeConnectionError',
@@ -88,21 +105,32 @@ describe('StripeTerminalConnector', () => {
       currency: 'PLN',
       terminalExternalId: 'tmr_1',
     });
-    expect(result).toMatchObject({ providerPaymentId: 'pi_1', state: 'UNKNOWN' });
+    expect(result).toMatchObject({
+      providerPaymentId: 'pi_1',
+      state: 'UNKNOWN',
+    });
   });
 
   test('reconciles a succeeded PaymentIntent as CAPTURED', async () => {
-    const connector = new StripeTerminalConnector(config(), new PaymentConnectorRegistry());
+    const connector = new StripeTerminalConnector(
+      config(),
+      new PaymentConnectorRegistry(),
+    );
     const client = baseClient();
     installClient(connector, client);
-    await expect(connector.getPayment({ providerPaymentId: 'pi_1' })).resolves.toMatchObject({
+    await expect(
+      connector.getPayment({ providerPaymentId: 'pi_1' }),
+    ).resolves.toMatchObject({
       providerPaymentId: 'pi_1',
       state: 'CAPTURED',
     });
   });
 
   test('refund uses minor units and provider idempotency', async () => {
-    const connector = new StripeTerminalConnector(config(), new PaymentConnectorRegistry());
+    const connector = new StripeTerminalConnector(
+      config(),
+      new PaymentConnectorRegistry(),
+    );
     const client = baseClient();
     installClient(connector, client);
     const result = await connector.refundPayment({
@@ -112,7 +140,10 @@ describe('StripeTerminalConnector', () => {
       amount: '10.50',
       currency: 'PLN',
     });
-    expect(result).toMatchObject({ providerRefundId: 're_1', state: 'SUCCEEDED' });
+    expect(result).toMatchObject({
+      providerRefundId: 're_1',
+      state: 'SUCCEEDED',
+    });
     expect(client.refunds.create).toHaveBeenCalledWith(
       expect.objectContaining({ payment_intent: 'pi_1', amount: 1050 }),
       { idempotencyKey: 'gospots:terminal:refund:refund-idem' },
@@ -120,8 +151,12 @@ describe('StripeTerminalConnector', () => {
   });
 
   test('rejects sub-grosz PLN precision instead of floating rounding', async () => {
-    const connector = new StripeTerminalConnector(config(), new PaymentConnectorRegistry());
-    installClient(connector, baseClient());
+    const connector = new StripeTerminalConnector(
+      config(),
+      new PaymentConnectorRegistry(),
+    );
+    const client = baseClient();
+    installClient(connector, client);
     const result = await connector.createPayment({
       operationId: 'op_precision',
       idempotencyKey: 'idem_precision',
@@ -129,6 +164,10 @@ describe('StripeTerminalConnector', () => {
       currency: 'PLN',
       terminalExternalId: 'tmr_1',
     });
-    expect(result.state).toBe('UNKNOWN');
+    expect(result).toMatchObject({
+      state: 'FAILED',
+      errorCode: 'INVALID_TERMINAL_AMOUNT',
+    });
+    expect(client.paymentIntents.create).not.toHaveBeenCalled();
   });
 });
