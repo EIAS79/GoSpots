@@ -7,9 +7,14 @@ import {
   fetchGuestChecks,
   type GuestCheck,
 } from "@/lib/guest-check-client";
-import { formatCheckoutMoney } from "./checkout-presenter";
 import { CheckoutDrawer } from "./checkout-drawer";
 import { SettlementStatus } from "./settlement-status";
+
+function sourceCount(check: GuestCheck) {
+  return (
+    check.shopOrders.length + check.playSessions.length + check.reservations.length
+  );
+}
 
 export function CheckoutWorkspace({
   canRead,
@@ -176,7 +181,7 @@ export function CheckoutWorkspace({
         <ul className="flex min-h-0 gap-2 overflow-x-auto lg:flex-1 lg:flex-col lg:overflow-y-auto lg:overflow-x-hidden lg:overscroll-contain lg:pr-1">
           {checks.map((check) => {
             const active = check.id === selected.id;
-            const currency = check.currency ?? "PLN";
+            const sources = sourceCount(check);
             return (
               <li key={check.id} className="min-w-[12rem] lg:min-w-0">
                 <button
@@ -200,8 +205,9 @@ export function CheckoutWorkspace({
                   <p className="mt-1 truncate text-xs text-zinc-500">
                     {check.guestName?.trim() || `#${check.id.slice(0, 8)}`}
                   </p>
-                  <p className="mt-2 text-sm font-bold tabular-nums text-zinc-100">
-                    {formatCheckoutMoney(check.runningTotal, currency, locale)}
+                  <p className="mt-2 text-xs font-medium text-zinc-400">
+                    {check.partySize} guest{check.partySize === 1 ? "" : "s"} · {sources}{" "}
+                    source{sources === 1 ? "" : "s"}
                   </p>
                 </button>
               </li>
@@ -211,7 +217,7 @@ export function CheckoutWorkspace({
       </aside>
 
       <CheckoutDrawer
-        key={`${selected.id}:${selected.version}`}
+        key={selected.id}
         check={selected}
         canWrite={canWrite}
         locale={locale}
