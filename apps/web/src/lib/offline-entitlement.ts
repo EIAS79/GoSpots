@@ -7,10 +7,14 @@ function key(context: OfflineNamespace) {
   return `${PREFIX}${context.userId}:${context.shopId}`;
 }
 
+export function offlineLiteEnabledFor(context: OfflineNamespace): boolean {
+  if (typeof localStorage === "undefined") return false;
+  return localStorage.getItem(key(context)) === "1";
+}
+
 export function offlineLiteEnabled(): boolean {
   const context = getOfflineContext();
-  if (!context || typeof localStorage === "undefined") return false;
-  return localStorage.getItem(key(context)) === "1";
+  return context ? offlineLiteEnabledFor(context) : false;
 }
 
 export async function refreshOfflineLiteEntitlement(): Promise<boolean> {
