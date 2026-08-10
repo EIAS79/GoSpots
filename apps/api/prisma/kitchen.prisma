@@ -1,0 +1,86 @@
+// Chunk 13 — KDS / Production
+model PrepStation {
+  id            String   @id @default(cuid())
+  shopId        String
+  name          String
+  kind          String
+  targetSeconds Int      @default(600)
+  sortOrder     Int      @default(0)
+  active        Boolean  @default(true)
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+  @@index([shopId, active, sortOrder])
+}
+model PrepRoute {
+  id         String   @id @default(cuid())
+  shopId     String
+  key        String
+  stationId  String
+  menuItemId String?
+  priority   Int      @default(0)
+  active     Boolean  @default(true)
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+  @@unique([shopId, key])
+  @@index([shopId, stationId, active])
+}
+model PrepTicket {
+  id          String   @id @default(cuid())
+  shopId      String
+  orderId     String
+  stationId   String
+  status      String   @default("NEW")
+  openedAt    DateTime @default(now())
+  startedAt   DateTime?
+  readyAt     DateTime?
+  collectedAt DateTime?
+  canceledAt  DateTime?
+  updatedAt   DateTime @updatedAt
+  @@unique([shopId, orderId, stationId])
+  @@index([shopId, stationId, status, openedAt])
+}
+model PrepTicketLine {
+  id                String   @id @default(cuid())
+  shopId            String
+  ticketId          String
+  stationId         String
+  orderLineId       String
+  quantity          Int
+  nameSnapshot      String
+  modifiersSnapshot Json
+  status            String   @default("NEW")
+  routedAt          DateTime @default(now())
+  startedAt         DateTime?
+  readyAt           DateTime?
+  collectedAt       DateTime?
+  canceledAt        DateTime?
+  cancellationReason String?
+  updatedAt         DateTime @updatedAt
+  @@unique([shopId, orderLineId, stationId])
+  @@index([shopId, ticketId, status])
+}
+model PrepStatusEvent {
+  id          String   @id @default(cuid())
+  shopId      String
+  ticketId    String
+  lineId      String?
+  fromStatus  String?
+  toStatus    String
+  actorUserId String
+  reason      String?
+  createdAt   DateTime @default(now())
+  @@index([shopId, ticketId, createdAt])
+}
+model PrepDisplayDevice {
+  id         String   @id @default(cuid())
+  shopId     String
+  stationId  String?
+  label      String
+  deviceKey  String
+  active     Boolean  @default(true)
+  lastSeenAt DateTime?
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+  @@unique([shopId, deviceKey])
+  @@index([shopId, stationId, active])
+}

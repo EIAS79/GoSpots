@@ -1,0 +1,17 @@
+-- Chunk 13: KDS / Production
+CREATE TABLE "PrepStation" ("id" TEXT NOT NULL,"shopId" TEXT NOT NULL,"name" TEXT NOT NULL,"kind" TEXT NOT NULL,"targetSeconds" INTEGER NOT NULL DEFAULT 600,"sortOrder" INTEGER NOT NULL DEFAULT 0,"active" BOOLEAN NOT NULL DEFAULT true,"createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,"updatedAt" TIMESTAMP(3) NOT NULL,CONSTRAINT "PrepStation_pkey" PRIMARY KEY ("id"));
+CREATE TABLE "PrepRoute" ("id" TEXT NOT NULL,"shopId" TEXT NOT NULL,"key" TEXT NOT NULL,"stationId" TEXT NOT NULL,"menuItemId" TEXT,"priority" INTEGER NOT NULL DEFAULT 0,"active" BOOLEAN NOT NULL DEFAULT true,"createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,"updatedAt" TIMESTAMP(3) NOT NULL,CONSTRAINT "PrepRoute_pkey" PRIMARY KEY ("id"));
+CREATE TABLE "PrepTicket" ("id" TEXT NOT NULL,"shopId" TEXT NOT NULL,"orderId" TEXT NOT NULL,"stationId" TEXT NOT NULL,"status" TEXT NOT NULL DEFAULT 'NEW',"openedAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,"startedAt" TIMESTAMP(3),"readyAt" TIMESTAMP(3),"collectedAt" TIMESTAMP(3),"canceledAt" TIMESTAMP(3),"updatedAt" TIMESTAMP(3) NOT NULL,CONSTRAINT "PrepTicket_pkey" PRIMARY KEY ("id"));
+CREATE TABLE "PrepTicketLine" ("id" TEXT NOT NULL,"shopId" TEXT NOT NULL,"ticketId" TEXT NOT NULL,"stationId" TEXT NOT NULL,"orderLineId" TEXT NOT NULL,"quantity" INTEGER NOT NULL,"nameSnapshot" TEXT NOT NULL,"modifiersSnapshot" JSONB NOT NULL,"status" TEXT NOT NULL DEFAULT 'NEW',"routedAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,"startedAt" TIMESTAMP(3),"readyAt" TIMESTAMP(3),"collectedAt" TIMESTAMP(3),"canceledAt" TIMESTAMP(3),"cancellationReason" TEXT,"updatedAt" TIMESTAMP(3) NOT NULL,CONSTRAINT "PrepTicketLine_pkey" PRIMARY KEY ("id"));
+CREATE TABLE "PrepStatusEvent" ("id" TEXT NOT NULL,"shopId" TEXT NOT NULL,"ticketId" TEXT NOT NULL,"lineId" TEXT,"fromStatus" TEXT,"toStatus" TEXT NOT NULL,"actorUserId" TEXT NOT NULL,"reason" TEXT,"createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,CONSTRAINT "PrepStatusEvent_pkey" PRIMARY KEY ("id"));
+CREATE TABLE "PrepDisplayDevice" ("id" TEXT NOT NULL,"shopId" TEXT NOT NULL,"stationId" TEXT,"label" TEXT NOT NULL,"deviceKey" TEXT NOT NULL,"active" BOOLEAN NOT NULL DEFAULT true,"lastSeenAt" TIMESTAMP(3),"createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,"updatedAt" TIMESTAMP(3) NOT NULL,CONSTRAINT "PrepDisplayDevice_pkey" PRIMARY KEY ("id"));
+CREATE INDEX "PrepStation_shopId_active_sortOrder_idx" ON "PrepStation"("shopId","active","sortOrder");
+CREATE UNIQUE INDEX "PrepRoute_shopId_key_key" ON "PrepRoute"("shopId","key");
+CREATE INDEX "PrepRoute_shopId_stationId_active_idx" ON "PrepRoute"("shopId","stationId","active");
+CREATE UNIQUE INDEX "PrepTicket_shopId_orderId_stationId_key" ON "PrepTicket"("shopId","orderId","stationId");
+CREATE INDEX "PrepTicket_shopId_stationId_status_openedAt_idx" ON "PrepTicket"("shopId","stationId","status","openedAt");
+CREATE UNIQUE INDEX "PrepTicketLine_shopId_orderLineId_stationId_key" ON "PrepTicketLine"("shopId","orderLineId","stationId");
+CREATE INDEX "PrepTicketLine_shopId_ticketId_status_idx" ON "PrepTicketLine"("shopId","ticketId","status");
+CREATE INDEX "PrepStatusEvent_shopId_ticketId_createdAt_idx" ON "PrepStatusEvent"("shopId","ticketId","createdAt");
+CREATE UNIQUE INDEX "PrepDisplayDevice_shopId_deviceKey_key" ON "PrepDisplayDevice"("shopId","deviceKey");
+CREATE INDEX "PrepDisplayDevice_shopId_stationId_active_idx" ON "PrepDisplayDevice"("shopId","stationId","active");
