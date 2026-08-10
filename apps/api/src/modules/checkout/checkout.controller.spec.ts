@@ -1,7 +1,9 @@
 import type { PrismaService } from '../../prisma/prisma.service';
 import { clearIdempotencyMemoryCache } from '../../common/idempotency.util';
 import { CheckoutController } from './checkout.controller';
+import type { CheckoutPaymentService } from './checkout-payment.service';
 import type { CheckoutService } from './checkout.service';
+import type { GuestCheckMergeService } from './guest-check-merge.service';
 
 type Receipt = {
   status: string;
@@ -18,7 +20,9 @@ function fakePrisma() {
   };
   return {
     idempotencyReceipt: {
-      findUnique: jest.fn(async ({ where }: any) => store.get(composite(where)) ?? null),
+      findUnique: jest.fn(
+        async ({ where }: any) => store.get(composite(where)) ?? null,
+      ),
       create: jest.fn(async ({ data }: any) => {
         const key = `${data.shopId}:${data.scope}:${data.key}`;
         if (store.has(key)) {
@@ -48,6 +52,15 @@ function fakePrisma() {
   } as unknown as PrismaService;
 }
 
+function makeController(checkout: CheckoutService) {
+  return new CheckoutController(
+    checkout,
+    {} as CheckoutPaymentService,
+    {} as GuestCheckMergeService,
+    fakePrisma(),
+  );
+}
+
 describe('CheckoutController settlement idempotency', () => {
   beforeEach(() => clearIdempotencyMemoryCache());
 
@@ -59,7 +72,7 @@ describe('CheckoutController settlement idempotency', () => {
         total: '42.0000',
       }),
     } as unknown as CheckoutService;
-    const controller = new CheckoutController(checkout, fakePrisma());
+    const controller = makeController(checkout);
     const user = {
       sub: 'owner-1',
       shopId: 'shop-a',
@@ -91,7 +104,7 @@ describe('CheckoutController settlement idempotency', () => {
     const checkout = {
       createSettlement: jest.fn(),
     } as unknown as CheckoutService;
-    const controller = new CheckoutController(checkout, fakePrisma());
+    const controller = makeController(checkout);
     const user = {
       sub: 'owner-1',
       shopId: 'shop-a',
