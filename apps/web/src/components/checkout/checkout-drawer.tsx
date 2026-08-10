@@ -248,7 +248,7 @@ export function CheckoutDrawer({
 
   return (
     <div className="flex min-h-0 min-w-0 flex-1 flex-col bg-zinc-950/20">
-      <div className="flex flex-wrap items-center justify-between gap-3 border-b border-white/8 px-4 py-3 sm:px-5">
+      <div className="flex shrink-0 flex-wrap items-center justify-between gap-3 border-b border-white/8 px-4 py-3 sm:px-5">
         <div className="flex min-w-0 items-center gap-3">
           <span className="grid h-10 w-10 shrink-0 place-items-center rounded-xl bg-emerald-400/10 text-emerald-300">
             <ReceiptText className="h-5 w-5" />
@@ -290,8 +290,8 @@ export function CheckoutDrawer({
         </div>
       </div>
 
-      <div className="grid min-h-0 flex-1 xl:grid-cols-[minmax(0,1fr)_22rem]">
-        <div className="min-h-0 space-y-4 overflow-y-auto p-4 sm:p-5">
+      <div className="grid min-h-0 flex-1 xl:grid-cols-[minmax(0,1fr)_22rem] xl:overflow-hidden">
+        <div className="min-h-0 space-y-4 overflow-y-auto overscroll-y-contain p-3 sm:p-4">
           {mergeOpen ? (
             <CheckMergePanel
               currentCheck={check}
@@ -363,8 +363,8 @@ export function CheckoutDrawer({
           ) : null}
         </div>
 
-        <aside className="border-t border-white/8 bg-black/15 p-4 xl:border-l xl:border-t-0 xl:p-5">
-          <div className="space-y-4 xl:sticky xl:top-4">
+        <aside className="border-t border-white/8 bg-black/15 p-3 xl:min-h-0 xl:overflow-y-auto xl:overscroll-y-contain xl:border-l xl:border-t-0 xl:p-4">
+          <div className="space-y-3 pb-1">
             {preview ? (
               <CheckoutTotals
                 preview={preview}

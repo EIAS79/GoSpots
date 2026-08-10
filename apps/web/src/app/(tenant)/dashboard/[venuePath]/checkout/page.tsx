@@ -40,7 +40,7 @@ export default function CheckoutPage() {
         "Role-aware read-only checkout",
         "Cash, Card, Split, and More placeholders without payment side effects",
       ]}
-      className="bg-zinc-950/30"
+      className="bg-zinc-950/30 p-2 sm:p-3 md:p-4 lg:p-4"
     >
       <CheckoutWorkspace
         canRead={access.read}
