@@ -5,10 +5,10 @@ import { PrismaService } from '../../prisma/prisma.service';
 import { CreateIntegrationJobDto } from './dto/integration.dto';
 import {
   CurrentIntegrationAuth,
-  IntegrationApiAuth,
   IntegrationApiKeyGuard,
   RequireIntegrationScopes,
 } from './integration-api-key.guard';
+import type { IntegrationApiAuth } from './integration-api-key.guard';
 import { IntegrationsService } from './integrations.service';
 
 function pageSize(raw?: string) {
@@ -37,7 +37,6 @@ export class IntegrationV1Controller {
         slug: true,
         currency: true,
         timezone: true,
-        countryCode: true,
       },
     });
     return { data: shop };
