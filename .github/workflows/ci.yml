@@ -53,7 +53,20 @@ jobs:
           DATABASE_URL: postgresql://ci:ci@localhost:5432/ci?schema=public
 
       - name: Build
-        run: pnpm run build
+        shell: bash
+        run: |
+          set +e
+          pnpm run build 2>&1 | tee /tmp/api-build.log
+          status=${PIPESTATUS[0]}
+          if [ "$status" -ne 0 ]; then
+            {
+              echo '### API build failure'
+              echo '```text'
+              tail -n 200 /tmp/api-build.log
+              echo '```'
+            } >> "$GITHUB_STEP_SUMMARY"
+          fi
+          exit "$status"
         env:
           DATABASE_URL: postgresql://ci:ci@localhost:5432/ci?schema=public
 
