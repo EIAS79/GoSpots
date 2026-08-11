@@ -33,9 +33,10 @@ const EVENT_STATES = [
   'COMPLETED',
   'CANCELED',
 ] as const;
+
 type EventState = (typeof EVENT_STATES)[number];
 
-const ALLOWED_TRANSITIONS: Record<EventState, EventState[]> = {
+const ALLOWED_TRANSITIONS: Record<EventState, readonly EventState[]> = {
   INQUIRY: ['QUOTED', 'CANCELED'],
   QUOTED: ['HOLD', 'DEPOSIT_PENDING', 'CONFIRMED', 'CANCELED'],
   HOLD: ['QUOTED', 'DEPOSIT_PENDING', 'CONFIRMED', 'CANCELED'],
@@ -62,38 +63,37 @@ export class EventsGrowthService {
     await this.expireHolds(shopId);
     await this.ensureLifecycle(shopId, eventRequestId, actor.sub);
 
-    const [event, proposals, holds, schedules, execution, lifecycle, checklist] =
-      await Promise.all([
-        this.requireEvent(shopId, eventRequestId),
-        this.prisma.eventProposal.findMany({
-          where: { shopId, eventRequestId },
-          orderBy: { version: 'desc' },
-        }),
-        this.prisma.eventResourceHold.findMany({
-          where: { shopId, eventRequestId },
-          orderBy: { startsAt: 'asc' },
-        }),
-        this.prisma.eventPaymentSchedule.findMany({
-          where: { shopId, eventRequestId },
-          orderBy: { dueAt: 'asc' },
-        }),
-        this.prisma.eventExecution.findFirst({ where: { shopId, eventRequestId } }),
-        this.prisma.eventLifecycleEvent.findMany({
-          where: { shopId, eventRequestId },
-          orderBy: { createdAt: 'asc' },
-        }),
-        this.prisma.eventChecklistItem.findMany({
-          where: { shopId, eventRequestId },
-          orderBy: [{ sortOrder: 'asc' }, { createdAt: 'asc' }],
-        }),
-      ]);
+    const event = await this.requireEvent(shopId, eventRequestId);
+    const proposals = await this.prisma.eventProposal.findMany({
+      where: { shopId, eventRequestId },
+      orderBy: { version: 'desc' },
+    });
+    const holds = await this.prisma.eventResourceHold.findMany({
+      where: { shopId, eventRequestId },
+      orderBy: { startsAt: 'asc' },
+    });
+    const paymentSchedule = await this.prisma.eventPaymentSchedule.findMany({
+      where: { shopId, eventRequestId },
+      orderBy: { dueAt: 'asc' },
+    });
+    const execution = await this.prisma.eventExecution.findFirst({
+      where: { shopId, eventRequestId },
+    });
+    const lifecycle = await this.prisma.eventLifecycleEvent.findMany({
+      where: { shopId, eventRequestId },
+      orderBy: { createdAt: 'asc' },
+    });
+    const checklist = await this.prisma.eventChecklistItem.findMany({
+      where: { shopId, eventRequestId },
+      orderBy: [{ sortOrder: 'asc' }, { createdAt: 'asc' }],
+    });
 
     return {
       event,
       state: lifecycle.at(-1)?.toState ?? 'INQUIRY',
       proposals,
       holds,
-      paymentSchedule: schedules,
+      paymentSchedule,
       execution,
       lifecycle,
       checklist,
@@ -111,68 +111,73 @@ export class EventsGrowthService {
     if (!Number.isInteger(dto.subtotalMinor) || dto.subtotalMinor < 0) {
       throw new BadRequestException('Proposal subtotal must be non-negative.');
     }
+    const depositMinor = dto.depositMinor ?? 0;
     if (
-      !Number.isInteger(dto.depositMinor ?? 0) ||
-      Number(dto.depositMinor ?? 0) < 0 ||
-      Number(dto.depositMinor ?? 0) > dto.subtotalMinor
+      !Number.isInteger(depositMinor) ||
+      depositMinor < 0 ||
+      depositMinor > dto.subtotalMinor
     ) {
       throw new BadRequestException(
         'Proposal deposit must be between zero and the subtotal.',
       );
     }
-    const current = await this.currentState(shopId, eventRequestId, actor.sub);
-    if (!['INQUIRY', 'QUOTED'].includes(current)) {
+    const state = await this.currentState(shopId, eventRequestId, actor.sub);
+    if (state !== 'INQUIRY' && state !== 'QUOTED') {
       throw new ConflictException(
-        `A proposal cannot be created while the event is ${current}.`,
+        `A proposal cannot be created while the event is ${state}.`,
       );
     }
-
     const shop = await this.prisma.shop.findUnique({
       where: { id: shopId },
       select: { currency: true },
     });
-    const row = await this.prisma.$transaction(async (tx) => {
+
+    const proposal = await this.prisma.$transaction(async (tx) => {
       await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext(${`event-proposal:${shopId}:${eventRequestId}`}))`;
       const latest = await tx.eventProposal.findFirst({
         where: { shopId, eventRequestId },
         orderBy: { version: 'desc' },
       });
-      const proposal = await tx.eventProposal.create({
+      const row = await tx.eventProposal.create({
         data: {
           shopId,
           eventRequestId,
           version: (latest?.version ?? 0) + 1,
           subtotalMinor: dto.subtotalMinor,
-          depositMinor: dto.depositMinor ?? 0,
+          depositMinor,
           currency: (dto.currency ?? shop?.currency ?? 'EUR').toUpperCase(),
-          terms: { schemaVersion: 1, ...dto.terms } as Prisma.InputJsonValue,
-          validUntil: dto.validUntil ? this.date(dto.validUntil, 'validUntil') : null,
+          terms: {
+            schemaVersion: 1,
+            ...dto.terms,
+          } as Prisma.InputJsonValue,
+          validUntil: dto.validUntil
+            ? this.parseDate(dto.validUntil, 'validUntil')
+            : null,
           createdById: actor.sub,
         },
       });
-      if (current !== 'QUOTED') {
-        await tx.eventLifecycleEvent.create({
-          data: {
-            shopId,
-            eventRequestId,
-            fromState: current,
-            toState: 'QUOTED',
-            reason: 'Proposal created',
-            actorUserId: actor.sub,
-            metadata: { proposalId: proposal.id } as Prisma.InputJsonValue,
-          },
+      if (state !== 'QUOTED') {
+        await this.appendLifecycleTx(tx, {
+          shopId,
+          eventRequestId,
+          fromState: state,
+          toState: 'QUOTED',
+          reason: 'Proposal created',
+          actorUserId: actor.sub,
+          metadata: { proposalId: row.id },
         });
       }
-      return proposal;
+      return row;
     });
+
     await this.record(actor, 'event.proposal.create', 'Created event proposal', {
       eventRequestId,
-      proposalId: row.id,
-      version: row.version,
-      subtotalMinor: row.subtotalMinor,
-      depositMinor: row.depositMinor,
+      proposalId: proposal.id,
+      version: proposal.version,
+      subtotalMinor: proposal.subtotalMinor,
+      depositMinor: proposal.depositMinor,
     });
-    return row;
+    return proposal;
   }
 
   async setProposalStatus(
@@ -185,8 +190,8 @@ export class EventsGrowthService {
       where: { id: proposalId, shopId },
     });
     if (!proposal) throw new NotFoundException('Event proposal not found.');
-    if (proposal.status === 'ACCEPTED') {
-      throw new ConflictException('An accepted proposal cannot be changed.');
+    if (proposal.status === 'ACCEPTED' || proposal.status === 'SUPERSEDED') {
+      throw new ConflictException('Accepted/superseded proposals cannot be changed.');
     }
     if (status === 'SENT' && proposal.validUntil && proposal.validUntil <= new Date()) {
       throw new ConflictException('Expired proposals cannot be sent.');
@@ -211,15 +216,18 @@ export class EventsGrowthService {
     const shopId = requireShopId(actor);
     const event = await this.requireEvent(shopId, eventRequestId);
     await this.expireHolds(shopId);
-    const current = await this.currentState(shopId, eventRequestId, actor.sub);
-    if (!['QUOTED', 'HOLD'].includes(current)) {
+    const state = await this.currentState(shopId, eventRequestId, actor.sub);
+    if (state !== 'QUOTED' && state !== 'HOLD') {
       throw new ConflictException('Create a proposal before holding event resources.');
     }
-    const startsAt = this.date(dto.startsAt, 'startsAt');
-    const endsAt = this.date(dto.endsAt, 'endsAt');
-    this.assertInterval(startsAt, endsAt);
+
+    const startsAt = this.parseDate(dto.startsAt, 'startsAt');
+    const endsAt = this.parseDate(dto.endsAt, 'endsAt');
+    if (endsAt <= startsAt) {
+      throw new BadRequestException('Event hold end must be after start.');
+    }
     const expiresAt = dto.expiresAt
-      ? this.date(dto.expiresAt, 'expiresAt')
+      ? this.parseDate(dto.expiresAt, 'expiresAt')
       : new Date(Date.now() + 30 * 60_000);
     if (expiresAt <= new Date()) {
       throw new BadRequestException('Hold expiry must be in the future.');
@@ -233,24 +241,18 @@ export class EventsGrowthService {
       event.partySize ?? 1,
     );
 
-    const row = await this.prisma.$transaction(async (tx) => {
+    const hold = await this.prisma.$transaction(async (tx) => {
       await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext(${`event-resource:${shopId}:${dto.resourceId}`}))`;
       await assertBookingSlotFree(tx, shopId, dto.resourceId, startsAt, endsAt);
-      const otherHold = await tx.eventResourceHold.findFirst({
-        where: {
-          shopId,
-          resourceId: dto.resourceId,
-          eventRequestId: { not: eventRequestId },
-          status: { in: ['HOLD', 'CONFIRMED'] },
-          startsAt: { lt: endsAt },
-          endsAt: { gt: startsAt },
-          OR: [{ expiresAt: null }, { expiresAt: { gt: new Date() } }],
-        },
-      });
-      if (otherHold) {
-        throw new ConflictException('Resource is already held by another event.');
-      }
-      const hold = await tx.eventResourceHold.create({
+      await this.assertOperationalConflictFreeTx(
+        tx,
+        shopId,
+        dto.resourceId,
+        startsAt,
+        endsAt,
+        eventRequestId,
+      );
+      const row = await tx.eventResourceHold.create({
         data: {
           shopId,
           eventRequestId,
@@ -261,28 +263,27 @@ export class EventsGrowthService {
           createdById: actor.sub,
         },
       });
-      if (current !== 'HOLD') {
-        await tx.eventLifecycleEvent.create({
-          data: {
-            shopId,
-            eventRequestId,
-            fromState: current,
-            toState: 'HOLD',
-            reason: 'Resource hold created',
-            actorUserId: actor.sub,
-            metadata: { holdId: hold.id } as Prisma.InputJsonValue,
-          },
+      if (state !== 'HOLD') {
+        await this.appendLifecycleTx(tx, {
+          shopId,
+          eventRequestId,
+          fromState: state,
+          toState: 'HOLD',
+          reason: 'Resource hold created',
+          actorUserId: actor.sub,
+          metadata: { holdId: row.id },
         });
       }
-      return hold;
+      return row;
     });
+
     await this.record(actor, 'event.hold.create', 'Held resource for event', {
       eventRequestId,
-      holdId: row.id,
-      resourceId: row.resourceId,
-      expiresAt: row.expiresAt,
+      holdId: hold.id,
+      resourceId: hold.resourceId,
+      expiresAt: hold.expiresAt,
     });
-    return row;
+    return hold;
   }
 
   async acceptProposal(actor: JwtAccessPayload, proposalId: string) {
@@ -295,13 +296,13 @@ export class EventsGrowthService {
     if (proposal.validUntil && proposal.validUntil <= new Date()) {
       throw new ConflictException('The proposal has expired.');
     }
-    if (!['DRAFT', 'SENT'].includes(proposal.status)) {
-      if (proposal.status === 'ACCEPTED') {
-        return this.detail(actor, proposal.eventRequestId);
-      }
+    if (proposal.status === 'ACCEPTED') {
+      return this.detail(actor, proposal.eventRequestId);
+    }
+    if (proposal.status !== 'DRAFT' && proposal.status !== 'SENT') {
       throw new ConflictException('Only an active proposal can be accepted.');
     }
-    const holds = await this.prisma.eventResourceHold.findMany({
+    const activeHolds = await this.prisma.eventResourceHold.count({
       where: {
         shopId,
         eventRequestId: proposal.eventRequestId,
@@ -309,7 +310,7 @@ export class EventsGrowthService {
         OR: [{ expiresAt: null }, { expiresAt: { gt: new Date() } }],
       },
     });
-    if (holds.length === 0) {
+    if (activeHolds === 0) {
       throw new ConflictException(
         'At least one active resource hold is required before acceptance.',
       );
@@ -317,7 +318,7 @@ export class EventsGrowthService {
 
     await this.prisma.eventProposal.update({
       where: { id: proposal.id },
-      data: { status: 'ACCEPTED', acceptedAt: new Date() },
+      data: { status: 'ACCEPTED' },
     });
     await this.prisma.eventProposal.updateMany({
       where: {
@@ -330,7 +331,7 @@ export class EventsGrowthService {
     });
 
     if (proposal.depositMinor > 0) {
-      const existingDeposit = await this.prisma.eventPaymentSchedule.findFirst({
+      const existing = await this.prisma.eventPaymentSchedule.findFirst({
         where: {
           shopId,
           eventRequestId: proposal.eventRequestId,
@@ -338,7 +339,7 @@ export class EventsGrowthService {
           label: 'Deposit',
         },
       });
-      if (!existingDeposit) {
+      if (!existing) {
         await this.prisma.eventPaymentSchedule.create({
           data: {
             shopId,
@@ -380,23 +381,23 @@ export class EventsGrowthService {
     if (!Number.isInteger(dto.amountMinor) || dto.amountMinor <= 0) {
       throw new BadRequestException('Payment milestone amount must be positive.');
     }
-    const shop = await this.prisma.shop.findUnique({
-      where: { id: shopId },
-      select: { currency: true },
-    });
     if (dto.proposalId) {
       const proposal = await this.prisma.eventProposal.findFirst({
         where: { id: dto.proposalId, shopId, eventRequestId },
       });
       if (!proposal) throw new NotFoundException('Event proposal not found.');
     }
+    const shop = await this.prisma.shop.findUnique({
+      where: { id: shopId },
+      select: { currency: true },
+    });
     const row = await this.prisma.eventPaymentSchedule.create({
       data: {
         shopId,
         eventRequestId,
         proposalId: dto.proposalId,
         label: dto.label.trim(),
-        dueAt: this.date(dto.dueAt, 'dueAt'),
+        dueAt: this.parseDate(dto.dueAt, 'dueAt'),
         amountMinor: dto.amountMinor,
         currency: (dto.currency ?? shop?.currency ?? 'EUR').toUpperCase(),
       },
@@ -427,8 +428,7 @@ export class EventsGrowthService {
     if (!payment) {
       throw new ConflictException('Successful payment evidence was not found.');
     }
-    const paidAmountMinor = this.decimalToMinor(payment.amount);
-    if (paidAmountMinor < schedule.amountMinor) {
+    if (this.decimalToMinor(payment.amount) < schedule.amountMinor) {
       throw new ConflictException(
         'Payment amount is below the event payment milestone amount.',
       );
@@ -496,7 +496,7 @@ export class EventsGrowthService {
         eventRequestId,
         label: dto.label.trim(),
         ownerUserId: dto.ownerUserId,
-        dueAt: dto.dueAt ? this.date(dto.dueAt, 'dueAt') : null,
+        dueAt: dto.dueAt ? this.parseDate(dto.dueAt, 'dueAt') : null,
         sortOrder: dto.sortOrder ?? 0,
       },
     });
@@ -554,7 +554,7 @@ export class EventsGrowthService {
       });
       if (!check) throw new NotFoundException('Open event GuestCheck not found.');
     } else {
-      const created = await this.guestChecks.create(actor, {
+      const check = await this.guestChecks.create(actor, {
         guestName: event.guestName,
         guestEmail: event.guestEmail ?? undefined,
         guestPhone: event.guestPhone ?? undefined,
@@ -562,7 +562,7 @@ export class EventsGrowthService {
         label: `Event: ${event.eventType}`,
         note: `Event request ${event.id}`,
       });
-      guestCheckId = created.id;
+      guestCheckId = check.id;
     }
 
     const execution = await this.prisma.$transaction(async (tx) => {
@@ -576,6 +576,7 @@ export class EventsGrowthService {
               guestCheckId,
               status: 'IN_PROGRESS',
               startedAt: existing.startedAt ?? new Date(),
+              canceledAt: null,
             },
           })
         : await tx.eventExecution.create({
@@ -587,6 +588,7 @@ export class EventsGrowthService {
               startedAt: new Date(),
             },
           });
+
       const holds = await tx.eventResourceHold.findMany({
         where: { shopId, eventRequestId, status: 'CONFIRMED' },
         select: { reservationId: true },
@@ -600,18 +602,18 @@ export class EventsGrowthService {
           data: { guestCheckId },
         });
       }
-      await this.appendTransitionTx(
-        tx,
+      await this.appendLifecycleTx(tx, {
         shopId,
         eventRequestId,
-        state,
-        'IN_PROGRESS',
-        'Event execution started',
-        actor.sub,
-        { guestCheckId },
-      );
+        fromState: state,
+        toState: 'IN_PROGRESS',
+        reason: 'Event execution started',
+        actorUserId: actor.sub,
+        metadata: { guestCheckId },
+      });
       return row;
     });
+
     await this.record(actor, 'event.execution.start', 'Started event execution', {
       eventRequestId,
       executionId: execution.id,
@@ -646,20 +648,22 @@ export class EventsGrowthService {
   async finishExecution(
     actor: JwtAccessPayload,
     eventRequestId: string,
-    status: 'COMPLETED' | 'CANCELED',
+    outcome: 'COMPLETED' | 'CANCELED',
   ) {
     const shopId = requireShopId(actor);
-    const current = await this.currentState(shopId, eventRequestId, actor.sub);
+    let state = await this.currentState(shopId, eventRequestId, actor.sub);
     let execution = await this.prisma.eventExecution.findFirst({
       where: { shopId, eventRequestId },
     });
 
-    if (status === 'COMPLETED') {
-      if (current === 'IN_PROGRESS') {
+    if (outcome === 'COMPLETED') {
+      if (state === 'IN_PROGRESS') {
         await this.moveToFinalPayment(actor, eventRequestId);
-      } else if (current !== 'FINAL_PAYMENT') {
+        state = 'FINAL_PAYMENT';
+      }
+      if (state !== 'FINAL_PAYMENT') {
         throw new ConflictException(
-          `Event cannot complete from lifecycle state ${current}.`,
+          `Event cannot complete from lifecycle state ${state}.`,
         );
       }
       execution =
@@ -676,7 +680,7 @@ export class EventsGrowthService {
           'Final event GuestCheck must be SETTLED before completion.',
         );
       }
-      const unpaid = await this.prisma.eventPaymentSchedule.count({
+      const unpaidDue = await this.prisma.eventPaymentSchedule.count({
         where: {
           shopId,
           eventRequestId,
@@ -684,12 +688,12 @@ export class EventsGrowthService {
           dueAt: { lte: new Date() },
         },
       });
-      if (unpaid > 0) {
+      if (unpaidDue > 0) {
         throw new ConflictException(
-          `${unpaid} due event payment milestone(s) remain unpaid.`,
+          `${unpaidDue} due event payment milestone(s) remain unpaid.`,
         );
       }
-    } else if (current === 'COMPLETED') {
+    } else if (state === 'COMPLETED') {
       throw new ConflictException('A completed event cannot be canceled.');
     }
 
@@ -697,41 +701,41 @@ export class EventsGrowthService {
     const row = execution
       ? await this.prisma.eventExecution.update({
           where: { id: execution.id },
-          data: {
-            status,
-            completedAt: status === 'COMPLETED' ? now : execution.completedAt,
-            canceledAt: status === 'CANCELED' ? now : execution.canceledAt,
-          },
+          data:
+            outcome === 'COMPLETED'
+              ? { status: outcome, completedAt: now }
+              : { status: outcome, canceledAt: now },
         })
       : await this.prisma.eventExecution.create({
           data: {
             shopId,
             eventRequestId,
-            status,
-            completedAt: status === 'COMPLETED' ? now : null,
-            canceledAt: status === 'CANCELED' ? now : null,
+            status: outcome,
+            completedAt: outcome === 'COMPLETED' ? now : null,
+            canceledAt: outcome === 'CANCELED' ? now : null,
           },
         });
 
-    const latestState = await this.currentState(shopId, eventRequestId, actor.sub);
-    if (latestState !== status) {
+    const latest = await this.currentState(shopId, eventRequestId, actor.sub);
+    if (latest !== outcome) {
       await this.transition(
         actor,
         eventRequestId,
-        status,
-        status === 'COMPLETED' ? 'Final settlement completed' : 'Event canceled',
+        outcome,
+        outcome === 'COMPLETED' ? 'Final settlement completed' : 'Event canceled',
       );
     }
-    if (status === 'CANCELED') {
+    if (outcome === 'CANCELED') {
       await this.prisma.eventResourceHold.updateMany({
         where: { shopId, eventRequestId, status: 'HOLD' },
         data: { status: 'RELEASED' },
       });
     }
-    await this.record(actor, 'event.execution.finish', `Marked event ${status}`, {
+
+    await this.record(actor, 'event.execution.finish', `Marked event ${outcome}`, {
       eventRequestId,
       executionId: row.id,
-      status,
+      outcome,
     });
     return {
       execution: row,
@@ -761,6 +765,10 @@ export class EventsGrowthService {
     return this.detail(actor, eventRequestId);
   }
 
+  async profitability(actor: JwtAccessPayload, eventRequestId: string) {
+    return this.profitabilityForShop(requireShopId(actor), eventRequestId);
+  }
+
   async expireHolds(shopId: string, at = new Date()) {
     const stale = await this.prisma.eventResourceHold.findMany({
       where: { shopId, status: 'HOLD', expiresAt: { lte: at } },
@@ -769,42 +777,41 @@ export class EventsGrowthService {
 
     await this.prisma.$transaction(async (tx) => {
       await tx.eventResourceHold.updateMany({
-        where: { id: { in: stale.map((hold) => hold.id) }, shopId, status: 'HOLD' },
+        where: {
+          shopId,
+          id: { in: stale.map((hold) => hold.id) },
+          status: 'HOLD',
+        },
         data: { status: 'EXPIRED' },
       });
-      for (const eventRequestId of [...new Set(stale.map((hold) => hold.eventRequestId))]) {
+      const eventIds = [...new Set(stale.map((hold) => hold.eventRequestId))];
+      for (const eventRequestId of eventIds) {
         const remaining = await tx.eventResourceHold.count({
           where: { shopId, eventRequestId, status: 'HOLD' },
         });
-        if (remaining === 0) {
-          const last = await tx.eventLifecycleEvent.findFirst({
-            where: { shopId, eventRequestId },
-            orderBy: { createdAt: 'desc' },
+        if (remaining > 0) continue;
+        const latest = await tx.eventLifecycleEvent.findFirst({
+          where: { shopId, eventRequestId },
+          orderBy: { createdAt: 'desc' },
+        });
+        if (latest?.toState === 'HOLD') {
+          await this.appendLifecycleTx(tx, {
+            shopId,
+            eventRequestId,
+            fromState: 'HOLD',
+            toState: 'QUOTED',
+            reason: 'All temporary resource holds expired',
+            actorUserId: null,
+            metadata: {
+              expiredHoldIds: stale
+                .filter((hold) => hold.eventRequestId === eventRequestId)
+                .map((hold) => hold.id),
+            },
           });
-          if (last?.toState === 'HOLD') {
-            await tx.eventLifecycleEvent.create({
-              data: {
-                shopId,
-                eventRequestId,
-                fromState: 'HOLD',
-                toState: 'QUOTED',
-                reason: 'All temporary resource holds expired',
-                metadata: {
-                  expiredHoldIds: stale
-                    .filter((hold) => hold.eventRequestId === eventRequestId)
-                    .map((hold) => hold.id),
-                } as Prisma.InputJsonValue,
-              },
-            });
-          }
         }
       }
     });
     return { expired: stale.length };
-  }
-
-  async profitability(actor: JwtAccessPayload, eventRequestId: string) {
-    return this.profitabilityForShop(requireShopId(actor), eventRequestId);
   }
 
   private async confirmEvent(
@@ -814,11 +821,16 @@ export class EventsGrowthService {
   ) {
     const shopId = requireShopId(actor);
     const event = await this.requireEvent(shopId, eventRequestId);
-    const current = await this.currentState(shopId, eventRequestId, actor.sub);
-    if (!['HOLD', 'DEPOSIT_PENDING', 'QUOTED'].includes(current)) {
-      if (current === 'CONFIRMED') return;
-      throw new ConflictException(`Event cannot confirm from ${current}.`);
+    const state = await this.currentState(shopId, eventRequestId, actor.sub);
+    if (state === 'CONFIRMED') return;
+    if (
+      state !== 'HOLD' &&
+      state !== 'DEPOSIT_PENDING' &&
+      state !== 'QUOTED'
+    ) {
+      throw new ConflictException(`Event cannot confirm from ${state}.`);
     }
+
     const holds = await this.prisma.eventResourceHold.findMany({
       where: {
         shopId,
@@ -838,23 +850,21 @@ export class EventsGrowthService {
         await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext(${`event-confirm:${shopId}:${resourceId}`}))`;
       }
       for (const hold of holds) {
-        await assertBookingSlotFree(tx, shopId, hold.resourceId, hold.startsAt, hold.endsAt);
-        const otherHold = await tx.eventResourceHold.findFirst({
-          where: {
-            shopId,
-            resourceId: hold.resourceId,
-            eventRequestId: { not: eventRequestId },
-            status: { in: ['HOLD', 'CONFIRMED'] },
-            startsAt: { lt: hold.endsAt },
-            endsAt: { gt: hold.startsAt },
-            OR: [{ expiresAt: null }, { expiresAt: { gt: new Date() } }],
-          },
-        });
-        if (otherHold) {
-          throw new ConflictException(
-            'An event resource was claimed by another event before confirmation.',
-          );
-        }
+        await assertBookingSlotFree(
+          tx,
+          shopId,
+          hold.resourceId,
+          hold.startsAt,
+          hold.endsAt,
+        );
+        await this.assertOperationalConflictFreeTx(
+          tx,
+          shopId,
+          hold.resourceId,
+          hold.startsAt,
+          hold.endsAt,
+          eventRequestId,
+        );
         const reservation = await tx.reservation.create({
           data: {
             shopId,
@@ -882,17 +892,63 @@ export class EventsGrowthService {
           data: { status: 'CONFIRMED', reservationId: reservation.id },
         });
       }
-      await this.appendTransitionTx(
-        tx,
+      await this.appendLifecycleTx(tx, {
         shopId,
         eventRequestId,
-        current,
-        'CONFIRMED',
-        'Deposit requirement satisfied and resources converted to reservations',
-        actor.sub,
-        { proposalId },
-      );
+        fromState: state,
+        toState: 'CONFIRMED',
+        reason: 'Deposit gate satisfied; holds converted to reservations',
+        actorUserId: actor.sub,
+        metadata: { proposalId },
+      });
     });
+  }
+
+  private async assertOperationalConflictFreeTx(
+    tx: Prisma.TransactionClient,
+    shopId: string,
+    resourceId: string,
+    startsAt: Date,
+    endsAt: Date,
+    currentEventRequestId: string,
+  ) {
+    const maintenance = await tx.resourceMaintenancePeriod.findFirst({
+      where: {
+        shopId,
+        resourceId,
+        startsAt: { lt: endsAt },
+        OR: [{ endsAt: null }, { endsAt: { gt: startsAt } }],
+      },
+    });
+    if (maintenance) {
+      throw new ConflictException('Resource entered maintenance before event confirmation.');
+    }
+    const session = await tx.operationsSession.findFirst({
+      where: {
+        shopId,
+        resourceId,
+        status: { in: ['ACTIVE', 'PAUSED'] },
+        startedAt: { lt: endsAt },
+        OR: [{ finishedAt: null }, { finishedAt: { gt: startsAt } }],
+      },
+    });
+    if (session) {
+      throw new ConflictException('Resource is occupied by an active session.');
+    }
+    const otherHold = await tx.eventResourceHold.findFirst({
+      where: {
+        shopId,
+        resourceId,
+        eventRequestId: { not: currentEventRequestId },
+        status: { in: ['HOLD', 'CONFIRMED'] },
+        startsAt: { lt: endsAt },
+        endsAt: { gt: startsAt },
+        OR: [{ expiresAt: null }, { expiresAt: { gt: new Date() } }],
+      },
+    });
+    if (otherHold) {
+      throw new ConflictException('Resource is held by another event.');
+    }
   }
 
   private async transition(
@@ -904,18 +960,18 @@ export class EventsGrowthService {
   ) {
     const shopId = requireShopId(actor);
     await this.requireEvent(shopId, eventRequestId);
-    const current = await this.currentState(shopId, eventRequestId, actor.sub);
-    if (current === toState) return current;
-    if (!ALLOWED_TRANSITIONS[current].includes(toState)) {
+    const fromState = await this.currentState(shopId, eventRequestId, actor.sub);
+    if (fromState === toState) return toState;
+    if (!ALLOWED_TRANSITIONS[fromState].includes(toState)) {
       throw new ConflictException(
-        `Event lifecycle cannot transition from ${current} to ${toState}.`,
+        `Event lifecycle cannot transition from ${fromState} to ${toState}.`,
       );
     }
     await this.prisma.eventLifecycleEvent.create({
       data: {
         shopId,
         eventRequestId,
-        fromState: current,
+        fromState,
         toState,
         reason: reason?.trim() || null,
         actorUserId: actor.sub,
@@ -943,42 +999,49 @@ export class EventsGrowthService {
     eventRequestId: string,
     actorUserId?: string,
   ) {
-    const existing = await this.prisma.eventLifecycleEvent.findFirst({
-      where: { shopId, eventRequestId },
-      select: { id: true },
-    });
-    if (existing) return;
-    await this.prisma.eventLifecycleEvent.create({
-      data: {
-        shopId,
-        eventRequestId,
-        fromState: null,
-        toState: 'INQUIRY',
-        reason: 'Event operational lifecycle initialized',
-        actorUserId: actorUserId ?? null,
-      },
+    await this.prisma.$transaction(async (tx) => {
+      await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext(${`event-lifecycle:${shopId}:${eventRequestId}`}))`;
+      const existing = await tx.eventLifecycleEvent.findFirst({
+        where: { shopId, eventRequestId },
+        select: { id: true },
+      });
+      if (existing) return;
+      await tx.eventLifecycleEvent.create({
+        data: {
+          shopId,
+          eventRequestId,
+          fromState: null,
+          toState: 'INQUIRY',
+          reason: 'Event operational lifecycle initialized',
+          actorUserId: actorUserId ?? null,
+        },
+      });
     });
   }
 
-  private async appendTransitionTx(
+  private async appendLifecycleTx(
     tx: Prisma.TransactionClient,
-    shopId: string,
-    eventRequestId: string,
-    fromState: string,
-    toState: EventState,
-    reason: string,
-    actorUserId: string,
-    metadata?: Record<string, unknown>,
+    input: {
+      shopId: string;
+      eventRequestId: string;
+      fromState: string | null;
+      toState: EventState;
+      reason: string;
+      actorUserId: string | null;
+      metadata?: Record<string, unknown>;
+    },
   ) {
     await tx.eventLifecycleEvent.create({
       data: {
-        shopId,
-        eventRequestId,
-        fromState,
-        toState,
-        reason,
-        actorUserId,
-        metadata: metadata ? (metadata as Prisma.InputJsonValue) : Prisma.JsonNull,
+        shopId: input.shopId,
+        eventRequestId: input.eventRequestId,
+        fromState: input.fromState,
+        toState: input.toState,
+        reason: input.reason,
+        actorUserId: input.actorUserId,
+        metadata: input.metadata
+          ? (input.metadata as Prisma.InputJsonValue)
+          : Prisma.JsonNull,
       },
     });
   }
@@ -999,60 +1062,65 @@ export class EventsGrowthService {
         null,
       );
 
-    const [ledger, eventInventory, milestones, punches] = await Promise.all([
-      execution?.guestCheckId
-        ? this.prisma.ledgerEntry.findMany({
-            where: { shopId, guestCheckId: execution.guestCheckId },
-          })
-        : Promise.resolve([]),
-      this.prisma.stockMovement.findMany({
-        where: { shopId, referenceType: 'EVENT', referenceId: eventRequestId },
-      }),
-      this.prisma.eventPaymentSchedule.findMany({ where: { shopId, eventRequestId } }),
+    const ledger = execution?.guestCheckId
+      ? await this.prisma.ledgerEntry.findMany({
+          where: { shopId, guestCheckId: execution.guestCheckId },
+        })
+      : [];
+    const eventInventory = await this.prisma.stockMovement.findMany({
+      where: { shopId, referenceType: 'EVENT', referenceId: eventRequestId },
+    });
+    const milestones = await this.prisma.eventPaymentSchedule.findMany({
+      where: { shopId, eventRequestId },
+    });
+    const punches =
       start && end
-        ? this.prisma.timePunch.findMany({
+        ? await this.prisma.timePunch.findMany({
             where: {
               shopId,
               startedAt: { lt: end },
               OR: [{ endedAt: null }, { endedAt: { gt: start } }],
             },
           })
-        : Promise.resolve([]),
-    ]);
+        : [];
 
-    const guestCheckRevenueMinor = ledger.reduce((sum, row) => {
-      const minor = this.decimalToMinor(row.amount);
-      if (row.kind === 'SALE') return sum + minor;
-      if (row.kind === 'REFUND') return sum - minor;
-      return sum;
-    }, 0);
+    let guestCheckRevenueMinor = 0;
+    for (const row of ledger) {
+      const minor = Math.abs(this.decimalToMinor(row.amount));
+      if (row.kind === 'SALE') guestCheckRevenueMinor += minor;
+      if (row.kind === 'REFUND') guestCheckRevenueMinor -= minor;
+    }
     const paidMilestonesMinor = milestones
       .filter((milestone) => milestone.paidAt != null)
       .reduce((sum, milestone) => sum + milestone.amountMinor, 0);
-    const inventoryCostMinor = eventInventory.reduce(
-      (sum, movement) =>
-        sum + (movement.kind === 'CONSUME' ? Math.abs(movement.totalCostMinor) : 0),
-      0,
-    );
-    const laborCostMinor =
-      start && end
-        ? punches.reduce((sum, punch) => {
-            const punchEnd = punch.endedAt ?? end;
-            const overlapStart = Math.max(start.getTime(), punch.startedAt.getTime());
-            const overlapEnd = Math.min(end.getTime(), punchEnd.getTime());
-            const seconds = Math.max(0, (overlapEnd - overlapStart) / 1000);
-            return sum + Math.round((seconds / 3600) * punch.hourlyRateMinor);
-          }, 0)
-        : 0;
+    let inventoryCostMinor = 0;
+    for (const movement of eventInventory) {
+      if (movement.kind === 'SALE_CONSUMPTION') {
+        inventoryCostMinor += Math.abs(movement.totalCostMinor);
+      } else if (movement.kind === 'SALE_REVERSAL') {
+        inventoryCostMinor -= Math.abs(movement.totalCostMinor);
+      } else if (movement.kind === 'WASTE') {
+        inventoryCostMinor += Math.abs(movement.totalCostMinor);
+      }
+    }
+    let laborCostMinor = 0;
+    if (start && end) {
+      for (const punch of punches) {
+        const punchEnd = punch.endedAt ?? end;
+        const overlapStart = Math.max(start.getTime(), punch.startedAt.getTime());
+        const overlapEnd = Math.min(end.getTime(), punchEnd.getTime());
+        const seconds = Math.max(0, (overlapEnd - overlapStart) / 1000);
+        laborCostMinor += Math.round((seconds / 3600) * punch.hourlyRateMinor);
+      }
+    }
     const recognizedRevenueMinor = Math.max(
       guestCheckRevenueMinor,
       paidMilestonesMinor,
     );
+
     return {
       currency:
-        execution?.guestCheckId && ledger[0]?.currency
-          ? ledger[0].currency
-          : milestones[0]?.currency ?? null,
+        ledger[0]?.currency ?? milestones[0]?.currency ?? null,
       guestCheckRevenueMinor,
       paidMilestonesMinor,
       recognizedRevenueMinor,
@@ -1078,18 +1146,12 @@ export class EventsGrowthService {
     return row;
   }
 
-  private date(value: string, field: string) {
+  private parseDate(value: string, field: string) {
     const date = new Date(value);
     if (Number.isNaN(date.getTime())) {
       throw new BadRequestException(`${field} must be a valid date/time.`);
     }
     return date;
-  }
-
-  private assertInterval(start: Date, end: Date) {
-    if (end <= start) {
-      throw new BadRequestException('Event hold end must be after start.');
-    }
   }
 
   private decimalToMinor(value: { toString(): string }) {
