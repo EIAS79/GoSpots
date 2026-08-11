@@ -17,23 +17,23 @@ model ReservationCapacityPolicy {
 }
 
 model ReservationBookingEvidence {
-  id                  String   @id @default(uuid())
-  shopId              String
-  reservationId       String   @unique
-  sourceChannel       String
-  requestedCategoryId String?
+  id                    String   @id @default(uuid())
+  shopId                String
+  reservationId         String   @unique
+  sourceChannel         String
+  requestedCategoryId   String?
   requestedResourceType String?
-  assignedResourceId  String?
-  bufferBeforeMinutes Int      @default(0)
-  bufferAfterMinutes  Int      @default(0)
-  recurrenceSeriesId  String?
-  recurrenceRule      Json?
-  checkedInAt         DateTime?
-  checkedInById       String?
-  canceledAt          DateTime?
-  cancellationReason  String?
-  createdAt           DateTime @default(now())
-  updatedAt           DateTime @updatedAt
+  assignedResourceId    String?
+  bufferBeforeMinutes   Int      @default(0)
+  bufferAfterMinutes    Int      @default(0)
+  recurrenceSeriesId    String?
+  recurrenceRule        Json?
+  checkedInAt           DateTime?
+  checkedInById         String?
+  canceledAt            DateTime?
+  cancellationReason    String?
+  createdAt             DateTime @default(now())
+  updatedAt             DateTime @updatedAt
 
   @@index([shopId, sourceChannel, createdAt])
   @@index([shopId, recurrenceSeriesId])
@@ -41,15 +41,15 @@ model ReservationBookingEvidence {
 }
 
 model ReservationDepositApplication {
-  id              String   @id @default(uuid())
-  shopId          String
-  reservationId   String
-  guestCheckId    String
-  amountMinor     Int
-  currency        String
-  correlationId   String
-  actorUserId     String?
-  createdAt       DateTime @default(now())
+  id            String   @id @default(uuid())
+  shopId        String
+  reservationId String
+  guestCheckId  String
+  amountMinor   Int
+  currency      String
+  correlationId String
+  actorUserId   String?
+  createdAt     DateTime @default(now())
 
   @@unique([shopId, correlationId])
   @@index([shopId, reservationId, createdAt])
@@ -80,19 +80,19 @@ model RuleBenefit {
 }
 
 model RuleApplication {
-  id              String   @id @default(uuid())
-  shopId          String
-  promotionId     String
-  sourceType      String
-  sourceId        String
+  id                String   @id @default(uuid())
+  shopId            String
+  promotionId       String
+  sourceType        String
+  sourceId          String
   pricingSnapshotId String?
-  benefitKind     String
-  discountMinor   Int      @default(0)
-  explanation     String
+  benefitKind       String
+  discountMinor     Int      @default(0)
+  explanation       String
   conditionSnapshot Json
-  benefitSnapshot Json
-  correlationId   String
-  createdAt       DateTime @default(now())
+  benefitSnapshot   Json
+  correlationId     String
+  createdAt         DateTime @default(now())
 
   @@unique([shopId, correlationId])
   @@index([shopId, sourceType, sourceId, createdAt])
@@ -100,34 +100,34 @@ model RuleApplication {
 }
 
 model CustomerIdentity {
-  id          String   @id @default(uuid())
-  shopId      String
-  customerId  String
-  kind        String
+  id              String   @id @default(uuid())
+  shopId          String
+  customerId      String
+  kind            String
   normalizedValue String
-  verifiedAt  DateTime?
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
+  verifiedAt      DateTime?
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
 
   @@unique([shopId, kind, normalizedValue])
   @@index([shopId, customerId])
 }
 
 model CustomerVisit {
-  id              String   @id @default(uuid())
-  shopId          String
-  customerId      String
-  sourceType      String
-  sourceId        String
-  completedAt     DateTime
-  reservationId   String?
-  guestCheckId    String?
+  id                  String   @id @default(uuid())
+  shopId              String
+  customerId          String
+  sourceType          String
+  sourceId            String
+  completedAt         DateTime
+  reservationId       String?
+  guestCheckId        String?
   operationsSessionId String?
-  eventRequestId  String?
-  settledAmountMinor Int?
-  currency        String?
-  proofHash       String
-  createdAt       DateTime @default(now())
+  eventRequestId      String?
+  settledAmountMinor  Int?
+  currency            String?
+  proofHash           String
+  createdAt           DateTime @default(now())
 
   @@unique([shopId, sourceType, sourceId])
   @@index([shopId, customerId, completedAt])
@@ -135,31 +135,33 @@ model CustomerVisit {
 }
 
 model CustomerMergeAudit {
-  id              String   @id @default(uuid())
-  shopId          String
+  id                  String   @id @default(uuid())
+  shopId              String
   canonicalCustomerId String
-  mergedCustomerId String
-  reason          String?
-  referenceCounts Json
-  actorUserId     String
-  createdAt       DateTime @default(now())
+  mergedCustomerId    String
+  reason              String?
+  referenceCounts     Json
+  actorUserId         String
+  createdAt           DateTime @default(now())
 
   @@index([shopId, canonicalCustomerId, createdAt])
   @@index([shopId, mergedCustomerId])
 }
 
 model ReviewVisitProof {
-  id          String   @id @default(uuid())
-  shopId      String
-  customerId  String
-  visitId     String
+  id              String   @id @default(uuid())
+  shopId          String
+  customerId      String
+  visitId         String
+  reviewId        String?  @unique
   publicTokenHash String
-  validUntil  DateTime?
-  consumedAt  DateTime?
-  createdAt   DateTime @default(now())
+  validUntil      DateTime?
+  consumedAt      DateTime?
+  createdAt       DateTime @default(now())
 
   @@unique([shopId, publicTokenHash])
   @@index([shopId, customerId, createdAt])
+  @@index([shopId, visitId])
 }
 
 model EventLifecycleEvent {
@@ -196,16 +198,16 @@ model EventChecklistItem {
 }
 
 model AnalyticsFact {
-  id          String   @id @default(uuid())
-  shopId      String
-  factKind    String
-  bucketStart DateTime
-  bucketEnd   DateTime
-  dimensionKey String
-  currency    String?
-  measures    Json
+  id            String   @id @default(uuid())
+  shopId        String
+  factKind      String
+  bucketStart   DateTime
+  bucketEnd     DateTime
+  dimensionKey  String
+  currency      String?
+  measures      Json
   sourceVersion String
-  rebuiltAt   DateTime @default(now())
+  rebuiltAt     DateTime @default(now())
 
   @@unique([shopId, factKind, bucketStart, dimensionKey, currency])
   @@index([shopId, factKind, bucketStart, bucketEnd])
