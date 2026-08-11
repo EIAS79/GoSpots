@@ -8,6 +8,7 @@ import {
   Prisma,
   ReservationStatus,
   ResourceStatus,
+  ResourceType,
   type PrismaClient,
 } from '@prisma/client';
 import { randomUUID } from 'crypto';
@@ -80,6 +81,7 @@ export class GrowthCapacityService {
     const { startsAt, endsAt, partySize } = this.parseWindow(dto);
     await assertWithinOpeningHours(this.prisma, shopId, startsAt, endsAt);
 
+    const resourceType = this.parseResourceType(dto.resourceType);
     const where: Prisma.ResourceWhereInput = {
       shopId,
       status: { not: ResourceStatus.MAINTENANCE },
@@ -87,7 +89,7 @@ export class GrowthCapacityService {
       ...(dto.resourceCategoryId
         ? { categoryId: dto.resourceCategoryId }
         : {}),
-      ...(dto.resourceType ? { type: dto.resourceType } : {}),
+      ...(resourceType ? { type: resourceType } : {}),
       OR: [{ capacity: null }, { capacity: { gte: partySize } }],
     };
 
@@ -165,7 +167,7 @@ export class GrowthCapacityService {
       requested: {
         resourceId: dto.resourceId ?? null,
         resourceCategoryId: dto.resourceCategoryId ?? null,
-        resourceType: dto.resourceType ?? null,
+        resourceType: resourceType ?? null,
       },
       available,
       unavailable,
@@ -190,6 +192,22 @@ export class GrowthCapacityService {
       throw new ConflictException('Resource is not available for this interval.');
     }
     return candidate;
+  }
+
+  async assertOperationallyFreeInTransaction(
+    tx: Prisma.TransactionClient,
+    shopId: string,
+    resourceId: string,
+    startsAt: Date,
+    endsAt: Date,
+  ) {
+    return this.assertOperationallyFree(
+      shopId,
+      resourceId,
+      startsAt,
+      endsAt,
+      tx,
+    );
   }
 
   async createStaff(actor: JwtAccessPayload, dto: UnifiedBookingInput) {
@@ -612,6 +630,14 @@ export class GrowthCapacityService {
       throw new BadRequestException('partySize must be between 1 and 500.');
     }
     return { startsAt, endsAt, partySize };
+  }
+
+  private parseResourceType(value?: string) {
+    if (!value) return undefined;
+    if (!Object.values(ResourceType).includes(value as ResourceType)) {
+      throw new BadRequestException('Unsupported resourceType.');
+    }
+    return value as ResourceType;
   }
 
   private pickPolicy(
