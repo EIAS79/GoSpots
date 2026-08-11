@@ -25,6 +25,15 @@ type SafeAction =
 
 const MAX_ATTEMPTS = 3;
 
+function isUniqueConstraintError(error: unknown): boolean {
+  return Boolean(
+    error &&
+      typeof error === 'object' &&
+      'code' in error &&
+      (error as { code?: unknown }).code === 'P2002',
+  );
+}
+
 @Injectable()
 export class AutomationService {
   private readonly logger = new Logger(AutomationService.name);
@@ -160,18 +169,29 @@ export class AutomationService {
     const payload = dto.payload ?? {};
     const condition = safeJsonParse<AutomationCondition | null>(rule.conditionJson, null);
     const inputHash = sha256(stableJson(payload));
-    const execution = await this.prisma.automationExecution.create({
-      data: {
-        shopId,
-        ruleId: rule.id,
-        triggerType: rule.triggerType,
-        triggerRef: dto.triggerRef ?? null,
-        dedupeKey: dto.dedupeKey,
-        status: 'QUEUED',
-        inputHash,
-        inputJson: stableJson(payload),
-      },
-    });
+    let execution;
+    try {
+      execution = await this.prisma.automationExecution.create({
+        data: {
+          shopId,
+          ruleId: rule.id,
+          triggerType: rule.triggerType,
+          triggerRef: dto.triggerRef ?? null,
+          dedupeKey: dto.dedupeKey,
+          status: 'QUEUED',
+          inputHash,
+          inputJson: stableJson(payload),
+        },
+      });
+    } catch (error) {
+      if (isUniqueConstraintError(error)) {
+        const replay = await this.prisma.automationExecution.findUnique({
+          where: { shopId_dedupeKey: { shopId, dedupeKey: dto.dedupeKey } },
+        });
+        if (replay) return { execution: replay, replayed: true };
+      }
+      throw error;
+    }
 
     if (!evaluateAutomationCondition(condition, payload)) {
       const skipped = await this.prisma.automationExecution.update({
