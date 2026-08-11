@@ -25,7 +25,10 @@ export class GrowthAnalyticsService {
       sourceVersion: ANALYTICS_SOURCE_VERSION,
       cards: {
         netSettledRevenueByCurrency: Object.fromEntries(
-          finance.currencies.map((row) => [row.currency, row.netSettledRevenueMinor]),
+          finance.currencies.map((row) => [
+            row.currency,
+            row.netSettledRevenueMinor,
+          ]),
         ),
         resourceUtilizationPct: operations.resources.utilizationPct,
         repeatVisitRatePct: guests.repeatVisits.ratePct,
@@ -70,10 +73,18 @@ export class GrowthAnalyticsService {
           orderBy: { occurredAt: 'asc' },
         }),
         this.prisma.payment.findMany({
-          where: { shopId, status: 'SUCCESS', succeededAt: { gte: from, lt: to } },
+          where: {
+            shopId,
+            status: 'SUCCESS',
+            succeededAt: { gte: from, lt: to },
+          },
         }),
         this.prisma.refund.findMany({
-          where: { shopId, state: 'SUCCEEDED', succeededAt: { gte: from, lt: to } },
+          where: {
+            shopId,
+            state: 'SUCCEEDED',
+            succeededAt: { gte: from, lt: to },
+          },
         }),
         this.prisma.pricingSnapshot.findMany({
           where: { shopId, createdAt: { gte: from, lt: to } },
@@ -110,8 +121,6 @@ export class GrowthAnalyticsService {
         })
       : [];
 
-    // A source may have multiple immutable snapshots over time. Analytics uses
-    // the latest evidence in the requested range and never mutates old rows.
     const latestSnapshots = new Map<string, (typeof snapshotsRaw)[number]>();
     for (const snapshot of snapshotsRaw) {
       latestSnapshots.set(`${snapshot.sourceType}:${snapshot.sourceId}`, snapshot);
@@ -132,21 +141,35 @@ export class GrowthAnalyticsService {
       const ledgerRows = ledger.filter((row) => row.currency === currency);
       const ledgerGrossMinor = ledgerRows
         .filter((row) => row.kind === 'SALE')
-        .reduce((sum, row) => sum + Math.abs(this.decimalToMinor(row.amount)), 0);
+        .reduce(
+          (sum, row) => sum + Math.abs(this.decimalToMinor(row.amount)),
+          0,
+        );
       const ledgerRefundMinor = ledgerRows
         .filter((row) => row.kind === 'REFUND')
-        .reduce((sum, row) => sum + Math.abs(this.decimalToMinor(row.amount)), 0);
+        .reduce(
+          (sum, row) => sum + Math.abs(this.decimalToMinor(row.amount)),
+          0,
+        );
       const netSettledRevenueMinor = ledgerGrossMinor - ledgerRefundMinor;
 
       const providerGrossMinor = payments
         .filter((payment) => payment.currency === currency)
-        .reduce((sum, payment) => sum + this.decimalToMinor(payment.amount), 0);
+        .reduce(
+          (sum, payment) => sum + this.decimalToMinor(payment.amount),
+          0,
+        );
       const providerRefundMinor = refunds
         .filter((refund) => refund.currency === currency)
-        .reduce((sum, refund) => sum + this.decimalToMinor(refund.amount), 0);
+        .reduce(
+          (sum, refund) => sum + this.decimalToMinor(refund.amount),
+          0,
+        );
       const providerNetMinor = providerGrossMinor - providerRefundMinor;
 
-      const pricingRows = snapshots.filter((snapshot) => snapshot.currency === currency);
+      const pricingRows = snapshots.filter(
+        (snapshot) => snapshot.currency === currency,
+      );
       const discountMinor = pricingRows.reduce(
         (sum, snapshot) => sum + snapshot.discountMinor,
         0,
@@ -166,18 +189,25 @@ export class GrowthAnalyticsService {
           : 0;
       const labor = punches.filter((punch) => punch.currency === currency);
       const laborCostMinor = labor.reduce((sum, punch) => {
-        const grossSeconds = clipSeconds(punch.startedAt, punch.endedAt ?? to, from, to);
+        const grossSeconds = clipSeconds(
+          punch.startedAt,
+          punch.endedAt ?? to,
+          from,
+          to,
+        );
         const unpaidSeconds = breaks
           .filter((row) => row.timePunchId === punch.id)
           .reduce(
             (breakSum, row) =>
-              breakSum + clipSeconds(row.startedAt, row.endedAt ?? to, from, to),
+              breakSum +
+              clipSeconds(row.startedAt, row.endedAt ?? to, from, to),
             0,
           );
         return (
           sum +
           Math.round(
-            (Math.max(0, grossSeconds - unpaidSeconds) * punch.hourlyRateMinor) /
+            (Math.max(0, grossSeconds - unpaidSeconds) *
+              punch.hourlyRateMinor) /
               3600,
           )
         );
@@ -192,7 +222,8 @@ export class GrowthAnalyticsService {
         providerGrossMinor,
         providerRefundMinor,
         providerNetMinor,
-        reconciliationVarianceMinor: netSettledRevenueMinor - providerNetMinor,
+        reconciliationVarianceMinor:
+          netSettledRevenueMinor - providerNetMinor,
         reconciliationOk: netSettledRevenueMinor === providerNetMinor,
         discountMinor,
         tipMinor,
@@ -212,12 +243,18 @@ export class GrowthAnalyticsService {
     });
 
     const workedSeconds = punches.reduce((sum, punch) => {
-      const grossSeconds = clipSeconds(punch.startedAt, punch.endedAt ?? to, from, to);
+      const grossSeconds = clipSeconds(
+        punch.startedAt,
+        punch.endedAt ?? to,
+        from,
+        to,
+      );
       const unpaidSeconds = breaks
         .filter((row) => row.timePunchId === punch.id)
         .reduce(
           (breakSum, row) =>
-            breakSum + clipSeconds(row.startedAt, row.endedAt ?? to, from, to),
+            breakSum +
+            clipSeconds(row.startedAt, row.endedAt ?? to, from, to),
           0,
         );
       return sum + Math.max(0, grossSeconds - unpaidSeconds);
@@ -247,48 +284,56 @@ export class GrowthAnalyticsService {
   async operations(actor: JwtAccessPayload, from: Date, to: Date) {
     this.assertRange(from, to);
     const shopId = requireShopId(actor);
-    const [resources, windows, sessions, maintenance, reservations, waitlist, tickets, stations] =
-      await Promise.all([
-        this.prisma.resource.findMany({
-          where: { shopId },
-          select: { id: true, name: true, type: true, categoryId: true },
-        }),
-        listOpeningWindows(this.prisma, shopId, from, to),
-        this.prisma.operationsSession.findMany({
-          where: {
-            shopId,
-            startedAt: { lt: to },
-            OR: [{ finishedAt: null }, { finishedAt: { gt: from } }],
-          },
-        }),
-        this.prisma.resourceMaintenancePeriod.findMany({
-          where: {
-            shopId,
-            startsAt: { lt: to },
-            OR: [{ endsAt: null }, { endsAt: { gt: from } }],
-          },
-        }),
-        this.prisma.reservation.findMany({
-          where: { shopId, startsAt: { gte: from, lt: to } },
-        }),
-        this.prisma.reservationWaitlistEntry.findMany({
-          where: {
-            shopId,
-            OR: [
-              { createdAt: { gte: from, lt: to } },
-              { offeredAt: { gte: from, lt: to } },
-            ],
-          },
-        }),
-        this.prisma.prepTicket.findMany({
-          where: {
-            shopId,
-            readyAt: { gte: from, lt: to },
-            canceledAt: null,
-          },
-        }),
-        this.prisma.prepStation.findMany({ where: { shopId } }),
-      ]);
+    const [
+      resources,
+      windows,
+      sessions,
+      maintenance,
+      reservations,
+      waitlist,
+      tickets,
+      stations,
+    ] = await Promise.all([
+      this.prisma.resource.findMany({
+        where: { shopId },
+        select: { id: true, name: true, type: true, categoryId: true },
+      }),
+      listOpeningWindows(this.prisma, shopId, from, to),
+      this.prisma.operationsSession.findMany({
+        where: {
+          shopId,
+          startedAt: { lt: to },
+          OR: [{ finishedAt: null }, { finishedAt: { gt: from } }],
+        },
+      }),
+      this.prisma.resourceMaintenancePeriod.findMany({
+        where: {
+          shopId,
+          startsAt: { lt: to },
+          OR: [{ endsAt: null }, { endsAt: { gt: from } }],
+        },
+      }),
+      this.prisma.reservation.findMany({
+        where: { shopId, startsAt: { gte: from, lt: to } },
+      }),
+      this.prisma.reservationWaitlistEntry.findMany({
+        where: {
+          shopId,
+          OR: [
+            { createdAt: { gte: from, lt: to } },
+            { offeredAt: { gte: from, lt: to } },
+          ],
+        },
+      }),
+      this.prisma.prepTicket.findMany({
+        where: {
+          shopId,
+          readyAt: { gte: from, lt: to },
+          canceledAt: null,
+        },
+      }),
+      this.prisma.prepStation.findMany({ where: { shopId } }),
+    ]);
 
     const pauses = sessions.length
       ? await this.prisma.operationsSessionPause.findMany({
@@ -318,18 +363,27 @@ export class GrowthAnalyticsService {
           start: period.startsAt,
           end: period.endsAt ?? to,
         })),
-        windows.map((window) => ({ start: window.opensAt, end: window.closesAt })),
+        windows.map((window) => ({
+          start: window.opensAt,
+          end: window.closesAt,
+        })),
         from,
         to,
       );
       const availableSeconds = Math.max(0, openSeconds - maintenanceSeconds);
       const occupiedSeconds = resourceSessions.reduce((sum, session) => {
-        const gross = clipSeconds(session.startedAt, session.finishedAt ?? to, from, to);
+        const gross = clipSeconds(
+          session.startedAt,
+          session.finishedAt ?? to,
+          from,
+          to,
+        );
         const paused = pauses
           .filter((pause) => pause.sessionId === session.id)
           .reduce(
             (pauseSum, pause) =>
-              pauseSum + clipSeconds(pause.startedAt, pause.endedAt ?? to, from, to),
+              pauseSum +
+              clipSeconds(pause.startedAt, pause.endedAt ?? to, from, to),
             0,
           );
         return sum + Math.max(0, gross - paused);
@@ -342,7 +396,9 @@ export class GrowthAnalyticsService {
         availableMinutes: availableSeconds / 60,
         occupiedMinutes: occupiedSeconds / 60,
         utilizationPct:
-          availableSeconds > 0 ? (occupiedSeconds / availableSeconds) * 100 : null,
+          availableSeconds > 0
+            ? (occupiedSeconds / availableSeconds) * 100
+            : null,
         sessionCount: resourceSessions.length,
         accruedResourceRevenueMinor: resourceSessions.reduce(
           (sum, session) => sum + session.accruedMinor,
@@ -370,31 +426,40 @@ export class GrowthAnalyticsService {
         ),
       ),
     ];
-    const [activityChecks, venueOrders] = await Promise.all([
+    const activityChecks: Array<{ id: string; partySize: number }> =
       sessionGuestCheckIds.length
-        ? this.prisma.guestCheck.findMany({
+        ? await this.prisma.guestCheck.findMany({
             where: { shopId, id: { in: sessionGuestCheckIds } },
             select: { id: true, partySize: true },
           })
-        : Promise.resolve([]),
-      this.prisma.venueOrder.findMany({
-        where: {
-          shopId,
-          status: 'COMPLETED',
-          completedAt: { gte: from, lt: to },
-          OR: [
-            ...(sessions.length
-              ? [{ operationsSessionId: { in: sessions.map((session) => session.id) } }]
-              : []),
-            ...(sessionGuestCheckIds.length
-              ? [{ guestCheckId: { in: sessionGuestCheckIds } }]
-              : []),
-          ],
-        },
-        select: { id: true },
-      }),
-    ]);
-    const orderLines = venueOrders.length
+        : [];
+    const venueOrderWhere: Prisma.VenueOrderWhereInput = {
+      shopId,
+      status: 'COMPLETED',
+      completedAt: { gte: from, lt: to },
+      OR: [
+        ...(sessions.length
+          ? [
+              {
+                operationsSessionId: {
+                  in: sessions.map((session) => session.id),
+                },
+              },
+            ]
+          : []),
+        ...(sessionGuestCheckIds.length
+          ? [{ guestCheckId: { in: sessionGuestCheckIds } }]
+          : []),
+      ],
+    };
+    const venueOrders: Array<{ id: string }> =
+      venueOrderWhere.OR?.length
+        ? await this.prisma.venueOrder.findMany({
+            where: venueOrderWhere,
+            select: { id: true },
+          })
+        : [];
+    const orderLines: Array<{ quantity: number }> = venueOrders.length
       ? await this.prisma.venueOrderLine.findMany({
           where: {
             shopId,
@@ -408,9 +473,14 @@ export class GrowthAnalyticsService {
       (sum, check) => sum + Math.max(1, check.partySize),
       0,
     );
-    const menuQuantity = orderLines.reduce((sum, line) => sum + line.quantity, 0);
+    const menuQuantity = orderLines.reduce(
+      (sum, line) => sum + line.quantity,
+      0,
+    );
 
-    const stationById = new Map(stations.map((station) => [station.id, station]));
+    const stationById = new Map(
+      stations.map((station) => [station.id, station]),
+    );
     const prepDurations = tickets
       .filter((ticket) => ticket.readyAt != null)
       .map((ticket) => ({
@@ -422,7 +492,8 @@ export class GrowthAnalyticsService {
               1000,
           ),
         ),
-        targetSeconds: stationById.get(ticket.stationId)?.targetSeconds ?? 600,
+        targetSeconds:
+          stationById.get(ticket.stationId)?.targetSeconds ?? 600,
       }));
     const slaMet = prepDurations.filter(
       (duration) => duration.seconds <= duration.targetSeconds,
@@ -432,7 +503,8 @@ export class GrowthAnalyticsService {
       [...new Set(reservations.map((reservation) => reservation.status))].map(
         (status) => [
           status,
-          reservations.filter((reservation) => reservation.status === status).length,
+          reservations.filter((reservation) => reservation.status === status)
+            .length,
         ],
       ),
     );
@@ -458,7 +530,9 @@ export class GrowthAnalyticsService {
         availableMinutes,
         occupiedMinutes,
         utilizationPct:
-          availableMinutes > 0 ? (occupiedMinutes / availableMinutes) * 100 : null,
+          availableMinutes > 0
+            ? (occupiedMinutes / availableMinutes) * 100
+            : null,
         accruedResourceRevenueMinor,
         revPahAccruedMinor:
           availableMinutes > 0
@@ -489,13 +563,17 @@ export class GrowthAnalyticsService {
         averagePrepSeconds:
           prepDurations.length > 0
             ? Math.round(
-                prepDurations.reduce((sum, duration) => sum + duration.seconds, 0) /
-                  prepDurations.length,
+                prepDurations.reduce(
+                  (sum, duration) => sum + duration.seconds,
+                  0,
+                ) / prepDurations.length,
               )
             : null,
         slaMetCount: slaMet,
         slaPct:
-          prepDurations.length > 0 ? (slaMet / prepDurations.length) * 100 : null,
+          prepDurations.length > 0
+            ? (slaMet / prepDurations.length) * 100
+            : null,
       },
     };
   }
@@ -529,12 +607,20 @@ export class GrowthAnalyticsService {
     const customerIds = [...new Set(visits.map((visit) => visit.customerId))];
     const priorVisits = customerIds.length
       ? await this.prisma.customerVisit.findMany({
-          where: { shopId, customerId: { in: customerIds }, completedAt: { lt: from } },
+          where: {
+            shopId,
+            customerId: { in: customerIds },
+            completedAt: { lt: from },
+          },
           select: { customerId: true },
         })
       : [];
-    const priorCustomerIds = new Set(priorVisits.map((visit) => visit.customerId));
-    const repeatCustomers = customerIds.filter((id) => priorCustomerIds.has(id));
+    const priorCustomerIds = new Set(
+      priorVisits.map((visit) => visit.customerId),
+    );
+    const repeatCustomers = customerIds.filter((id) =>
+      priorCustomerIds.has(id),
+    );
 
     const reservationIds = evidence.map((row) => row.reservationId);
     const reservations = reservationIds.length
@@ -557,7 +643,11 @@ export class GrowthAnalyticsService {
     ];
     const settledChecks = guestCheckIds.length
       ? await this.prisma.guestCheck.findMany({
-          where: { shopId, id: { in: guestCheckIds }, status: 'SETTLED' },
+          where: {
+            shopId,
+            id: { in: guestCheckIds },
+            status: 'SETTLED',
+          },
           select: { id: true },
         })
       : [];
@@ -580,7 +670,9 @@ export class GrowthAnalyticsService {
         revenueMinor: 0,
       };
       bucket.touches += 1;
-      const reservation = reservations.find((item) => item.id === row.reservationId);
+      const reservation = reservations.find(
+        (item) => item.id === row.reservationId,
+      );
       const visit = visitByReservation.get(row.reservationId);
       const settled =
         Boolean(visit) ||
@@ -589,7 +681,8 @@ export class GrowthAnalyticsService {
             settledCheckIds.has(reservation.guestCheckId),
         ) ||
         Boolean(
-          reservation?.status === 'COMPLETED' && reservation.billedAmount != null,
+          reservation?.status === 'COMPLETED' &&
+            reservation.billedAmount != null,
         );
       if (settled) {
         bucket.settledVisits += 1;
@@ -606,7 +699,9 @@ export class GrowthAnalyticsService {
         channel,
         ...bucket,
         ratePct:
-          bucket.touches > 0 ? (bucket.settledVisits / bucket.touches) * 100 : null,
+          bucket.touches > 0
+            ? (bucket.settledVisits / bucket.touches) * 100
+            : null,
       }),
     );
     const acquisitionTotal = channelRows.reduce(
@@ -618,7 +713,9 @@ export class GrowthAnalyticsService {
       { touches: 0, settledVisits: 0, revenueMinor: 0 },
     );
 
-    const snapshotById = new Map(snapshots.map((snapshot) => [snapshot.id, snapshot]));
+    const snapshotById = new Map(
+      snapshots.map((snapshot) => [snapshot.id, snapshot]),
+    );
     const promotionGroups = new Map<
       string,
       {
@@ -644,18 +741,23 @@ export class GrowthAnalyticsService {
         : undefined;
       if (snapshot) {
         bucket.attributedRevenueMinor += snapshot.totalMinor;
-        bucket.directPackageCostMinor += this.packageCostFromRules(snapshot.rules);
+        bucket.directPackageCostMinor += this.packageCostFromRules(
+          snapshot.rules,
+        );
       }
       promotionGroups.set(application.promotionId, bucket);
     }
-    const promotionProfitability = [...promotionGroups.values()].map((bucket) => ({
-      ...bucket,
-      partialContributionMinor:
-        bucket.attributedRevenueMinor -
-        bucket.discountMinor -
-        bucket.directPackageCostMinor,
-      costCoverage: 'pricing+package-direct-cost; COGS/labor only when separately attributed',
-    }));
+    const promotionProfitability = [...promotionGroups.values()].map(
+      (bucket) => ({
+        ...bucket,
+        partialContributionMinor:
+          bucket.attributedRevenueMinor -
+          bucket.discountMinor -
+          bucket.directPackageCostMinor,
+        costCoverage:
+          'pricing+package-direct-cost; COGS/labor only when separately attributed',
+      }),
+    );
 
     const storedByCurrency = new Map<string, number>();
     for (const row of storedAll) {
@@ -682,7 +784,10 @@ export class GrowthAnalyticsService {
             : null,
       },
       loyalty: {
-        outstandingPoints: loyaltyAll.reduce((sum, row) => sum + row.points, 0),
+        outstandingPoints: loyaltyAll.reduce(
+          (sum, row) => sum + row.points,
+          0,
+        ),
       },
       storedValue: {
         liabilityByCurrency: Object.fromEntries(storedByCurrency),
@@ -693,7 +798,9 @@ export class GrowthAnalyticsService {
           ...acquisitionTotal,
           ratePct:
             acquisitionTotal.touches > 0
-              ? (acquisitionTotal.settledVisits / acquisitionTotal.touches) * 100
+              ? (acquisitionTotal.settledVisits /
+                  acquisitionTotal.touches) *
+                100
               : null,
         },
       },
@@ -712,7 +819,9 @@ export class GrowthAnalyticsService {
       this.guests(actor, from, to),
     ]);
     const currency =
-      finance.currencies.length === 1 ? finance.currencies[0]!.currency : null;
+      finance.currencies.length === 1
+        ? finance.currencies[0]!.currency
+        : null;
     const facts = [
       {
         factKind: 'RANGE_FINANCE',
@@ -737,8 +846,6 @@ export class GrowthAnalyticsService {
     return this.prisma.$transaction(async (tx) => {
       const stored = [];
       for (const fact of facts) {
-        // Nullable currency is intentionally normalized to N/A in the dimension
-        // key so PostgreSQL NULL uniqueness semantics cannot create duplicates.
         const dimensionKey = `${fact.dimensionKey}:currency=${fact.currency ?? 'N/A'}`;
         const existing = await tx.analyticsFact.findFirst({
           where: {
@@ -754,7 +861,8 @@ export class GrowthAnalyticsService {
               where: { id: existing.id },
               data: {
                 currency: fact.currency,
-                measures: fact.measures as unknown as Prisma.InputJsonValue,
+                measures:
+                  fact.measures as unknown as Prisma.InputJsonValue,
                 sourceVersion: ANALYTICS_SOURCE_VERSION,
                 rebuiltAt: new Date(),
               },
@@ -767,7 +875,8 @@ export class GrowthAnalyticsService {
                 bucketEnd: to,
                 dimensionKey,
                 currency: fact.currency,
-                measures: fact.measures as unknown as Prisma.InputJsonValue,
+                measures:
+                  fact.measures as unknown as Prisma.InputJsonValue,
                 sourceVersion: ANALYTICS_SOURCE_VERSION,
               },
             });
@@ -791,7 +900,11 @@ export class GrowthAnalyticsService {
           open.start.getTime(),
           from.getTime(),
         );
-        const end = Math.min(block.end.getTime(), open.end.getTime(), to.getTime());
+        const end = Math.min(
+          block.end.getTime(),
+          open.end.getTime(),
+          to.getTime(),
+        );
         if (end > start) clipped.push({ start, end });
       }
     }
