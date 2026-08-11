@@ -1,0 +1,25 @@
+model ReservationDepositPaymentIntent {
+  id                String   @id @default(cuid())
+  shopId            String
+  reservationId     String
+  provider           String   @default("STRIPE")
+  providerIntentId  String   @unique
+  amountMinor       Int
+  currency          String
+  status            String   @default("REQUIRES_PAYMENT")
+  idempotencyKey    String
+  clientSecretHash  String?
+  lastProviderEvent String?
+  failureCode       String?
+  failureMessage    String?
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+  succeededAt       DateTime?
+  canceledAt        DateTime?
+
+  reservation Reservation @relation(fields: [reservationId], references: [id], onDelete: Cascade)
+
+  @@unique([shopId, idempotencyKey])
+  @@index([shopId, reservationId, createdAt])
+  @@index([shopId, status, updatedAt])
+}
