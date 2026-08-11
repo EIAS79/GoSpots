@@ -14,6 +14,8 @@ import {
   computePricingQuote,
   signedLedgerAmount,
   type PricingContext,
+  type PromotionEvaluation,
+  type PromotionEvaluationStatus,
   type PromotionForQuote,
   type RuleBenefitInput,
   type RuleConditionInput,
@@ -205,17 +207,6 @@ export class GrowthPricingService {
     const requestedCodes = new Set(
       (dto.promotionCodes ?? []).map((code) => code.trim().toUpperCase()),
     );
-    const eligible: PromotionForQuote[] = rules
-      .filter((rule) => {
-        if (rule.startsAt && rule.startsAt > at) return false;
-        if (rule.endsAt && rule.endsAt <= at) return false;
-        if (!rule.requiresCode) return true;
-        return (
-          requestedIds.has(rule.id) ||
-          Boolean(rule.code && requestedCodes.has(rule.code.toUpperCase()))
-        );
-      })
-      .map((rule) => this.toQuoteRule(rule, conditionRows, benefitRows));
 
     let packages: PackageDefinition[] = [];
     if (dto.packageIds?.length) {
@@ -231,6 +222,7 @@ export class GrowthPricingService {
       (sum, row) => sum + this.packageCostMinor(row),
       0,
     );
+    const adjustedSubtotalMinor = dto.subtotalMinor + packageMinor;
     const context: PricingContext = {
       at,
       resourceId: dto.context?.resourceId,
@@ -244,16 +236,74 @@ export class GrowthPricingService {
       bookingChannel: dto.context?.bookingChannel,
       promotionCodes: [...requestedCodes],
     };
+
+    const eligible: PromotionForQuote[] = [];
+    const preEvaluated: PromotionEvaluation[] = [];
+    for (const rule of rules) {
+      const quoteRule = this.toQuoteRule(rule, conditionRows, benefitRows);
+      let status: PromotionEvaluationStatus | null = null;
+      let reason = '';
+      if (rule.startsAt && rule.startsAt > at) {
+        status = 'SKIPPED_NOT_STARTED';
+        reason = `Promotion starts at ${rule.startsAt.toISOString()}.`;
+      } else if (rule.endsAt && rule.endsAt <= at) {
+        status = 'SKIPPED_EXPIRED';
+        reason = `Promotion ended at ${rule.endsAt.toISOString()}.`;
+      } else if (
+        rule.requiresCode &&
+        !requestedIds.has(rule.id) &&
+        !Boolean(rule.code && requestedCodes.has(rule.code.toUpperCase()))
+      ) {
+        status = 'SKIPPED_CODE_REQUIRED';
+        reason = 'Promotion requires an explicit matching promotion id or code.';
+      }
+
+      if (!status) {
+        eligible.push(quoteRule);
+        continue;
+      }
+      preEvaluated.push(
+        this.prefilterEvaluation(quoteRule, status, reason, adjustedSubtotalMinor),
+      );
+    }
+
     const quote = computePricingQuote({
-      subtotalMinor: dto.subtotalMinor + packageMinor,
+      subtotalMinor: adjustedSubtotalMinor,
       taxMinor: dto.taxMinor,
       tipMinor: dto.tipMinor,
       tipBps: dto.tipBps,
       promotions: eligible,
       context,
     });
+    const evaluatedPromotions = [...preEvaluated, ...quote.evaluatedPromotions].sort(
+      (a, b) => b.priority - a.priority || a.id.localeCompare(b.id),
+    );
+    const evaluationInput = {
+      evaluatedAt: at.toISOString(),
+      requestedSubtotalMinor: dto.subtotalMinor,
+      packageAdjustedSubtotalMinor: adjustedSubtotalMinor,
+      requestedTaxMinor: dto.taxMinor ?? null,
+      requestedTipMinor: dto.tipMinor ?? null,
+      requestedTipBps: dto.tipBps ?? null,
+      requestedPromotionIds: [...requestedIds].sort(),
+      requestedPromotionCodes: [...requestedCodes].sort(),
+      requestedPackageIds: [...(dto.packageIds ?? [])].sort(),
+      context: {
+        resourceId: dto.context?.resourceId ?? null,
+        resourceCategoryId: dto.context?.resourceCategoryId ?? null,
+        itemIds: [...(dto.context?.itemIds ?? [])].sort(),
+        itemCategoryIds: [...(dto.context?.itemCategoryIds ?? [])].sort(),
+        customerId: dto.context?.customerId ?? null,
+        isMember: dto.context?.isMember ?? null,
+        sessionMinutes: dto.context?.sessionMinutes ?? null,
+        partySize: dto.context?.partySize ?? null,
+        bookingChannel: dto.context?.bookingChannel ?? null,
+      },
+    };
     return {
       ...quote,
+      evaluatedPromotions,
+      evaluationInput,
       packageMinor,
       packageCostMinor,
       contributionBeforeOtherCostsMinor:
@@ -283,7 +333,9 @@ export class GrowthPricingService {
     const sourceType = dto.sourceType.trim().toUpperCase();
     const sourceId = dto.sourceId.trim();
     const rules = {
-      schemaVersion: 1,
+      schemaVersion: 2,
+      evaluationInput: quote.evaluationInput,
+      evaluatedPromotions: quote.evaluatedPromotions,
       appliedPromotions: quote.appliedPromotions,
       explanations: quote.explanations,
       packages: quote.packages,
@@ -370,6 +422,7 @@ export class GrowthPricingService {
     await this.record(actor, 'pricing.snapshot', 'Stored immutable pricing evidence', {
       snapshotId: result.snapshot.id,
       applicationCount: result.applications.length,
+      evaluatedRuleCount: quote.evaluatedPromotions.length,
     });
     return result;
   }
@@ -533,6 +586,34 @@ export class GrowthPricingService {
       minSubtotalMinor: rule.minSubtotalMinor,
       conditions: conditions.length ? conditions : this.legacyConditions(rule.conditions),
       benefits,
+    };
+  }
+
+  private prefilterEvaluation(
+    rule: PromotionForQuote,
+    status: PromotionEvaluationStatus,
+    reason: string,
+    subtotalMinor: number,
+  ): PromotionEvaluation {
+    return {
+      id: rule.id,
+      name: rule.name,
+      code: rule.code ?? null,
+      kind: rule.kind,
+      priority: rule.priority,
+      stackable: rule.stackable,
+      exclusiveGroup: rule.exclusiveGroup,
+      minSubtotalMinor: rule.minSubtotalMinor,
+      minSubtotalMatched: subtotalMinor >= rule.minSubtotalMinor,
+      status,
+      reason,
+      remainingBeforeMinor: subtotalMinor,
+      discountMinor: 0,
+      conditionSnapshot: [...(rule.conditions ?? [])],
+      conditionResults: [],
+      benefitSnapshots: [...(rule.benefits ?? [])],
+      benefitResults: [],
+      winningBenefit: null,
     };
   }
 
