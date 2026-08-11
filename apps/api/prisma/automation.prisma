@@ -1,0 +1,103 @@
+enum AutomationTriggerType {
+  MANUAL
+  DOMAIN_EVENT
+  SCHEDULED
+}
+
+enum AutomationExecutionStatus {
+  QUEUED
+  RUNNING
+  SUCCEEDED
+  FAILED
+  DEAD_LETTER
+  SKIPPED
+}
+
+enum AutomationStepStatus {
+  PENDING
+  RUNNING
+  SUCCEEDED
+  FAILED
+  SKIPPED
+}
+
+model AutomationRule {
+  id                String                @id @default(cuid())
+  shopId            String
+  name              String
+  enabled           Boolean               @default(true)
+  triggerType       AutomationTriggerType
+  triggerConfigJson String?
+  conditionJson     String?
+  actionsJson       String
+  version           Int                   @default(1)
+  nextRunAt         DateTime?
+  lastTriggeredAt   DateTime?
+  createdById       String?
+  createdAt         DateTime              @default(now())
+  updatedAt         DateTime              @updatedAt
+
+  @@unique([shopId, name])
+  @@index([shopId, enabled, triggerType])
+  @@index([shopId, nextRunAt])
+}
+
+model AutomationExecution {
+  id           String                    @id @default(cuid())
+  shopId       String
+  ruleId       String?
+  triggerType  AutomationTriggerType
+  triggerRef   String?
+  dedupeKey    String
+  status       AutomationExecutionStatus @default(QUEUED)
+  attempt      Int                       @default(0)
+  inputHash    String
+  inputJson    String?
+  outputJson   String?
+  errorCode    String?
+  errorMessage String?
+  startedAt    DateTime?
+  completedAt  DateTime?
+  createdAt    DateTime                  @default(now())
+  updatedAt    DateTime                  @updatedAt
+
+  @@unique([shopId, dedupeKey])
+  @@index([shopId, ruleId, createdAt])
+  @@index([shopId, status, updatedAt])
+}
+
+model AutomationExecutionStep {
+  id          String               @id @default(cuid())
+  shopId      String
+  executionId String
+  stepIndex   Int
+  actionType  String
+  status      AutomationStepStatus @default(PENDING)
+  inputHash   String?
+  outputJson  String?
+  errorCode   String?
+  errorMessage String?
+  startedAt   DateTime?
+  completedAt DateTime?
+  createdAt   DateTime             @default(now())
+  updatedAt   DateTime             @updatedAt
+
+  @@unique([executionId, stepIndex])
+  @@index([shopId, executionId, stepIndex])
+  @@index([shopId, status, updatedAt])
+}
+
+model AutomationDeadLetter {
+  id          String   @id @default(cuid())
+  shopId      String
+  executionId String
+  reason      String
+  replayCount Int      @default(0)
+  lastReplayAt DateTime?
+  resolvedAt  DateTime?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@unique([shopId, executionId])
+  @@index([shopId, resolvedAt, createdAt])
+}

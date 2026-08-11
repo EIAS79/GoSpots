@@ -1,0 +1,1 @@
+ALTER TABLE "AiInsightFeedback" ALTER COLUMN "actorId" SET NOT NULL;

@@ -33,6 +33,10 @@ export const PERMISSIONS = {
   REVIEWS_WRITE: 'reviews.write',
   MESSAGING_READ: 'messaging.read',
   MESSAGING_WRITE: 'messaging.write',
+  TICKETING_MANAGE: 'ticketing.manage',
+  AUTOMATION_MANAGE: 'automation.manage',
+  AI_INSIGHTS_READ: 'ai_insights.read',
+  RELIABILITY_READ: 'reliability.read',
   SUBSCRIPTION_MANAGE: 'subscription.manage',
 } as const;
 
