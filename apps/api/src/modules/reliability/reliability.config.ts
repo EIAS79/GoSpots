@@ -5,6 +5,7 @@ export type ReliabilityConfigInput = {
   jwtSecret?: string;
   opaqueIdentifierSecret?: string;
   aiProvider?: string;
+  aiEndpoint?: string;
   aiApiKey?: string;
 };
 
@@ -52,11 +53,27 @@ export function evaluateReliabilityConfig(input: ReliabilityConfigInput): Reliab
   const provider = (input.aiProvider ?? 'DETERMINISTIC').toUpperCase();
   if (provider === 'DETERMINISTIC' || provider === 'LOCAL') {
     checks.aiProvider = 'ready';
-  } else if (input.aiApiKey?.trim()) {
-    checks.aiProvider = 'ready';
   } else {
-    checks.aiProvider = 'missing';
-    warnings.push(`AI provider ${provider} has no API key; deterministic fallback will be used.`);
+    let endpointValid = false;
+    if (input.aiEndpoint?.trim()) {
+      try {
+        const parsed = new URL(input.aiEndpoint);
+        endpointValid = parsed.protocol === 'https:';
+      } catch {
+        endpointValid = false;
+      }
+    }
+    const hasKey = Boolean(input.aiApiKey?.trim());
+    if (endpointValid && hasKey) {
+      checks.aiProvider = 'ready';
+    } else {
+      checks.aiProvider = input.aiEndpoint?.trim() && !endpointValid ? 'invalid' : 'missing';
+      const missing = [
+        endpointValid ? null : 'a valid HTTPS AI_INSIGHTS_ENDPOINT',
+        hasKey ? null : 'AI_INSIGHTS_API_KEY',
+      ].filter(Boolean).join(' and ');
+      warnings.push(`AI provider ${provider} is missing ${missing}; deterministic fallback will be used.`);
+    }
   }
 
   return {
