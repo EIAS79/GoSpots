@@ -17,7 +17,7 @@ function pageSize(raw?: string) {
 }
 
 @ApiTags('public-integration-v1')
-@Controller('v1')
+@Controller('integrations/v1')
 @Public()
 @UseGuards(IntegrationApiKeyGuard)
 export class IntegrationV1Controller {
