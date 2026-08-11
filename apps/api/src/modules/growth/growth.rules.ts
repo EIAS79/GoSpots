@@ -50,6 +50,44 @@ export type AppliedPromotion = {
   benefitSnapshot: RuleBenefitInput;
 };
 
+export type PromotionEvaluationStatus =
+  | 'APPLIED'
+  | 'SKIPPED_NOT_STARTED'
+  | 'SKIPPED_EXPIRED'
+  | 'SKIPPED_CODE_REQUIRED'
+  | 'SKIPPED_CONDITIONS'
+  | 'SKIPPED_EXCLUSIVE_GROUP'
+  | 'SKIPPED_NON_STACKABLE'
+  | 'SKIPPED_EXHAUSTED'
+  | 'SKIPPED_ZERO_BENEFIT';
+
+export type PromotionEvaluation = {
+  id: string;
+  name: string;
+  code: string | null;
+  kind: string;
+  priority: number;
+  stackable: boolean;
+  exclusiveGroup: string | null;
+  minSubtotalMinor: number;
+  minSubtotalMatched: boolean;
+  status: PromotionEvaluationStatus;
+  reason: string;
+  remainingBeforeMinor: number;
+  discountMinor: number;
+  conditionSnapshot: RuleConditionInput[];
+  conditionResults: Array<{
+    condition: RuleConditionInput;
+    matched: boolean;
+  }>;
+  benefitSnapshots: RuleBenefitInput[];
+  benefitResults: Array<{
+    benefit: RuleBenefitInput;
+    discountMinor: number;
+  }>;
+  winningBenefit: RuleBenefitInput | null;
+};
+
 export type PricingQuote = {
   subtotalMinor: number;
   discountMinor: number;
@@ -57,6 +95,7 @@ export type PricingQuote = {
   tipMinor: number;
   totalMinor: number;
   appliedPromotions: AppliedPromotion[];
+  evaluatedPromotions: PromotionEvaluation[];
 };
 
 export function intervalsOverlap(
@@ -128,51 +167,127 @@ export function computePricingQuote(input: {
   );
   const usedGroups = new Set<string>();
   const appliedPromotions: AppliedPromotion[] = [];
+  const evaluatedPromotions: PromotionEvaluation[] = [];
   let discountMinor = 0;
-  let exclusiveApplied = false;
+  let nonStackableApplied = false;
 
   for (const rule of sorted) {
-    if (exclusiveApplied || !promotionMatches(rule, context, input.subtotalMinor)) {
+    const conditions = [...(rule.conditions ?? [])];
+    const benefits = rule.benefits?.length ? [...rule.benefits] : [legacyBenefit(rule)];
+    const remaining = Math.max(0, input.subtotalMinor - discountMinor);
+    const minSubtotalMatched = input.subtotalMinor >= rule.minSubtotalMinor;
+    const conditionResults = conditions.map((condition) => ({
+      condition,
+      matched: conditionMatches(condition, context, input.subtotalMinor),
+    }));
+    const baseEvaluation = {
+      id: rule.id,
+      name: rule.name,
+      code: rule.code ?? null,
+      kind: rule.kind,
+      priority: rule.priority,
+      stackable: rule.stackable,
+      exclusiveGroup: rule.exclusiveGroup,
+      minSubtotalMinor: rule.minSubtotalMinor,
+      minSubtotalMatched,
+      remainingBeforeMinor: remaining,
+      discountMinor: 0,
+      conditionSnapshot: conditions,
+      conditionResults,
+      benefitSnapshots: benefits,
+      benefitResults: [] as Array<{
+        benefit: RuleBenefitInput;
+        discountMinor: number;
+      }>,
+      winningBenefit: null as RuleBenefitInput | null,
+    };
+
+    if (nonStackableApplied) {
+      evaluatedPromotions.push({
+        ...baseEvaluation,
+        status: 'SKIPPED_NON_STACKABLE',
+        reason: 'A higher-priority non-stackable promotion already applied.',
+      });
       continue;
     }
-    if (rule.exclusiveGroup && usedGroups.has(rule.exclusiveGroup)) continue;
-    const remaining = Math.max(0, input.subtotalMinor - discountMinor);
-    if (remaining === 0) break;
+    if (!minSubtotalMatched || conditionResults.some((result) => !result.matched)) {
+      evaluatedPromotions.push({
+        ...baseEvaluation,
+        status: 'SKIPPED_CONDITIONS',
+        reason: !minSubtotalMatched
+          ? `Subtotal is below the ${rule.minSubtotalMinor} minor-unit minimum.`
+          : 'One or more promotion conditions did not match the pricing context.',
+      });
+      continue;
+    }
+    if (rule.exclusiveGroup && usedGroups.has(rule.exclusiveGroup)) {
+      evaluatedPromotions.push({
+        ...baseEvaluation,
+        status: 'SKIPPED_EXCLUSIVE_GROUP',
+        reason: `Exclusive group ${rule.exclusiveGroup} was already consumed by a higher-priority promotion.`,
+      });
+      continue;
+    }
+    if (remaining === 0) {
+      evaluatedPromotions.push({
+        ...baseEvaluation,
+        status: 'SKIPPED_EXHAUSTED',
+        reason: 'No discountable subtotal remained after higher-priority promotions.',
+      });
+      continue;
+    }
 
-    const benefits =
-      rule.benefits?.length
-        ? rule.benefits
-        : [legacyBenefit(rule)];
-    let ruleDiscount = 0;
-    let winningBenefit = benefits[0]!;
-    for (const benefit of benefits) {
-      const discount = computeBenefitDiscount(
+    const benefitResults = benefits.map((benefit) => ({
+      benefit,
+      discountMinor: computeBenefitDiscount(
         benefit,
         rule,
         remaining,
         input.subtotalMinor,
         context,
-      );
-      if (discount > ruleDiscount) {
-        ruleDiscount = discount;
-        winningBenefit = benefit;
+      ),
+    }));
+    let ruleDiscount = 0;
+    let winningBenefit = benefits[0] ?? null;
+    for (const result of benefitResults) {
+      if (result.discountMinor > ruleDiscount) {
+        ruleDiscount = result.discountMinor;
+        winningBenefit = result.benefit;
       }
     }
     const discount = Math.min(remaining, Math.max(0, ruleDiscount));
-    if (discount === 0) continue;
+    if (discount === 0 || !winningBenefit) {
+      evaluatedPromotions.push({
+        ...baseEvaluation,
+        benefitResults,
+        winningBenefit,
+        status: 'SKIPPED_ZERO_BENEFIT',
+        reason: 'Promotion matched, but none of its benefits produced a discount.',
+      });
+      continue;
+    }
 
+    const explanation = explainBenefit(rule.name, winningBenefit, discount);
     appliedPromotions.push({
       id: rule.id,
       name: rule.name,
       discountMinor: discount,
       benefitKind: winningBenefit.kind,
-      explanation: explainBenefit(rule.name, winningBenefit, discount),
-      conditionSnapshot: [...(rule.conditions ?? [])],
+      explanation,
+      conditionSnapshot: conditions,
       benefitSnapshot: winningBenefit,
+    });
+    evaluatedPromotions.push({
+      ...baseEvaluation,
+      discountMinor: discount,
+      benefitResults,
+      winningBenefit,
+      status: 'APPLIED',
+      reason: explanation,
     });
     discountMinor += discount;
     if (rule.exclusiveGroup) usedGroups.add(rule.exclusiveGroup);
-    if (!rule.stackable) exclusiveApplied = true;
+    if (!rule.stackable) nonStackableApplied = true;
   }
 
   const netBeforeTax = Math.max(0, input.subtotalMinor - discountMinor);
@@ -191,6 +306,7 @@ export function computePricingQuote(input: {
     tipMinor,
     totalMinor: netBeforeTax + taxMinor + tipMinor,
     appliedPromotions,
+    evaluatedPromotions,
   };
 }
 
