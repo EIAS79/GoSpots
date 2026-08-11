@@ -17,7 +17,6 @@ import { CommerceGrowthService } from './commerce-growth.service';
 import { EventsGrowthService } from './events-growth.service';
 import { GrowthAnalyticsService } from './growth-analytics.service';
 import {
-  type CapacityRequest,
   GrowthCapacityService,
   type UnifiedBookingInput,
 } from './growth-capacity.service';
@@ -25,6 +24,7 @@ import { ReservationGrowthService } from './reservation-growth.service';
 import type {
   AttachReservationPolicyDto,
   CreateCustomerDto,
+  CreateEventChecklistDto,
   CreateEventHoldDto,
   CreateEventProposalDto,
   CreateEventScheduleDto,
@@ -35,13 +35,17 @@ import type {
   CreateTierDto,
   CreateWaitlistDto,
   EnrollCustomerDto,
+  EventTransitionDto,
   LoyaltyEntryDto,
   MarkEventSchedulePaidDto,
+  MergeCustomerDto,
   OfferWaitlistDto,
   QuoteDto,
   RecordDepositDto,
   RecordTipDto,
+  RecordVisitDto,
   ReservationOutcomeDto,
+  ReverseRewardsDto,
   SnapshotDto,
   StartEventDto,
   StoredValueEntryDto,
@@ -59,6 +63,7 @@ export class GrowthController {
     private readonly analytics: GrowthAnalyticsService,
   ) {}
 
+  // Chunk 16 — Reservations 2.0, deposits and waitlist
   @Get('reservations/capacity')
   @RequirePermissions(PERMISSIONS.RESERVATION_READ)
   capacityForStaff(
@@ -204,7 +209,7 @@ export class GrowthController {
 
   @Post('waitlist/:id/offer')
   @RequirePermissions(PERMISSIONS.RESERVATION_WRITE)
-  offer(
+  offerWaitlist(
     @CurrentUser() user: JwtAccessPayload,
     @Param('id') id: string,
     @Body() dto: OfferWaitlistDto,
@@ -212,15 +217,17 @@ export class GrowthController {
     return this.reservations.offerWaitlist(user, id, dto);
   }
 
+  @Post('waitlist/:id/claim')
   @Post('waitlist/:id/convert')
   @RequirePermissions(PERMISSIONS.RESERVATION_WRITE)
-  convertWaitlist(
+  claimWaitlist(
     @CurrentUser() user: JwtAccessPayload,
     @Param('id') id: string,
   ) {
     return this.reservations.convertWaitlist(user, id);
   }
 
+  // Chunk 17 — Promotions, packages and tips
   @Get('promotions')
   @RequirePermissions(PERMISSIONS.TRANSACTION_READ)
   promotions(@CurrentUser() user: JwtAccessPayload) {
@@ -234,6 +241,12 @@ export class GrowthController {
     @Body() dto: CreatePromotionDto,
   ) {
     return this.commerce.createPromotion(user, dto);
+  }
+
+  @Get('packages')
+  @RequirePermissions(PERMISSIONS.TRANSACTION_READ)
+  packages(@CurrentUser() user: JwtAccessPayload) {
+    return this.commerce.listPackages(user);
   }
 
   @Post('packages')
@@ -263,6 +276,17 @@ export class GrowthController {
     return this.commerce.recordTip(user, dto);
   }
 
+  @Get('tips/report')
+  @RequirePermissions(PERMISSIONS.TRANSACTION_READ)
+  tipReport(
+    @CurrentUser() user: JwtAccessPayload,
+    @Query('from') from: string,
+    @Query('to') to: string,
+  ) {
+    return this.commerce.tipReport(user, new Date(from), new Date(to));
+  }
+
+  // Chunk 18 — CRM, membership, loyalty and stored value
   @Get('customers')
   @RequirePermissions(PERMISSIONS.RESERVATION_READ)
   customers(@CurrentUser() user: JwtAccessPayload) {
@@ -282,6 +306,16 @@ export class GrowthController {
   @RequirePermissions(PERMISSIONS.RESERVATION_READ)
   history(@CurrentUser() user: JwtAccessPayload, @Param('id') id: string) {
     return this.commerce.customerHistory(user, id);
+  }
+
+  @Post('customers/:id/merge')
+  @RequirePermissions(PERMISSIONS.RESERVATION_WRITE)
+  mergeCustomer(
+    @CurrentUser() user: JwtAccessPayload,
+    @Param('id') id: string,
+    @Body() dto: MergeCustomerDto,
+  ) {
+    return this.commerce.mergeCustomer(user, id, dto);
   }
 
   @Post('membership-tiers')
@@ -310,6 +344,36 @@ export class GrowthController {
     return this.commerce.loyalty(user, id, dto);
   }
 
+  @Post('customers/:id/rewards/reverse')
+  @RequirePermissions(PERMISSIONS.TRANSACTION_WRITE)
+  reverseRewards(
+    @CurrentUser() user: JwtAccessPayload,
+    @Param('id') id: string,
+    @Body() dto: ReverseRewardsDto,
+  ) {
+    return this.commerce.reverseRewards(user, id, dto);
+  }
+
+  @Post('customers/:id/visits')
+  @RequirePermissions(PERMISSIONS.RESERVATION_WRITE)
+  recordVisit(
+    @CurrentUser() user: JwtAccessPayload,
+    @Param('id') id: string,
+    @Body() dto: RecordVisitDto,
+  ) {
+    return this.commerce.recordVisit(user, id, dto);
+  }
+
+  @Post('customers/:id/visits/:visitId/review-proof')
+  @RequirePermissions(PERMISSIONS.REVIEWS_WRITE)
+  issueReviewProof(
+    @CurrentUser() user: JwtAccessPayload,
+    @Param('id') id: string,
+    @Param('visitId') visitId: string,
+  ) {
+    return this.commerce.issueReviewProof(user, id, visitId);
+  }
+
   @Post('stored-value/accounts')
   @RequirePermissions(PERMISSIONS.TRANSACTION_WRITE)
   storedAccount(
@@ -329,6 +393,7 @@ export class GrowthController {
     return this.commerce.storedValue(user, id, dto);
   }
 
+  // Chunk 19 — Events / Parties 2.0
   @Get('events/:id')
   @RequirePermissions(PERMISSIONS.RESERVATION_READ)
   event(@CurrentUser() user: JwtAccessPayload, @Param('id') id: string) {
@@ -387,6 +452,26 @@ export class GrowthController {
     return this.events.markPaymentPaid(user, id, dto);
   }
 
+  @Post('events/:id/checklist')
+  @RequirePermissions(PERMISSIONS.RESERVATION_WRITE)
+  createChecklist(
+    @CurrentUser() user: JwtAccessPayload,
+    @Param('id') id: string,
+    @Body() dto: CreateEventChecklistDto,
+  ) {
+    return this.events.createChecklistItem(user, id, dto);
+  }
+
+  @Post('events/checklist/:id/status')
+  @RequirePermissions(PERMISSIONS.RESERVATION_WRITE)
+  checklistStatus(
+    @CurrentUser() user: JwtAccessPayload,
+    @Param('id') id: string,
+    @Body() dto: { status: 'OPEN' | 'DONE' },
+  ) {
+    return this.events.setChecklistStatus(user, id, dto.status);
+  }
+
   @Post('events/:id/start')
   @RequirePermissions(PERMISSIONS.RESERVATION_WRITE)
   startEvent(
@@ -397,12 +482,25 @@ export class GrowthController {
     return this.events.startExecution(user, id, dto);
   }
 
-  @Post('events/:id/complete')
+  @Post('events/:id/final-payment')
   @RequirePermissions(PERMISSIONS.RESERVATION_WRITE)
-  completeEvent(
+  finalPayment(@CurrentUser() user: JwtAccessPayload, @Param('id') id: string) {
+    return this.events.moveToFinalPayment(user, id);
+  }
+
+  @Post('events/:id/transition')
+  @RequirePermissions(PERMISSIONS.RESERVATION_WRITE)
+  eventTransition(
     @CurrentUser() user: JwtAccessPayload,
     @Param('id') id: string,
+    @Body() dto: EventTransitionDto,
   ) {
+    return this.events.transitionExplicit(user, id, dto);
+  }
+
+  @Post('events/:id/complete')
+  @RequirePermissions(PERMISSIONS.RESERVATION_WRITE)
+  completeEvent(@CurrentUser() user: JwtAccessPayload, @Param('id') id: string) {
     return this.events.finishExecution(user, id, 'COMPLETED');
   }
 
@@ -412,6 +510,16 @@ export class GrowthController {
     return this.events.finishExecution(user, id, 'CANCELED');
   }
 
+  @Get('events/:id/profitability')
+  @RequirePermissions(PERMISSIONS.TRANSACTION_READ)
+  eventProfitability(
+    @CurrentUser() user: JwtAccessPayload,
+    @Param('id') id: string,
+  ) {
+    return this.events.profitability(user, id);
+  }
+
+  // Chunk 20 — Analytics 2.0; exactly four decision surfaces.
   @Get('analytics/overview')
   @RequirePermissions(PERMISSIONS.TRANSACTION_READ)
   overview(
@@ -420,5 +528,48 @@ export class GrowthController {
     @Query('to') to: string,
   ) {
     return this.analytics.overview(user, new Date(from), new Date(to));
+  }
+
+  @Get('analytics/operations')
+  @RequirePermissions(PERMISSIONS.TRANSACTION_READ)
+  analyticsOperations(
+    @CurrentUser() user: JwtAccessPayload,
+    @Query('from') from: string,
+    @Query('to') to: string,
+  ) {
+    return this.analytics.operations(user, new Date(from), new Date(to));
+  }
+
+  @Get('analytics/guests')
+  @RequirePermissions(PERMISSIONS.TRANSACTION_READ)
+  analyticsGuests(
+    @CurrentUser() user: JwtAccessPayload,
+    @Query('from') from: string,
+    @Query('to') to: string,
+  ) {
+    return this.analytics.guests(user, new Date(from), new Date(to));
+  }
+
+  @Get('analytics/finance')
+  @RequirePermissions(PERMISSIONS.TRANSACTION_READ)
+  analyticsFinance(
+    @CurrentUser() user: JwtAccessPayload,
+    @Query('from') from: string,
+    @Query('to') to: string,
+  ) {
+    return this.analytics.finance(user, new Date(from), new Date(to));
+  }
+
+  @Post('analytics/facts/rebuild')
+  @RequirePermissions(PERMISSIONS.TRANSACTION_WRITE)
+  rebuildAnalyticsFacts(
+    @CurrentUser() user: JwtAccessPayload,
+    @Body() dto: { from: string; to: string },
+  ) {
+    return this.analytics.rebuildFacts(
+      user,
+      new Date(dto.from),
+      new Date(dto.to),
+    );
   }
 }
