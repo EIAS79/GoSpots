@@ -22,6 +22,15 @@ import type {
   ScanTicketDto,
 } from './dto/ticketing.dto';
 
+function isUniqueConstraintError(error: unknown): boolean {
+  return Boolean(
+    error &&
+      typeof error === 'object' &&
+      'code' in error &&
+      (error as { code?: unknown }).code === 'P2002',
+  );
+}
+
 @Injectable()
 export class TicketingService {
   constructor(
@@ -114,6 +123,9 @@ export class TicketingService {
   async issueOrder(actor: JwtAccessPayload, dto: IssueTicketOrderDto) {
     const shopId = this.shopId(actor);
     if (!dto.lines.length) throw new BadRequestException('At least one ticket line is required.');
+    const ticketCount = dto.lines.reduce((sum, line) => sum + line.quantity, 0);
+    if (ticketCount > 1000) throw new BadRequestException('One order cannot issue more than 1000 tickets.');
+
     const existing = await this.prisma.ticketOrder.findUnique({
       where: { shopId_idempotencyKey: { shopId, idempotencyKey: dto.idempotencyKey } },
     });
@@ -154,35 +166,49 @@ export class TicketingService {
       }
     }
 
-    const result = await this.prisma.$transaction(async (tx) => {
-      const order = await tx.ticketOrder.create({
-        data: {
-          shopId,
-          idempotencyKey: dto.idempotencyKey,
-          status: 'PAID',
-          totalMinor,
-          currency: products[0].currency,
-          customerRefHash,
-        },
+    let result;
+    try {
+      result = await this.prisma.$transaction(async (tx) => {
+        const order = await tx.ticketOrder.create({
+          data: {
+            shopId,
+            idempotencyKey: dto.idempotencyKey,
+            status: 'PAID',
+            totalMinor,
+            currency: products[0].currency,
+            customerRefHash,
+          },
+        });
+        const tickets = [];
+        for (const item of issued) {
+          tickets.push(
+            await tx.ticket.create({
+              data: {
+                shopId,
+                orderId: order.id,
+                productId: item.productId,
+                tokenHash: item.tokenHash,
+                status: 'ACTIVE',
+                maxScans: item.maxScans,
+                expiresAt: item.expiresAt,
+              },
+            }),
+          );
+        }
+        return { order, tickets };
       });
-      const tickets = [];
-      for (const item of issued) {
-        tickets.push(
-          await tx.ticket.create({
-            data: {
-              shopId,
-              orderId: order.id,
-              productId: item.productId,
-              tokenHash: item.tokenHash,
-              status: 'ACTIVE',
-              maxScans: item.maxScans,
-              expiresAt: item.expiresAt,
-            },
-          }),
-        );
+    } catch (error) {
+      if (isUniqueConstraintError(error)) {
+        const replayOrder = await this.prisma.ticketOrder.findUnique({
+          where: { shopId_idempotencyKey: { shopId, idempotencyKey: dto.idempotencyKey } },
+        });
+        if (replayOrder) {
+          const tickets = await this.prisma.ticket.findMany({ where: { shopId, orderId: replayOrder.id } });
+          return { order: replayOrder, tickets, replayed: true, rawTokens: [] as string[] };
+        }
       }
-      return { order, tickets };
-    });
+      throw error;
+    }
 
     await this.audit(shopId, actor, 'ticketing.order.issue', `Issued ${result.tickets.length} ticket(s)`, {
       orderId: result.order.id,
@@ -199,56 +225,65 @@ export class TicketingService {
   async scan(actor: JwtAccessPayload, dto: ScanTicketDto) {
     const shopId = this.shopId(actor);
     const presentedHash = this.opaque(dto.token);
-    const result = await this.prisma.$transaction(async (tx) => {
-      const replay = await tx.ticketScan.findUnique({
-        where: { shopId_idempotencyKey: { shopId, idempotencyKey: dto.idempotencyKey } },
-      });
-      if (replay) return { scan: replay, replayed: true };
+    try {
+      return await this.prisma.$transaction(async (tx) => {
+        const replay = await tx.ticketScan.findUnique({
+          where: { shopId_idempotencyKey: { shopId, idempotencyKey: dto.idempotencyKey } },
+        });
+        if (replay) return { scan: replay, replayed: true };
 
-      await tx.$queryRaw(Prisma.sql`SELECT "id" FROM "Ticket" WHERE "shopId" = ${shopId} AND "tokenHash" = ${presentedHash} FOR UPDATE`);
-      const ticket = await tx.ticket.findFirst({ where: { shopId, tokenHash: presentedHash } });
-      let scanResult: 'ACCEPTED' | 'DUPLICATE' | 'EXPIRED' | 'VOIDED' | 'REJECTED' = 'REJECTED';
-      let reasonCode: string | null = 'NOT_FOUND';
-      if (ticket) {
-        if (ticket.status === 'VOIDED') {
-          scanResult = 'VOIDED';
-          reasonCode = 'TICKET_VOIDED';
-        } else if (ticket.expiresAt && ticket.expiresAt.getTime() <= Date.now()) {
-          scanResult = 'EXPIRED';
-          reasonCode = 'TICKET_EXPIRED';
-          await tx.ticket.update({ where: { id: ticket.id }, data: { status: 'EXPIRED' } });
-        } else if (ticket.status === 'REDEEMED' || ticket.scansUsed >= ticket.maxScans) {
-          scanResult = 'DUPLICATE';
-          reasonCode = 'SCAN_LIMIT_REACHED';
-        } else {
-          scanResult = 'ACCEPTED';
-          reasonCode = null;
-          const next = ticket.scansUsed + 1;
-          await tx.ticket.update({
-            where: { id: ticket.id },
-            data: {
-              scansUsed: next,
-              lastScannedAt: new Date(),
-              status: next >= ticket.maxScans ? 'REDEEMED' : 'ACTIVE',
-              redeemedAt: next >= ticket.maxScans ? new Date() : null,
-            },
-          });
+        await tx.$queryRaw(Prisma.sql`SELECT "id" FROM "Ticket" WHERE "shopId" = ${shopId} AND "tokenHash" = ${presentedHash} FOR UPDATE`);
+        const ticket = await tx.ticket.findFirst({ where: { shopId, tokenHash: presentedHash } });
+        let scanResult: 'ACCEPTED' | 'DUPLICATE' | 'EXPIRED' | 'VOIDED' | 'REJECTED' = 'REJECTED';
+        let reasonCode: string | null = 'NOT_FOUND';
+        if (ticket) {
+          if (ticket.status === 'VOIDED') {
+            scanResult = 'VOIDED';
+            reasonCode = 'TICKET_VOIDED';
+          } else if (ticket.expiresAt && ticket.expiresAt.getTime() <= Date.now()) {
+            scanResult = 'EXPIRED';
+            reasonCode = 'TICKET_EXPIRED';
+            await tx.ticket.update({ where: { id: ticket.id }, data: { status: 'EXPIRED' } });
+          } else if (ticket.status === 'REDEEMED' || ticket.scansUsed >= ticket.maxScans) {
+            scanResult = 'DUPLICATE';
+            reasonCode = 'SCAN_LIMIT_REACHED';
+          } else {
+            scanResult = 'ACCEPTED';
+            reasonCode = null;
+            const next = ticket.scansUsed + 1;
+            await tx.ticket.update({
+              where: { id: ticket.id },
+              data: {
+                scansUsed: next,
+                lastScannedAt: new Date(),
+                status: next >= ticket.maxScans ? 'REDEEMED' : 'ACTIVE',
+                redeemedAt: next >= ticket.maxScans ? new Date() : null,
+              },
+            });
+          }
         }
-      }
-      const scan = await tx.ticketScan.create({
-        data: {
-          shopId,
-          ticketId: ticket?.id ?? null,
-          presentedHash,
-          result: scanResult,
-          scannerDeviceId: dto.scannerDeviceId ?? null,
-          idempotencyKey: dto.idempotencyKey,
-          reasonCode,
-        },
+        const scan = await tx.ticketScan.create({
+          data: {
+            shopId,
+            ticketId: ticket?.id ?? null,
+            presentedHash,
+            result: scanResult,
+            scannerDeviceId: dto.scannerDeviceId ?? null,
+            idempotencyKey: dto.idempotencyKey,
+            reasonCode,
+          },
+        });
+        return { scan, replayed: false };
       });
-      return { scan, replayed: false };
-    });
-    return result;
+    } catch (error) {
+      if (isUniqueConstraintError(error)) {
+        const replay = await this.prisma.ticketScan.findUnique({
+          where: { shopId_idempotencyKey: { shopId, idempotencyKey: dto.idempotencyKey } },
+        });
+        if (replay) return { scan: replay, replayed: true };
+      }
+      throw error;
+    }
   }
 
   async createWallet(actor: JwtAccessPayload, dto: CreateRfidWalletDto) {
@@ -283,7 +318,8 @@ export class TicketingService {
     return credential;
   }
 
-  private async mutateWallet(
+  private async mutateWalletInTx(
+    tx: Prisma.TransactionClient,
     actor: JwtAccessPayload,
     walletId: string,
     dto: RfidWalletMutationDto,
@@ -291,42 +327,58 @@ export class TicketingService {
   ) {
     const shopId = this.shopId(actor);
     const signed = kind === 'SPEND' ? -dto.amountMinor : dto.amountMinor;
+    const replay = await tx.rfidWalletEntry.findUnique({
+      where: { shopId_idempotencyKey: { shopId, idempotencyKey: dto.idempotencyKey } },
+    });
+    if (replay) {
+      const wallet = await tx.rfidWallet.findFirst({ where: { id: replay.walletId, shopId } });
+      return { wallet, entry: replay, replayed: true };
+    }
+    await tx.$queryRaw(Prisma.sql`SELECT "id" FROM "RfidWallet" WHERE "id" = ${walletId} AND "shopId" = ${shopId} FOR UPDATE`);
+    const wallet = await tx.rfidWallet.findFirst({ where: { id: walletId, shopId, active: true } });
+    if (!wallet) throw new NotFoundException('RFID wallet not found.');
+    const next = wallet.balanceMinor + signed;
+    if (next < 0) throw new ConflictException('RFID wallet balance cannot become negative.');
+    const updated = await tx.rfidWallet.update({
+      where: { id: wallet.id },
+      data: { balanceMinor: next, version: { increment: 1 } },
+    });
+    const entry = await tx.rfidWalletEntry.create({
+      data: {
+        shopId,
+        walletId: wallet.id,
+        type: kind,
+        amountMinor: signed,
+        balanceAfterMinor: next,
+        idempotencyKey: dto.idempotencyKey,
+        referenceType: dto.referenceType ?? null,
+        referenceId: dto.referenceId ?? null,
+        actorUserId: actor.sub,
+        note: dto.note ?? null,
+      },
+    });
+    return { wallet: updated, entry, replayed: false };
+  }
+
+  private async mutateWallet(
+    actor: JwtAccessPayload,
+    walletId: string,
+    dto: RfidWalletMutationDto,
+    kind: 'LOAD' | 'SPEND' | 'REFUND' | 'ADJUSTMENT',
+  ) {
+    const shopId = this.shopId(actor);
     try {
-      return await this.prisma.$transaction(async (tx) => {
-        const replay = await tx.rfidWalletEntry.findUnique({
+      return await this.prisma.$transaction((tx) => this.mutateWalletInTx(tx, actor, walletId, dto, kind));
+    } catch (error) {
+      if (isUniqueConstraintError(error)) {
+        const replay = await this.prisma.rfidWalletEntry.findUnique({
           where: { shopId_idempotencyKey: { shopId, idempotencyKey: dto.idempotencyKey } },
         });
         if (replay) {
-          const wallet = await tx.rfidWallet.findFirst({ where: { id: replay.walletId, shopId } });
+          const wallet = await this.prisma.rfidWallet.findFirst({ where: { id: replay.walletId, shopId } });
           return { wallet, entry: replay, replayed: true };
         }
-        await tx.$queryRaw(Prisma.sql`SELECT "id" FROM "RfidWallet" WHERE "id" = ${walletId} AND "shopId" = ${shopId} FOR UPDATE`);
-        const wallet = await tx.rfidWallet.findFirst({ where: { id: walletId, shopId, active: true } });
-        if (!wallet) throw new NotFoundException('RFID wallet not found.');
-        const next = wallet.balanceMinor + signed;
-        if (next < 0) throw new ConflictException('RFID wallet balance cannot become negative.');
-        const updated = await tx.rfidWallet.update({
-          where: { id: wallet.id },
-          data: { balanceMinor: next, version: { increment: 1 } },
-        });
-        const entry = await tx.rfidWalletEntry.create({
-          data: {
-            shopId,
-            walletId: wallet.id,
-            type: kind,
-            amountMinor: signed,
-            balanceAfterMinor: next,
-            idempotencyKey: dto.idempotencyKey,
-            referenceType: dto.referenceType ?? null,
-            referenceId: dto.referenceId ?? null,
-            actorUserId: actor.sub,
-            note: dto.note ?? null,
-          },
-        });
-        return { wallet: updated, entry, replayed: false };
-      });
-    } catch (error) {
-      if (error instanceof ConflictException || error instanceof NotFoundException) throw error;
+      }
       throw error;
     }
   }
@@ -345,87 +397,131 @@ export class TicketingService {
 
   async reverse(actor: JwtAccessPayload, walletId: string, dto: ReverseRfidEntryDto) {
     const shopId = this.shopId(actor);
-    return this.prisma.$transaction(async (tx) => {
-      const replay = await tx.rfidWalletEntry.findUnique({
-        where: { shopId_idempotencyKey: { shopId, idempotencyKey: dto.idempotencyKey } },
+    try {
+      return await this.prisma.$transaction(async (tx) => {
+        const replay = await tx.rfidWalletEntry.findUnique({
+          where: { shopId_idempotencyKey: { shopId, idempotencyKey: dto.idempotencyKey } },
+        });
+        if (replay) return { entry: replay, replayed: true };
+        await tx.$queryRaw(Prisma.sql`SELECT "id" FROM "RfidWallet" WHERE "id" = ${walletId} AND "shopId" = ${shopId} FOR UPDATE`);
+        const [wallet, original, priorReversal] = await Promise.all([
+          tx.rfidWallet.findFirst({ where: { id: walletId, shopId, active: true } }),
+          tx.rfidWalletEntry.findFirst({ where: { id: dto.entryId, walletId, shopId } }),
+          tx.rfidWalletEntry.findFirst({ where: { shopId, reversalOfId: dto.entryId } }),
+        ]);
+        if (!wallet || !original) throw new NotFoundException('Wallet entry not found.');
+        if (original.type === 'REVERSAL') throw new ConflictException('A reversal cannot be reversed directly.');
+        if (priorReversal) throw new ConflictException('Wallet entry was already reversed.');
+        const amountMinor = -original.amountMinor;
+        const next = wallet.balanceMinor + amountMinor;
+        if (next < 0) throw new ConflictException('Reversal would make wallet balance negative.');
+        const updated = await tx.rfidWallet.update({
+          where: { id: wallet.id },
+          data: { balanceMinor: next, version: { increment: 1 } },
+        });
+        const entry = await tx.rfidWalletEntry.create({
+          data: {
+            shopId,
+            walletId,
+            type: 'REVERSAL',
+            amountMinor,
+            balanceAfterMinor: next,
+            idempotencyKey: dto.idempotencyKey,
+            reversalOfId: original.id,
+            referenceType: original.referenceType,
+            referenceId: original.referenceId,
+            actorUserId: actor.sub,
+            note: dto.note ?? `Reversal of ${original.id}`,
+          },
+        });
+        return { wallet: updated, entry, replayed: false };
       });
-      if (replay) return { entry: replay, replayed: true };
-      await tx.$queryRaw(Prisma.sql`SELECT "id" FROM "RfidWallet" WHERE "id" = ${walletId} AND "shopId" = ${shopId} FOR UPDATE`);
-      const [wallet, original, priorReversal] = await Promise.all([
-        tx.rfidWallet.findFirst({ where: { id: walletId, shopId, active: true } }),
-        tx.rfidWalletEntry.findFirst({ where: { id: dto.entryId, walletId, shopId } }),
-        tx.rfidWalletEntry.findFirst({ where: { shopId, reversalOfId: dto.entryId } }),
-      ]);
-      if (!wallet || !original) throw new NotFoundException('Wallet entry not found.');
-      if (original.type === 'REVERSAL') throw new ConflictException('A reversal cannot be reversed directly.');
-      if (priorReversal) throw new ConflictException('Wallet entry was already reversed.');
-      const amountMinor = -original.amountMinor;
-      const next = wallet.balanceMinor + amountMinor;
-      if (next < 0) throw new ConflictException('Reversal would make wallet balance negative.');
-      const updated = await tx.rfidWallet.update({
-        where: { id: wallet.id },
-        data: { balanceMinor: next, version: { increment: 1 } },
-      });
-      const entry = await tx.rfidWalletEntry.create({
-        data: {
-          shopId,
-          walletId,
-          type: 'REVERSAL',
-          amountMinor,
-          balanceAfterMinor: next,
-          idempotencyKey: dto.idempotencyKey,
-          reversalOfId: original.id,
-          referenceType: original.referenceType,
-          referenceId: original.referenceId,
-          actorUserId: actor.sub,
-          note: dto.note ?? `Reversal of ${original.id}`,
-        },
-      });
-      return { wallet: updated, entry, replayed: false };
-    });
+    } catch (error) {
+      if (isUniqueConstraintError(error)) {
+        const replay = await this.prisma.rfidWalletEntry.findUnique({
+          where: { shopId_idempotencyKey: { shopId, idempotencyKey: dto.idempotencyKey } },
+        });
+        if (replay) return { entry: replay, replayed: true };
+        const priorReversal = await this.prisma.rfidWalletEntry.findFirst({
+          where: { shopId, reversalOfId: dto.entryId },
+        });
+        if (priorReversal) throw new ConflictException('Wallet entry was already reversed.');
+      }
+      throw error;
+    }
   }
 
   async tap(actor: JwtAccessPayload, dto: RfidTapDto) {
     const shopId = this.shopId(actor);
     const uidHash = this.opaque(dto.uid);
-    const replay = await this.prisma.rfidTap.findUnique({
-      where: { shopId_idempotencyKey: { shopId, idempotencyKey: dto.idempotencyKey } },
-    });
-    if (replay) return { tap: replay, replayed: true };
-    const credential = await this.prisma.rfidCredential.findUnique({
-      where: { shopId_uidHash: { shopId, uidHash } },
-    });
-    if (!credential || credential.status !== 'ACTIVE') {
-      const tap = await this.prisma.rfidTap.create({
-        data: { shopId, uidHash, action: dto.action, amountMinor: dto.amountMinor ?? null, result: 'CREDENTIAL_REJECTED', idempotencyKey: dto.idempotencyKey, deviceId: dto.deviceId ?? null },
+    try {
+      return await this.prisma.$transaction(async (tx) => {
+        const replay = await tx.rfidTap.findUnique({
+          where: { shopId_idempotencyKey: { shopId, idempotencyKey: dto.idempotencyKey } },
+        });
+        if (replay) return { tap: replay, replayed: true };
+
+        const credential = await tx.rfidCredential.findUnique({
+          where: { shopId_uidHash: { shopId, uidHash } },
+        });
+        if (!credential || credential.status !== 'ACTIVE') {
+          const tap = await tx.rfidTap.create({
+            data: {
+              shopId,
+              uidHash,
+              action: dto.action,
+              amountMinor: dto.amountMinor ?? null,
+              result: 'CREDENTIAL_REJECTED',
+              idempotencyKey: dto.idempotencyKey,
+              deviceId: dto.deviceId ?? null,
+            },
+          });
+          return { tap, replayed: false, wallet: null };
+        }
+
+        let walletResult: unknown = await tx.rfidWallet.findFirst({
+          where: { id: credential.walletId, shopId },
+        });
+        if (dto.action === 'SPEND' || dto.action === 'LOAD') {
+          if (!dto.amountMinor) throw new BadRequestException('amountMinor is required for SPEND or LOAD.');
+          walletResult = await this.mutateWalletInTx(
+            tx,
+            actor,
+            credential.walletId,
+            {
+              amountMinor: dto.amountMinor,
+              idempotencyKey: `tap-ledger:${dto.idempotencyKey}`,
+              referenceType: 'RFID_TAP',
+              referenceId: dto.idempotencyKey,
+            },
+            dto.action,
+          );
+        }
+        const tap = await tx.rfidTap.create({
+          data: {
+            shopId,
+            credentialId: credential.id,
+            uidHash,
+            walletId: credential.walletId,
+            action: dto.action,
+            amountMinor: dto.amountMinor ?? null,
+            result: 'ACCEPTED',
+            idempotencyKey: dto.idempotencyKey,
+            deviceId: dto.deviceId ?? null,
+          },
+        });
+        await tx.rfidCredential.update({ where: { id: credential.id }, data: { lastTapAt: new Date() } });
+        return { tap, replayed: false, wallet: walletResult };
       });
-      return { tap, replayed: false, wallet: null };
+    } catch (error) {
+      if (isUniqueConstraintError(error)) {
+        const replay = await this.prisma.rfidTap.findUnique({
+          where: { shopId_idempotencyKey: { shopId, idempotencyKey: dto.idempotencyKey } },
+        });
+        if (replay) return { tap: replay, replayed: true };
+      }
+      throw error;
     }
-    let walletResult: unknown = await this.prisma.rfidWallet.findFirst({ where: { id: credential.walletId, shopId } });
-    if (dto.action === 'SPEND' || dto.action === 'LOAD') {
-      if (!dto.amountMinor) throw new BadRequestException('amountMinor is required for SPEND or LOAD.');
-      walletResult = await this.mutateWallet(
-        actor,
-        credential.walletId,
-        { amountMinor: dto.amountMinor, idempotencyKey: `tap-ledger:${dto.idempotencyKey}`, referenceType: 'RFID_TAP', referenceId: dto.idempotencyKey },
-        dto.action,
-      );
-    }
-    const tap = await this.prisma.rfidTap.create({
-      data: {
-        shopId,
-        credentialId: credential.id,
-        uidHash,
-        walletId: credential.walletId,
-        action: dto.action,
-        amountMinor: dto.amountMinor ?? null,
-        result: 'ACCEPTED',
-        idempotencyKey: dto.idempotencyKey,
-        deviceId: dto.deviceId ?? null,
-      },
-    });
-    await this.prisma.rfidCredential.update({ where: { id: credential.id }, data: { lastTapAt: new Date() } });
-    return { tap, replayed: false, wallet: walletResult };
   }
 
   async readiness(actor: JwtAccessPayload) {
