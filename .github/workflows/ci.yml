@@ -57,18 +57,12 @@ jobs:
         shell: bash
         run: |
           set +e
-          pnpm run build 2>&1 | tee /tmp/api-build.log
+          pnpm run build 2>&1 | tee /tmp/api-build.raw.log
           status=${PIPESTATUS[0]}
-          while IFS= read -r line; do
-            if [[ "$line" =~ ^([^:]+\.ts):([0-9]+):([0-9]+).*error\ TS([0-9]+):[[:space:]]*(.*)$ ]]; then
-              file="${BASH_REMATCH[1]}"
-              lineno="${BASH_REMATCH[2]}"
-              col="${BASH_REMATCH[3]}"
-              code="${BASH_REMATCH[4]}"
-              message="${BASH_REMATCH[5]}"
-              echo "::error file=${file},line=${lineno},col=${col}::TS${code}: ${message}"
-            fi
-          done < /tmp/api-build.log
+          sed -r 's/\x1B\[[0-9;]*[mK]//g' /tmp/api-build.raw.log > /tmp/api-build.log
+          grep -E 'error TS[0-9]+:' /tmp/api-build.log | while IFS= read -r line; do
+            echo "::error title=TypeScript compiler::${line}"
+          done || true
           exit "$status"
         env:
           DATABASE_URL: postgresql://ci:ci@localhost:5432/ci?schema=public
