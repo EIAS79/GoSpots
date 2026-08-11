@@ -1,0 +1,76 @@
+enum AiInsightRunStatus {
+  RUNNING
+  SUCCEEDED
+  DEGRADED
+  FAILED
+}
+
+enum AiInsightSeverity {
+  INFO
+  OPPORTUNITY
+  WARNING
+  CRITICAL
+}
+
+model InsightSnapshot {
+  id          String   @id @default(cuid())
+  shopId      String
+  windowStart DateTime
+  windowEnd   DateTime
+  metricsJson String
+  metricsHash String
+  createdAt   DateTime @default(now())
+
+  @@unique([shopId, windowStart, windowEnd, metricsHash])
+  @@index([shopId, windowEnd, createdAt])
+}
+
+model AiInsightRun {
+  id           String             @id @default(cuid())
+  shopId       String
+  snapshotId   String
+  provider     String
+  model        String?
+  status       AiInsightRunStatus @default(RUNNING)
+  inputHash    String
+  outputHash   String?
+  failureCode  String?
+  failureMessage String?
+  createdAt    DateTime           @default(now())
+  completedAt  DateTime?
+
+  @@unique([shopId, snapshotId, provider, inputHash])
+  @@index([shopId, status, createdAt])
+}
+
+model AiInsight {
+  id           String            @id @default(cuid())
+  shopId       String
+  runId        String
+  fingerprint  String
+  type         String
+  severity     AiInsightSeverity @default(INFO)
+  title        String
+  body         String
+  evidenceJson String
+  actionKey    String?
+  dismissedAt  DateTime?
+  createdAt    DateTime          @default(now())
+
+  @@unique([shopId, fingerprint])
+  @@index([shopId, runId, createdAt])
+  @@index([shopId, severity, dismissedAt])
+}
+
+model AiInsightFeedback {
+  id        String   @id @default(cuid())
+  shopId    String
+  insightId String
+  actorId   String?
+  rating    Int
+  reason    String?
+  createdAt DateTime @default(now())
+
+  @@unique([shopId, insightId, actorId])
+  @@index([shopId, insightId, createdAt])
+}
