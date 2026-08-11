@@ -208,7 +208,7 @@ export class AiInsightsService {
     const completed = await this.prisma.aiInsightRun.update({
       where: { id: run.id },
       data: {
-        status: status === 'FAILED' ? 'FAILED' : status,
+        status,
         outputHash,
         failureCode,
         failureMessage,
