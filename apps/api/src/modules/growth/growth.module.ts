@@ -1,4 +1,5 @@
 import { Module } from '@nestjs/common';
+import { GuestCheckModule } from '../guest-check/guest-check.module';
 import { CommerceGrowthService } from './commerce-growth.service';
 import { EventsGrowthService } from './events-growth.service';
 import { GrowthAnalyticsService } from './growth-analytics.service';
@@ -8,6 +9,7 @@ import { GrowthController } from './growth.controller';
 import { ReservationGrowthService } from './reservation-growth.service';
 
 @Module({
+  imports: [GuestCheckModule],
   controllers: [GrowthController, GrowthPublicController],
   providers: [
     ReservationGrowthService,
