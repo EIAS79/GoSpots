@@ -5,7 +5,7 @@ import Link from "next/link";
 import { useConnectivityOptional } from "@/lib/connectivity-context";
 import { translate } from "@/lib/i18n";
 import { usePublicPrefsOptional } from "@/lib/public-prefs-context";
-import { useVenueHref } from "@/lib/venue-context";
+import { useVenueHrefOptional } from "@/lib/venue-context";
 import { useVenueSettingsOptional } from "@/lib/venue-settings-context";
 
 const MODE_META = {
@@ -20,7 +20,7 @@ export function OfflineBanner() {
   const venue = useVenueSettingsOptional();
   const publicPrefs = usePublicPrefsOptional();
   const locale = venue?.locale ?? publicPrefs?.locale ?? "en";
-  const syncHref = useVenueHref("/offline-sync");
+  const syncHref = useVenueHrefOptional("/offline-sync");
   const mode = connectivity?.mode ?? "ok";
   const pending = connectivity?.pending ?? 0;
   const conflict = connectivity?.conflict ?? 0;
@@ -40,7 +40,7 @@ export function OfflineBanner() {
     >
       <Icon size={16} className="shrink-0 text-amber-300" aria-hidden />
       <p className="min-w-0 flex-1 leading-snug">{text}</p>
-      {hasQueue ? (
+      {hasQueue && syncHref ? (
         <Link
           href={syncHref}
           className="rounded-lg border border-amber-200/25 bg-black/15 px-2.5 py-1 text-xs font-semibold text-amber-100 hover:bg-black/25"
