@@ -14,11 +14,13 @@ import { VenueContextInterceptor } from './common/venue-context.interceptor';
 import { CaptchaAwareThrottlerGuard } from './common/captcha-throttler.guard';
 import { TrialAccessGuard } from './common/trial-access.guard';
 import { isThrottleDisabled, parsePositiveInt } from './common/throttle.config';
+import { AiInsightsModule } from './modules/ai-insights/ai-insights.module';
 import { AuditModule } from './modules/audit/audit.module';
 import { AuthModule } from './modules/auth/auth.module';
 import { CsrfGuard } from './modules/auth/guards/csrf.guard';
 import { JwtAuthGuard } from './modules/auth/guards/jwt-auth.guard';
 import { RolesGuard } from './modules/auth/guards/roles.guard';
+import { AutomationModule } from './modules/automation/automation.module';
 import { BillingModule } from './modules/billing/billing.module';
 import { CashModule } from './modules/cash/cash.module';
 import { CheckoutModule } from './modules/checkout/checkout.module';
@@ -51,11 +53,13 @@ import { OperationsModule } from './modules/operations/operations.module';
 import { OrderingModule } from './modules/ordering/ordering.module';
 import { OrganizationsModule } from './modules/organizations/organizations.module';
 import { PublicModule } from './modules/public/public.module';
+import { ReliabilityModule } from './modules/reliability/reliability.module';
 import { ReservationsModule } from './modules/reservations/reservations.module';
 import { ResourcesModule } from './modules/resources/resources.module';
 import { ShopModule } from './modules/shop/shop.module';
 import { StaffApprovalsModule } from './modules/staff-approvals/staff-approvals.module';
 import { StaffModule } from './modules/staff/staff.module';
+import { TicketingModule } from './modules/ticketing/ticketing.module';
 import { WorkforceModule } from './modules/workforce/workforce.module';
 
 @Module({
@@ -122,6 +126,10 @@ import { WorkforceModule } from './modules/workforce/workforce.module';
     OrganizationsModule,
     IntegrationsModule,
     HardwareModule,
+    TicketingModule,
+    AutomationModule,
+    AiInsightsModule,
+    ReliabilityModule,
     HealthModule,
     MetricsModule,
   ],
