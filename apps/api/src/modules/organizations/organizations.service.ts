@@ -131,7 +131,14 @@ export class OrganizationsService {
       const [shops, directMemberships] = await Promise.all([
         this.prisma.shop.findMany({
           where: { id: { in: allShopIds } },
-          select: { id: true, name: true, slug: true, dashboardKey: true, currency: true, timezone: true },
+          select: {
+            id: true,
+            name: true,
+            slug: true,
+            dashboardKey: true,
+            currency: true,
+            timezone: true,
+          },
         }),
         this.prisma.membership.findMany({
           where: { userId: actor.sub, shopId: { in: allShopIds } },
@@ -154,7 +161,7 @@ export class OrganizationsService {
               id: orgShop.shopId,
               name: orgShop.displayName || shop?.name || 'Venue',
               slug: shop?.slug ?? null,
-              venuePath: shop?.slug ?? null,
+              venuePath: shop?.dashboardKey ?? shop?.slug ?? null,
               currency: shop?.currency ?? null,
               timezone: shop?.timezone ?? null,
               sharedCatalogEnabled: orgShop.sharedCatalogEnabled,
@@ -269,12 +276,16 @@ export class OrganizationsService {
     await this.requireFeature(actor);
     await this.requireOrgAdmin(actor, organizationId);
     const row = await this.prisma.organizationShop.findUnique({ where: { shopId } });
-    if (!row || row.organizationId !== organizationId) throw new NotFoundException('Organization venue not found');
-    return this.prisma.organizationShop.update({
+    if (!row || row.organizationId !== organizationId) {
+      throw new NotFoundException('Organization venue not found');
+    }
+    const updated = await this.prisma.organizationShop.update({
       where: { shopId },
       data: {
         ...(dto.displayName !== undefined ? { displayName: dto.displayName.trim() || null } : {}),
-        ...(dto.sharedCatalogEnabled !== undefined ? { sharedCatalogEnabled: dto.sharedCatalogEnabled } : {}),
+        ...(dto.sharedCatalogEnabled !== undefined
+          ? { sharedCatalogEnabled: dto.sharedCatalogEnabled }
+          : {}),
         ...(dto.inheritedSettings !== undefined
           ? { inheritedSettings: dto.inheritedSettings as Prisma.InputJsonValue }
           : {}),
@@ -283,6 +294,17 @@ export class OrganizationsService {
           : {}),
       },
     });
+    await this.audit.record(actor, {
+      section: 'venue',
+      action: 'organization.shop_updated',
+      summary: 'Updated organization venue settings',
+      meta: {
+        organizationId,
+        shopId,
+        sharedCatalogEnabled: updated.sharedCatalogEnabled,
+      },
+    });
+    return updated;
   }
 
   async addMember(actor: JwtAccessPayload, organizationId: string, dto: AddOrganizationMemberDto) {
@@ -334,7 +356,10 @@ export class OrganizationsService {
       where: { id: memberId, organizationId },
     });
     if (!target) throw new NotFoundException('Organization member not found');
-    if ((target.role === OrganizationRole.OWNER || dto.role === OrganizationRole.OWNER) && admin.role !== OrganizationRole.OWNER) {
+    if (
+      (target.role === OrganizationRole.OWNER || dto.role === OrganizationRole.OWNER) &&
+      admin.role !== OrganizationRole.OWNER
+    ) {
       throw new ForbiddenException('Only an organization owner can change owner membership');
     }
     if (target.role === OrganizationRole.OWNER && dto.role && dto.role !== OrganizationRole.OWNER) {
@@ -343,13 +368,26 @@ export class OrganizationsService {
       });
       if (owners <= 1) throw new ConflictException('Organization must keep at least one owner');
     }
-    return this.prisma.organizationMembership.update({
+    const updated = await this.prisma.organizationMembership.update({
       where: { id: memberId },
       data: {
         ...(dto.role ? { role: dto.role } : {}),
         ...(dto.accessMode ? { accessMode: dto.accessMode } : {}),
       },
     });
+    await this.audit.record(actor, {
+      section: 'team',
+      action: 'organization.member_updated',
+      summary: 'Updated organization membership',
+      meta: {
+        organizationId,
+        memberId,
+        userId: target.userId,
+        role: updated.role,
+        accessMode: updated.accessMode,
+      },
+    });
+    return updated;
   }
 
   async groupAnalytics(
@@ -382,16 +420,23 @@ export class OrganizationsService {
       ]);
       const byShop = new Map<string, Prisma.Decimal>();
       for (const row of rows) {
-        const signed = row.kind === LedgerKind.REFUND || row.kind === LedgerKind.LOSS
-          ? row._sum.amount?.negated()
-          : row._sum.amount;
+        const signed =
+          row.kind === LedgerKind.REFUND || row.kind === LedgerKind.LOSS
+            ? row._sum.amount?.negated()
+            : row._sum.amount;
         if (!signed) continue;
-        byShop.set(row.shopId, (byShop.get(row.shopId) ?? new Prisma.Decimal(0)).add(signed));
+        byShop.set(
+          row.shopId,
+          (byShop.get(row.shopId) ?? new Prisma.Decimal(0)).add(signed),
+        );
       }
       const currencies = new Set(shops.map((shop) => shop.currency));
       const comparable = currencies.size <= 1;
       const total = comparable
-        ? [...byShop.values()].reduce((sum, value) => sum.add(value), new Prisma.Decimal(0))
+        ? [...byShop.values()].reduce(
+            (sum, value) => sum.add(value),
+            new Prisma.Decimal(0),
+          )
         : null;
       return {
         from: gte.toISOString(),

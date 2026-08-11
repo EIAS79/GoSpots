@@ -6,6 +6,7 @@ import { GoPosIntegrationConnector } from './connectors/gopos.connector';
 import { IntegrationConnectorRegistry } from './connectors/integration-connector.registry';
 import { IntegrationApiKeyGuard } from './integration-api-key.guard';
 import { IntegrationInboundWebhookController } from './integration-inbound-webhook.controller';
+import { IntegrationRecoveryService } from './integration-recovery.service';
 import { IntegrationSecretBoxService } from './integration-secret-box.service';
 import { IntegrationV1Controller } from './integration-v1.controller';
 import { IntegrationsController } from './integrations.controller';
@@ -20,6 +21,7 @@ import { IntegrationsService } from './integrations.service';
   ],
   providers: [
     IntegrationsService,
+    IntegrationRecoveryService,
     IntegrationSecretBoxService,
     DemoIntegrationConnector,
     GoPosIntegrationConnector,
