@@ -53,17 +53,7 @@ jobs:
           DATABASE_URL: postgresql://ci:ci@localhost:5432/ci?schema=public
 
       - name: Build
-        if: ${{ always() }}
-        shell: bash
-        run: |
-          set +e
-          pnpm run build 2>&1 | tee /tmp/api-build.raw.log
-          status=${PIPESTATUS[0]}
-          sed -r 's/\x1B\[[0-9;]*[mK]//g' /tmp/api-build.raw.log > /tmp/api-build.log
-          grep -E 'error TS[0-9]+:' /tmp/api-build.log | while IFS= read -r line; do
-            echo "::error title=TypeScript compiler::${line}"
-          done || true
-          exit "$status"
+        run: pnpm run build
         env:
           DATABASE_URL: postgresql://ci:ci@localhost:5432/ci?schema=public
 
