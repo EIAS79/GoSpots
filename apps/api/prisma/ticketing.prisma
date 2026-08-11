@@ -1,0 +1,186 @@
+enum TicketStatus {
+  ISSUED
+  ACTIVE
+  REDEEMED
+  VOIDED
+  EXPIRED
+}
+
+enum TicketOrderStatus {
+  OPEN
+  PAID
+  VOIDED
+  REFUNDED
+}
+
+enum RfidCredentialStatus {
+  ACTIVE
+  SUSPENDED
+  REVOKED
+}
+
+enum RfidWalletEntryType {
+  LOAD
+  SPEND
+  REFUND
+  REVERSAL
+  ADJUSTMENT
+}
+
+enum TicketScanResult {
+  ACCEPTED
+  DUPLICATE
+  EXPIRED
+  VOIDED
+  REJECTED
+}
+
+enum RfidTapAction {
+  IDENTIFY
+  BALANCE
+  SPEND
+  LOAD
+}
+
+model TicketProduct {
+  id              String   @id @default(cuid())
+  shopId          String
+  name            String
+  sku             String?
+  priceMinor      Int
+  currency        String   @default("EUR")
+  validityMinutes Int?
+  maxScans        Int      @default(1)
+  active          Boolean  @default(true)
+  metadataJson    String?
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  @@unique([shopId, name])
+  @@unique([shopId, sku])
+  @@index([shopId, active, updatedAt])
+}
+
+model TicketOrder {
+  id              String            @id @default(cuid())
+  shopId          String
+  idempotencyKey  String
+  status          TicketOrderStatus @default(OPEN)
+  totalMinor      Int
+  currency        String            @default("EUR")
+  customerRefHash String?
+  metadataJson    String?
+  createdAt       DateTime          @default(now())
+  updatedAt       DateTime          @updatedAt
+
+  @@unique([shopId, idempotencyKey])
+  @@index([shopId, status, createdAt])
+}
+
+model Ticket {
+  id            String       @id @default(cuid())
+  shopId        String
+  orderId       String?
+  productId     String
+  tokenHash     String       @unique
+  status        TicketStatus @default(ISSUED)
+  scansUsed     Int          @default(0)
+  maxScans      Int          @default(1)
+  issuedAt      DateTime     @default(now())
+  expiresAt     DateTime?
+  redeemedAt    DateTime?
+  voidedAt      DateTime?
+  lastScannedAt DateTime?
+  createdAt     DateTime     @default(now())
+  updatedAt     DateTime     @updatedAt
+
+  @@index([shopId, productId, status])
+  @@index([shopId, orderId, createdAt])
+  @@index([shopId, expiresAt])
+}
+
+model TicketScan {
+  id             String           @id @default(cuid())
+  shopId         String
+  ticketId       String?
+  presentedHash  String
+  result         TicketScanResult
+  scannerDeviceId String?
+  idempotencyKey String
+  reasonCode     String?
+  scannedAt      DateTime         @default(now())
+
+  @@unique([shopId, idempotencyKey])
+  @@index([shopId, ticketId, scannedAt])
+  @@index([shopId, presentedHash, scannedAt])
+}
+
+model RfidWallet {
+  id              String   @id @default(cuid())
+  shopId          String
+  label           String?
+  customerRefHash String?
+  currency        String   @default("EUR")
+  balanceMinor    Int      @default(0)
+  version         Int      @default(0)
+  active          Boolean  @default(true)
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  @@index([shopId, active, updatedAt])
+  @@index([shopId, customerRefHash])
+}
+
+model RfidCredential {
+  id        String               @id @default(cuid())
+  shopId    String
+  uidHash   String
+  walletId  String
+  label     String?
+  status    RfidCredentialStatus @default(ACTIVE)
+  lastTapAt DateTime?
+  createdAt DateTime             @default(now())
+  updatedAt DateTime             @updatedAt
+
+  @@unique([shopId, uidHash])
+  @@index([shopId, walletId, status])
+}
+
+model RfidWalletEntry {
+  id                String              @id @default(cuid())
+  shopId            String
+  walletId          String
+  type              RfidWalletEntryType
+  amountMinor       Int
+  balanceAfterMinor Int
+  idempotencyKey    String
+  referenceType     String?
+  referenceId       String?
+  reversalOfId      String?
+  actorUserId       String?
+  note              String?
+  createdAt         DateTime            @default(now())
+
+  @@unique([shopId, idempotencyKey])
+  @@unique([shopId, reversalOfId])
+  @@index([shopId, walletId, createdAt])
+  @@index([shopId, referenceType, referenceId])
+}
+
+model RfidTap {
+  id             String        @id @default(cuid())
+  shopId         String
+  credentialId   String?
+  uidHash        String
+  walletId       String?
+  action         RfidTapAction
+  amountMinor    Int?
+  result         String
+  idempotencyKey String
+  deviceId       String?
+  createdAt      DateTime      @default(now())
+
+  @@unique([shopId, idempotencyKey])
+  @@index([shopId, credentialId, createdAt])
+  @@index([shopId, uidHash, createdAt])
+}
