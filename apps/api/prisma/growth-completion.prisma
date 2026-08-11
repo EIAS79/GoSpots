@@ -1,0 +1,212 @@
+model ReservationCapacityPolicy {
+  id                  String   @id @default(uuid())
+  shopId              String
+  resourceCategoryId  String?
+  resourceType        String?
+  bufferBeforeMinutes Int      @default(0)
+  bufferAfterMinutes  Int      @default(0)
+  minPartySize        Int      @default(1)
+  maxPartySize        Int?
+  flexibleAssignment  Boolean  @default(true)
+  active              Boolean  @default(true)
+  createdAt           DateTime @default(now())
+  updatedAt           DateTime @updatedAt
+
+  @@index([shopId, active, resourceCategoryId])
+  @@index([shopId, active, resourceType])
+}
+
+model ReservationBookingEvidence {
+  id                  String   @id @default(uuid())
+  shopId              String
+  reservationId       String   @unique
+  sourceChannel       String
+  requestedCategoryId String?
+  requestedResourceType String?
+  assignedResourceId  String?
+  bufferBeforeMinutes Int      @default(0)
+  bufferAfterMinutes  Int      @default(0)
+  recurrenceSeriesId  String?
+  recurrenceRule      Json?
+  checkedInAt         DateTime?
+  checkedInById       String?
+  canceledAt          DateTime?
+  cancellationReason  String?
+  createdAt           DateTime @default(now())
+  updatedAt           DateTime @updatedAt
+
+  @@index([shopId, sourceChannel, createdAt])
+  @@index([shopId, recurrenceSeriesId])
+  @@index([shopId, requestedCategoryId])
+}
+
+model ReservationDepositApplication {
+  id              String   @id @default(uuid())
+  shopId          String
+  reservationId   String
+  guestCheckId    String
+  amountMinor     Int
+  currency        String
+  correlationId   String
+  actorUserId     String?
+  createdAt       DateTime @default(now())
+
+  @@unique([shopId, correlationId])
+  @@index([shopId, reservationId, createdAt])
+  @@index([shopId, guestCheckId, createdAt])
+}
+
+model RuleCondition {
+  id          String   @id @default(uuid())
+  shopId      String
+  promotionId String
+  kind        String
+  operator    String   @default("EQ")
+  value       Json
+  createdAt   DateTime @default(now())
+
+  @@index([shopId, promotionId, kind])
+}
+
+model RuleBenefit {
+  id          String   @id @default(uuid())
+  shopId      String
+  promotionId String
+  kind        String
+  value       Json
+  createdAt   DateTime @default(now())
+
+  @@index([shopId, promotionId, kind])
+}
+
+model RuleApplication {
+  id              String   @id @default(uuid())
+  shopId          String
+  promotionId     String
+  sourceType      String
+  sourceId        String
+  pricingSnapshotId String?
+  benefitKind     String
+  discountMinor   Int      @default(0)
+  explanation     String
+  conditionSnapshot Json
+  benefitSnapshot Json
+  correlationId   String
+  createdAt       DateTime @default(now())
+
+  @@unique([shopId, correlationId])
+  @@index([shopId, sourceType, sourceId, createdAt])
+  @@index([shopId, promotionId, createdAt])
+}
+
+model CustomerIdentity {
+  id          String   @id @default(uuid())
+  shopId      String
+  customerId  String
+  kind        String
+  normalizedValue String
+  verifiedAt  DateTime?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@unique([shopId, kind, normalizedValue])
+  @@index([shopId, customerId])
+}
+
+model CustomerVisit {
+  id              String   @id @default(uuid())
+  shopId          String
+  customerId      String
+  sourceType      String
+  sourceId        String
+  completedAt     DateTime
+  reservationId   String?
+  guestCheckId    String?
+  operationsSessionId String?
+  eventRequestId  String?
+  settledAmountMinor Int?
+  currency        String?
+  proofHash       String
+  createdAt       DateTime @default(now())
+
+  @@unique([shopId, sourceType, sourceId])
+  @@index([shopId, customerId, completedAt])
+  @@index([shopId, completedAt])
+}
+
+model CustomerMergeAudit {
+  id              String   @id @default(uuid())
+  shopId          String
+  canonicalCustomerId String
+  mergedCustomerId String
+  reason          String?
+  referenceCounts Json
+  actorUserId     String
+  createdAt       DateTime @default(now())
+
+  @@index([shopId, canonicalCustomerId, createdAt])
+  @@index([shopId, mergedCustomerId])
+}
+
+model ReviewVisitProof {
+  id          String   @id @default(uuid())
+  shopId      String
+  customerId  String
+  visitId     String
+  publicTokenHash String
+  validUntil  DateTime?
+  consumedAt  DateTime?
+  createdAt   DateTime @default(now())
+
+  @@unique([shopId, publicTokenHash])
+  @@index([shopId, customerId, createdAt])
+}
+
+model EventLifecycleEvent {
+  id             String   @id @default(uuid())
+  shopId         String
+  eventRequestId String
+  fromState      String?
+  toState        String
+  reason         String?
+  actorUserId    String?
+  metadata       Json?
+  createdAt      DateTime @default(now())
+
+  @@index([shopId, eventRequestId, createdAt])
+  @@index([shopId, toState, createdAt])
+}
+
+model EventChecklistItem {
+  id             String   @id @default(uuid())
+  shopId         String
+  eventRequestId String
+  label          String
+  ownerUserId    String?
+  dueAt          DateTime?
+  status         String   @default("OPEN")
+  completedAt    DateTime?
+  completedById  String?
+  sortOrder      Int      @default(0)
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  @@index([shopId, eventRequestId, status, sortOrder])
+  @@index([shopId, ownerUserId, status])
+}
+
+model AnalyticsFact {
+  id          String   @id @default(uuid())
+  shopId      String
+  factKind    String
+  bucketStart DateTime
+  bucketEnd   DateTime
+  dimensionKey String
+  currency    String?
+  measures    Json
+  sourceVersion String
+  rebuiltAt   DateTime @default(now())
+
+  @@unique([shopId, factKind, bucketStart, dimensionKey, currency])
+  @@index([shopId, factKind, bucketStart, bucketEnd])
+}
