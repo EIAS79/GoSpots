@@ -1,10 +1,26 @@
 import { ConflictException, Injectable, NotFoundException } from '@nestjs/common';
+import { Prisma } from '@prisma/client';
 import { requireShopId } from '../../common/tenant';
 import { PrismaService } from '../../prisma/prisma.service';
 import { AuditService } from '../audit/audit.service';
 import type { JwtAccessPayload } from '../auth/auth.service';
 import { CancelOrderLineDto, CreateModifierDto, CreateModifierGroupDto, CreateVariantDto, CreateVenueOrderDto, LinkModifierGroupDto, UpsertCommerceProfileDto } from './dto/ordering.dto';
 import { OrderingPricingService } from './ordering-pricing.service';
+
+export function calculateEffectiveOrderTotals(lines:{taxMinor:number;totalMinor:number;canceledAt?:Date|null}[]){
+  const active=lines.filter(line=>!line.canceledAt);
+  const taxMinor=active.reduce((sum,line)=>sum+line.taxMinor,0);
+  const totalMinor=active.reduce((sum,line)=>sum+line.totalMinor,0);
+  return {subtotalMinor:totalMinor-taxMinor,taxMinor,totalMinor};
+}
+
+function projectPrepTicketStatus(statuses:string[]){
+  if(!statuses.length||statuses.every(s=>s==='CANCELED'))return 'CANCELED';
+  if(statuses.every(s=>s==='COLLECTED'||s==='CANCELED'))return 'COLLECTED';
+  if(statuses.every(s=>s==='READY'||s==='COLLECTED'||s==='CANCELED'))return 'READY';
+  if(statuses.some(s=>s==='PREPARING'||s==='READY'||s==='COLLECTED'))return 'PREPARING';
+  return 'NEW';
+}
 
 @Injectable()
 export class OrderingService {
@@ -102,7 +118,14 @@ export class OrderingService {
     const line = await this.prisma.venueOrderLine.findFirst({ where: { id: lineId, orderId, shopId } });
     if (!line) throw new NotFoundException('Order line not found.');
     if (line.canceledAt) return line;
-    const updated = await this.prisma.venueOrderLine.update({ where: { id: lineId }, data: { canceledAt: new Date(), cancellationReason: dto.reason } });
+    const now=new Date();
+    const updated = await this.prisma.$transaction(async tx=>{
+      const row=await tx.venueOrderLine.update({ where: { id: lineId }, data: { canceledAt: now, cancellationReason: dto.reason } });
+      await this.cancelPrepLines(tx,shopId,[lineId],actor.sub,dto.reason,now);
+      const effective=await tx.venueOrderLine.findMany({where:{shopId,orderId},select:{taxMinor:true,totalMinor:true,canceledAt:true}});
+      await tx.venueOrder.update({where:{id:orderId},data:calculateEffectiveOrderTotals(effective)});
+      return row;
+    });
     await this.audit.record(actor, { section: 'operations', action: 'order.line.cancel', summary: 'Canceled order line without mutating price snapshot', meta: { orderId, lineId, reason: dto.reason } });
     return updated;
   }
@@ -113,9 +136,37 @@ export class OrderingService {
     if (!order) throw new NotFoundException('Order not found.');
     if (order.status === 'COMPLETED') throw new ConflictException('Completed order must use the refund flow.');
     if (order.status === 'CANCELED') return order;
-    const row = await this.prisma.venueOrder.update({ where: { id }, data: { status: 'CANCELED', canceledAt: new Date() } });
-    await this.audit.record(actor, { section: 'operations', action: 'order.cancel', summary: 'Canceled order', meta: { orderId: id } });
+    const now=new Date();
+    const row = await this.prisma.$transaction(async tx=>{
+      const lines=await tx.venueOrderLine.findMany({where:{shopId,orderId:id},select:{id:true,canceledAt:true}});
+      const liveLineIds=lines.filter(line=>!line.canceledAt).map(line=>line.id);
+      if(liveLineIds.length){
+        await tx.venueOrderLine.updateMany({where:{shopId,orderId:id,id:{in:liveLineIds}},data:{canceledAt:now,cancellationReason:'ORDER_CANCELED'}});
+        await this.cancelPrepLines(tx,shopId,liveLineIds,actor.sub,'ORDER_CANCELED',now);
+      }
+      return tx.venueOrder.update({ where: { id }, data: { status: 'CANCELED', canceledAt: now, subtotalMinor:0, taxMinor:0, totalMinor:0 } });
+    });
+    await this.audit.record(actor, { section: 'operations', action: 'order.cancel', summary: 'Canceled order and active production work', meta: { orderId: id } });
     return row;
+  }
+
+  private async cancelPrepLines(tx:Prisma.TransactionClient,shopId:string,orderLineIds:string[],actorUserId:string,reason:string,now:Date){
+    if(!orderLineIds.length)return;
+    const prepLines=await tx.prepTicketLine.findMany({where:{shopId,orderLineId:{in:orderLineIds},status:{notIn:['COLLECTED','CANCELED']}}});
+    const ticketIds=[...new Set(prepLines.map(line=>line.ticketId))];
+    for(const prepLine of prepLines){
+      await tx.prepTicketLine.update({where:{id:prepLine.id},data:{status:'CANCELED',canceledAt:now,cancellationReason:reason}});
+      await tx.prepStatusEvent.create({data:{shopId,ticketId:prepLine.ticketId,lineId:prepLine.id,fromStatus:prepLine.status,toStatus:'CANCELED',actorUserId,reason}});
+    }
+    for(const ticketId of ticketIds){
+      const ticket=await tx.prepTicket.findFirst({where:{id:ticketId,shopId}});
+      if(!ticket)continue;
+      const lines=await tx.prepTicketLine.findMany({where:{shopId,ticketId},select:{status:true}});
+      const next=projectPrepTicketStatus(lines.map(line=>line.status));
+      if(next===ticket.status)continue;
+      await tx.prepTicket.update({where:{id:ticketId},data:{status:next,...(next==='CANCELED'?{canceledAt:now}:{})}});
+      await tx.prepStatusEvent.create({data:{shopId,ticketId,fromStatus:ticket.status,toStatus:next,actorUserId,reason}});
+    }
   }
 
   private async requireMenuItem(shopId: string, id: string) { const item = await this.prisma.menuItem.findFirst({ where: { id, shopId } }); if (!item) throw new NotFoundException('Menu item not found.'); return item; }
