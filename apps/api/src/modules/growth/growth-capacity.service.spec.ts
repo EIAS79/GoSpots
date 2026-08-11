@@ -15,6 +15,29 @@ function candidate() {
   };
 }
 
+function addBookingConflictDelegates(tx: any) {
+  tx.resource = {
+    findFirst: jest.fn().mockResolvedValue({
+      id: 'resource-1',
+      shopId: 'shop-1',
+      status: 'AVAILABLE',
+    }),
+  };
+  tx.playSession = {
+    findMany: jest.fn().mockResolvedValue([]),
+  };
+  tx.resourceMaintenancePeriod = {
+    findFirst: jest.fn().mockResolvedValue(null),
+  };
+  tx.operationsSession = {
+    findFirst: jest.fn().mockResolvedValue(null),
+  };
+  tx.eventResourceHold = {
+    findFirst: jest.fn().mockResolvedValue(null),
+  };
+  return tx;
+}
+
 describe('GrowthCapacityService public booking flow', () => {
   afterEach(() => jest.restoreAllMocks());
 
@@ -25,7 +48,7 @@ describe('GrowthCapacityService public booking flow', () => {
       startsAt: new Date(start),
       endsAt: new Date(end),
     };
-    const tx: any = {
+    const tx: any = addBookingConflictDelegates({
       $executeRaw: jest.fn().mockResolvedValue(0),
       reservation: {
         findFirst: jest.fn().mockResolvedValue(null),
@@ -37,7 +60,7 @@ describe('GrowthCapacityService public booking flow', () => {
       reservationBookingEvidence: {
         create: jest.fn().mockResolvedValue({ id: 'evidence-1' }),
       },
-    };
+    });
     const prisma: any = {
       $transaction: jest.fn(async (callback: any) => callback(tx)),
     };
@@ -81,7 +104,7 @@ describe('GrowthCapacityService public booking flow', () => {
   });
 
   it('locks each resource once for a recurring public series and snapshots the recurrence evidence', async () => {
-    const tx: any = {
+    const tx: any = addBookingConflictDelegates({
       $executeRaw: jest.fn().mockResolvedValue(0),
       reservation: {
         findFirst: jest.fn().mockResolvedValue(null),
@@ -92,7 +115,7 @@ describe('GrowthCapacityService public booking flow', () => {
       reservationBookingEvidence: {
         create: jest.fn().mockResolvedValue({ id: 'evidence' }),
       },
-    };
+    });
     const prisma: any = {
       $transaction: jest.fn(async (callback: any) => callback(tx)),
     };
@@ -133,7 +156,7 @@ describe('GrowthCapacityService public booking flow', () => {
       resourceId: 'resource-1',
       partySize: 2,
     };
-    const tx: any = {
+    const tx: any = addBookingConflictDelegates({
       $queryRaw: jest.fn().mockResolvedValue([{ id: 'resource-1' }]),
       reservation: {
         findFirst: jest.fn().mockResolvedValue(null),
@@ -145,7 +168,7 @@ describe('GrowthCapacityService public booking flow', () => {
       reservationBookingEvidence: {
         upsert: jest.fn().mockResolvedValue({ id: 'evidence-1' }),
       },
-    };
+    });
     const prisma: any = {
       $transaction: jest.fn(async (callback: any) => callback(tx)),
     };
