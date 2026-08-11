@@ -8,6 +8,10 @@ const actor = {
   shopRole: 'OWNER',
 } as any;
 
+const secretConfig = {
+  get: jest.fn((key: string) => (key === 'OPAQUE_IDENTIFIER_SECRET' ? 'test-opaque-secret' : undefined)),
+} as any;
+
 describe('TicketingService', () => {
   it('replays an existing ticket order without issuing raw tokens again', async () => {
     const order = { id: 'order-1', shopId: 'shop-1', idempotencyKey: 'idem-1' };
@@ -16,8 +20,7 @@ describe('TicketingService', () => {
       ticketOrder: { findUnique: jest.fn().mockResolvedValue(order) },
       ticket: { findMany: jest.fn().mockResolvedValue(tickets) },
     } as any;
-    const config = { get: jest.fn() } as any;
-    const service = new TicketingService(prisma, config);
+    const service = new TicketingService(prisma, { get: jest.fn() } as any);
 
     const result = await service.issueOrder(actor, {
       idempotencyKey: 'idem-1',
@@ -33,10 +36,7 @@ describe('TicketingService', () => {
       rfidWallet: { create },
       auditLog: { create: jest.fn().mockResolvedValue({ id: 'audit-1' }) },
     } as any;
-    const config = {
-      get: jest.fn((key: string) => (key === 'OPAQUE_IDENTIFIER_SECRET' ? 'test-opaque-secret' : undefined)),
-    } as any;
-    const service = new TicketingService(prisma, config);
+    const service = new TicketingService(prisma, secretConfig);
 
     await service.createWallet(actor, { customerRef: 'customer@example.com', currency: 'eur' } as any);
 
@@ -64,5 +64,18 @@ describe('TicketingService', () => {
       service.spend(actor, 'wallet-1', { amountMinor: 100, idempotencyKey: 'spend-1' } as any),
     ).rejects.toBeInstanceOf(ConflictException);
     expect(tx.rfidWallet.update).not.toHaveBeenCalled();
+  });
+
+  it('turns a concurrent scan idempotency collision into a replay', async () => {
+    const replay = { id: 'scan-1', shopId: 'shop-1', idempotencyKey: 'scan-key', result: 'ACCEPTED' };
+    const prisma = {
+      $transaction: jest.fn().mockRejectedValue({ code: 'P2002' }),
+      ticketScan: { findUnique: jest.fn().mockResolvedValue(replay) },
+    } as any;
+    const service = new TicketingService(prisma, secretConfig);
+
+    const result = await service.scan(actor, { token: 'gst_example', idempotencyKey: 'scan-key' } as any);
+
+    expect(result).toEqual({ scan: replay, replayed: true });
   });
 });
