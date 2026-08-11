@@ -1,3 +1,4 @@
+import { NotFoundException } from '@nestjs/common';
 import { GrowthPrivacyService } from './growth-privacy.service';
 
 function makeTx() {
@@ -29,6 +30,70 @@ function makeTx() {
 }
 
 describe('GrowthPrivacyService', () => {
+  it('grants and revokes marketing consent explicitly for a tenant customer', async () => {
+    const update = jest
+      .fn()
+      .mockResolvedValueOnce({
+        id: 'customer-1',
+        marketingConsentAt: new Date(),
+        consentSource: 'WEB_FORM',
+      })
+      .mockResolvedValueOnce({
+        id: 'customer-1',
+        marketingConsentAt: null,
+        consentSource: null,
+      });
+    const prisma: any = {
+      customerProfile: {
+        findFirst: jest.fn().mockResolvedValue({ id: 'customer-1' }),
+        update,
+      },
+    };
+    const service = new GrowthPrivacyService(prisma);
+
+    await service.setMarketingConsent(
+      'shop-1',
+      'customer-1',
+      true,
+      ' WEB_FORM ',
+    );
+    await service.setMarketingConsent('shop-1', 'customer-1', false);
+
+    expect(prisma.customerProfile.findFirst).toHaveBeenNthCalledWith(1, {
+      where: { id: 'customer-1', shopId: 'shop-1' },
+      select: { id: true },
+    });
+    expect(update.mock.calls[0][0]).toEqual({
+      where: { id: 'customer-1' },
+      data: {
+        marketingConsentAt: expect.any(Date),
+        consentSource: 'WEB_FORM',
+      },
+    });
+    expect(update.mock.calls[1][0]).toEqual({
+      where: { id: 'customer-1' },
+      data: {
+        marketingConsentAt: null,
+        consentSource: null,
+      },
+    });
+  });
+
+  it('does not mutate consent when the customer is outside the tenant', async () => {
+    const prisma: any = {
+      customerProfile: {
+        findFirst: jest.fn().mockResolvedValue(null),
+        update: jest.fn(),
+      },
+    };
+    const service = new GrowthPrivacyService(prisma);
+
+    await expect(
+      service.setMarketingConsent('shop-1', 'customer-other', true, 'STAFF'),
+    ).rejects.toBeInstanceOf(NotFoundException);
+    expect(prisma.customerProfile.update).not.toHaveBeenCalled();
+  });
+
   it('redacts CRM identity/consent data while preserving financial rows', async () => {
     const tx = makeTx();
     const prisma: any = {
