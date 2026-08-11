@@ -66,7 +66,7 @@ model AiInsightFeedback {
   id        String   @id @default(cuid())
   shopId    String
   insightId String
-  actorId   String?
+  actorId   String
   rating    Int
   reason    String?
   createdAt DateTime @default(now())
