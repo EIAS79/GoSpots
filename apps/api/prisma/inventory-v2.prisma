@@ -1,0 +1,168 @@
+// Chunk 14 — Inventory, Recipes and Purchasing
+model InventoryProfile {
+  id             String   @id @default(cuid())
+  shopId         String   @unique
+  enabled        Boolean  @default(false)
+  legacyDualMode Boolean  @default(true)
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+}
+model InventoryLocation {
+  id        String   @id @default(cuid())
+  shopId    String
+  name      String
+  active    Boolean  @default(true)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  @@unique([shopId,name])
+  @@index([shopId,active])
+}
+model StockCategory {
+  id        String   @id @default(cuid())
+  shopId    String
+  name      String
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  @@unique([shopId,name])
+}
+model StockItem {
+  id                       String   @id @default(cuid())
+  shopId                   String
+  categoryId               String?
+  sku                      String?
+  name                     String
+  unit                     String   @default("unit")
+  weightedAverageCostMinor Int      @default(0)
+  active                   Boolean  @default(true)
+  createdAt                DateTime @default(now())
+  updatedAt                DateTime @updatedAt
+  @@unique([shopId,sku])
+  @@index([shopId,active,name])
+}
+model Supplier {
+  id        String   @id @default(cuid())
+  shopId    String
+  name      String
+  email     String?
+  phone     String?
+  active    Boolean  @default(true)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  @@index([shopId,active,name])
+}
+model Recipe {
+  id         String   @id @default(cuid())
+  shopId     String
+  key        String
+  name       String
+  menuItemId String?
+  yieldMilli Int      @default(1000)
+  active     Boolean  @default(true)
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+  @@unique([shopId,key])
+  @@index([shopId,menuItemId,active])
+}
+model RecipeComponent {
+  id            String @id @default(cuid())
+  shopId        String
+  recipeId      String
+  stockItemId   String
+  quantityMilli Int
+  @@unique([shopId,recipeId,stockItemId])
+  @@index([shopId,stockItemId])
+}
+model StockMovement {
+  id                String   @id @default(cuid())
+  shopId            String
+  stockItemId       String
+  locationId        String
+  kind               String
+  quantityMilli      Int
+  unitCostMinor      Int
+  totalCostMinor     Int
+  referenceType      String?
+  referenceId        String?
+  movementKey        String   @unique
+  note               String?
+  actorUserId        String
+  occurredAt         DateTime @default(now())
+  createdAt          DateTime @default(now())
+  @@index([shopId,stockItemId,locationId,occurredAt])
+  @@index([shopId,kind,occurredAt])
+  @@index([shopId,referenceType,referenceId])
+}
+model PurchaseOrder {
+  id          String   @id @default(cuid())
+  shopId      String
+  supplierId  String
+  locationId  String
+  status      String   @default("DRAFT")
+  orderedAt   DateTime?
+  closedAt    DateTime?
+  createdById String
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  @@index([shopId,status,createdAt])
+}
+model PurchaseOrderLine {
+  id               String @id @default(cuid())
+  shopId           String
+  purchaseOrderId  String
+  stockItemId      String
+  orderedMilli     Int
+  unitCostMinor    Int
+  @@index([shopId,purchaseOrderId])
+}
+model GoodsReceipt {
+  id              String   @id @default(cuid())
+  shopId          String
+  purchaseOrderId String?
+  supplierId      String?
+  locationId      String
+  receivedById    String
+  receivedAt      DateTime @default(now())
+  createdAt       DateTime @default(now())
+  @@index([shopId,purchaseOrderId,receivedAt])
+}
+model GoodsReceiptLine {
+  id             String @id @default(cuid())
+  shopId         String
+  goodsReceiptId String
+  stockItemId    String
+  quantityMilli  Int
+  unitCostMinor  Int
+  @@index([shopId,goodsReceiptId])
+}
+model Stocktake {
+  id          String   @id @default(cuid())
+  shopId      String
+  locationId  String
+  status      String   @default("OPEN")
+  countedById String
+  postedAt    DateTime?
+  createdAt   DateTime @default(now())
+  @@index([shopId,locationId,status,createdAt])
+}
+model StocktakeLine {
+  id              String @id @default(cuid())
+  shopId          String
+  stocktakeId     String
+  stockItemId     String
+  countedMilli    Int
+  expectedMilli   Int
+  adjustmentMilli Int
+  @@unique([shopId,stocktakeId,stockItemId])
+}
+model StockTransfer {
+  id             String   @id @default(cuid())
+  shopId         String
+  stockItemId    String
+  fromLocationId String
+  toLocationId   String
+  quantityMilli  Int
+  actorUserId    String
+  transferredAt  DateTime @default(now())
+  createdAt      DateTime @default(now())
+  @@index([shopId,stockItemId,transferredAt])
+}

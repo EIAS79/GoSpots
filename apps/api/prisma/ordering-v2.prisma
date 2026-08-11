@@ -1,0 +1,137 @@
+// Chunk 12 — Menu, Ordering and Pricing Foundation 2.0
+
+model MenuModifierGroup {
+  id        String   @id @default(cuid())
+  shopId    String
+  name      String
+  required  Boolean  @default(false)
+  minSelect Int      @default(0)
+  maxSelect Int      @default(1)
+  sortOrder Int      @default(0)
+  active    Boolean  @default(true)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([shopId, active, sortOrder])
+}
+
+model MenuModifier {
+  id              String   @id @default(cuid())
+  shopId          String
+  groupId         String
+  name            String
+  priceDeltaMinor Int      @default(0)
+  sortOrder       Int      @default(0)
+  active          Boolean  @default(true)
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  @@index([shopId, groupId, active, sortOrder])
+}
+
+model MenuItemModifierGroup {
+  id              String   @id @default(cuid())
+  shopId          String
+  menuItemId      String
+  modifierGroupId String
+  sortOrder       Int      @default(0)
+
+  @@unique([shopId, menuItemId, modifierGroupId])
+  @@index([shopId, menuItemId, sortOrder])
+}
+
+model MenuItemVariant {
+  id              String   @id @default(cuid())
+  shopId          String
+  menuItemId      String
+  name            String
+  priceDeltaMinor Int      @default(0)
+  sortOrder       Int      @default(0)
+  active          Boolean  @default(true)
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  @@index([shopId, menuItemId, active, sortOrder])
+}
+
+model MenuItemCommerceProfile {
+  id             String   @id @default(cuid())
+  shopId         String
+  menuItemId     String
+  taxCategoryKey String?
+  taxRateBps     Int      @default(0)
+  prepRouteKey   String?
+  recipeKey      String?
+  favorite       Boolean  @default(false)
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  @@unique([shopId, menuItemId])
+  @@index([shopId, prepRouteKey])
+  @@index([shopId, recipeKey])
+  @@index([shopId, favorite])
+}
+
+model VenueOrder {
+  id                  String   @id @default(cuid())
+  shopId              String
+  guestCheckId        String?
+  operationsSessionId String?
+  resourceId          String?
+  serviceMode         String
+  status              String   @default("OPEN")
+  seat                Int?
+  guestLabel          String?
+  currency            String
+  subtotalMinor       Int
+  taxMinor            Int
+  totalMinor          Int
+  createdById         String
+  createdAt           DateTime @default(now())
+  completedAt         DateTime?
+  canceledAt          DateTime?
+  updatedAt           DateTime @updatedAt
+
+  @@index([shopId, status, createdAt])
+  @@index([shopId, guestCheckId])
+  @@index([shopId, operationsSessionId])
+}
+
+model VenueOrderLine {
+  id                  String   @id @default(cuid())
+  shopId              String
+  orderId             String
+  menuItemId          String
+  variantId           String?
+  quantity            Int
+  seat                Int?
+  nameSnapshot        String
+  variantNameSnapshot String?
+  unitBaseMinor       Int
+  variantMinor        Int      @default(0)
+  modifierMinor       Int      @default(0)
+  unitPriceMinor      Int
+  taxCategorySnapshot String?
+  taxRateBps          Int      @default(0)
+  taxMinor            Int      @default(0)
+  totalMinor          Int
+  priceSnapshot       Json
+  canceledAt          DateTime?
+  cancellationReason  String?
+  createdAt           DateTime @default(now())
+
+  @@index([shopId, orderId, createdAt])
+  @@index([shopId, menuItemId])
+}
+
+model OrderLineModifier {
+  id              String   @id @default(cuid())
+  shopId          String
+  orderLineId     String
+  modifierId      String
+  nameSnapshot    String
+  priceDeltaMinor Int
+  createdAt       DateTime @default(now())
+
+  @@index([shopId, orderLineId])
+}
