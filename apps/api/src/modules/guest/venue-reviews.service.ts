@@ -3,17 +3,18 @@ import {
   Injectable,
   NotFoundException,
 } from '@nestjs/common';
+import { ShopReviewsMode, VenueReviewStatus } from '@prisma/client';
+import { createHash } from 'node:crypto';
 import { ApiDomainErrorCode } from '../../common/api-error.codes';
 import { apiForbiddenException } from '../../common/api-error.util';
-import { ShopReviewsMode, VenueReviewStatus } from '@prisma/client';
-import { PrismaService } from '../../prisma/prisma.service';
-import { requireShopId } from '../../common/tenant';
-import { hasPermission, PERMISSIONS } from '../../common/permissions';
-import { assertShopHasFeature } from '../../common/venue-entitlements';
 import {
   assertPrivacyConsentAccepted,
   recordConsent,
 } from '../../common/gdpr-consent.util';
+import { hasPermission, PERMISSIONS } from '../../common/permissions';
+import { requireShopId } from '../../common/tenant';
+import { assertShopHasFeature } from '../../common/venue-entitlements';
+import { PrismaService } from '../../prisma/prisma.service';
 import { AuditService } from '../audit/audit.service';
 import type { JwtAccessPayload } from '../auth/auth.service';
 import { NotificationsService } from '../notifications/notifications.service';
@@ -85,10 +86,13 @@ export class VenueReviewsService {
     const order = opts.order === 'asc' ? 'asc' : 'desc';
     const orderBy =
       sort === 'rating'
-        ? [{ rating: order as 'asc' | 'desc' }, { createdAt: 'desc' as const }]
+        ? [
+            { rating: order as 'asc' | 'desc' },
+            { createdAt: 'desc' as const },
+          ]
         : [{ createdAt: order as 'asc' | 'desc' }];
 
-    const [reviews, agg] = await Promise.all([
+    const [reviews, aggregate] = await Promise.all([
       this.prisma.venueReview.findMany({
         where: { shopId: shop.id, status: VenueReviewStatus.PUBLISHED },
         orderBy,
@@ -107,18 +111,23 @@ export class VenueReviewsService {
         _count: { rating: true },
       }),
     ]);
+    const verifiedIds = await this.verifiedReviewIds(
+      shop.id,
+      reviews.map((review) => review.id),
+    );
 
     return {
       reviewsMode: mode,
       canSubmit,
       showReviews: true,
-      averageRating: agg._avg.rating
-        ? Math.round(agg._avg.rating * 10) / 10
+      averageRating: aggregate._avg.rating
+        ? Math.round(aggregate._avg.rating * 10) / 10
         : null,
-      reviewCount: agg._count.rating,
-      reviews: reviews.map((r) => ({
-        ...r,
-        createdAt: r.createdAt.toISOString(),
+      reviewCount: aggregate._count.rating,
+      reviews: reviews.map((review) => ({
+        ...review,
+        verifiedVisit: verifiedIds.has(review.id),
+        createdAt: review.createdAt.toISOString(),
       })),
     };
   }
@@ -131,7 +140,6 @@ export class VenueReviewsService {
       select: { id: true, name: true, reviewsMode: true },
     });
     if (!shop) throw new NotFoundException('Venue not found.');
-
     if (shop.reviewsMode === ShopReviewsMode.DISABLED) {
       throw new BadRequestException(
         'This venue is not accepting reviews right now.',
@@ -139,23 +147,69 @@ export class VenueReviewsService {
     }
 
     const hidden = shop.reviewsMode === ShopReviewsMode.HIDDEN;
+    const tokenHash = dto.visitProofToken
+      ? createHash('sha256').update(dto.visitProofToken.trim()).digest('hex')
+      : null;
+    const proof = tokenHash
+      ? await this.prisma.reviewVisitProof.findFirst({
+          where: {
+            shopId: shop.id,
+            publicTokenHash: tokenHash,
+            consumedAt: null,
+            OR: [{ validUntil: null }, { validUntil: { gt: new Date() } }],
+          },
+        })
+      : null;
+    if (dto.visitProofToken && !proof) {
+      throw new BadRequestException(
+        'The verified-visit proof is invalid, expired, or already used.',
+      );
+    }
 
-    const row = await this.prisma.venueReview.create({
-      data: {
-        shopId: shop.id,
-        guestName: dto.guestName.trim(),
-        guestEmail: dto.guestEmail?.trim() || null,
-        rating: dto.rating,
-        comment: dto.comment?.trim() || null,
-        status: VenueReviewStatus.PENDING,
-      },
+    const row = await this.prisma.$transaction(async (tx) => {
+      const review = await tx.venueReview.create({
+        data: {
+          shopId: shop.id,
+          guestName: dto.guestName.trim(),
+          guestEmail: dto.guestEmail?.trim() || null,
+          rating: dto.rating,
+          comment: dto.comment?.trim() || null,
+          status: VenueReviewStatus.PENDING,
+        },
+      });
+      if (proof) {
+        const consumed = await tx.reviewVisitProof.updateMany({
+          where: {
+            id: proof.id,
+            shopId: shop.id,
+            consumedAt: null,
+            reviewId: null,
+            OR: [{ validUntil: null }, { validUntil: { gt: new Date() } }],
+          },
+          data: {
+            consumedAt: new Date(),
+            reviewId: review.id,
+          },
+        });
+        if (consumed.count !== 1) {
+          throw new BadRequestException(
+            'The verified-visit proof was already used.',
+          );
+        }
+      }
+      return review;
     });
 
     await this.audit.recordForShop(shop.id, {
       section: 'venue',
       action: 'review.create_public',
       summary: `${row.guestName} left a ${row.rating}/5 review`,
-      meta: { reviewId: row.id, rating: row.rating, hidden },
+      meta: {
+        reviewId: row.id,
+        rating: row.rating,
+        hidden,
+        verifiedVisit: Boolean(proof),
+      },
     });
 
     await recordConsent(this.prisma, {
@@ -167,7 +221,7 @@ export class VenueReviewsService {
     });
 
     await this.notifications.recordTeamEvent(shop.id, {
-      title: 'New guest review',
+      title: proof ? 'New verified-visit review' : 'New guest review',
       body: `${row.guestName} rated ${row.rating}/5 — awaiting moderation`,
       href: '/reviews',
       dedupeKey: `review:${row.id}`,
@@ -178,6 +232,7 @@ export class VenueReviewsService {
       message:
         'Thank you! Your review was received and is awaiting moderation.',
       id: row.id,
+      verifiedVisit: Boolean(proof),
       publicVisible: false,
     };
   }
@@ -191,13 +246,12 @@ export class VenueReviewsService {
     await assertShopHasFeature(this.prisma, shopId, 'reviews');
     const take = Math.min(Math.max(opts.take ?? 50, 1), 200);
     const skip = Math.max(opts.skip ?? 0, 0);
-
     const where = {
       shopId,
       ...(opts.status ? { status: opts.status } : {}),
     };
 
-    const [reviews, total, publishedAgg] = await Promise.all([
+    const [reviews, total, publishedAggregate] = await Promise.all([
       this.prisma.venueReview.findMany({
         where,
         orderBy: { createdAt: 'desc' },
@@ -211,22 +265,27 @@ export class VenueReviewsService {
         _count: { rating: true },
       }),
     ]);
+    const verifiedIds = await this.verifiedReviewIds(
+      shopId,
+      reviews.map((review) => review.id),
+    );
 
     return {
       total,
-      averageRating: publishedAgg._avg.rating
-        ? Math.round(publishedAgg._avg.rating * 10) / 10
+      averageRating: publishedAggregate._avg.rating
+        ? Math.round(publishedAggregate._avg.rating * 10) / 10
         : null,
-      publishedCount: publishedAgg._count.rating,
-      reviews: reviews.map((r) => ({
-        id: r.id,
-        guestName: r.guestName,
-        guestEmail: r.guestEmail,
-        rating: r.rating,
-        comment: r.comment,
-        status: r.status,
-        createdAt: r.createdAt.toISOString(),
-        updatedAt: r.updatedAt.toISOString(),
+      publishedCount: publishedAggregate._count.rating,
+      reviews: reviews.map((review) => ({
+        id: review.id,
+        guestName: review.guestName,
+        guestEmail: review.guestEmail,
+        rating: review.rating,
+        comment: review.comment,
+        status: review.status,
+        verifiedVisit: verifiedIds.has(review.id),
+        createdAt: review.createdAt.toISOString(),
+        updatedAt: review.updatedAt.toISOString(),
       })),
     };
   }
@@ -251,17 +310,22 @@ export class VenueReviewsService {
       where: { id, shopId },
     });
     if (!existing) throw new NotFoundException('Review not found.');
-
     const row = await this.prisma.venueReview.update({
       where: { id, shopId },
       data: { status },
     });
+    const verifiedIds = await this.verifiedReviewIds(shopId, [row.id]);
 
     await this.audit.record(actor, {
       section: 'venue',
       action: 'review.update_status',
       summary: `Set review by ${existing.guestName} to ${status}`,
-      meta: { reviewId: id, status, rating: existing.rating },
+      meta: {
+        reviewId: id,
+        status,
+        rating: existing.rating,
+        verifiedVisit: verifiedIds.has(row.id),
+      },
     });
 
     return {
@@ -271,6 +335,7 @@ export class VenueReviewsService {
       guestEmail: row.guestEmail,
       rating: row.rating,
       comment: row.comment,
+      verifiedVisit: verifiedIds.has(row.id),
       createdAt: row.createdAt.toISOString(),
       updatedAt: row.updatedAt.toISOString(),
     };
@@ -286,14 +351,12 @@ export class VenueReviewsService {
     if (!existing) throw new NotFoundException('Review not found.');
 
     await this.prisma.venueReview.delete({ where: { id, shopId } });
-
     await this.audit.record(actor, {
       section: 'venue',
       action: 'review.delete',
       summary: `Deleted review by ${existing.guestName} (${existing.rating}/5)`,
       meta: { reviewId: id, rating: existing.rating },
     });
-
     return { ok: true };
   }
 
@@ -304,7 +367,6 @@ export class VenueReviewsService {
         { averageRating: number | null; reviewCount: number }
       >();
     }
-
     const enabled = await this.prisma.shop.findMany({
       where: {
         id: { in: shopIds },
@@ -312,10 +374,8 @@ export class VenueReviewsService {
       },
       select: { id: true },
     });
-    const enabledIds = enabled.map((s) => s.id);
-    if (!enabledIds.length) {
-      return new Map();
-    }
+    const enabledIds = enabled.map((shop) => shop.id);
+    if (!enabledIds.length) return new Map();
 
     const rows = await this.prisma.venueReview.groupBy({
       by: ['shopId'],
@@ -326,7 +386,6 @@ export class VenueReviewsService {
       _avg: { rating: true },
       _count: { rating: true },
     });
-
     const map = new Map<
       string,
       { averageRating: number | null; reviewCount: number }
@@ -340,5 +399,20 @@ export class VenueReviewsService {
       });
     }
     return map;
+  }
+
+  private async verifiedReviewIds(shopId: string, reviewIds: string[]) {
+    if (reviewIds.length === 0) return new Set<string>();
+    const proofs = await this.prisma.reviewVisitProof.findMany({
+      where: {
+        shopId,
+        reviewId: { in: reviewIds },
+        consumedAt: { not: null },
+      },
+      select: { reviewId: true },
+    });
+    return new Set(
+      proofs.flatMap((proof) => (proof.reviewId ? [proof.reviewId] : [])),
+    );
   }
 }

@@ -1,0 +1,328 @@
+// Chunks 16–20 — Growth Platform Ready
+// Existing Reservation, EventRequest, GuestCheck, Payment, Resource and Operations
+// models remain source-of-truth. Scalar references here extend those domains without
+// forcing inverse-relation churn in the legacy schema.
+
+model ReservationPolicy {
+  id                         String   @id @default(cuid())
+  shopId                     String
+  name                       String
+  depositKind                String   @default("NONE")
+  depositFixedMinor          Int?
+  depositPercentBps          Int?
+  cancellationWindowMinutes  Int      @default(0)
+  lateCancelForfeitPercent   Int      @default(0)
+  noShowForfeitPercent       Int      @default(100)
+  active                     Boolean  @default(true)
+  createdAt                  DateTime @default(now())
+  updatedAt                  DateTime @updatedAt
+
+  @@index([shopId, active, name])
+}
+
+model ReservationExtension {
+  id                 String   @id @default(cuid())
+  shopId             String
+  reservationId      String   @unique
+  policyId            String?
+  policySnapshot      Json?
+  convertedSessionId String?
+  createdAt           DateTime @default(now())
+  updatedAt           DateTime @updatedAt
+
+  @@index([shopId, policyId])
+  @@index([shopId, convertedSessionId])
+}
+
+model ReservationDepositLedgerEntry {
+  id            String   @id @default(cuid())
+  shopId        String
+  reservationId String
+  type          String
+  amountMinor   Int
+  currency      String
+  paymentId     String?
+  refundId      String?
+  correlationId String
+  note          String?
+  actorUserId   String?
+  createdAt     DateTime @default(now())
+
+  @@unique([shopId, correlationId])
+  @@index([shopId, reservationId, createdAt])
+  @@index([shopId, paymentId])
+  @@index([shopId, refundId])
+}
+
+model ReservationWaitlistEntry {
+  id              String   @id @default(cuid())
+  shopId          String
+  resourceId      String?
+  guestName       String
+  guestEmail      String?
+  guestPhone      String?
+  partySize       Int      @default(1)
+  desiredStartsAt DateTime
+  desiredEndsAt   DateTime
+  priority        Int      @default(0)
+  status          String   @default("WAITING")
+  offeredAt       DateTime?
+  offerExpiresAt  DateTime?
+  reservationId   String?
+  note            String?
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  @@index([shopId, status, priority, createdAt])
+  @@index([shopId, resourceId, desiredStartsAt, desiredEndsAt])
+}
+
+model PromotionRule {
+  id                 String   @id @default(cuid())
+  shopId             String
+  code               String?
+  name               String
+  kind               String
+  valueBps           Int?
+  amountMinor        Int?
+  priority           Int      @default(0)
+  stackable          Boolean  @default(true)
+  exclusiveGroup     String?
+  minSubtotalMinor   Int      @default(0)
+  requiresCode       Boolean  @default(false)
+  startsAt           DateTime?
+  endsAt             DateTime?
+  conditions         Json?
+  active             Boolean  @default(true)
+  createdAt          DateTime @default(now())
+  updatedAt          DateTime @updatedAt
+
+  @@unique([shopId, code])
+  @@index([shopId, active, priority])
+  @@index([shopId, startsAt, endsAt])
+}
+
+model PackageDefinition {
+  id          String   @id @default(cuid())
+  shopId      String
+  name        String
+  priceMinor  Int
+  currency    String
+  components  Json
+  active      Boolean  @default(true)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@index([shopId, active, name])
+}
+
+model PricingSnapshot {
+  id            String   @id @default(cuid())
+  shopId        String
+  sourceType    String
+  sourceId      String
+  subtotalMinor Int
+  discountMinor Int
+  taxMinor      Int
+  tipMinor      Int
+  totalMinor    Int
+  currency      String
+  rules         Json
+  pricingHash   String
+  createdById   String?
+  createdAt     DateTime @default(now())
+
+  @@unique([shopId, sourceType, sourceId, pricingHash])
+  @@index([shopId, createdAt])
+  @@index([shopId, sourceType, sourceId])
+}
+
+model TipLedgerEntry {
+  id            String   @id @default(cuid())
+  shopId        String
+  guestCheckId  String?
+  paymentId     String?
+  type          String
+  amountMinor   Int
+  currency      String
+  correlationId String
+  reason        String?
+  actorUserId   String?
+  createdAt     DateTime @default(now())
+
+  @@unique([shopId, correlationId])
+  @@index([shopId, guestCheckId, createdAt])
+  @@index([shopId, paymentId])
+}
+
+model CustomerProfile {
+  id                 String   @id @default(cuid())
+  shopId             String
+  name               String?
+  email              String?
+  phone              String?
+  marketingConsentAt DateTime?
+  consentSource      String?
+  notes              String?
+  createdAt          DateTime @default(now())
+  updatedAt          DateTime @updatedAt
+
+  @@unique([shopId, email])
+  @@unique([shopId, phone])
+  @@index([shopId, createdAt])
+}
+
+model MembershipTier {
+  id                 String   @id @default(cuid())
+  shopId             String
+  name               String
+  code               String
+  rank               Int      @default(0)
+  earnRateBasisPoints Int     @default(0)
+  benefits           Json?
+  active             Boolean  @default(true)
+  createdAt          DateTime @default(now())
+  updatedAt          DateTime @updatedAt
+
+  @@unique([shopId, code])
+  @@index([shopId, active, rank])
+}
+
+model CustomerMembership {
+  id         String   @id @default(cuid())
+  shopId     String
+  customerId String
+  tierId     String
+  status     String   @default("ACTIVE")
+  joinedAt   DateTime @default(now())
+  expiresAt  DateTime?
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  @@unique([shopId, customerId])
+  @@index([shopId, tierId, status])
+}
+
+model LoyaltyLedgerEntry {
+  id            String   @id @default(cuid())
+  shopId        String
+  customerId    String
+  type          String
+  points        Int
+  sourceType    String?
+  sourceId      String?
+  correlationId String
+  note          String?
+  actorUserId   String?
+  createdAt     DateTime @default(now())
+
+  @@unique([shopId, correlationId])
+  @@index([shopId, customerId, createdAt])
+  @@index([shopId, sourceType, sourceId])
+}
+
+model StoredValueAccount {
+  id         String   @id @default(cuid())
+  shopId     String
+  customerId String?
+  codeHash   String
+  currency   String
+  status     String   @default("ACTIVE")
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  @@unique([shopId, codeHash])
+  @@index([shopId, customerId, status])
+}
+
+model StoredValueLedgerEntry {
+  id            String   @id @default(cuid())
+  shopId        String
+  accountId     String
+  type          String
+  amountMinor   Int
+  currency      String
+  sourceType    String?
+  sourceId      String?
+  paymentId     String?
+  correlationId String
+  note          String?
+  actorUserId   String?
+  createdAt     DateTime @default(now())
+
+  @@unique([shopId, correlationId])
+  @@index([shopId, accountId, createdAt])
+  @@index([shopId, sourceType, sourceId])
+}
+
+model EventProposal {
+  id                String   @id @default(cuid())
+  shopId            String
+  eventRequestId    String
+  version           Int
+  status            String   @default("DRAFT")
+  subtotalMinor     Int
+  depositMinor      Int      @default(0)
+  currency          String
+  terms             Json
+  validUntil        DateTime?
+  createdById       String
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+
+  @@unique([shopId, eventRequestId, version])
+  @@index([shopId, eventRequestId, status])
+}
+
+model EventResourceHold {
+  id             String   @id @default(cuid())
+  shopId         String
+  eventRequestId String
+  resourceId     String
+  startsAt       DateTime
+  endsAt         DateTime
+  status         String   @default("HOLD")
+  expiresAt      DateTime?
+  reservationId  String?
+  createdById    String
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  @@index([shopId, eventRequestId, status])
+  @@index([shopId, resourceId, startsAt, endsAt])
+}
+
+model EventPaymentSchedule {
+  id             String   @id @default(cuid())
+  shopId         String
+  eventRequestId String
+  proposalId     String?
+  label          String
+  dueAt          DateTime
+  amountMinor    Int
+  currency       String
+  status         String   @default("DUE")
+  paymentId      String?
+  paidAt         DateTime?
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  @@index([shopId, eventRequestId, status, dueAt])
+  @@index([shopId, paymentId])
+}
+
+model EventExecution {
+  id             String   @id @default(cuid())
+  shopId         String
+  eventRequestId String   @unique
+  guestCheckId   String?
+  status         String   @default("PLANNED")
+  startedAt      DateTime?
+  completedAt    DateTime?
+  canceledAt     DateTime?
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  @@index([shopId, status, createdAt])
+  @@index([shopId, guestCheckId])
+}
