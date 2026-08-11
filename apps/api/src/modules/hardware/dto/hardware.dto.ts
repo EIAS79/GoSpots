@@ -106,7 +106,7 @@ export class CreatePrintJobDto {
 
 export class CompletePrintJobDto {
   @IsEnum(PrintJobStatus)
-  status!: PrintJobStatus.SUCCEEDED | PrintJobStatus.FAILED;
+  status!: PrintJobStatus;
 
   @IsOptional()
   @IsString()
