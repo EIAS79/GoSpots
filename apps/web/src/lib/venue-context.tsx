@@ -42,8 +42,12 @@ export function VenuePathProvider({
   );
 }
 
+export function useVenuePathOptional(): string | null {
+  return useContext(VenueContext);
+}
+
 export function useVenuePath(): string {
-  const path = useContext(VenueContext);
+  const path = useVenuePathOptional();
   if (!path) {
     throw new Error("useVenuePath must be used inside VenuePathProvider");
   }
@@ -53,4 +57,9 @@ export function useVenuePath(): string {
 export function useVenueHref(segment = ""): string {
   const venuePath = useVenuePath();
   return dashboardHref(venuePath, segment);
+}
+
+export function useVenueHrefOptional(segment = ""): string | null {
+  const venuePath = useVenuePathOptional();
+  return venuePath ? dashboardHref(venuePath, segment) : null;
 }
