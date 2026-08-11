@@ -67,7 +67,7 @@ describe('GrowthCapacityService public booking flow', () => {
     expect(tx.reservation.create).toHaveBeenCalledTimes(1);
     const persisted = tx.reservation.create.mock.calls[0][0].data;
     expect(persisted.guestTokenHash).toMatch(/^[a-f0-9]{64}$/);
-    expect(persisted.guestToken).toBeUndefined();
+    expect(persisted.guestToken).toBeNull();
     expect(tx.reservationBookingEvidence.create).toHaveBeenCalledWith({
       data: expect.objectContaining({
         sourceChannel: 'PUBLIC_WEB',
