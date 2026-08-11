@@ -4,7 +4,12 @@ import {
   Injectable,
   NotFoundException,
 } from '@nestjs/common';
-import { Prisma, ReservationStatus, ResourceStatus } from '@prisma/client';
+import {
+  Prisma,
+  ReservationStatus,
+  ResourceStatus,
+  type PrismaClient,
+} from '@prisma/client';
 import { randomUUID } from 'crypto';
 import { assertBookingSlotFree } from '../../common/booking-overlap.util';
 import { withResourceBookingLock } from '../../common/booking-lock.util';
@@ -52,6 +57,17 @@ type CapacityCandidate = {
   bufferAfterMinutes: number;
 };
 
+type CapacityPolicy = {
+  resourceCategoryId: string | null;
+  resourceType: string | null;
+  bufferBeforeMinutes: number;
+  bufferAfterMinutes: number;
+  minPartySize: number;
+  maxPartySize: number | null;
+};
+
+type DbClient = PrismaClient | Prisma.TransactionClient | PrismaService;
+
 @Injectable()
 export class GrowthCapacityService {
   constructor(private readonly prisma: PrismaService) {}
@@ -64,34 +80,38 @@ export class GrowthCapacityService {
     const { startsAt, endsAt, partySize } = this.parseWindow(dto);
     await assertWithinOpeningHours(this.prisma, shopId, startsAt, endsAt);
 
-    const resources = await this.prisma.resource.findMany({
-      where: {
-        shopId,
-        status: { not: ResourceStatus.MAINTENANCE },
-        ...(dto.resourceId ? { id: dto.resourceId } : {}),
-        ...(dto.resourceCategoryId
-          ? { categoryId: dto.resourceCategoryId }
-          : {}),
-        ...(dto.resourceType ? { type: dto.resourceType } : {}),
-        OR: [{ capacity: null }, { capacity: { gte: partySize } }],
-      },
-      orderBy: [{ capacity: 'asc' }, { sortOrder: 'asc' }, { name: 'asc' }],
-      select: {
-        id: true,
-        name: true,
-        type: true,
-        categoryId: true,
-        capacity: true,
-      },
-    });
+    const where: Prisma.ResourceWhereInput = {
+      shopId,
+      status: { not: ResourceStatus.MAINTENANCE },
+      ...(dto.resourceId ? { id: dto.resourceId } : {}),
+      ...(dto.resourceCategoryId
+        ? { categoryId: dto.resourceCategoryId }
+        : {}),
+      ...(dto.resourceType ? { type: dto.resourceType } : {}),
+      OR: [{ capacity: null }, { capacity: { gte: partySize } }],
+    };
 
-    const policies = await this.prisma.reservationCapacityPolicy.findMany({
-      where: { shopId, active: true },
-      orderBy: { createdAt: 'desc' },
-    });
+    const [resources, policies] = await Promise.all([
+      this.prisma.resource.findMany({
+        where,
+        orderBy: [{ capacity: 'asc' }, { sortOrder: 'asc' }, { name: 'asc' }],
+        select: {
+          id: true,
+          name: true,
+          type: true,
+          categoryId: true,
+          capacity: true,
+        },
+      }),
+      this.prisma.reservationCapacityPolicy.findMany({
+        where: { shopId, active: true },
+        orderBy: { createdAt: 'desc' },
+      }),
+    ]);
 
     const available: CapacityCandidate[] = [];
-    const unavailable: { resourceId: string; reason: string }[] = [];
+    const unavailable: Array<{ resourceId: string; reason: string }> = [];
+
     for (const resource of resources) {
       const policy = this.pickPolicy(policies, resource);
       if (
@@ -101,10 +121,16 @@ export class GrowthCapacityService {
         unavailable.push({ resourceId: resource.id, reason: 'PARTY_SIZE' });
         continue;
       }
+
       const bufferBeforeMinutes = Math.max(0, policy?.bufferBeforeMinutes ?? 0);
       const bufferAfterMinutes = Math.max(0, policy?.bufferAfterMinutes ?? 0);
-      const blockedStart = new Date(startsAt.getTime() - bufferBeforeMinutes * 60_000);
-      const blockedEnd = new Date(endsAt.getTime() + bufferAfterMinutes * 60_000);
+      const blockedStart = new Date(
+        startsAt.getTime() - bufferBeforeMinutes * 60_000,
+      );
+      const blockedEnd = new Date(
+        endsAt.getTime() + bufferAfterMinutes * 60_000,
+      );
+
       try {
         await assertBookingSlotFree(
           this.prisma,
@@ -146,6 +172,26 @@ export class GrowthCapacityService {
     };
   }
 
+  async assertResourceIntervalAvailable(
+    shopId: string,
+    resourceId: string,
+    startsAt: Date,
+    endsAt: Date,
+    partySize = 1,
+  ) {
+    const result = await this.capacityForShop(shopId, {
+      resourceId,
+      startsAt: startsAt.toISOString(),
+      endsAt: endsAt.toISOString(),
+      partySize,
+    });
+    const candidate = result.available.find((item) => item.id === resourceId);
+    if (!candidate) {
+      throw new ConflictException('Resource is not available for this interval.');
+    }
+    return candidate;
+  }
+
   async createStaff(actor: JwtAccessPayload, dto: UnifiedBookingInput) {
     return this.createForShop(requireShopId(actor), dto, {
       actorUserId: actor.sub,
@@ -168,15 +214,26 @@ export class GrowthCapacityService {
     if (!dto.guestName?.trim()) {
       throw new BadRequestException('Guest name is required.');
     }
+    if (!dto.sourceChannel?.trim()) {
+      throw new BadRequestException('sourceChannel is required.');
+    }
+
     const recurrenceCount = dto.recurrence?.count ?? 1;
-    if (!Number.isInteger(recurrenceCount) || recurrenceCount < 1 || recurrenceCount > 24) {
-      throw new BadRequestException('Recurrence count must be between 1 and 24.');
+    if (
+      !Number.isInteger(recurrenceCount) ||
+      recurrenceCount < 1 ||
+      recurrenceCount > 24
+    ) {
+      throw new BadRequestException(
+        'Recurrence count must be between 1 and 24.',
+      );
     }
 
     const first = this.parseWindow(dto);
     const seriesId = recurrenceCount > 1 ? randomUUID() : null;
     const windows = Array.from({ length: recurrenceCount }, (_, index) => {
-      const deltaDays = dto.recurrence?.frequency === 'DAILY' ? index : index * 7;
+      const deltaDays =
+        dto.recurrence?.frequency === 'DAILY' ? index : index * 7;
       return {
         startsAt: new Date(first.startsAt.getTime() + deltaDays * 86_400_000),
         endsAt: new Date(first.endsAt.getTime() + deltaDays * 86_400_000),
@@ -187,7 +244,9 @@ export class GrowthCapacityService {
       startsAt: Date;
       endsAt: Date;
       candidate: CapacityCandidate;
+      guestToken: ReturnType<typeof issueGuestToken> | null;
     }> = [];
+
     for (const window of windows) {
       const result = await this.capacityForShop(shopId, {
         ...dto,
@@ -200,92 +259,105 @@ export class GrowthCapacityService {
           `No capacity is available for ${window.startsAt.toISOString()}.`,
         );
       }
-      assignments.push({ ...window, candidate });
-    }
-
-    const created: Array<{
-      reservationId: string;
-      resourceId: string;
-      startsAt: Date;
-      endsAt: Date;
-      guestToken?: string;
-    }> = [];
-
-    for (const assignment of assignments) {
-      const issued = options.issuePublicToken
-        ? issueGuestToken({ from: assignment.endsAt })
-        : null;
-      const row = await withResourceBookingLock(
-        this.prisma,
-        assignment.candidate.id,
-        async (tx) => {
-          const blockedStart = new Date(
-            assignment.startsAt.getTime() -
-              assignment.candidate.bufferBeforeMinutes * 60_000,
-          );
-          const blockedEnd = new Date(
-            assignment.endsAt.getTime() +
-              assignment.candidate.bufferAfterMinutes * 60_000,
-          );
-          await assertBookingSlotFree(
-            tx,
-            shopId,
-            assignment.candidate.id,
-            blockedStart,
-            blockedEnd,
-          );
-          await this.assertOperationallyFree(
-            shopId,
-            assignment.candidate.id,
-            blockedStart,
-            blockedEnd,
-            tx,
-          );
-          const reservation = await tx.reservation.create({
-            data: {
-              shopId,
-              resourceId: assignment.candidate.id,
-              guestName: dto.guestName.trim(),
-              guestEmail: dto.guestEmail?.trim() || null,
-              guestPhone: dto.guestPhone?.trim() || null,
-              partySize: first.partySize,
-              startsAt: assignment.startsAt,
-              endsAt: assignment.endsAt,
-              status: ReservationStatus.CONFIRMED,
-              staffAlert: options.issuePublicToken,
-              notes: dto.notes?.trim() || null,
-              ...(issued ? guestTokenPersistFields(issued) : {}),
-            },
-          });
-          await tx.reservationBookingEvidence.create({
-            data: {
-              shopId,
-              reservationId: reservation.id,
-              sourceChannel: dto.sourceChannel.trim().toUpperCase(),
-              requestedCategoryId: dto.resourceCategoryId ?? null,
-              requestedResourceType: dto.resourceType ?? null,
-              assignedResourceId: assignment.candidate.id,
-              bufferBeforeMinutes: assignment.candidate.bufferBeforeMinutes,
-              bufferAfterMinutes: assignment.candidate.bufferAfterMinutes,
-              recurrenceSeriesId: seriesId,
-              recurrenceRule: dto.recurrence
-                ? (dto.recurrence as Prisma.InputJsonValue)
-                : Prisma.JsonNull,
-            },
-          });
-          return reservation;
-        },
-      );
-      created.push({
-        reservationId: row.id,
-        resourceId: row.resourceId!,
-        startsAt: row.startsAt,
-        endsAt: row.endsAt,
-        ...(issued ? { guestToken: issued.raw } : {}),
+      assignments.push({
+        ...window,
+        candidate,
+        guestToken: options.issuePublicToken
+          ? issueGuestToken({ from: window.endsAt })
+          : null,
       });
     }
 
-    return { recurrenceSeriesId: seriesId, reservations: created };
+    const lockResourceIds = [
+      ...new Set(assignments.map((assignment) => assignment.candidate.id)),
+    ].sort();
+
+    const rows = await this.prisma.$transaction(async (tx) => {
+      for (const resourceId of lockResourceIds) {
+        await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext(${`${shopId}:growth-booking:${resourceId}`}))`;
+      }
+
+      const created: Array<{
+        reservationId: string;
+        resourceId: string;
+        startsAt: Date;
+        endsAt: Date;
+        guestToken?: string;
+      }> = [];
+
+      for (const assignment of assignments) {
+        const blockedStart = new Date(
+          assignment.startsAt.getTime() -
+            assignment.candidate.bufferBeforeMinutes * 60_000,
+        );
+        const blockedEnd = new Date(
+          assignment.endsAt.getTime() +
+            assignment.candidate.bufferAfterMinutes * 60_000,
+        );
+
+        await assertBookingSlotFree(
+          tx,
+          shopId,
+          assignment.candidate.id,
+          blockedStart,
+          blockedEnd,
+        );
+        await this.assertOperationallyFree(
+          shopId,
+          assignment.candidate.id,
+          blockedStart,
+          blockedEnd,
+          tx,
+        );
+
+        const issued = assignment.guestToken;
+        const reservation = await tx.reservation.create({
+          data: {
+            shopId,
+            resourceId: assignment.candidate.id,
+            guestName: dto.guestName.trim(),
+            guestEmail: dto.guestEmail?.trim() || null,
+            guestPhone: dto.guestPhone?.trim() || null,
+            partySize: first.partySize,
+            startsAt: assignment.startsAt,
+            endsAt: assignment.endsAt,
+            status: ReservationStatus.CONFIRMED,
+            staffAlert: options.issuePublicToken,
+            notes: dto.notes?.trim() || null,
+            ...(issued ? guestTokenPersistFields(issued) : {}),
+          },
+        });
+
+        await tx.reservationBookingEvidence.create({
+          data: {
+            shopId,
+            reservationId: reservation.id,
+            sourceChannel: dto.sourceChannel.trim().toUpperCase(),
+            requestedCategoryId: dto.resourceCategoryId ?? null,
+            requestedResourceType: dto.resourceType ?? null,
+            assignedResourceId: assignment.candidate.id,
+            bufferBeforeMinutes: assignment.candidate.bufferBeforeMinutes,
+            bufferAfterMinutes: assignment.candidate.bufferAfterMinutes,
+            recurrenceSeriesId: seriesId,
+            recurrenceRule: dto.recurrence
+              ? (dto.recurrence as Prisma.InputJsonValue)
+              : Prisma.JsonNull,
+          },
+        });
+
+        created.push({
+          reservationId: reservation.id,
+          resourceId: assignment.candidate.id,
+          startsAt: reservation.startsAt,
+          endsAt: reservation.endsAt,
+          ...(issued ? { guestToken: issued.raw } : {}),
+        });
+      }
+
+      return created;
+    });
+
+    return { recurrenceSeriesId: seriesId, reservations: rows };
   }
 
   async reschedulePublic(
@@ -294,14 +366,20 @@ export class GrowthCapacityService {
     guestToken: string,
     dto: CapacityRequest,
   ) {
-    const current = await this.requireGuestReservation(shopId, reservationId, guestToken);
+    const current = await this.requireGuestReservation(
+      shopId,
+      reservationId,
+      guestToken,
+    );
     const capacity = await this.capacityForShop(shopId, {
       ...dto,
       resourceId: dto.resourceId ?? current.resourceId ?? undefined,
       partySize: dto.partySize ?? current.partySize,
     });
     const candidate = capacity.available[0];
-    if (!candidate) throw new ConflictException('No capacity is available for that time.');
+    if (!candidate) {
+      throw new ConflictException('No capacity is available for that time.');
+    }
     const { startsAt, endsAt } = this.parseWindow(dto);
 
     return withResourceBookingLock(this.prisma, candidate.id, async (tx) => {
@@ -326,6 +404,7 @@ export class GrowthCapacityService {
         blockedEnd,
         tx,
       );
+
       const row = await tx.reservation.update({
         where: { id: current.id },
         data: {
@@ -365,7 +444,11 @@ export class GrowthCapacityService {
     guestToken: string,
     reason?: string,
   ) {
-    const row = await this.requireGuestReservation(shopId, reservationId, guestToken);
+    const row = await this.requireGuestReservation(
+      shopId,
+      reservationId,
+      guestToken,
+    );
     const now = new Date();
     await this.prisma.$transaction([
       this.prisma.reservation.update({
@@ -400,9 +483,15 @@ export class GrowthCapacityService {
       where: { id: reservationId, shopId },
     });
     if (!row) throw new NotFoundException('Reservation not found.');
-    if (![ReservationStatus.PENDING, ReservationStatus.CONFIRMED].includes(row.status)) {
-      throw new ConflictException('Only an upcoming reservation can be checked in.');
+    if (
+      row.status !== ReservationStatus.PENDING &&
+      row.status !== ReservationStatus.CONFIRMED
+    ) {
+      throw new ConflictException(
+        'Only an upcoming reservation can be checked in.',
+      );
     }
+
     const now = new Date();
     return this.prisma.$transaction(async (tx) => {
       const reservation = await tx.reservation.update({
@@ -439,33 +528,55 @@ export class GrowthCapacityService {
     if (!Number.isInteger(input.amountMinor) || input.amountMinor <= 0) {
       throw new BadRequestException('amountMinor must be a positive integer.');
     }
+    if (!input.correlationId?.trim()) {
+      throw new BadRequestException('correlationId is required.');
+    }
+
     return this.prisma.$transaction(async (tx) => {
       await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext(${`${shopId}:reservation-deposit:${reservationId}`}))`;
       const existing = await tx.reservationDepositApplication.findFirst({
         where: { shopId, correlationId: input.correlationId },
       });
       if (existing) return existing;
-      const [reservation, guestCheck, ledger, applications] = await Promise.all([
-        tx.reservation.findFirst({ where: { id: reservationId, shopId } }),
-        tx.guestCheck.findFirst({ where: { id: input.guestCheckId, shopId } }),
-        tx.reservationDepositLedgerEntry.findMany({ where: { shopId, reservationId } }),
-        tx.reservationDepositApplication.findMany({ where: { shopId, reservationId } }),
-      ]);
+
+      const [reservation, guestCheck, ledger, applications, shop] =
+        await Promise.all([
+          tx.reservation.findFirst({ where: { id: reservationId, shopId } }),
+          tx.guestCheck.findFirst({ where: { id: input.guestCheckId, shopId } }),
+          tx.reservationDepositLedgerEntry.findMany({
+            where: { shopId, reservationId },
+          }),
+          tx.reservationDepositApplication.findMany({
+            where: { shopId, reservationId },
+          }),
+          tx.shop.findUnique({ where: { id: shopId }, select: { currency: true } }),
+        ]);
+
       if (!reservation) throw new NotFoundException('Reservation not found.');
       if (!guestCheck) throw new NotFoundException('Guest check not found.');
-      const captured = ledger.reduce((sum, row) => sum + row.amountMinor, 0);
-      const applied = applications.reduce((sum, row) => sum + row.amountMinor, 0);
-      if (captured - applied < input.amountMinor) {
-        throw new ConflictException('Deposit application exceeds the unapplied deposit balance.');
+
+      const depositBalance = ledger.reduce(
+        (sum, entry) => sum + entry.amountMinor,
+        0,
+      );
+      const applied = applications.reduce(
+        (sum, application) => sum + application.amountMinor,
+        0,
+      );
+      if (depositBalance - applied < input.amountMinor) {
+        throw new ConflictException(
+          'Deposit application exceeds the unapplied deposit balance.',
+        );
       }
+
       return tx.reservationDepositApplication.create({
         data: {
           shopId,
           reservationId,
           guestCheckId: input.guestCheckId,
           amountMinor: input.amountMinor,
-          currency: (input.currency ?? 'PLN').toUpperCase(),
-          correlationId: input.correlationId,
+          currency: (input.currency ?? shop?.currency ?? 'EUR').toUpperCase(),
+          correlationId: input.correlationId.trim(),
           actorUserId: actor.sub,
         },
       });
@@ -504,22 +615,23 @@ export class GrowthCapacityService {
   }
 
   private pickPolicy(
-    policies: Array<{
-      resourceCategoryId: string | null;
-      resourceType: string | null;
-      bufferBeforeMinutes: number;
-      bufferAfterMinutes: number;
-      minPartySize: number;
-      maxPartySize: number | null;
-    }>,
+    policies: CapacityPolicy[],
     resource: { categoryId: string | null; type: string | null },
   ) {
     return (
       policies.find(
-        (p) => p.resourceCategoryId && p.resourceCategoryId === resource.categoryId,
+        (policy) =>
+          policy.resourceCategoryId != null &&
+          policy.resourceCategoryId === resource.categoryId,
       ) ??
-      policies.find((p) => p.resourceType && p.resourceType === resource.type) ??
-      policies.find((p) => !p.resourceCategoryId && !p.resourceType) ??
+      policies.find(
+        (policy) =>
+          policy.resourceType != null && policy.resourceType === resource.type,
+      ) ??
+      policies.find(
+        (policy) =>
+          policy.resourceCategoryId == null && policy.resourceType == null,
+      ) ??
       null
     );
   }
@@ -529,7 +641,7 @@ export class GrowthCapacityService {
     resourceId: string,
     startsAt: Date,
     endsAt: Date,
-    client: Prisma.TransactionClient | PrismaService = this.prisma,
+    client: DbClient = this.prisma,
   ) {
     const now = new Date();
     const [maintenance, session, hold] = await Promise.all([
@@ -547,6 +659,7 @@ export class GrowthCapacityService {
           resourceId,
           status: { in: ['ACTIVE', 'PAUSED'] },
           startedAt: { lt: endsAt },
+          OR: [{ finishedAt: null }, { finishedAt: { gt: startsAt } }],
         },
       }),
       client.eventResourceHold.findFirst({
@@ -560,9 +673,16 @@ export class GrowthCapacityService {
         },
       }),
     ]);
-    if (maintenance) throw new ConflictException('Resource is blocked for maintenance.');
-    if (session) throw new ConflictException('Resource has an active operations session.');
-    if (hold) throw new ConflictException('Resource is held by an event.');
+
+    if (maintenance) {
+      throw new ConflictException('Resource is blocked for maintenance.');
+    }
+    if (session) {
+      throw new ConflictException('Resource has an active operations session.');
+    }
+    if (hold) {
+      throw new ConflictException('Resource is held by an event.');
+    }
   }
 
   private async requireGuestReservation(
