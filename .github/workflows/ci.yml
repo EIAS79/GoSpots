@@ -48,7 +48,7 @@ jobs:
         run: pnpm run lint
 
       - name: Test
-        run: pnpm exec jest --config jest.config.cjs --runInBand
+        run: pnpm exec jest --config jest.config.cjs --runInBand --reporters=default --reporters=github-actions
         env:
           DATABASE_URL: postgresql://ci:ci@localhost:5432/ci?schema=public
 
