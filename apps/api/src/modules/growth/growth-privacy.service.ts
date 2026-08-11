@@ -1,4 +1,4 @@
-import { Injectable } from '@nestjs/common';
+import { Injectable, NotFoundException } from '@nestjs/common';
 import { createHash } from 'node:crypto';
 import { PrismaService } from '../../prisma/prisma.service';
 
@@ -17,6 +17,33 @@ type GrowthPrivacyCounts = {
 @Injectable()
 export class GrowthPrivacyService {
   constructor(private readonly prisma: PrismaService) {}
+
+  async setMarketingConsent(
+    shopId: string,
+    customerId: string,
+    granted: boolean,
+    source?: string,
+  ) {
+    const customer = await this.prisma.customerProfile.findFirst({
+      where: { id: customerId, shopId },
+      select: { id: true },
+    });
+    if (!customer) throw new NotFoundException('Customer not found.');
+
+    const now = new Date();
+    return this.prisma.customerProfile.update({
+      where: { id: customerId },
+      data: granted
+        ? {
+            marketingConsentAt: now,
+            consentSource: source?.trim() || 'STAFF',
+          }
+        : {
+            marketingConsentAt: null,
+            consentSource: null,
+          },
+    });
+  }
 
   async redactByEmail(shopId: string, rawEmail: string): Promise<GrowthPrivacyCounts> {
     const email = rawEmail.trim().toLowerCase();
