@@ -1,0 +1,47 @@
+import { Body, Controller, Get, Param, Patch, Post, UseGuards } from '@nestjs/common';
+import { ApiTags } from '@nestjs/swagger';
+import { PERMISSIONS } from '../../common/permissions';
+import type { JwtAccessPayload } from '../auth/auth.service';
+import { CurrentUser } from '../auth/decorators/current-user.decorator';
+import { RequirePermissions } from '../auth/decorators/roles.decorator';
+import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
+import { AutomationService } from './automation.service';
+import { CreateAutomationRuleDto, TriggerAutomationDto, UpdateAutomationRuleDto } from './dto/automation.dto';
+
+@ApiTags('automation')
+@Controller('automation')
+@UseGuards(JwtAuthGuard)
+@RequirePermissions(PERMISSIONS.AUTOMATION_MANAGE)
+export class AutomationController {
+  constructor(private readonly automation: AutomationService) {}
+
+  @Get()
+  list(@CurrentUser() user: JwtAccessPayload) {
+    return this.automation.list(user);
+  }
+
+  @Post('rules')
+  create(@CurrentUser() user: JwtAccessPayload, @Body() dto: CreateAutomationRuleDto) {
+    return this.automation.createRule(user, dto);
+  }
+
+  @Patch('rules/:id')
+  update(@CurrentUser() user: JwtAccessPayload, @Param('id') id: string, @Body() dto: UpdateAutomationRuleDto) {
+    return this.automation.updateRule(user, id, dto);
+  }
+
+  @Post('rules/:id/trigger')
+  trigger(@CurrentUser() user: JwtAccessPayload, @Param('id') id: string, @Body() dto: TriggerAutomationDto) {
+    return this.automation.trigger(user, id, dto);
+  }
+
+  @Post('executions/:id/replay')
+  replay(@CurrentUser() user: JwtAccessPayload, @Param('id') id: string) {
+    return this.automation.replayDeadLetter(user, id);
+  }
+
+  @Get('readiness')
+  readiness(@CurrentUser() user: JwtAccessPayload) {
+    return this.automation.readiness(user);
+  }
+}
