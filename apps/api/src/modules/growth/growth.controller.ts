@@ -9,6 +9,7 @@ import {
 } from '@nestjs/common';
 import { ApiTags } from '@nestjs/swagger';
 import { PERMISSIONS } from '../../common/permissions';
+import { requireShopId } from '../../common/tenant';
 import type { JwtAccessPayload } from '../auth/auth.service';
 import { CurrentUser } from '../auth/decorators/current-user.decorator';
 import { RequirePermissions } from '../auth/decorators/roles.decorator';
@@ -20,6 +21,7 @@ import {
   GrowthCapacityService,
   type UnifiedBookingInput,
 } from './growth-capacity.service';
+import { GrowthPrivacyService } from './growth-privacy.service';
 import { ReservationGrowthService } from './reservation-growth.service';
 import type {
   AttachReservationPolicyDto,
@@ -59,6 +61,7 @@ export class GrowthController {
     private readonly reservations: ReservationGrowthService,
     private readonly capacity: GrowthCapacityService,
     private readonly commerce: CommerceGrowthService,
+    private readonly privacy: GrowthPrivacyService,
     private readonly events: EventsGrowthService,
     private readonly analytics: GrowthAnalyticsService,
   ) {}
@@ -217,10 +220,19 @@ export class GrowthController {
     return this.reservations.offerWaitlist(user, id, dto);
   }
 
-  @Post('waitlist/:id/claim')
   @Post('waitlist/:id/convert')
   @RequirePermissions(PERMISSIONS.RESERVATION_WRITE)
-  claimWaitlist(
+  convertWaitlist(
+    @CurrentUser() user: JwtAccessPayload,
+    @Param('id') id: string,
+  ) {
+    return this.reservations.convertWaitlist(user, id);
+  }
+
+  /** @deprecated Compatibility alias. New clients must use /waitlist/:id/convert. */
+  @Post('waitlist/:id/claim')
+  @RequirePermissions(PERMISSIONS.RESERVATION_WRITE)
+  claimWaitlistCompatibility(
     @CurrentUser() user: JwtAccessPayload,
     @Param('id') id: string,
   ) {
@@ -316,6 +328,21 @@ export class GrowthController {
     @Body() dto: MergeCustomerDto,
   ) {
     return this.commerce.mergeCustomer(user, id, dto);
+  }
+
+  @Post('customers/:id/marketing-consent')
+  @RequirePermissions(PERMISSIONS.RESERVATION_WRITE)
+  marketingConsent(
+    @CurrentUser() user: JwtAccessPayload,
+    @Param('id') id: string,
+    @Body() dto: { granted: boolean; source?: string },
+  ) {
+    return this.privacy.setMarketingConsent(
+      requireShopId(user),
+      id,
+      dto.granted,
+      dto.source,
+    );
   }
 
   @Post('membership-tiers')
