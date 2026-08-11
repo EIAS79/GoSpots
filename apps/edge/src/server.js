@@ -99,6 +99,12 @@ const server = createServer(async (req, res) => {
       return send(res, 200, await hub.cloud.syncPending(Number(body.limit ?? 100)));
     }
 
+    if (req.method === 'POST' && url.pathname === '/v1/cloud/print-once') {
+      const body = await readJson(req);
+      authHeaders(req, 'POST', path, body);
+      return send(res, 200, await hub.processPrintQueue());
+    }
+
     return send(res, 404, { message: 'Not found' });
   } catch (error) {
     const message = error?.message ?? String(error);
@@ -121,6 +127,7 @@ const syncTimer = setInterval(async () => {
   try {
     if (hub.cloud.registeredDeviceId) {
       await hub.cloud.syncPending();
+      await hub.processPrintQueue();
       await hub.cloud.heartbeat(EDGE_VERSION);
     }
   } catch (error) {

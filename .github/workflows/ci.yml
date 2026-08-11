@@ -53,24 +53,7 @@ jobs:
           DATABASE_URL: postgresql://ci:ci@localhost:5432/ci?schema=public
 
       - name: Build
-        shell: bash
-        run: |
-          set +e
-          pnpm run build 2>&1 | tee build.log
-          code=${PIPESTATUS[0]}
-          if [ "$code" -ne 0 ]; then
-            node - <<'NODE'
-          const fs = require('fs');
-          const text = fs.readFileSync('build.log', 'utf8');
-          const lines = text.split(/\r?\n/).filter((line) => /error TS\d+/.test(line));
-          const selected = lines.length ? lines.slice(0, 30) : text.split(/\r?\n/).slice(-30);
-          for (const raw of selected) {
-            const message = raw.replace(/%/g, '%25').replace(/\r/g, '%0D').replace(/\n/g, '%0A');
-            console.log(`::error title=API TypeScript build::${message}`);
-          }
-          NODE
-          fi
-          exit "$code"
+        run: pnpm run build
         env:
           DATABASE_URL: postgresql://ci:ci@localhost:5432/ci?schema=public
 
@@ -178,4 +161,4 @@ jobs:
       - name: Test
         run: node --test test/*.test.js
       - name: Build
-        run: node --check src/canonical.js && node --check src/crypto.js && node --check src/store.js && node --check src/cloud-client.js && node --check src/hub.js && node --check src/server.js
+        run: node --check src/canonical.js && node --check src/crypto.js && node --check src/store.js && node --check src/cloud-client.js && node --check src/printer.js && node --check src/hub.js && node --check src/server.js
