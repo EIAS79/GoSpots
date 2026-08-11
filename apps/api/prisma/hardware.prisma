@@ -1,0 +1,126 @@
+enum PrintJobType {
+  KITCHEN
+  BAR
+  CUSTOMER_RECEIPT
+  INVOICE
+  SHIFT
+  LABEL
+}
+
+enum PrintJobStatus {
+  QUEUED
+  CLAIMED
+  PRINTING
+  SUCCEEDED
+  FAILED
+  CANCELED
+}
+
+enum CustomerDisplayStatus {
+  IDLE
+  ACTIVE
+  PAYMENT
+  COMPLETE
+  DISABLED
+}
+
+/// Printer-specific settings layered on top of the shared Device(type=PRINTER) registry.
+model PrinterDeviceConfiguration {
+  id           String   @id @default(cuid())
+  shopId       String
+  deviceId     String   @unique
+  adapter      String
+  host         String?
+  port         Int?
+  paperWidthMm Int      @default(80)
+  capabilities Json?
+  enabled      Boolean  @default(true)
+  lastError    String?
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  @@index([shopId, enabled])
+}
+
+/// Rules that choose a PRINTER Device for a semantic print type/source.
+model PrintRoute {
+  id              String       @id @default(cuid())
+  shopId          String
+  name            String
+  jobType         PrintJobType
+  sourceKey       String?
+  printerDeviceId String
+  priority        Int          @default(100)
+  enabled         Boolean      @default(true)
+  createdAt       DateTime     @default(now())
+  updatedAt       DateTime     @updatedAt
+
+  @@unique([shopId, name])
+  @@index([shopId, jobType, sourceKey, enabled, priority])
+  @@index([printerDeviceId, enabled])
+}
+
+/// Durable cloud print queue. Retries mutate this row; they never create a second fiscal semantic job.
+model PrintJob {
+  id                    String         @id @default(cuid())
+  shopId                String
+  type                  PrintJobType
+  routeId               String?
+  printerDeviceId       String
+  sourceType            String
+  sourceId              String
+  payload               Json
+  dedupeKey             String
+  fiscalSemanticKey     String?
+  status                PrintJobStatus @default(QUEUED)
+  attemptCount          Int            @default(0)
+  maxAttempts           Int            @default(5)
+  claimedByEdgeDeviceId String?
+  claimedAt             DateTime?
+  printingAt            DateTime?
+  printedAt             DateTime?
+  lastErrorCode         String?
+  lastError             String?
+  createdById           String?
+  createdAt             DateTime       @default(now())
+  updatedAt             DateTime       @updatedAt
+
+  @@unique([shopId, dedupeKey])
+  @@unique([shopId, fiscalSemanticKey])
+  @@index([shopId, status, createdAt])
+  @@index([printerDeviceId, status, createdAt])
+  @@index([claimedByEdgeDeviceId, status])
+}
+
+/// Pairing between a read-only customer display Device and a POS Device.
+model CustomerDisplayBinding {
+  id               String                @id @default(cuid())
+  shopId           String
+  displayDeviceId  String                @unique
+  displayTokenHash String                @unique
+  posDeviceId      String?
+  status           CustomerDisplayStatus @default(IDLE)
+  activeCheckId    String?
+  snapshot         Json?
+  lastSeenAt       DateTime?
+  createdAt        DateTime              @default(now())
+  updatedAt        DateTime              @updatedAt
+
+  @@index([shopId, status, lastSeenAt])
+  @@index([posDeviceId])
+}
+
+/// Barcode aliases keep scanners decoupled from inventory/menu/retail entity schemas.
+model BarcodeAlias {
+  id         String   @id @default(cuid())
+  shopId     String
+  barcode    String
+  entityType String
+  entityId   String
+  metadata   Json?
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  @@unique([shopId, barcode])
+  @@index([shopId, entityType, entityId])
+}

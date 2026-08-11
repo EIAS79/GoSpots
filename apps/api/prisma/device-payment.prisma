@@ -4,6 +4,8 @@ enum DeviceType {
   EDGE_HUB
   PRINTER
   KDS
+  CUSTOMER_DISPLAY
+  BARCODE_SCANNER
 }
 
 enum DeviceStatus {

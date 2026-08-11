@@ -1,0 +1,209 @@
+enum ConnectorInstallationStatus {
+  ACTIVE
+  PAUSED
+  ERROR
+  DISABLED
+}
+
+enum IntegrationJobStatus {
+  PENDING
+  PROCESSING
+  SUCCEEDED
+  RETRY
+  DEAD
+}
+
+enum IntegrationDirection {
+  INBOUND
+  OUTBOUND
+}
+
+enum WebhookDeliveryStatus {
+  PENDING
+  SUCCEEDED
+  RETRY
+  DEAD
+}
+
+enum WebhookReceiptStatus {
+  RECEIVED
+  APPLIED
+  IGNORED
+  REJECTED
+}
+
+/// One installed connector per Shop/provider/use case. Secrets are encrypted, never returned by API.
+model ConnectorInstallation {
+  id               String                      @id @default(cuid())
+  shopId           String
+  provider         String
+  name             String
+  status           ConnectorInstallationStatus @default(ACTIVE)
+  config           Json?
+  capabilities     Json?
+  secretCiphertext String?
+  secretIv         String?
+  secretTag        String?
+  secretKeyVersion Int                         @default(1)
+  lastHealthAt     DateTime?
+  lastErrorCode    String?
+  lastErrorMessage String?
+  createdById      String?
+  createdAt        DateTime                    @default(now())
+  updatedAt        DateTime                    @updatedAt
+  externalRefs     ExternalReference[]
+  mappings         IntegrationMapping[]
+  jobs             IntegrationJob[]
+  webhookReceipts  WebhookReceipt[]
+
+  @@unique([shopId, provider, name])
+  @@index([shopId, status, provider])
+}
+
+/// Durable local↔external identity mapping for idempotent synchronization.
+model ExternalReference {
+  id             String                @id @default(cuid())
+  shopId         String
+  installationId String
+  installation   ConnectorInstallation @relation(fields: [installationId], references: [id], onDelete: Cascade)
+  namespace      String
+  localType      String
+  localId        String
+  externalType   String
+  externalId     String
+  metadata       Json?
+  createdAt      DateTime              @default(now())
+  updatedAt      DateTime              @updatedAt
+
+  @@unique([installationId, namespace, localType, localId])
+  @@unique([installationId, namespace, externalType, externalId])
+  @@index([shopId, localType, localId])
+}
+
+/// Configurable mapping between GoSpots and connector concepts without hard-coding provider branches.
+model IntegrationMapping {
+  id             String                @id @default(cuid())
+  shopId         String
+  installationId String
+  installation   ConnectorInstallation @relation(fields: [installationId], references: [id], onDelete: Cascade)
+  mappingType    String
+  localKey       String
+  externalKey    String
+  config         Json?
+  active         Boolean               @default(true)
+  createdAt      DateTime              @default(now())
+  updatedAt      DateTime              @updatedAt
+
+  @@unique([installationId, mappingType, localKey])
+  @@index([shopId, installationId, active])
+}
+
+/// Durable retry/dead-letter work queue for connector operations.
+model IntegrationJob {
+  id             String                @id @default(cuid())
+  shopId         String
+  installationId String
+  installation   ConnectorInstallation @relation(fields: [installationId], references: [id], onDelete: Cascade)
+  direction      IntegrationDirection
+  jobType        String
+  idempotencyKey String
+  payload        Json
+  status         IntegrationJobStatus  @default(PENDING)
+  attemptCount   Int                   @default(0)
+  maxAttempts    Int                   @default(8)
+  nextAttemptAt  DateTime?
+  correlationId  String?
+  lastErrorCode  String?
+  lastError      String?
+  lockedAt       DateTime?
+  completedAt    DateTime?
+  createdAt      DateTime              @default(now())
+  updatedAt      DateTime              @updatedAt
+
+  @@unique([shopId, installationId, idempotencyKey])
+  @@index([shopId, status, nextAttemptAt, createdAt])
+  @@index([installationId, status, createdAt])
+}
+
+/// Outbound webhook subscription. Signing secret is encrypted at rest.
+model WebhookEndpoint {
+  id               String   @id @default(cuid())
+  shopId           String
+  name             String
+  url              String
+  eventTypes       Json
+  active           Boolean  @default(true)
+  secretCiphertext String
+  secretIv         String
+  secretTag        String
+  secretKeyVersion Int      @default(1)
+  createdById      String?
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
+  deliveries       WebhookDelivery[]
+
+  @@unique([shopId, name])
+  @@index([shopId, active])
+}
+
+/// One delivery per endpoint/domain-event, with bounded retry and dead-letter state.
+model WebhookDelivery {
+  id             String                @id @default(cuid())
+  shopId         String
+  endpointId     String
+  endpoint       WebhookEndpoint       @relation(fields: [endpointId], references: [id], onDelete: Cascade)
+  eventId        String
+  eventType      String
+  payload        Json
+  payloadHash    String
+  status         WebhookDeliveryStatus @default(PENDING)
+  attemptCount   Int                   @default(0)
+  nextAttemptAt  DateTime?
+  lastStatusCode Int?
+  lastError      String?
+  deliveredAt    DateTime?
+  createdAt      DateTime              @default(now())
+  updatedAt      DateTime              @updatedAt
+
+  @@unique([endpointId, eventId])
+  @@index([shopId, status, nextAttemptAt, createdAt])
+}
+
+/// Hash-only public API bearer credential. The raw token is shown exactly once on creation.
+model IntegrationCredential {
+  id          String   @id @default(cuid())
+  shopId      String
+  name        String
+  tokenPrefix String
+  tokenHash   String   @unique
+  scopes      Json
+  active      Boolean  @default(true)
+  expiresAt   DateTime?
+  lastUsedAt  DateTime?
+  createdById String?
+  createdAt   DateTime @default(now())
+  revokedAt   DateTime?
+
+  @@unique([shopId, name])
+  @@index([shopId, active, expiresAt])
+  @@index([tokenPrefix])
+}
+
+/// Inbound provider webhook receipt used for signature/replay protection and idempotent application.
+model WebhookReceipt {
+  id             String                 @id @default(cuid())
+  shopId         String
+  installationId String
+  installation   ConnectorInstallation  @relation(fields: [installationId], references: [id], onDelete: Cascade)
+  provider       String
+  eventId        String
+  timestamp      DateTime
+  payloadHash    String
+  signatureHash  String
+  status         WebhookReceiptStatus   @default(RECEIVED)
+  receivedAt     DateTime               @default(now())
+  processedAt    DateTime?
+
+  @@unique([installationId, eventId])
+  @@index([shopId, provider, receivedAt])
+}

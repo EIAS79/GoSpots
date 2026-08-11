@@ -161,4 +161,4 @@ jobs:
       - name: Test
         run: node --test test/*.test.js
       - name: Build
-        run: node --check src/canonical.js && node --check src/crypto.js && node --check src/store.js && node --check src/cloud-client.js && node --check src/hub.js && node --check src/server.js
+        run: node --check src/canonical.js && node --check src/crypto.js && node --check src/store.js && node --check src/cloud-client.js && node --check src/printer.js && node --check src/hub.js && node --check src/server.js

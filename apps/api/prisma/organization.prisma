@@ -1,0 +1,59 @@
+enum OrganizationRole {
+  OWNER
+  ADMIN
+  ANALYST
+  OPERATOR
+}
+
+enum OrganizationAccessMode {
+  ALL_SHOPS
+  EXPLICIT
+}
+
+/// Parent entity for a group of operational Shops. Shop remains the transaction/tenant boundary.
+model Organization {
+  id          String   @id @default(cuid())
+  name        String
+  slug        String   @unique
+  createdById String
+  settings    Json?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  memberships OrganizationMembership[]
+  shops       OrganizationShop[]
+
+  @@index([createdById, createdAt])
+}
+
+/// Group-level RBAC. This never implicitly bypasses Shop tenant scoping.
+model OrganizationMembership {
+  id             String                 @id @default(cuid())
+  organizationId String
+  organization   Organization           @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  userId         String
+  role           OrganizationRole
+  accessMode     OrganizationAccessMode @default(EXPLICIT)
+  createdAt      DateTime               @default(now())
+  updatedAt      DateTime               @updatedAt
+
+  @@unique([organizationId, userId])
+  @@index([userId, role])
+}
+
+/// Organization-to-Shop membership. A Shop may belong to at most one parent organization in v1.
+model OrganizationShop {
+  id                    String       @id @default(cuid())
+  organizationId        String
+  organization          Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  shopId                String       @unique
+  displayName           String?
+  sortOrder             Int          @default(0)
+  sharedCatalogEnabled  Boolean      @default(false)
+  inheritedSettings     Json?
+  overrideSettings      Json?
+  createdAt             DateTime     @default(now())
+  updatedAt             DateTime     @updatedAt
+
+  @@unique([organizationId, shopId])
+  @@index([organizationId, sortOrder])
+}

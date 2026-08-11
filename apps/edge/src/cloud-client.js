@@ -50,6 +50,25 @@ export class CloudClient {
     });
   }
 
+  async signedJsonPost(path, body) {
+    const response = await this.signedPost(path, body);
+    const data = await response.json().catch(() => ({}));
+    if (!response.ok) throw new Error(data?.message ?? `Cloud request failed (${response.status})`);
+    return data;
+  }
+
+  async claimPrintJob() {
+    return this.signedJsonPost('/hardware/edge/print-jobs/claim', {});
+  }
+
+  async markPrintJobPrinting(jobId) {
+    return this.signedJsonPost(`/hardware/edge/print-jobs/${encodeURIComponent(jobId)}/printing`, {});
+  }
+
+  async completePrintJob(jobId, result) {
+    return this.signedJsonPost(`/hardware/edge/print-jobs/${encodeURIComponent(jobId)}/complete`, result);
+  }
+
   async heartbeat(version) {
     const response = await this.signedPost('/edge-hub/cloud/heartbeat', { version });
     if (!response.ok) throw new Error(`Cloud heartbeat failed (${response.status})`);

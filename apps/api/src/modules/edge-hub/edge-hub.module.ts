@@ -7,5 +7,6 @@ import { EdgeHubService } from './edge-hub.service';
   imports: [OfflineSyncModule],
   controllers: [EdgeHubController],
   providers: [EdgeHubService],
+  exports: [EdgeHubService],
 })
 export class EdgeHubModule {}

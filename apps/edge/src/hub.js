@@ -4,18 +4,21 @@ import { hostname } from 'node:os';
 import { decryptSecret, encryptSecret, generateCloudKeyPair, loadOrCreateMasterKey, verifyLanSignature } from './crypto.js';
 import { EdgeStore } from './store.js';
 import { CloudClient } from './cloud-client.js';
+import { executePrintJob } from './printer.js';
 
 export const EDGE_VERSION = '0.1.0';
 const MAX_CLOCK_SKEW_MS = 5 * 60_000;
 
 export class EdgeHub {
-  constructor({ dbPath, keyPath, pairToken, cloudUrl, fetchImpl } = {}) {
+  constructor({ dbPath, keyPath, pairToken, cloudUrl, fetchImpl, printExecutor = executePrintJob } = {}) {
     const resolvedDb = dbPath ?? process.env.EDGE_DB_PATH ?? join(process.cwd(), 'data', 'edge.db');
     const resolvedKey = keyPath ?? process.env.EDGE_KEY_PATH ?? join(dirname(resolvedDb), 'edge-master.key');
     this.store = new EdgeStore(resolvedDb);
     this.masterKey = loadOrCreateMasterKey(resolvedKey);
     this.pairToken = pairToken ?? process.env.EDGE_PAIR_TOKEN ?? randomBytes(24).toString('base64url');
     this.listeners = new Set();
+    this.printExecutor = printExecutor;
+    this.printWorkerRunning = false;
 
     let publicKeyPem = this.store.getMeta('cloudPublicKey');
     let encryptedPrivate = this.store.getMeta('cloudPrivateKey');
@@ -76,6 +79,7 @@ export class EdgeHub {
       shopId: this.store.getMeta('shopId'),
       pendingEvents: diagnostics.events.pending,
       lastSequence: diagnostics.events.lastSequence,
+      printWorkerRunning: this.printWorkerRunning,
     };
   }
 
@@ -88,5 +92,35 @@ export class EdgeHub {
 
   async registerCloud(provisioningToken) {
     return this.cloud.register(provisioningToken, EDGE_VERSION, hostname());
+  }
+
+  async processPrintQueue() {
+    if (!this.cloud.registeredDeviceId || this.printWorkerRunning) return { processed: 0, skipped: true };
+    this.printWorkerRunning = true;
+    try {
+      const claimed = await this.cloud.claimPrintJob();
+      const job = claimed?.job;
+      if (!job) return { processed: 0 };
+      try {
+        await this.cloud.markPrintJobPrinting(job.id);
+        const result = await this.printExecutor(job);
+        await this.cloud.completePrintJob(job.id, { status: 'SUCCEEDED' });
+        return { processed: 1, succeeded: 1, jobId: job.id, result };
+      } catch (error) {
+        const message = error?.message ?? String(error);
+        try {
+          await this.cloud.completePrintJob(job.id, {
+            status: 'FAILED',
+            errorCode: /UNSUPPORTED/i.test(message) ? 'UNSUPPORTED_PRINTER_ADAPTER' : 'EDGE_PRINT_FAILED',
+            error: String(message).slice(0, 1000),
+          });
+        } catch (completionError) {
+          console.error('[gospots-edge] could not report print failure:', completionError?.message ?? completionError);
+        }
+        return { processed: 1, failed: 1, jobId: job.id, error: message };
+      }
+    } finally {
+      this.printWorkerRunning = false;
+    }
   }
 }
