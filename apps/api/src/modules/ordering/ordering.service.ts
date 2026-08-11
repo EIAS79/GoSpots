@@ -114,7 +114,8 @@ export class OrderingService {
   async cancelLine(actor: JwtAccessPayload, orderId: string, lineId: string, dto: CancelOrderLineDto) {
     const shopId = requireShopId(actor);
     const order = await this.prisma.venueOrder.findFirst({ where: { id: orderId, shopId } });
-    if (!order || order.status === 'CANCELED') throw new ConflictException('Order cannot be changed.');
+    if (!order) throw new NotFoundException('Order not found.');
+    if (['CANCELED','COMPLETED','REFUNDED'].includes(order.status)) throw new ConflictException('Terminal order cannot be changed.');
     const line = await this.prisma.venueOrderLine.findFirst({ where: { id: lineId, orderId, shopId } });
     if (!line) throw new NotFoundException('Order line not found.');
     if (line.canceledAt) return line;
@@ -134,7 +135,7 @@ export class OrderingService {
     const shopId = requireShopId(actor);
     const order = await this.prisma.venueOrder.findFirst({ where: { id, shopId } });
     if (!order) throw new NotFoundException('Order not found.');
-    if (order.status === 'COMPLETED') throw new ConflictException('Completed order must use the refund flow.');
+    if (order.status === 'COMPLETED' || order.status === 'REFUNDED') throw new ConflictException('Settled order must use the refund flow.');
     if (order.status === 'CANCELED') return order;
     const now=new Date();
     const row = await this.prisma.$transaction(async tx=>{
