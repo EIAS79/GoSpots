@@ -17,8 +17,6 @@ model ReservationDepositPaymentIntent {
   succeededAt       DateTime?
   canceledAt        DateTime?
 
-  reservation Reservation @relation(fields: [reservationId], references: [id], onDelete: Cascade)
-
   @@unique([shopId, idempotencyKey])
   @@index([shopId, reservationId, createdAt])
   @@index([shopId, status, updatedAt])
