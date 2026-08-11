@@ -294,7 +294,7 @@ CREATE INDEX "EventResourceHold_shopId_resourceId_startsAt_endsAt_idx" ON "Event
 ALTER TABLE "EventResourceHold" ADD CONSTRAINT "EventResourceHold_no_overlap" EXCLUDE USING gist (
   "shopId" WITH =,
   "resourceId" WITH =,
-  tstzrange("startsAt", "endsAt", '[)') WITH &&
+  tsrange("startsAt", "endsAt", '[)') WITH &&
 ) WHERE ("status" IN ('HOLD','CONFIRMED'));
 
 CREATE TABLE "EventPaymentSchedule" (
