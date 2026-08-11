@@ -226,7 +226,13 @@ export class OperationsService {
       let plan = dto.ratePlanId
         ? await tx.operationsRatePlan.findFirst({ where: { id: dto.ratePlanId, shopId, active: true } })
         : null;
-      if (!plan) {
+      if (dto.ratePlanId && !plan) {
+        throw new NotFoundException('Selected active rate plan was not found for this venue.');
+      }
+      if (plan && plan.resourceId !== resource.id && plan.resourceCategoryId !== resource.categoryId) {
+        throw new ConflictException('Selected rate plan does not apply to this resource.');
+      }
+      if (!dto.ratePlanId) {
         plan = await tx.operationsRatePlan.findFirst({
           where: {
             shopId,
