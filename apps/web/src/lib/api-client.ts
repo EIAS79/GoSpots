@@ -53,6 +53,18 @@ async function request<T>(path: string, options: RequestOptions = {}): Promise<T
   return response.json() as Promise<T>;
 }
 
+/**
+ * Generic compatibility entry point used by data-heavy workspaces that need
+ * to choose the HTTP verb dynamically. It deliberately shares the exact same
+ * CSRF, venue-header, cookie and error-handling path as the typed `api` facade.
+ */
+export function apiFetch<T>(
+  path: string,
+  options: RequestOptions = {},
+): Promise<T> {
+  return request<T>(path, options);
+}
+
 export const api = {
   get: <T>(path: string, options?: RequestOptions) =>
     request<T>(path, { ...options, method: 'GET' }),
