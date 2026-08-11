@@ -145,7 +145,10 @@ export class AiInsightsService {
       },
     });
     if (existingRun) {
-      const insights = await this.prisma.aiInsight.findMany({ where: { shopId, runId: existingRun.id }, orderBy: { createdAt: 'asc' } });
+      const insights = await this.prisma.aiInsight.findMany({
+        where: { shopId, runId: existingRun.id },
+        orderBy: { createdAt: 'asc' },
+      });
       return { snapshot, run: existingRun, insights, replayed: true };
     }
 
@@ -153,69 +156,101 @@ export class AiInsightsService {
       data: { shopId, snapshotId: snapshot.id, provider: providerName, status: 'RUNNING', inputHash },
     });
     let candidates: InsightCandidate[] = [];
-    let status: 'SUCCEEDED' | 'DEGRADED' | 'FAILED' = 'SUCCEEDED';
+    let status: 'SUCCEEDED' | 'DEGRADED' = 'SUCCEEDED';
     let failureCode: string | null = null;
     let failureMessage: string | null = null;
+
     try {
-      candidates = useExternal
-        ? await this.external.generate(metrics)
-        : await this.deterministic.generate(metrics);
-      if (useExternal && candidates.length === 0) {
-        status = 'DEGRADED';
-        failureCode = 'EMPTY_PROVIDER_RESPONSE';
+      if (useExternal) {
+        try {
+          candidates = await this.external.generate(metrics);
+          if (candidates.length === 0) {
+            status = 'DEGRADED';
+            failureCode = 'EMPTY_PROVIDER_RESPONSE';
+            failureMessage = 'External AI provider returned no usable insights.';
+            candidates = await this.deterministic.generate(metrics);
+          }
+        } catch (error) {
+          status = 'DEGRADED';
+          failureCode = 'PROVIDER_FAILURE';
+          failureMessage = error instanceof Error ? error.message.slice(0, 500) : 'AI provider failed.';
+          candidates = await this.deterministic.generate(metrics);
+        }
+      } else {
         candidates = await this.deterministic.generate(metrics);
       }
     } catch (error) {
-      status = 'DEGRADED';
-      failureCode = 'PROVIDER_FAILURE';
-      failureMessage = error instanceof Error ? error.message.slice(0, 500) : 'AI provider failed.';
-      candidates = await this.deterministic.generate(metrics);
+      const terminalMessage = error instanceof Error ? error.message.slice(0, 500) : 'AI insight generation failed.';
+      await this.prisma.aiInsightRun.update({
+        where: { id: run.id },
+        data: {
+          status: 'FAILED',
+          failureCode: useExternal ? 'FALLBACK_FAILURE' : 'DETERMINISTIC_PROVIDER_FAILURE',
+          failureMessage: terminalMessage,
+          completedAt: new Date(),
+        },
+      });
+      throw error;
     }
 
-    const persisted = [];
-    for (const candidate of candidates.slice(0, 8)) {
-      const evidenceJson = stableJson(redactProviderInput(candidate.evidence));
-      const fingerprint = sha256(
-        stableJson({ type: candidate.type, title: candidate.title, evidence: evidenceJson }),
-      );
-      persisted.push(
-        await this.prisma.aiInsight.upsert({
-          where: { shopId_fingerprint: { shopId, fingerprint } },
-          create: {
-            shopId,
-            runId: run.id,
-            fingerprint,
-            type: candidate.type,
-            severity: candidate.severity,
-            title: candidate.title,
-            body: candidate.body,
-            evidenceJson,
-            actionKey: candidate.actionKey ?? null,
-          },
-          update: {
-            runId: run.id,
-            severity: candidate.severity,
-            title: candidate.title,
-            body: candidate.body,
-            evidenceJson,
-            actionKey: candidate.actionKey ?? null,
-            dismissedAt: null,
-          },
-        }),
-      );
+    try {
+      const persisted = [];
+      for (const candidate of candidates.slice(0, 8)) {
+        const evidenceJson = stableJson(redactProviderInput(candidate.evidence));
+        const fingerprint = sha256(
+          stableJson({ type: candidate.type, title: candidate.title, evidence: evidenceJson }),
+        );
+        persisted.push(
+          await this.prisma.aiInsight.upsert({
+            where: { shopId_fingerprint: { shopId, fingerprint } },
+            create: {
+              shopId,
+              runId: run.id,
+              fingerprint,
+              type: candidate.type,
+              severity: candidate.severity,
+              title: candidate.title,
+              body: candidate.body,
+              evidenceJson,
+              actionKey: candidate.actionKey ?? null,
+            },
+            update: {
+              runId: run.id,
+              severity: candidate.severity,
+              title: candidate.title,
+              body: candidate.body,
+              evidenceJson,
+              actionKey: candidate.actionKey ?? null,
+              dismissedAt: null,
+            },
+          }),
+        );
+      }
+      const outputHash = sha256(stableJson(persisted.map((row) => row.fingerprint)));
+      const completed = await this.prisma.aiInsightRun.update({
+        where: { id: run.id },
+        data: {
+          status,
+          outputHash,
+          failureCode,
+          failureMessage,
+          completedAt: new Date(),
+        },
+      });
+      return { snapshot, run: completed, insights: persisted, replayed: false };
+    } catch (error) {
+      const terminalMessage = error instanceof Error ? error.message.slice(0, 500) : 'AI insight persistence failed.';
+      await this.prisma.aiInsightRun.update({
+        where: { id: run.id },
+        data: {
+          status: 'FAILED',
+          failureCode: 'INSIGHT_PERSISTENCE_FAILURE',
+          failureMessage: terminalMessage,
+          completedAt: new Date(),
+        },
+      }).catch(() => undefined);
+      throw error;
     }
-    const outputHash = sha256(stableJson(persisted.map((row) => row.fingerprint)));
-    const completed = await this.prisma.aiInsightRun.update({
-      where: { id: run.id },
-      data: {
-        status,
-        outputHash,
-        failureCode,
-        failureMessage,
-        completedAt: new Date(),
-      },
-    });
-    return { snapshot, run: completed, insights: persisted, replayed: false };
   }
 
   async feedback(actor: JwtAccessPayload, insightId: string, dto: AiInsightFeedbackDto) {
