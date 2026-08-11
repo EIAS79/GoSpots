@@ -36,13 +36,8 @@ CREATE INDEX "ReservationDepositCheckoutAttempt_shopId_status_updatedAt_idx"
   ON "ReservationDepositCheckoutAttempt"("shopId", "status", "updatedAt");
 
 ALTER TABLE "ReservationDepositCheckoutAttempt" ENABLE ROW LEVEL SECURITY;
+ALTER TABLE "ReservationDepositCheckoutAttempt" FORCE ROW LEVEL SECURITY;
 CREATE POLICY "ReservationDepositCheckoutAttempt_tenant_policy"
   ON "ReservationDepositCheckoutAttempt"
-  USING (
-    current_setting('app.current_shop_id', true) = ''
-    OR "shopId" = current_setting('app.current_shop_id', true)
-  )
-  WITH CHECK (
-    current_setting('app.current_shop_id', true) = ''
-    OR "shopId" = current_setting('app.current_shop_id', true)
-  );
+  USING (app_tenant_rls_ok("shopId"))
+  WITH CHECK (app_tenant_rls_ok("shopId"));
