@@ -6,6 +6,7 @@ import {
   NotFoundException,
 } from '@nestjs/common';
 import { Interval } from '@nestjs/schedule';
+import type { Prisma } from '@prisma/client';
 import type { JwtAccessPayload } from '../auth/auth.service';
 import { PrismaService } from '../../prisma/prisma.service';
 import { safeJsonParse, sha256, stableJson } from '../../common/platform-security.util';
@@ -311,6 +312,7 @@ export class AutomationService {
       executionId,
       payload,
     };
+    const deliveryPayloadJson = JSON.parse(stableJson(deliveryPayload)) as Prisma.InputJsonValue;
     const delivery = await this.prisma.webhookDelivery.upsert({
       where: { endpointId_eventId: { endpointId: endpoint.id, eventId } },
       create: {
@@ -318,8 +320,8 @@ export class AutomationService {
         endpointId: endpoint.id,
         eventId,
         eventType: action.eventType ?? 'automation.triggered',
-        payload: deliveryPayload,
-        payloadHash: sha256(stableJson(deliveryPayload)),
+        payload: deliveryPayloadJson,
+        payloadHash: sha256(stableJson(deliveryPayloadJson)),
       },
       update: {},
     });
