@@ -195,18 +195,14 @@ describe('GrowthCrmService integrity gates', () => {
     };
     const { service } = makeService({
       storedValueAccount: {
-        findFirst: jest().fn,
+        findFirst: jest.fn().mockResolvedValue({
+          id: 'wallet-1',
+          currency: 'EUR',
+          status: 'ACTIVE',
+        }),
       },
+      $transaction: jest.fn(async (callback: any) => callback(tx)),
     });
-    // Replace the accidental generic placeholder with the real active account mock.
-    (service as any).prisma.storedValueAccount = {
-      findFirst: jest.fn().mockResolvedValue({
-        id: 'wallet-1',
-        currency: 'EUR',
-        status: 'ACTIVE',
-      }),
-    };
-    (service as any).prisma.$transaction = jest.fn(async (callback: any) => callback(tx));
 
     await expect(
       service.storedValue(actor, 'wallet-1', {
