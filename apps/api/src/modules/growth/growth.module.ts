@@ -4,6 +4,8 @@ import { CommerceGrowthService } from './commerce-growth.service';
 import { EventsGrowthService } from './events-growth.service';
 import { GrowthAnalyticsService } from './growth-analytics.service';
 import { GrowthCapacityService } from './growth-capacity.service';
+import { GrowthCrmService } from './growth-crm.service';
+import { GrowthPricingService } from './growth-pricing.service';
 import { GrowthPublicController } from './growth-public.controller';
 import { GrowthController } from './growth.controller';
 import { ReservationGrowthService } from './reservation-growth.service';
@@ -14,6 +16,8 @@ import { ReservationGrowthService } from './reservation-growth.service';
   providers: [
     ReservationGrowthService,
     GrowthCapacityService,
+    GrowthPricingService,
+    GrowthCrmService,
     CommerceGrowthService,
     EventsGrowthService,
     GrowthAnalyticsService,
