@@ -48,7 +48,6 @@ export async function assertNoReservationOverlap(
       resourceId,
       ...(excludeReservationId ? { id: { not: excludeReservationId } } : {}),
       status: { in: ACTIVE_RESERVATION },
-      // Half-open: adjacent slots that only touch at an endpoint do not clash.
       startsAt: { lt: endsAt },
       endsAt: { gt: startsAt },
     },
@@ -112,6 +111,72 @@ export async function assertNoWalkInOverlap(
   }
 }
 
+/**
+ * Resource Engine 2.0 blockers that must participate in the same transaction
+ * as a reservation write. This closes the waitlist/public/staff race where a
+ * resource becomes unavailable after a preflight capacity read.
+ */
+export async function assertNoOperationalOverlap(
+  prisma: DbClient,
+  shopId: string,
+  resourceId: string,
+  startsAt: Date,
+  endsAt: Date,
+) {
+  const now = new Date();
+  const [maintenance, operationsSession, eventHold] = await Promise.all([
+    prisma.resourceMaintenancePeriod.findFirst({
+      where: {
+        shopId,
+        resourceId,
+        startsAt: { lt: endsAt },
+        OR: [{ endsAt: null }, { endsAt: { gt: startsAt } }],
+      },
+      select: { id: true },
+    }),
+    prisma.operationsSession.findFirst({
+      where: {
+        shopId,
+        resourceId,
+        status: { in: ['ACTIVE', 'PAUSED'] },
+        startedAt: { lt: endsAt },
+        OR: [{ finishedAt: null }, { finishedAt: { gt: startsAt } }],
+      },
+      select: { id: true },
+    }),
+    prisma.eventResourceHold.findFirst({
+      where: {
+        shopId,
+        resourceId,
+        status: { in: ['HOLD', 'CONFIRMED'] },
+        startsAt: { lt: endsAt },
+        endsAt: { gt: startsAt },
+        OR: [{ expiresAt: null }, { expiresAt: { gt: now } }],
+      },
+      select: { id: true },
+    }),
+  ]);
+
+  if (maintenance) {
+    throw apiConflictException(
+      ApiDomainErrorCode.RESOURCE_MAINTENANCE,
+      'This unit has a maintenance block that overlaps that time.',
+    );
+  }
+  if (operationsSession) {
+    throw apiConflictException(
+      ApiDomainErrorCode.WALK_IN_OVERLAP,
+      'This unit has an active operations session that overlaps that time.',
+    );
+  }
+  if (eventHold) {
+    throw apiConflictException(
+      ApiDomainErrorCode.RESERVATION_OVERLAP,
+      'This unit has an event hold that overlaps that time.',
+    );
+  }
+}
+
 /** Full check before creating/updating a timed reservation. */
 export async function assertBookingSlotFree(
   prisma: DbClient,
@@ -131,4 +196,5 @@ export async function assertBookingSlotFree(
     excludeReservationId,
   );
   await assertNoWalkInOverlap(prisma, shopId, resourceId, startsAt, endsAt);
+  await assertNoOperationalOverlap(prisma, shopId, resourceId, startsAt, endsAt);
 }
