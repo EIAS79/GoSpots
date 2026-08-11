@@ -31,6 +31,12 @@ export class CreatePublicReviewDto {
   @MaxLength(2000)
   comment?: string;
 
+  /** Optional one-time proof issued from a completed CustomerVisit. */
+  @IsOptional()
+  @IsString()
+  @MaxLength(256)
+  visitProofToken?: string;
+
   @IsBoolean()
   privacyConsentAccepted!: boolean;
 
