@@ -124,7 +124,9 @@ export class OrderingService {
       const row=await tx.venueOrderLine.update({ where: { id: lineId }, data: { canceledAt: now, cancellationReason: dto.reason } });
       await this.cancelPrepLines(tx,shopId,[lineId],actor.sub,dto.reason,now);
       const effective=await tx.venueOrderLine.findMany({where:{shopId,orderId},select:{taxMinor:true,totalMinor:true,canceledAt:true}});
-      await tx.venueOrder.update({where:{id:orderId},data:calculateEffectiveOrderTotals(effective)});
+      const totals=calculateEffectiveOrderTotals(effective);
+      const hasActive=effective.some(candidate=>!candidate.canceledAt);
+      await tx.venueOrder.update({where:{id:orderId},data:{...totals,...(!hasActive?{status:'CANCELED',canceledAt:now}:{})}});
       return row;
     });
     await this.audit.record(actor, { section: 'operations', action: 'order.line.cancel', summary: 'Canceled order line without mutating price snapshot', meta: { orderId, lineId, reason: dto.reason } });
@@ -142,8 +144,8 @@ export class OrderingService {
       const lines=await tx.venueOrderLine.findMany({where:{shopId,orderId:id},select:{id:true,canceledAt:true}});
       const liveLineIds=lines.filter(line=>!line.canceledAt).map(line=>line.id);
       if(liveLineIds.length){
-        await tx.venueOrderLine.updateMany({where:{shopId,orderId:id,id:{in:liveLineIds}},data:{canceledAt:now,cancellationReason:'ORDER_CANCELED'}});
         await this.cancelPrepLines(tx,shopId,liveLineIds,actor.sub,'ORDER_CANCELED',now);
+        await tx.venueOrderLine.updateMany({where:{shopId,orderId:id,id:{in:liveLineIds}},data:{canceledAt:now,cancellationReason:'ORDER_CANCELED'}});
       }
       return tx.venueOrder.update({ where: { id }, data: { status: 'CANCELED', canceledAt: now, subtotalMinor:0, taxMinor:0, totalMinor:0 } });
     });
@@ -153,7 +155,9 @@ export class OrderingService {
 
   private async cancelPrepLines(tx:Prisma.TransactionClient,shopId:string,orderLineIds:string[],actorUserId:string,reason:string,now:Date){
     if(!orderLineIds.length)return;
-    const prepLines=await tx.prepTicketLine.findMany({where:{shopId,orderLineId:{in:orderLineIds},status:{notIn:['COLLECTED','CANCELED']}}});
+    const allPrepLines=await tx.prepTicketLine.findMany({where:{shopId,orderLineId:{in:orderLineIds}}});
+    if(allPrepLines.some(line=>line.status==='COLLECTED'))throw new ConflictException('Collected production cannot be canceled; use the refund/compensation flow.');
+    const prepLines=allPrepLines.filter(line=>line.status!=='CANCELED');
     const ticketIds=[...new Set(prepLines.map(line=>line.ticketId))];
     for(const prepLine of prepLines){
       await tx.prepTicketLine.update({where:{id:prepLine.id},data:{status:'CANCELED',canceledAt:now,cancellationReason:reason}});
