@@ -23,9 +23,8 @@ export class ReliabilityService {
       jwtSecret: this.config.get<string>('JWT_SECRET'),
       opaqueIdentifierSecret: this.config.get<string>('OPAQUE_IDENTIFIER_SECRET'),
       aiProvider: this.config.get<string>('AI_INSIGHTS_PROVIDER'),
-      aiApiKey:
-        this.config.get<string>('AI_INSIGHTS_API_KEY') ??
-        this.config.get<string>('OPENAI_API_KEY'),
+      aiEndpoint: this.config.get<string>('AI_INSIGHTS_ENDPOINT'),
+      aiApiKey: this.config.get<string>('AI_INSIGHTS_API_KEY'),
     });
 
     let database: 'up' | 'down' = 'up';
