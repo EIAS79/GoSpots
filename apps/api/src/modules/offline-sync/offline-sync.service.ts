@@ -378,7 +378,7 @@ export class OfflineSyncService {
         subtotalMinor,
         taxMinor,
         totalMinor: subtotalMinor + taxMinor,
-        createdById,
+        createdById: createdById ?? 'system:offline',
         createdAt: operationDate(dto),
       },
     });
