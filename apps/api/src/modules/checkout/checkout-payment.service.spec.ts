@@ -28,6 +28,9 @@ describe('CheckoutPaymentService', () => {
         status: 'OPEN',
         version: 7,
         currentSettlementId: 'settlement-1',
+        shopOrders: [],
+        playSessions: [],
+        reservations: [],
       },
       snapshots: [
         {
@@ -202,6 +205,9 @@ describe('CheckoutPaymentService', () => {
         status: 'OPEN',
         version: 1,
         currentSettlementId: 'settlement-1',
+        shopOrders: [],
+        playSessions: [],
+        reservations: [],
       },
       snapshots: [
         {
