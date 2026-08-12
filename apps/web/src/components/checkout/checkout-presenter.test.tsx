@@ -12,6 +12,7 @@ import { CheckoutTotals } from "./checkout-totals";
 import { PaymentConfirmation } from "./payment-confirmation";
 import {
   checkoutAccess,
+  checkoutBillBlockers,
   checkoutCloseErrorMessage,
   checkoutFlowStep,
   checkoutOperationalBlockers,
@@ -134,7 +135,7 @@ test("unauthorized staff is read/write denied and payment controls stay disabled
   });
   const html = renderToStaticMarkup(<TenderButtons canWrite={false} />);
   assert.match(html, /disabled/);
-  assert.match(html, /Add at least one non-zero charge/);
+  assert.match(html, /Payment unlocks only when/);
 });
 
 test("payment choices make manual/external boundaries explicit", () => {
@@ -180,7 +181,53 @@ test("cash confirmation states that the amount is posted to the cash shift", () 
   assert.match(html, /currently open cash shift/i);
 });
 
-test("checkout close readiness blocks live orders and play, but not booking payment twice", () => {
+test("final-bill gate blocks mutable orders and running standalone play", () => {
+  const check = guestCheck();
+  check.shopOrders.push({
+    id: "order-12345678",
+    status: "OPEN",
+    total: "20.0000",
+    label: "Table 4 order",
+    reservationFee: null,
+    guestCount: 1,
+    createdAt: check.createdAt,
+    completedAt: null,
+  });
+  check.playSessions.push({
+    id: "play-standalone",
+    status: "ACTIVE",
+    amount: "40.0000",
+    reservationId: null,
+    label: "Pool table 2",
+    startedAt: check.createdAt,
+    endedAt: null,
+    completedAt: null,
+  });
+
+  const blockers = checkoutBillBlockers(check);
+  assert.equal(blockers.length, 2);
+  assert.equal(blockers[0]?.action, "orders");
+  assert.equal(blockers[1]?.action, "sessions");
+});
+
+test("ended standalone play is bill-final before its paid completion stamp", () => {
+  const check = guestCheck();
+  check.playSessions.push({
+    id: "play-ended",
+    status: "ACTIVE",
+    amount: "40.0000",
+    reservationId: null,
+    label: "Pool table 2",
+    startedAt: check.createdAt,
+    endedAt: "2026-08-12T09:00:00.000Z",
+    completedAt: null,
+  });
+
+  assert.equal(checkoutBillBlockers(check).length, 0);
+  assert.equal(checkoutOperationalBlockers(check).length, 0);
+});
+
+test("checkout close readiness blocks live orders and reservation-linked play, but not booking payment twice", () => {
   const check = guestCheck();
   check.shopOrders.push({
     id: "order-12345678",
@@ -199,6 +246,7 @@ test("checkout close readiness blocks live orders and play, but not booking paym
     reservationId: "reservation-1",
     label: "Pool table 2",
     startedAt: check.createdAt,
+    endedAt: null,
     completedAt: null,
   });
   check.reservations.push({
@@ -221,19 +269,43 @@ test("checkout close readiness blocks live orders and play, but not booking paym
 
 test("checkout flow step always tells the operator what to do next", () => {
   assert.equal(
-    checkoutFlowStep({ lineCount: 0, paymentStarted: false, fullyPaid: false, blockerCount: 0 }),
+    checkoutFlowStep({
+      lineCount: 0,
+      paymentStarted: false,
+      fullyPaid: false,
+      blockerCount: 0,
+      billBlockerCount: 0,
+    }),
     1,
   );
   assert.equal(
-    checkoutFlowStep({ lineCount: 3, paymentStarted: false, fullyPaid: false, blockerCount: 0 }),
+    checkoutFlowStep({
+      lineCount: 3,
+      paymentStarted: false,
+      fullyPaid: false,
+      blockerCount: 1,
+      billBlockerCount: 1,
+    }),
     2,
   );
   assert.equal(
-    checkoutFlowStep({ lineCount: 3, paymentStarted: true, fullyPaid: true, blockerCount: 1 }),
+    checkoutFlowStep({
+      lineCount: 3,
+      paymentStarted: false,
+      fullyPaid: false,
+      blockerCount: 0,
+      billBlockerCount: 0,
+    }),
     3,
   );
   assert.equal(
-    checkoutFlowStep({ lineCount: 3, paymentStarted: true, fullyPaid: true, blockerCount: 0 }),
+    checkoutFlowStep({
+      lineCount: 3,
+      paymentStarted: true,
+      fullyPaid: true,
+      blockerCount: 0,
+      billBlockerCount: 0,
+    }),
     4,
   );
 });
