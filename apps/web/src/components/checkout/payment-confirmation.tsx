@@ -7,27 +7,27 @@ import { formatCheckoutMoney } from "./checkout-presenter";
 function methodCopy(method: CheckoutPaymentMethod) {
   if (method === "CASH") {
     return {
-      label: "Cash",
+      label: "Cash received",
       action: "Confirm cash received",
       detail:
-        "Confirm that you physically received this amount. GoSpots will record it in the open cash shift.",
+        "Only continue after you physically receive this amount. GoSpots will record it in the currently open cash shift.",
       icon: Banknote,
     };
   }
   if (method === "MANUAL_CARD") {
     return {
-      label: "Manual card",
-      action: "Record manual card",
+      label: "Card · external terminal",
+      action: "Record approved card payment",
       detail:
-        "Only continue after the external terminal or processor has approved this payment. GoSpots records the payment here; it does not charge the card.",
+        "Only continue after the separate card terminal or processor says the payment is approved. GoSpots records that result; it does not charge the card from this button.",
       icon: CreditCard,
     };
   }
   return {
-    label: "Other",
-    action: "Record other payment",
+    label: "Other payment received",
+    action: "Record received payment",
     detail:
-      "Confirm that this payment was received through another method before recording it in GoSpots.",
+      "Only continue after you have actually received this payment through another method. This button records the result in GoSpots.",
     icon: ShieldCheck,
   };
 }
@@ -67,6 +67,9 @@ export function PaymentConfirmation({
             {formatCheckoutMoney(amount, currency, locale)}
           </p>
           <p className="mt-2 text-xs leading-5 text-zinc-400">{copy.detail}</p>
+          <p className="mt-2 rounded-lg border border-white/7 bg-black/15 px-2.5 py-2 text-[11px] leading-4 text-zinc-500">
+            Recording payment changes the GoSpots balance. It does not automatically end an active play session or open order.
+          </p>
         </div>
       </div>
 
