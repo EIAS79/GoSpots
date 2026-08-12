@@ -9,14 +9,14 @@ const TENDERS: Array<{
   label: string;
   hint: string;
 }> = [
-  { key: "Cash", label: "Cash", hint: "Pay remaining balance in cash" },
+  { key: "Cash", label: "Cash", hint: "Customer pays the remaining balance in cash" },
   {
     key: "ManualCard",
-    label: "Manual card",
-    hint: "Record a card payment without a terminal connection",
+    label: "Card · external terminal",
+    hint: "The card was approved on a separate terminal; record it in GoSpots",
   },
-  { key: "Split", label: "Split", hint: "Split or mix several payments" },
-  { key: "Other", label: "Other", hint: "Record another manual tender" },
+  { key: "Split", label: "Split payment", hint: "Use more than one payment method or split the amount" },
+  { key: "Other", label: "Other received", hint: "Record another payment method that was already received" },
 ];
 
 export function TenderButtons({
@@ -41,9 +41,12 @@ export function TenderButtons({
   return (
     <section className="rounded-2xl border border-white/8 bg-white/[0.025] p-3">
       <div className="mb-2 flex items-center justify-between gap-2">
-        <p className="text-xs font-semibold uppercase tracking-[0.16em] text-zinc-500">
-          Payment
-        </p>
+        <div>
+          <p className="text-xs font-semibold uppercase tracking-[0.16em] text-zinc-500">
+            Take payment
+          </p>
+          <p className="mt-1 text-[11px] text-zinc-600">Choose how the customer actually paid.</p>
+        </div>
         {paymentsEnabled && onlineForFinance ? (
           <span className="rounded-full bg-emerald-400/10 px-2 py-1 text-[10px] font-semibold uppercase tracking-wide text-emerald-300">
             Ready
@@ -70,10 +73,10 @@ export function TenderButtons({
       </div>
       <p className="mt-3 text-xs leading-5 text-zinc-600">
         {!onlineForFinance
-          ? "Payments, final settlement and provider reconciliation are disabled offline. Continue supported check editing, then reconnect to take payment."
+          ? "Payments and final checkout are disabled offline. Reconnect before taking money."
           : paymentsEnabled
-            ? "Cash and manual tenders are recorded inside GoSpots. Manual card does not contact a terminal."
-            : "Add at least one charge before taking payment."}
+            ? "Cash posts to the open cash shift. Card · external terminal only records a card payment that was already approved elsewhere; GoSpots does not charge the card itself."
+            : "Add at least one non-zero charge before taking payment."}
       </p>
     </section>
   );
