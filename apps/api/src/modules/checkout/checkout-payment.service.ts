@@ -58,6 +58,7 @@ const paymentSettlementInclude = {
           status: true,
           reservationId: true,
           label: true,
+          endedAt: true,
           updatedAt: true,
         },
       },
@@ -205,7 +206,9 @@ export class CheckoutPaymentService {
     const successful = settlement.payments.filter(
       (payment) => payment.status === CheckoutPaymentStatus.SUCCESS,
     );
-    const paidAmount = sumMoneyDecimal(...successful.map((payment) => payment.amount));
+    const paidAmount = sumMoneyDecimal(
+      ...successful.map((payment) => payment.amount),
+    );
     return {
       settlementId: settlement.id,
       guestCheckId: settlement.guestCheckId,
@@ -328,7 +331,9 @@ export class CheckoutPaymentService {
       const remainingRows = this.allocator.buildRemainingSnapshots(
         this.allocationInputs(settlement),
       );
-      const byId = new Map(remainingRows.map((row) => [row.id, row] as const));
+      const byId = new Map(
+        remainingRows.map((row) => [row.id, row] as const),
+      );
       const seen = new Set<string>();
       const normalized = dto.allocations.map((allocation) => {
         if (seen.has(allocation.snapshotId)) {
@@ -345,7 +350,9 @@ export class CheckoutPaymentService {
         }
         const amount = roundMoneyDecimal(allocation.amount, 4);
         if (amount.lte(0)) {
-          throw new BadRequestException('Allocation amount must be greater than zero');
+          throw new BadRequestException(
+            'Allocation amount must be greater than zero',
+          );
         }
         if (amount.gt(row.remainingAmountDecimal)) {
           throw new BadRequestException(
