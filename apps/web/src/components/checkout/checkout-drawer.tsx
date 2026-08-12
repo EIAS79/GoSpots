@@ -32,7 +32,8 @@ import {
   voidGuestCheck,
   type GuestCheck,
 } from "@/lib/guest-check-client";
-import { updatePlaySession, updateShopOrder } from "@/lib/finance-client";
+import { updateShopOrder } from "@/lib/finance-client";
+import { updateWalkIn } from "@/lib/play-billing-client";
 import { ChargeGroups } from "./charge-groups";
 import { CheckMergePanel } from "./check-merge-panel";
 import { CheckoutSourcePicker } from "./checkout-source-picker";
@@ -323,7 +324,10 @@ export function CheckoutDrawer({
       if (blocker.sourceType === "SHOP_ORDER") {
         await updateShopOrder(blocker.sourceId, { status: "COMPLETED" });
       } else {
-        await updatePlaySession(blocker.sourceId, { status: "COMPLETED" });
+        // End the timer and freeze the amount, but do not stamp this play as paid.
+        // Checkout V2 writes the paid/revenue stamp from the immutable settlement
+        // when the cashier closes the fully-paid check.
+        await updateWalkIn(blocker.sourceId, { endSession: true });
       }
 
       let currentPaymentState = paymentState;
@@ -587,8 +591,9 @@ export function CheckoutDrawer({
                 <div>
                   <p className="font-bold text-emerald-200">Bill is final</p>
                   <p className="mt-0.5 text-emerald-100/70">
-                    Open orders and standalone play sessions are finished. You can take
-                    payment without the amount changing underneath the cashier.
+                    Open orders are handed off and standalone play timers are ended.
+                    You can now take payment without the amount changing underneath
+                    the cashier.
                   </p>
                 </div>
               </div>
@@ -673,7 +678,9 @@ export function CheckoutDrawer({
                   <div>
                     <p className="text-sm font-bold text-amber-200">Payment locked</p>
                     <p className="mt-1 text-xs leading-5 text-zinc-400">
-                      Finish {operationalBlockers.length} open {operationalBlockers.length === 1 ? "activity" : "activities"} first. GoSpots will then calculate a final, stable bill.
+                      Finish {operationalBlockers.length} open{" "}
+                      {operationalBlockers.length === 1 ? "activity" : "activities"}{" "}
+                      first. GoSpots will then calculate a final, stable bill.
                     </p>
                   </div>
                 </div>
@@ -706,7 +713,7 @@ export function CheckoutDrawer({
                     <p className="mt-1 text-xs leading-5 text-zinc-400">
                       {operationalBlockers.length > 0
                         ? `Do not charge again. Finish ${operationalBlockers.length} open ${operationalBlockers.length === 1 ? "activity" : "activities"}, then close this check.`
-                        : "No balance remains. Close the check to finish the transaction. Booking billing stamps are finalized automatically."}
+                        : "No balance remains. Close the check to finish the transaction. Booking and ended-play billing stamps are finalized automatically."}
                     </p>
                   </div>
                 </div>
@@ -804,7 +811,13 @@ function CheckoutFlowProgress({
     {
       icon: CircleDollarSign,
       label: "3 · Payment",
-      detail: fullyPaid ? "Paid" : paymentStarted ? "Partial" : blockers === 0 && hasCharges ? "Ready" : "Waiting",
+      detail: fullyPaid
+        ? "Paid"
+        : paymentStarted
+          ? "Partial"
+          : blockers === 0 && hasCharges
+            ? "Ready"
+            : "Waiting",
       done: fullyPaid,
       active: hasCharges && blockers === 0 && !fullyPaid,
     },
@@ -818,7 +831,10 @@ function CheckoutFlowProgress({
   ];
 
   return (
-    <section className="grid gap-2 sm:grid-cols-2 xl:grid-cols-4" aria-label="Checkout workflow">
+    <section
+      className="grid gap-2 sm:grid-cols-2 xl:grid-cols-4"
+      aria-label="Checkout workflow"
+    >
       {steps.map((step) => {
         const Icon = step.icon;
         return (
@@ -874,12 +890,14 @@ function BillFinalizationPanel({
           <LockKeyhole className="mt-0.5 h-4 w-4 shrink-0 text-amber-300" />
           <div>
             <p className="text-sm font-bold text-amber-100">
-              {recoveryMode ? "Finish activity — do not charge again" : "Finalize the bill before payment"}
+              {recoveryMode
+                ? "Finish activity — do not charge again"
+                : "Finalize the bill before payment"}
             </p>
             <p className="mt-1 text-xs leading-5 text-zinc-400">
               {recoveryMode
                 ? "These items were left open by the previous checkout flow. Closing them here does not create another checkout payment."
-                : "GoSpots blocks payment while an order or play session can still change the final amount."}
+                : "GoSpots blocks payment while an order or play timer can still change the final amount."}
             </p>
           </div>
         </div>
@@ -905,7 +923,7 @@ function BillFinalizationPanel({
                   <p className="mt-0.5 text-xs text-zinc-500">
                     {isOrder
                       ? `Order is ${blocker.status.toLowerCase()} · confirm it was handed off`
-                      : `Play session is ${blocker.status.toLowerCase()} · stop/finalize the session`}
+                      : `Play timer is ${blocker.status.toLowerCase()} · end the timer to freeze the bill`}
                   </p>
                 </div>
               </div>
@@ -923,7 +941,7 @@ function BillFinalizationPanel({
                 ) : isOrder ? (
                   "Mark handed off"
                 ) : (
-                  "Finish session"
+                  "End session"
                 )}
               </button>
             </div>
