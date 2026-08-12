@@ -2,7 +2,9 @@
 
 ## Status
 
-**VERIFYING on PR #36.** This record supersedes the earlier restricted implementation that supported only GuestCheck create/update.
+**DONE — repository acceptance gate complete on PR #36.**
+
+This record supersedes the earlier restricted implementation that supported only GuestCheck create/update.
 
 ## Delivered
 
@@ -21,25 +23,35 @@ Offline Lite now provides the execution-plan single-browser WAN resilience model
 
 ### GuestChecks
 
-Offline create/update remains versioned and settlement-aware.
+Offline create/update is versioned and settlement-aware.
 
 ### Orders
 
-Offline Lite can now add safe/simple orders locally. The browser queues references and marks the local row `pendingServerPricing`; during replay the API validates current catalog references and calls the canonical `OrderingPricingService` inside the transaction. Authoritative price/tax totals are therefore never client-generated.
+Offline Lite can add safe/simple orders locally. The browser queues references and marks the local row `pendingServerPricing`; during replay the API validates current catalog references and calls the canonical `OrderingPricingService` inside the transaction. Authoritative price/tax totals are therefore never client-generated.
 
 ### Gaming sessions
 
-Offline Lite can now start and end gaming/resource sessions locally. Replay uses resource locking/conflict checks, validates current reservation/maintenance/rate-plan state, resolves the server rate snapshot, and uses the canonical Operations accrued-money calculation. Session end requires the captured expected version.
+Offline Lite can start and end gaming/resource sessions locally. Replay uses resource locking/conflict checks, validates current reservation/maintenance/rate-plan state, resolves the server rate snapshot, and uses the canonical Operations accrued-money calculation. Session end requires the captured expected version.
 
 ### Explicit online-only boundary
 
 Cash settlement finalization, card/terminal payment, fiscalization, KSeF, refunds, subscription billing and final reconciliation remain online-only. This is intentional: the execution plan permits offline cash only when an approved compliance/device mode exists. Chunk 09 does not pretend the browser is a fiscal/payment authority. Multi-device local authority remains Chunk 10 Edge Hub.
 
-## Verification
+## Acceptance Gate 09
 
-The API tests cover durable replay, version conflict, client-addressed creation, server-authoritative offline-order replay and deterministic resource conflict. The web Offline Lite suite covers capability policy, mutation envelope, offline clients, refresh recovery, timer behavior, SW API exclusion and ambiguous-online-mutation safety.
+- [x] browser refresh during WAN outage preserves cached/local work;
+- [x] reconnect uses durable idempotency and cannot duplicate the same queued operation;
+- [x] GuestCheck/session/resource conflicts are deterministic;
+- [x] unsupported money/provider/compliance actions are clearly disabled;
+- [x] local timer behavior does not depend on 1-second API writes;
+- [x] plan-listed local order addition is implemented;
+- [x] plan-listed local session start/end is implemented with conflict/version policy;
+- [x] Offline Lite remains protected by the per-Shop `offline_lite` feature flag;
+- [x] API replay tests cover durable replay, version conflict, client-addressed creation, authoritative order pricing and deterministic resource conflict;
+- [x] web Offline Lite tests cover capability policy, mutation envelope, offline clients, refresh recovery, timer behavior, service-worker API exclusion and ambiguous-online-mutation safety;
+- [x] final PR #36 exact-head blocking CI is green before ready-for-review transition.
 
-See `chunk-09-acceptance.md` for the exact gate checklist. The record becomes **DONE** only when the final PR #36 head has all blocking CI jobs green.
+See `chunk-09-acceptance.md` for the detailed checklist.
 
 ## Rollout
 

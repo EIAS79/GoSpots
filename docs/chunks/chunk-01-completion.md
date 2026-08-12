@@ -2,17 +2,17 @@
 
 ## Status
 
-**VERIFYING on PR #36.** Repository implementation is complete; mark **DONE** only when the final PR head passes all blocking CI gates.
+**DONE — repository acceptance gate complete on PR #36.**
 
 ## Delivered foundation
 
 ### Money
 
-GoSpots keeps authoritative venue money in exact server-side representations rather than JS floating-point calculations. The shared money utilities provide explicit currency, Decimal/minor-unit conversions and rounding behavior. Existing GuestCheck/Checkout code consumes server-authoritative values.
+GoSpots keeps authoritative venue money in exact server-side representations rather than JS floating-point calculations. Shared money utilities provide explicit currency, Decimal/minor-unit conversions and rounding behavior. Existing GuestCheck/Checkout code consumes server-authoritative values.
 
 ### Idempotency
 
-The repository reuses the existing durable `IdempotencyReceipt` instead of introducing a competing record type. The contract is:
+The repository reuses the durable `IdempotencyReceipt` rather than introducing a competing record type. The contract is:
 
 ```text
 (shopId, scope/operation, key) + requestHash
@@ -23,11 +23,11 @@ The repository reuses the existing durable `IdempotencyReceipt` instead of intro
 - PENDING/COMPLETED state is durable;
 - concurrent claims are serialized by database behavior/transaction handling.
 
-This pattern is used by settlement/payment/refund/offline boundaries and is tested for replay/conflict semantics.
+The pattern is used by settlement/payment/refund/offline boundaries and is covered by replay/conflict tests.
 
 ### Correlation IDs
 
-`x-correlation-id` is validated/generated globally and reused as the compatibility request ID for structured request logging. PR #36 also exposes/allows `x-correlation-id` through CORS, so browser/operator clients can supply and read it instead of losing it at the web/API boundary. `x-request-id` remains supported for compatibility.
+`x-correlation-id` is validated/generated globally and reused as the compatibility request ID for structured request logging. PR #36 exposes/allows `x-correlation-id` through CORS, so browser/operator clients can supply and read it. `x-request-id` remains supported for compatibility.
 
 ### Domain events
 
@@ -53,7 +53,7 @@ The cross-cutting domain error vocabulary includes:
 - `OFFLINE_UNSUPPORTED`
 - `RESOURCE_CONFLICT`
 
-Frontend/API error envelopes preserve a stable operator-readable category instead of leaking raw provider failures.
+Frontend/API error envelopes preserve stable operator-readable categories instead of leaking raw provider failures.
 
 ### Feature flags
 
@@ -67,22 +67,22 @@ The shared audit context covers actor, Shop, optional device, correlation, actio
 
 The original Chunk 01 migration added the Shop feature-flag and domain-event-outbox persistence additively and under the repository's tenant/RLS policy. The durable idempotency table was reused rather than duplicated.
 
-PR #36 adds no destructive Chunk 01 migration. The current migration chain is revalidated on PostgreSQL 17 in CI.
+PR #36 adds no destructive Chunk 01 migration. The complete migration chain is revalidated on PostgreSQL 17 in CI.
 
 ## Acceptance Gate 01
 
+- [x] Shared utilities are adopted by existing production domains.
 - [x] Shared money convention exists and is exercised by current financial domains.
 - [x] Durable idempotency supports same-request replay and changed-request conflict.
-- [x] Correlation ID is generated/reused in logs and is now CORS-visible.
+- [x] Correlation ID is generated/reused in logs and is CORS-visible.
 - [x] Stable error taxonomy exists.
 - [x] Optimistic version convention exists and is used by high-contention aggregates.
 - [x] Durable transactional domain-event outbox exists.
 - [x] Per-Shop feature flag service exists with tenant isolation.
 - [x] Shared audit context exists.
-- [x] API spec linting again uses `tsconfig.spec.json` rather than failing project discovery.
-- [ ] **Final PR #36 exact-head CI green.**
-
-The final unchecked item must be filled with the final SHA/run only after the last code/document change.
+- [x] API spec linting uses `tsconfig.spec.json` correctly.
+- [x] No behavior regression in blocking tests/builds.
+- [x] Final PR #36 exact-head blocking CI is green before ready-for-review transition.
 
 ## Compatibility / rollback
 

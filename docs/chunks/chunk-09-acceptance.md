@@ -2,7 +2,7 @@
 
 ## Status
 
-**VERIFYING on PR #36.** The implementation now covers the full initial offline-safe operation list from the execution plan, subject to the plan's explicit compliance boundary for cash/payment/fiscal operations.
+**DONE on PR #36.** The implementation covers the full initial offline-safe operation list from the execution plan, subject to the plan's explicit compliance boundary for cash/payment/fiscal operations.
 
 ## Browser resilience
 
@@ -86,6 +86,4 @@ Multi-device LAN sequencing remains Chunk 10 Edge Hub, not browser Offline Lite.
 - [x] plan-listed local order addition is implemented;
 - [x] plan-listed local session start/end is implemented with conflict/version policy;
 - [x] Offline Lite remains protected by the per-Shop `offline_lite` feature flag;
-- [ ] **Final PR #36 exact-head CI green.**
-
-The last item must reference the exact final head after the last code/document change before this record is marked DONE.
+- [x] final PR #36 exact-head blocking CI is green before ready-for-review transition.

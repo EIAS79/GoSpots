@@ -2,9 +2,11 @@
 
 ## Status
 
-**Engineering implementation complete behind feature flags. Production compliance activation is not authorized by this record.**
+**ENGINEERING DONE — EXTERNAL COMPLIANCE/PRODUCTION RELEASE GATE REQUIRED.**
 
 Chunk 08 implements the Poland-specific compliance boundary without changing existing checkout/tender authority. The Poland adapter remains disabled unless the Shop is explicitly enabled with `fiscal_pl`; KSeF additionally requires `ksef_pl` and the environment kill switch `KSEF_ENABLED=true`.
+
+This engineering record is not legal certification. The execution plan explicitly requires external legal/accounting review before a marketing compliance claim.
 
 ## Delivered
 
@@ -38,7 +40,7 @@ Chunk 08 implements the Poland-specific compliance boundary without changing exi
 
 - Current TEST/DEMO/PRD environment routing.
 - Official challenge + KSeF-token authentication flow.
-- Current public certificate discovery through `/security/public-key-certificates` with rotation-aware `publicKeyId` selection.
+- Public certificate discovery through `/security/public-key-certificates` with rotation-aware `publicKeyId` selection.
 - RSA-OAEP SHA-256 token/key encryption and AES-256-CBC invoice session payload encryption.
 - FA(3) standard domestic B2B VAT invoice builder for the supported pilot scope.
 - Online session open, invoice submission, status reconciliation, KSeF number persistence and UPO proof retrieval when available.
@@ -61,18 +63,36 @@ The Chunk 08 test suite covers, among other cases:
 - refusal to guess an unmapped tax rate;
 - immutable settlement-derived line snapshots;
 - duplicate KSeF/fiscal submission prevention;
-- `UNKNOWN` -> reconcile-only behavior;
+- `UNKNOWN` → reconcile-only behavior;
 - KSeF cryptographic primitives and FA(3) generation;
 - durable proof/identifier behavior.
 
-The repository CI gate requires:
+PR #36 repository verification uses the current baseline:
 
-1. API Jest suite;
+1. full API Jest suite;
 2. API TypeScript/Nest build;
-3. web Checkout UI tests + typecheck + build;
-4. fresh PostgreSQL 16 `prisma migrate deploy`, `migrate status`, and `prisma validate`.
+3. web checkout + Offline Lite tests, typecheck and build;
+4. Edge Hub tests/build;
+5. fresh PostgreSQL **17** `prisma migrate deploy`, `migrate status`, and `prisma validate`.
 
-The exact final CI run/SHA is recorded on PR #21 immediately before merge; post-merge `main` CI must also be green before Chunk 09 begins.
+## Execution-plan Gate 08
+
+Repository-verifiable engineering items:
+
+- [x] successful paid settlement can produce an immutable fiscal document;
+- [x] duplicate fiscal submission is prevented;
+- [x] retry/reconciliation behavior is safe for ambiguous outcomes;
+- [x] provider/compliance failure is operator-visible;
+- [x] paid-settlement-to-fiscal reconciliation exists;
+- [x] KSeF path is implemented and covered by automated tests for the supported pilot scope.
+
+External production-release evidence required by the plan:
+
+- [ ] live KSeF TEST/DEMO credential pilot completed with the intended credential model;
+- [ ] certified fiscal provider/device pilot completed for target receipt scenarios;
+- [ ] Polish tax/accounting/legal review signed off for the target venue/payment/tax scenarios.
+
+The unchecked external items do not block merging the engineering implementation behind disabled feature flags. They do block broad production activation and any claim that GoSpots is legally certified/compliant for all Polish fiscal/KSeF scenarios.
 
 ## Rollout
 
@@ -90,12 +110,4 @@ The exact final CI run/SHA is recorded on PR #21 immediately before merge; post-
 - Never delete legal/compliance documents, requests, events or proofs as rollback.
 - Reconcile all outstanding `SUBMITTED`/`UNKNOWN` operations before re-enabling.
 
-See `docs/operations/poland-compliance-ksef.md` for the operational runbook.
-
-## External production release gate
-
-This engineering completion record is **not legal certification** and must not be used to market GoSpots as broadly compliant with Polish fiscal/KSeF obligations.
-
-Before production marketing/activation for customers, obtain documented Polish tax/accounting/legal review of the target business scenarios, VAT mappings, FA(3) coverage, correction/refund handling, certified fiscal provider/device obligations, retention, audit and operator procedures. Unsupported legal/tax cases remain blocked rather than guessed.
-
-A live KSeF TEST/DEMO credential pilot and certified fiscal-provider/device pilot are operational release evidence, not something repository CI can fabricate without the external credentials/devices. Keep the production flags off until those pilot checks and the external review are complete.
+See `docs/operations/poland-compliance-ksef.md` and `chunk-08-acceptance.md`.
