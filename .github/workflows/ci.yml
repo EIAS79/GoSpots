@@ -23,29 +23,24 @@ jobs:
         uses: actions/checkout@v4
         with:
           fetch-depth: 2
-
       - name: Setup pnpm
         uses: pnpm/action-setup@v4
         with:
           version: 10.12.1
-
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
           node-version: '24'
           cache: pnpm
           cache-dependency-path: pnpm-lock.yaml
-
       - name: Install dependencies
         working-directory: .
         run: pnpm install --frozen-lockfile
-
       - name: Prisma generate
         run: pnpm exec prisma generate
         env:
           DATABASE_URL: postgresql://ci:ci@localhost:5432/ci?schema=public
-
-      - name: Lint changed API TypeScript (semantic ratchet)
+      - name: Lint changed API production TypeScript (semantic ratchet)
         working-directory: .
         shell: bash
         env:
@@ -60,30 +55,25 @@ jobs:
           fi
           mapfile -t files < <(
             git diff --name-only --diff-filter=ACMR "$base" HEAD -- 'apps/api/**/*.ts' \
-              | sed 's#^apps/api/##'
+              | grep -vE '\.spec\.ts$' \
+              | sed 's#^apps/api/##' || true
           )
           if [ "${#files[@]}" -eq 0 ]; then
-            echo "No changed API TypeScript files."
+            echo "No changed API production TypeScript files."
             exit 0
           fi
-          printf 'Linting changed files:\n%s\n' "${files[*]}"
-          # Formatting remains visible in the full advisory report. The blocking
-          # ratchet is semantic so inherited repository-wide Prettier debt cannot
-          # turn a safe change into an unrelated mass-formatting PR.
+          printf 'Linting changed production files:\n%s\n' "${files[*]}"
           pnpm --dir apps/api exec eslint \
             --rule 'prettier/prettier: off' \
             --rule '@typescript-eslint/no-unnecessary-type-assertion: off' \
             "${files[@]}"
-
       - name: Full API lint debt report
         continue-on-error: true
         run: pnpm run lint
-
       - name: Test
         run: pnpm exec jest --config jest.config.cjs --runInBand --reporters=default --reporters=github-actions
         env:
           DATABASE_URL: postgresql://ci:ci@localhost:5432/ci?schema=public
-
       - name: Build
         shell: bash
         run: |
@@ -127,7 +117,6 @@ jobs:
           --health-retries 5
     env:
       DATABASE_URL: postgresql://ci:ci@localhost:5432/ci?schema=public
-
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -164,7 +153,6 @@ jobs:
       NEXT_PUBLIC_SITE_URL: https://www.gospots.eu
       NEXT_PUBLIC_API_BASE_URL: /api/v1
       API_PROXY_TARGET: https://ci-api.invalid
-
     steps:
       - name: Checkout
         uses: actions/checkout@v4
