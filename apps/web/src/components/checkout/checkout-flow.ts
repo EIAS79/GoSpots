@@ -6,6 +6,7 @@ import type {
 
 export type OperationalCheckoutBlocker = GuestCheckCloseBlocker & {
   sourceType: "SHOP_ORDER" | "PLAY_SESSION";
+  reason: "ORDER_OPEN" | "PLAY_SESSION_OPEN";
 };
 
 export function operationalCheckoutBlockers(
@@ -13,8 +14,7 @@ export function operationalCheckoutBlockers(
 ): OperationalCheckoutBlocker[] {
   const fromServer = check.closeReadiness?.blockers?.filter(
     (blocker): blocker is OperationalCheckoutBlocker =>
-      blocker.sourceType === "SHOP_ORDER" ||
-      blocker.sourceType === "PLAY_SESSION",
+      blocker.reason === "ORDER_OPEN" || blocker.reason === "PLAY_SESSION_OPEN",
   );
   if (fromServer) return fromServer;
 
@@ -32,6 +32,7 @@ export function operationalCheckoutBlockers(
   for (const session of check.playSessions) {
     if (session.reservationId) continue;
     if (session.status === "COMPLETED" || session.status === "CANCELED") continue;
+    if (session.endedAt) continue;
     blockers.push({
       sourceType: "PLAY_SESSION",
       sourceId: session.id,
@@ -60,7 +61,7 @@ export function checkoutErrorMessage(
       const stage = typeof details?.stage === "string" ? details.stage : null;
       return stage === "FINALIZE_BILL"
         ? "Finish the open order or play session before taking payment. This keeps the final amount from changing after payment."
-        : "This check still has an open order or play session. Finish that activity, refresh, then close the check.";
+        : "This check still has activity that needs attention. Finish the open order or end the play session, refresh, then close the check.";
     }
     if (error.code === "GUEST_CHECK_PAYMENT_INCOMPLETE") {
       return "Payment is not complete yet. Collect the remaining balance before closing the check.";
@@ -75,7 +76,7 @@ export function checkoutErrorMessage(
 
   const message = error instanceof Error ? error.message.trim() : "";
   if (/attached children|children are closed/i.test(message)) {
-    return "This check still has an open order or play session. Finish that activity, refresh, then close the check.";
+    return "This check still has activity that needs attention. Finish the open order or end the play session, refresh, then close the check.";
   }
   if (/settlement is stale|guest check changed/i.test(message)) {
     return "Checkout changed in another screen. Refresh this check and try again.";
