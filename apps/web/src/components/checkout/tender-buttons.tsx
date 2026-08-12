@@ -9,14 +9,14 @@ const TENDERS: Array<{
   label: string;
   hint: string;
 }> = [
-  { key: "Cash", label: "Cash", hint: "Pay remaining balance in cash" },
+  { key: "Cash", label: "Cash", hint: "Record the remaining balance as cash" },
   {
     key: "ManualCard",
-    label: "Manual card",
-    hint: "Record a card payment without a terminal connection",
+    label: "Card · manual",
+    hint: "Record a card payment that was already taken on an external terminal",
   },
-  { key: "Split", label: "Split", hint: "Split or mix several payments" },
-  { key: "Other", label: "Other", hint: "Record another manual tender" },
+  { key: "Split", label: "Split / mixed", hint: "Split the balance across several payments" },
+  { key: "Other", label: "Other", hint: "Record another manual payment method" },
 ];
 
 export function TenderButtons({
@@ -41,12 +41,15 @@ export function TenderButtons({
   return (
     <section className="rounded-2xl border border-white/8 bg-white/[0.025] p-3">
       <div className="mb-2 flex items-center justify-between gap-2">
-        <p className="text-xs font-semibold uppercase tracking-[0.16em] text-zinc-500">
-          Payment
-        </p>
+        <div>
+          <p className="text-xs font-semibold uppercase tracking-[0.16em] text-zinc-500">
+            Take payment
+          </p>
+          <p className="mt-1 text-[11px] text-zinc-600">Choose how the guest paid.</p>
+        </div>
         {paymentsEnabled && onlineForFinance ? (
           <span className="rounded-full bg-emerald-400/10 px-2 py-1 text-[10px] font-semibold uppercase tracking-wide text-emerald-300">
-            Ready
+            Bill final
           </span>
         ) : !onlineForFinance ? (
           <span className="rounded-full bg-amber-400/10 px-2 py-1 text-[10px] font-semibold uppercase tracking-wide text-amber-300">
@@ -70,10 +73,10 @@ export function TenderButtons({
       </div>
       <p className="mt-3 text-xs leading-5 text-zinc-600">
         {!onlineForFinance
-          ? "Payments, final settlement and provider reconciliation are disabled offline. Continue supported check editing, then reconnect to take payment."
+          ? "Payments and final settlement are disabled offline. Reconnect before collecting payment in GoSpots."
           : paymentsEnabled
-            ? "Cash and manual tenders are recorded inside GoSpots. Manual card does not contact a terminal."
-            : "Add at least one charge before taking payment."}
+            ? "Cash is recorded in the active drawer. Card · manual only records a payment already taken on an external terminal; GoSpots does not contact the terminal."
+            : "Payment unlocks after the bill has charges and all mutable orders/play sessions are finalized."}
       </p>
     </section>
   );
