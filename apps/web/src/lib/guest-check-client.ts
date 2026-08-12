@@ -19,6 +19,19 @@ export type GuestCheckTotalLine = {
   reason?: string;
 };
 
+export type GuestCheckCloseBlocker = {
+  sourceType: "SHOP_ORDER" | "PLAY_SESSION" | "RESERVATION";
+  sourceId: string;
+  status: string;
+  label: string;
+  reason: "ORDER_OPEN" | "PLAY_SESSION_OPEN" | "RESERVATION_UNBILLED";
+};
+
+export type GuestCheckCloseReadiness = {
+  ready: boolean;
+  blockers: GuestCheckCloseBlocker[];
+};
+
 export type GuestCheck = {
   id: string;
   shopId: string;
@@ -73,6 +86,7 @@ export type GuestCheck = {
   playTotal: string;
   reservationTotal: string;
   totalLines: GuestCheckTotalLine[];
+  closeReadiness: GuestCheckCloseReadiness;
 };
 
 export type GuestCheckListResponse = {
@@ -159,6 +173,7 @@ function localCheck(body: GuestCheckMutation): GuestCheck {
     playTotal: "0.0000",
     reservationTotal: "0.0000",
     totalLines: [],
+    closeReadiness: { ready: true, blockers: [] },
   };
 }
 
