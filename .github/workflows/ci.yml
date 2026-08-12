@@ -211,7 +211,7 @@ jobs:
           set -o pipefail
           pnpm --dir apps/api exec prisma migrate diff \
             --from-url "$DATABASE_URL" \
-            --to-schema-datamodel apps/api/prisma/schema.prisma \
+            --to-schema-datamodel prisma/schema.prisma \
             --script | tee /tmp/phase1-schema-drift.sql
           {
             echo '### Prisma schema / migration drift report'
