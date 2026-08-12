@@ -57,6 +57,7 @@ const checkoutCheckInclude = {
       amount: true,
       currency: true,
       billingDiscountPercent: true,
+      endedAt: true,
       completedAt: true,
       reservationId: true,
     },
@@ -137,7 +138,9 @@ export class CheckoutService {
     }
   }
 
-  private assertBillFinalized(check: Prisma.GuestCheckGetPayload<{ include: typeof checkoutCheckInclude }>) {
+  private assertBillFinalized(
+    check: Prisma.GuestCheckGetPayload<{ include: typeof checkoutCheckInclude }>,
+  ) {
     const readiness = guestCheckOperationalReadiness(check);
     if (readiness.ready) return;
     throw apiConflictException(
