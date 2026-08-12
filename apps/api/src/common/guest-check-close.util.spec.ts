@@ -1,4 +1,7 @@
-import { guestCheckCloseReadiness } from './guest-check-close.util';
+import {
+  guestCheckCloseReadiness,
+  guestCheckOperationalReadiness,
+} from './guest-check-close.util';
 
 function baseCheck() {
   return {
@@ -8,6 +11,8 @@ function baseCheck() {
       status: string;
       reservationId?: string | null;
       label?: string | null;
+      endedAt?: Date | null;
+      completedAt?: Date | null;
     }>,
     reservations: [] as Array<{
       id: string;
@@ -43,8 +48,17 @@ describe('guest check close readiness', () => {
 
   it('returns structured blockers for open order, play, and unpaid resource booking', () => {
     const check = baseCheck();
-    check.shopOrders.push({ id: 'order-12345678', status: 'PENDING', label: 'Table 4' });
-    check.playSessions.push({ id: 'play-12345678', status: 'ACTIVE', reservationId: null });
+    check.shopOrders.push({
+      id: 'order-12345678',
+      status: 'PENDING',
+      label: 'Table 4',
+    });
+    check.playSessions.push({
+      id: 'play-12345678',
+      status: 'ACTIVE',
+      reservationId: null,
+      endedAt: null,
+    });
     check.reservations.push({
       id: 'res-12345678',
       status: 'CHECKED_IN',
@@ -67,6 +81,31 @@ describe('guest check close readiness', () => {
     expect(result.blockers[2]).toEqual(
       expect.objectContaining({ label: 'Alex', sourceType: 'RESERVATION' }),
     );
+  });
+
+  it('treats an ended standalone play timer as bill-final but not yet paid/closed', () => {
+    const check = baseCheck();
+    check.playSessions.push({
+      id: 'play-ended',
+      status: 'ACTIVE',
+      reservationId: null,
+      endedAt: new Date('2026-08-12T09:00:00Z'),
+      completedAt: null,
+    });
+
+    expect(guestCheckOperationalReadiness(check)).toEqual({
+      ready: true,
+      blockers: [],
+    });
+    expect(guestCheckCloseReadiness(check)).toEqual({
+      ready: false,
+      blockers: [
+        expect.objectContaining({
+          sourceId: 'play-ended',
+          reason: 'PLAY_SESSION_UNPAID',
+        }),
+      ],
+    });
   });
 
   it('does not double-block reservation-linked play or zero-charge non-resource bookings', () => {
