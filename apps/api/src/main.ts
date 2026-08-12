@@ -4,6 +4,7 @@ import { NestFactory } from '@nestjs/core';
 import { NestExpressApplication } from '@nestjs/platform-express';
 import { DocumentBuilder, SwaggerModule } from '@nestjs/swagger';
 import cookieParser from 'cookie-parser';
+import type { Response } from 'express';
 import helmet from 'helmet';
 import { join } from 'path';
 import { AppModule } from './app.module';
@@ -84,7 +85,7 @@ async function bootstrap() {
       prefix: '/api/v1/uploads/',
       /** No directory index / listing — only named files under uploads/. */
       index: false,
-      setHeaders(res) {
+      setHeaders(res: Response) {
         res.setHeader('Cross-Origin-Resource-Policy', 'cross-origin');
       },
     });
@@ -166,4 +167,4 @@ async function bootstrap() {
   await app.listen(port);
 }
 
-bootstrap();
+void bootstrap();
