@@ -1,4 +1,5 @@
 import type { CheckoutChargeLine } from "@/lib/checkout-client";
+import type { GuestCheck } from "@/lib/guest-check-client";
 
 export type CheckoutGroupKey = "PLAY" | "FOOD_DRINK" | "BOOKING" | "OTHER";
 export type CheckoutRole = "OWNER" | "MANAGER" | "STAFF" | undefined;
@@ -9,6 +10,15 @@ export type CheckoutIssueKind =
   | "disabled"
   | "unauthorized"
   | "error";
+
+export type CheckoutOperationalBlocker = {
+  kind: "ORDER" | "PLAY_SESSION";
+  id: string;
+  label: string;
+  status: string;
+  action: "orders" | "sessions";
+  message: string;
+};
 
 export const CHECKOUT_GROUPS: ReadonlyArray<{
   key: CheckoutGroupKey;
@@ -62,11 +72,84 @@ export function checkoutAccess(role: CheckoutRole, permissions: string) {
   } as const;
 }
 
+export function checkoutOperationalBlockers(
+  check: GuestCheck,
+): CheckoutOperationalBlocker[] {
+  const blockers: CheckoutOperationalBlocker[] = [];
+
+  for (const order of check.shopOrders) {
+    if (order.status === "COMPLETED" || order.status === "CANCELED") continue;
+    const label = order.label?.trim() || `Order ${order.id.slice(0, 8)}`;
+    blockers.push({
+      kind: "ORDER",
+      id: order.id,
+      label,
+      status: order.status,
+      action: "orders",
+      message: `${label} is still ${order.status.toLowerCase()}. Complete or cancel the order before closing this check.`,
+    });
+  }
+
+  for (const play of check.playSessions) {
+    if (play.status === "COMPLETED" || play.status === "CANCELED") continue;
+    const label = play.label?.trim() || `Play session ${play.id.slice(0, 8)}`;
+    blockers.push({
+      kind: "PLAY_SESSION",
+      id: play.id,
+      label,
+      status: play.status,
+      action: "sessions",
+      message: `${label} is still ${play.status.toLowerCase()}. End or cancel the play session before closing this check.`,
+    });
+  }
+
+  return blockers;
+}
+
+export function checkoutFlowStep(input: {
+  lineCount: number;
+  paymentStarted: boolean;
+  fullyPaid: boolean;
+  blockerCount: number;
+}): 1 | 2 | 3 | 4 {
+  if (input.lineCount === 0) return 1;
+  if (!input.fullyPaid) return 2;
+  if (input.blockerCount > 0) return 3;
+  return 4;
+}
+
 type ErrorLike = {
   status?: unknown;
   code?: unknown;
   message?: unknown;
+  details?: unknown;
 };
+
+export function checkoutCloseErrorMessage(error: unknown): string {
+  const value =
+    error && typeof error === "object" ? (error as ErrorLike) : undefined;
+
+  const details = value?.details;
+  if (details && typeof details === "object") {
+    const body = details as Record<string, unknown>;
+    if (Array.isArray(body.blockers) && body.blockers.length > 0) {
+      return "Payment is complete, but a live order or play session is still open. Finish it first, then close the check.";
+    }
+    if (typeof body.message === "string" && body.message.trim()) {
+      return body.message;
+    }
+  }
+
+  if (typeof value?.message === "string" && value.message.trim()) {
+    const message = value.message;
+    if (message.toLowerCase().includes("attached children")) {
+      return "Payment is complete, but a live order or play session is still open. Finish it first, then close the check.";
+    }
+    return message;
+  }
+
+  return "The check could not be closed. Refresh the checkout and try again.";
+}
 
 export function classifyCheckoutError(error: unknown): CheckoutIssueKind {
   const value =

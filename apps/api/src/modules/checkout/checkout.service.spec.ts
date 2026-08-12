@@ -131,6 +131,7 @@ function buildService(options: { checkVersion?: number; flag?: boolean } = {}) {
   const states = {
     assertGuestCheckCanCalculate: jest.fn(),
     initialCalculatedState: jest.fn().mockReturnValue('CALCULATED'),
+    assertTransition: jest.fn(),
   } as any;
   const outbox = {
     enqueue: jest.fn().mockResolvedValue({ id: 'event-1' }),
@@ -150,6 +151,93 @@ function buildService(options: { checkVersion?: number; flag?: boolean } = {}) {
     tx,
     flags,
     calculator,
+    states,
+    outbox,
+    audit,
+  };
+}
+
+function buildCloseService(options: {
+  settlementState?: 'CALCULATED' | 'PARTIALLY_PAID' | 'PAID' | 'CLOSED' | 'VOID';
+  total?: string;
+  amountDue?: string;
+  orderStatus?: string;
+  playStatus?: string;
+  reservationLinkedPlay?: boolean;
+} = {}) {
+  const check = {
+    id: 'check-1',
+    shopId: 'shop-a',
+    status: 'OPEN',
+    version: 8,
+    currentSettlementId: 'settlement-1',
+    shopOrders:
+      options.orderStatus == null
+        ? []
+        : [
+            {
+              id: 'order-12345678',
+              status: options.orderStatus,
+              label: 'Table 4 order',
+            },
+          ],
+    playSessions:
+      options.playStatus == null
+        ? []
+        : [
+            {
+              id: 'play-12345678',
+              status: options.playStatus,
+              label: 'Pool table 2',
+              reservationId: options.reservationLinkedPlay
+                ? 'reservation-1'
+                : null,
+            },
+          ],
+  };
+
+  const settlement = {
+    id: 'settlement-1',
+    shopId: 'shop-a',
+    guestCheckId: 'check-1',
+    state: options.settlementState ?? 'PAID',
+    total: new Prisma.Decimal(options.total ?? '100'),
+    amountDue: new Prisma.Decimal(options.amountDue ?? '0'),
+    currency: 'PLN',
+  } as any;
+
+  const tx = {
+    $queryRaw: jest.fn().mockResolvedValue([{ id: 'check-1' }]),
+    guestCheck: {
+      findFirst: jest.fn().mockResolvedValue(check),
+      updateMany: jest.fn().mockResolvedValue({ count: 1 }),
+    },
+    checkSettlement: {
+      findFirst: jest.fn().mockResolvedValue(settlement),
+      update: jest.fn().mockResolvedValue({ ...settlement, state: 'CLOSED' }),
+    },
+  };
+  const prisma = {
+    $transaction: jest.fn(async (fn: (client: any) => unknown) => fn(tx)),
+  } as any;
+  const flags = { isFeatureEnabled: jest.fn().mockResolvedValue(true) } as any;
+  const calculator = {} as any;
+  const states = {
+    assertTransition: jest.fn(),
+  } as any;
+  const outbox = { enqueue: jest.fn().mockResolvedValue({ id: 'event-1' }) } as any;
+  const audit = { record: jest.fn().mockResolvedValue({}) } as any;
+
+  return {
+    service: new CheckoutService(
+      prisma,
+      flags,
+      calculator,
+      states,
+      outbox,
+      audit,
+    ),
+    tx,
     states,
     outbox,
     audit,
@@ -249,5 +337,112 @@ describe('CheckoutService', () => {
       'Checkout V2 is not enabled',
     );
     expect(ctx.prisma.guestCheck.findFirst).not.toHaveBeenCalled();
+  });
+
+  it('closes a fully paid settlement and guest check in the same transaction', async () => {
+    const ctx = buildCloseService();
+
+    await expect(ctx.service.closeCheck(actor, 'check-1')).resolves.toMatchObject({
+      checkId: 'check-1',
+      settlementId: 'settlement-1',
+      status: 'SETTLED',
+      settlementState: 'CLOSED',
+      total: '100.0000',
+      currency: 'PLN',
+    });
+
+    expect(ctx.states.assertTransition).toHaveBeenCalledWith('PAID', 'CLOSED');
+    expect(ctx.tx.checkSettlement.update).toHaveBeenCalledWith({
+      where: { id: 'settlement-1' },
+      data: { state: 'CLOSED', amountDue: expect.any(Prisma.Decimal) },
+    });
+    expect(ctx.tx.guestCheck.updateMany).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: { id: 'check-1', shopId: 'shop-a', status: 'OPEN' },
+        data: expect.objectContaining({
+          status: 'SETTLED',
+          currentSettlementId: null,
+          version: { increment: 1 },
+        }),
+      }),
+    );
+    expect(ctx.outbox.enqueue).toHaveBeenCalledWith(
+      ctx.tx,
+      expect.objectContaining({ eventType: 'settlement.closed' }),
+    );
+    expect(ctx.audit.record).toHaveBeenCalledWith(
+      actor,
+      expect.objectContaining({ action: 'checkout.close' }),
+    );
+  });
+
+  it('refuses to close while payment is still outstanding', async () => {
+    const ctx = buildCloseService({
+      settlementState: 'PARTIALLY_PAID',
+      amountDue: '20',
+    });
+
+    await expect(ctx.service.closeCheck(actor, 'check-1')).rejects.toMatchObject({
+      response: expect.objectContaining({ message: 'Payment is not complete yet' }),
+    });
+    expect(ctx.tx.checkSettlement.update).not.toHaveBeenCalled();
+    expect(ctx.tx.guestCheck.updateMany).not.toHaveBeenCalled();
+  });
+
+  it('returns a structured blocker for an open order', async () => {
+    const ctx = buildCloseService({ orderStatus: 'OPEN' });
+
+    await expect(ctx.service.closeCheck(actor, 'check-1')).rejects.toMatchObject({
+      response: expect.objectContaining({
+        message: 'Finish the live activity before closing this guest check',
+        blockers: [
+          expect.objectContaining({
+            type: 'ORDER',
+            id: 'order-12345678',
+            action: 'orders',
+          }),
+        ],
+      }),
+    });
+    expect(ctx.tx.guestCheck.updateMany).not.toHaveBeenCalled();
+  });
+
+  it('blocks an active play session even when it came from a reservation', async () => {
+    const ctx = buildCloseService({
+      playStatus: 'ACTIVE',
+      reservationLinkedPlay: true,
+    });
+
+    await expect(ctx.service.closeCheck(actor, 'check-1')).rejects.toMatchObject({
+      response: expect.objectContaining({
+        blockers: [
+          expect.objectContaining({
+            type: 'PLAY_SESSION',
+            id: 'play-12345678',
+            action: 'sessions',
+          }),
+        ],
+      }),
+    });
+    expect(ctx.tx.guestCheck.updateMany).not.toHaveBeenCalled();
+  });
+
+  it('allows a zero-value calculated checkout to close without inventing a payment', async () => {
+    const ctx = buildCloseService({
+      settlementState: 'CALCULATED',
+      total: '0',
+      amountDue: '0',
+    });
+
+    await expect(ctx.service.closeCheck(actor, 'check-1')).resolves.toMatchObject({
+      settlementState: 'CLOSED',
+      total: '0.0000',
+    });
+    expect(ctx.states.assertTransition).toHaveBeenNthCalledWith(
+      1,
+      'CALCULATED',
+      'PAID',
+    );
+    expect(ctx.states.assertTransition).toHaveBeenNthCalledWith(2, 'PAID', 'CLOSED');
   });
 });

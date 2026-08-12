@@ -1,8 +1,9 @@
 "use client";
 
-import { ArrowLeftRight, CheckCircle2, RefreshCw, ReceiptText } from "lucide-react";
+import { ArrowLeftRight, RefreshCw, ReceiptText } from "lucide-react";
 import { useCallback, useEffect, useState } from "react";
 import {
+  closeCheckoutCheck,
   createCheckSettlement,
   createCheckoutPayment,
   fetchCheckoutPaymentState,
@@ -12,15 +13,15 @@ import {
   type CheckoutPaymentState,
   type CheckoutPreview,
 } from "@/lib/checkout-client";
-import {
-  settleGuestCheck,
-  type GuestCheck,
-} from "@/lib/guest-check-client";
+import type { GuestCheck } from "@/lib/guest-check-client";
 import { ChargeGroups } from "./charge-groups";
 import { CheckMergePanel } from "./check-merge-panel";
+import { CheckoutFlowStatus } from "./checkout-flow-status";
 import { CheckoutSourcePicker } from "./checkout-source-picker";
 import { CheckoutTotals } from "./checkout-totals";
 import {
+  checkoutCloseErrorMessage,
+  checkoutOperationalBlockers,
   classifyCheckoutError,
   formatCheckoutMoney,
   type CheckoutIssueKind,
@@ -38,10 +39,20 @@ function errorDetail(error: unknown): string | null {
   return null;
 }
 
-function hasPositiveAmount(value: string | undefined | null) {
-  if (!value) return false;
+function numericAmount(value: string | undefined | null) {
+  if (!value) return null;
   const amount = Number(value);
-  return Number.isFinite(amount) && amount > 0;
+  return Number.isFinite(amount) ? amount : null;
+}
+
+function hasPositiveAmount(value: string | undefined | null) {
+  const amount = numericAmount(value);
+  return amount != null && amount > 0;
+}
+
+function isZeroAmount(value: string | undefined | null) {
+  const amount = numericAmount(value);
+  return amount != null && amount === 0;
 }
 
 function tenderMethod(tender: CheckoutTender): CheckoutPaymentMethod | null {
@@ -53,8 +64,8 @@ function tenderMethod(tender: CheckoutTender): CheckoutPaymentMethod | null {
 
 function paymentMethodLabel(method: string) {
   if (method === "CASH") return "Cash";
-  if (method === "MANUAL_CARD") return "Manual card";
-  if (method === "OTHER") return "Other";
+  if (method === "MANUAL_CARD") return "Card · recorded manually";
+  if (method === "OTHER") return "Other recorded payment";
   return method.replaceAll("_", " ").toLowerCase();
 }
 
@@ -169,6 +180,7 @@ export function CheckoutDrawer({
     setSplitOpen(false);
     setPendingTender(null);
     setPaymentError(null);
+    setCloseError(null);
     await onCheckChanged();
     await loadPreview(false);
   }
@@ -206,7 +218,7 @@ export function CheckoutDrawer({
     setPaymentBusy(true);
     try {
       const state = await ensureSettlement();
-      if (state.state === "PAID" || state.amountDue === "0.0000") return;
+      if (state.state === "PAID" || isZeroAmount(state.amountDue)) return;
       setSplitOpen(true);
       setMergeOpen(false);
     } catch (error) {
@@ -223,9 +235,10 @@ export function CheckoutDrawer({
 
     setPaymentBusy(true);
     setPaymentError(null);
+    setCloseError(null);
     try {
       const state = await ensureSettlement();
-      if (state.state === "PAID" || state.amountDue === "0.0000") {
+      if (state.state === "PAID" || isZeroAmount(state.amountDue)) {
         setPendingTender(null);
         return;
       }
@@ -259,6 +272,7 @@ export function CheckoutDrawer({
   async function handleSplitPaymentRecorded(next: CheckoutPaymentState) {
     setPaymentState(next);
     setPaymentError(null);
+    setCloseError(null);
     await onCheckChanged();
     await loadPreview(false);
   }
@@ -268,25 +282,18 @@ export function CheckoutDrawer({
     setSplitOpen(false);
     setPendingTender(null);
     setPaymentError(null);
+    setCloseError(null);
     await onCheckChanged();
     await loadPreview(false);
   }
 
-  async function finishCheck() {
-    if (!fullyPaid || closingCheck) return;
-    setClosingCheck(true);
+  async function refreshCheckout() {
     setCloseError(null);
-    try {
-      await settleGuestCheck(check.id);
-      await onCheckChanged();
-    } catch (error) {
-      const message = errorDetail(error);
-      setCloseError(
-        message ??
-          "Payment is complete, but attached activity must be completed before this check can close.",
-      );
-    } finally {
-      setClosingCheck(false);
+    setPaymentError(null);
+    await onCheckChanged();
+    await loadPreview(false);
+    if (check.currentSettlementId) {
+      await loadPaymentState(check.currentSettlementId);
     }
   }
 
@@ -299,8 +306,14 @@ export function CheckoutDrawer({
   const displayName =
     check.label?.trim() || check.guestName?.trim() || "Guest check";
   const paymentStarted = hasPositiveAmount(paymentState?.paidAmount);
-  const fullyPaid =
-    paymentState?.state === "PAID" || paymentState?.amountDue === "0.0000";
+  const zeroValueBill =
+    Boolean(preview && preview.lines.length > 0) && isZeroAmount(preview?.amountDue);
+  const fullyPaid = paymentState
+    ? paymentState.state === "PAID" ||
+      paymentState.state === "CLOSED" ||
+      isZeroAmount(paymentState.amountDue)
+    : zeroValueBill;
+  const blockers = checkoutOperationalBlockers(check);
   const billEditable = canWrite && !paymentStarted && !fullyPaid;
   const paymentsEnabled =
     canWrite &&
@@ -310,6 +323,28 @@ export function CheckoutDrawer({
   const pendingMethod = pendingTender ? tenderMethod(pendingTender) : null;
   const pendingAmount = paymentState?.amountDue ?? preview?.amountDue ?? "0.0000";
   const paymentCurrency = paymentState?.currency ?? preview?.currency ?? check.currency ?? "PLN";
+
+  async function finishCheck() {
+    if (!fullyPaid || closingCheck) return;
+    if (blockers.length > 0) {
+      setCloseError(
+        "Payment is complete, but a live order or play session is still open. Finish it first; do not charge the customer again.",
+      );
+      return;
+    }
+
+    setClosingCheck(true);
+    setCloseError(null);
+    try {
+      await ensureSettlement();
+      await closeCheckoutCheck(check.id);
+      await onCheckChanged();
+    } catch (error) {
+      setCloseError(checkoutCloseErrorMessage(error));
+    } finally {
+      setClosingCheck(false);
+    }
+  }
 
   return (
     <div className="flex min-h-0 min-w-0 flex-1 flex-col bg-zinc-950/20">
@@ -346,8 +381,8 @@ export function CheckoutDrawer({
           ) : null}
           <button
             type="button"
-            onClick={() => void loadPreview(false)}
-            disabled={loading}
+            onClick={() => void refreshCheckout()}
+            disabled={loading || paymentBusy || closingCheck}
             className="inline-flex min-h-10 items-center gap-2 rounded-xl border border-white/10 bg-white/[0.04] px-3 py-2 text-xs font-semibold text-zinc-300 transition hover:bg-white/[0.08] disabled:opacity-50"
           >
             <RefreshCw
@@ -356,6 +391,16 @@ export function CheckoutDrawer({
             Refresh
           </button>
         </div>
+      </div>
+
+      <div className="shrink-0 border-b border-white/8 p-3 sm:p-4">
+        <CheckoutFlowStatus
+          check={check}
+          lineCount={preview?.lines.length ?? 0}
+          paymentStarted={paymentStarted}
+          fullyPaid={fullyPaid}
+          locale={locale}
+        />
       </div>
 
       <div className="grid min-h-0 flex-1 xl:grid-cols-[minmax(0,1fr)_22rem] xl:overflow-hidden">
@@ -381,23 +426,9 @@ export function CheckoutDrawer({
             />
           ) : null}
 
-          {fullyPaid ? (
-            <div className="rounded-xl border border-emerald-400/25 bg-emerald-400/[0.08] px-3 py-3 text-xs leading-5 text-emerald-100">
-              <div className="flex items-start gap-2.5">
-                <CheckCircle2 className="mt-0.5 h-4 w-4 shrink-0 text-emerald-300" />
-                <div>
-                  <p className="font-bold text-emerald-200">Payment complete</p>
-                  <p className="mt-0.5 text-emerald-100/75">
-                    No balance remains. The check stays operationally open until its
-                    attached order, play session, or booking is finished.
-                  </p>
-                </div>
-              </div>
-            </div>
-          ) : paymentStarted ? (
+          {paymentStarted && !fullyPaid ? (
             <div className="rounded-xl border border-amber-400/20 bg-amber-400/[0.06] px-3 py-2.5 text-xs leading-5 text-amber-100">
-              Partially paid. Bill sources are locked so recorded payment allocations
-              cannot be changed or moved.
+              Partially paid. The bill is now locked so already-recorded payment allocations cannot drift or be moved.
             </div>
           ) : null}
 
@@ -430,7 +461,7 @@ export function CheckoutDrawer({
                     Current bill
                   </h3>
                   <p className="mt-0.5 text-xs text-zinc-600">
-                    Items and attached activity included in this check.
+                    This is the exact bill GoSpots will use for payment.
                   </p>
                 </div>
                 <span className="rounded-full bg-white/[0.05] px-2.5 py-1 text-[11px] font-medium text-zinc-500">
@@ -496,26 +527,47 @@ export function CheckoutDrawer({
             ) : null}
 
             {fullyPaid ? (
-              <section className="rounded-2xl border border-emerald-400/20 bg-emerald-400/[0.055] p-3">
-                <p className="text-sm font-bold text-emerald-200">Paid in full</p>
-                <p className="mt-1 text-xs leading-5 text-zinc-400">
-                  Finish the check when the attached operational activity is complete.
-                  If something is still active, GoSpots will keep the check open.
-                </p>
-                {closeError ? (
-                  <div className="mt-3 rounded-xl border border-amber-400/20 bg-amber-400/[0.07] px-3 py-2 text-xs leading-5 text-amber-100">
-                    {closeError}
-                  </div>
-                ) : null}
-                <button
-                  type="button"
-                  disabled={!canWrite || closingCheck}
-                  onClick={() => void finishCheck()}
-                  className="mt-3 min-h-11 w-full rounded-xl bg-emerald-400 px-3 text-sm font-bold text-emerald-950 transition hover:bg-emerald-300 disabled:opacity-45"
-                >
-                  {closingCheck ? "Checking…" : "Finish check"}
-                </button>
-              </section>
+              blockers.length > 0 ? (
+                <section className="rounded-2xl border border-amber-400/20 bg-amber-400/[0.055] p-3">
+                  <p className="text-sm font-bold text-amber-200">Paid — activity still open</p>
+                  <p className="mt-1 text-xs leading-5 text-zinc-400">
+                    Do not charge again. Finish the live order or play session shown above, then refresh Checkout.
+                  </p>
+                  {closeError ? (
+                    <div className="mt-3 rounded-xl border border-amber-400/20 bg-black/15 px-3 py-2 text-xs leading-5 text-amber-100">
+                      {closeError}
+                    </div>
+                  ) : null}
+                  <button
+                    type="button"
+                    disabled={loading || closingCheck}
+                    onClick={() => void refreshCheckout()}
+                    className="mt-3 min-h-11 w-full rounded-xl border border-amber-300/20 bg-amber-300/10 px-3 text-sm font-bold text-amber-100 transition hover:bg-amber-300/15 disabled:opacity-45"
+                  >
+                    Refresh after finishing activity
+                  </button>
+                </section>
+              ) : (
+                <section className="rounded-2xl border border-emerald-400/20 bg-emerald-400/[0.055] p-3">
+                  <p className="text-sm font-bold text-emerald-200">Ready to close</p>
+                  <p className="mt-1 text-xs leading-5 text-zinc-400">
+                    Payment is complete. Closing does not charge the customer again; it only finalizes and archives this guest check.
+                  </p>
+                  {closeError ? (
+                    <div className="mt-3 rounded-xl border border-amber-400/20 bg-amber-400/[0.07] px-3 py-2 text-xs leading-5 text-amber-100">
+                      {closeError}
+                    </div>
+                  ) : null}
+                  <button
+                    type="button"
+                    disabled={!canWrite || closingCheck}
+                    onClick={() => void finishCheck()}
+                    className="mt-3 min-h-11 w-full rounded-xl bg-emerald-400 px-3 text-sm font-bold text-emerald-950 transition hover:bg-emerald-300 disabled:opacity-45"
+                  >
+                    {closingCheck ? "Closing…" : "Close paid check"}
+                  </button>
+                </section>
+              )
             ) : null}
           </div>
         </aside>

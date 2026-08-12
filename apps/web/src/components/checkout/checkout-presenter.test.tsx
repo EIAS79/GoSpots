@@ -6,11 +6,15 @@ import type {
   CheckoutPaymentState,
   CheckoutPreview,
 } from "@/lib/checkout-client";
+import type { GuestCheck } from "@/lib/guest-check-client";
 import { ChargeGroups } from "./charge-groups";
 import { CheckoutTotals } from "./checkout-totals";
 import { PaymentConfirmation } from "./payment-confirmation";
 import {
   checkoutAccess,
+  checkoutCloseErrorMessage,
+  checkoutFlowStep,
+  checkoutOperationalBlockers,
   classifyCheckoutError,
 } from "./checkout-presenter";
 import { SettlementStatus } from "./settlement-status";
@@ -34,6 +38,38 @@ function line(
     finalAmount: "10.0000",
     currency: "PLN",
     pricingMetadata: {},
+  };
+}
+
+function guestCheck(): GuestCheck {
+  return {
+    id: "check-1",
+    shopId: "shop-1",
+    status: "OPEN",
+    version: 4,
+    currentSettlementId: "settlement-1",
+    guestName: "Demo guest",
+    guestEmail: null,
+    guestPhone: null,
+    partySize: 1,
+    label: null,
+    note: null,
+    currency: "PLN",
+    paymentMethod: null,
+    openedAt: "2026-08-12T08:00:00.000Z",
+    settledAt: null,
+    voidedAt: null,
+    createdById: "user-1",
+    createdAt: "2026-08-12T08:00:00.000Z",
+    updatedAt: "2026-08-12T08:00:00.000Z",
+    shopOrders: [],
+    playSessions: [],
+    reservations: [],
+    runningTotal: "0.0000",
+    menuTotal: "0.0000",
+    playTotal: "0.0000",
+    reservationTotal: "0.0000",
+    totalLines: [],
   };
 }
 
@@ -98,21 +134,21 @@ test("unauthorized staff is read/write denied and payment controls stay disabled
   });
   const html = renderToStaticMarkup(<TenderButtons canWrite={false} />);
   assert.match(html, /disabled/);
-  assert.match(html, /Add at least one charge/);
+  assert.match(html, /Add at least one non-zero charge/);
 });
 
-test("Chunk 04 tenders clearly expose manual payment methods", () => {
+test("payment choices make manual/external boundaries explicit", () => {
   const html = renderToStaticMarkup(
     <TenderButtons canWrite paymentsEnabled />,
   );
   assert.match(html, /Cash/);
-  assert.match(html, /Manual card/);
-  assert.match(html, /Split/);
-  assert.match(html, /Other/);
-  assert.match(html, /does not contact a terminal/);
+  assert.match(html, /Card · external terminal/);
+  assert.match(html, /Split payment/);
+  assert.match(html, /Other received/);
+  assert.match(html, /does not charge the card itself/);
 });
 
-test("manual card confirmation makes the external-provider boundary explicit", () => {
+test("external-terminal card confirmation cannot be mistaken for charging a card", () => {
   const html = renderToStaticMarkup(
     <PaymentConfirmation
       method="MANUAL_CARD"
@@ -124,9 +160,9 @@ test("manual card confirmation makes the external-provider boundary explicit", (
   );
   assert.match(html, /Confirm payment/);
   assert.match(html, /200\.00/);
-  assert.match(html, /external terminal or processor has approved/i);
+  assert.match(html, /separate card terminal or processor/i);
   assert.match(html, /does not charge the card/i);
-  assert.match(html, /Record manual card/);
+  assert.match(html, /Record approved card payment/);
   assert.match(html, /Cancel/);
 });
 
@@ -141,7 +177,74 @@ test("cash confirmation states that the amount is posted to the cash shift", () 
     />,
   );
   assert.match(html, /Confirm cash received/);
-  assert.match(html, /open cash shift/i);
+  assert.match(html, /currently open cash shift/i);
+});
+
+test("checkout close readiness blocks live orders and play, but not booking payment twice", () => {
+  const check = guestCheck();
+  check.shopOrders.push({
+    id: "order-12345678",
+    status: "OPEN",
+    total: "20.0000",
+    label: "Table 4 order",
+    reservationFee: null,
+    guestCount: 1,
+    createdAt: check.createdAt,
+    completedAt: null,
+  });
+  check.playSessions.push({
+    id: "play-12345678",
+    status: "ACTIVE",
+    amount: "40.0000",
+    reservationId: "reservation-1",
+    label: "Pool table 2",
+    startedAt: check.createdAt,
+    completedAt: null,
+  });
+  check.reservations.push({
+    id: "reservation-1",
+    guestName: "Demo guest",
+    billedAmount: null,
+    billedAt: null,
+    resourceId: "resource-1",
+    startsAt: check.createdAt,
+    endsAt: check.createdAt,
+    status: "CONFIRMED",
+  });
+
+  const blockers = checkoutOperationalBlockers(check);
+  assert.equal(blockers.length, 2);
+  assert.equal(blockers[0]?.action, "orders");
+  assert.equal(blockers[1]?.action, "sessions");
+  assert.doesNotMatch(JSON.stringify(blockers), /reservation.*paid/i);
+});
+
+test("checkout flow step always tells the operator what to do next", () => {
+  assert.equal(
+    checkoutFlowStep({ lineCount: 0, paymentStarted: false, fullyPaid: false, blockerCount: 0 }),
+    1,
+  );
+  assert.equal(
+    checkoutFlowStep({ lineCount: 3, paymentStarted: false, fullyPaid: false, blockerCount: 0 }),
+    2,
+  );
+  assert.equal(
+    checkoutFlowStep({ lineCount: 3, paymentStarted: true, fullyPaid: true, blockerCount: 1 }),
+    3,
+  );
+  assert.equal(
+    checkoutFlowStep({ lineCount: 3, paymentStarted: true, fullyPaid: true, blockerCount: 0 }),
+    4,
+  );
+});
+
+test("technical attached-children close errors are never shown to cashiers", () => {
+  assert.equal(
+    checkoutCloseErrorMessage({
+      message: "Guest check cannot settle until attached children are closed",
+    }),
+    "Payment is complete, but a live order or play session is still open. Finish it first, then close the check.",
+  );
 });
 
 test("state conflicts use the required reload message", () => {
