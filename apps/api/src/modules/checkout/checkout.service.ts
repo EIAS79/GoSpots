@@ -1,4 +1,6 @@
 import {
+  BadRequestException,
+  ConflictException,
   ForbiddenException,
   Injectable,
   NotFoundException,
@@ -100,6 +102,24 @@ const checkoutCheckInclude = {
           },
         },
       },
+    },
+  },
+} satisfies Prisma.GuestCheckInclude;
+
+const closeCheckInclude = {
+  shopOrders: {
+    select: {
+      id: true,
+      status: true,
+      label: true,
+    },
+  },
+  playSessions: {
+    select: {
+      id: true,
+      status: true,
+      label: true,
+      reservationId: true,
     },
   },
 } satisfies Prisma.GuestCheckInclude;
@@ -352,5 +372,162 @@ export class CheckoutService {
     });
     if (!settlement) throw new NotFoundException('Settlement not found');
     return this.serializeSettlement(settlement);
+  }
+
+  /**
+   * Checkout V3 finalization. Payment is authoritative in CheckSettlement;
+   * operational sources only need to be finished, not paid a second time.
+   */
+  async closeCheck(actor: JwtAccessPayload, checkId: string) {
+    this.assertPermission(actor, PERMISSIONS.CHECKOUT_WRITE);
+    const shopId = requireShopId(actor);
+    await this.requireCheckoutV2(shopId);
+
+    const closed = await this.prisma.$transaction(async (tx) => {
+      await tx.$queryRaw(
+        Prisma.sql`SELECT "id" FROM "GuestCheck" WHERE "id" = ${checkId} AND "shopId" = ${shopId} FOR UPDATE`,
+      );
+
+      const check = await tx.guestCheck.findFirst({
+        where: { id: checkId, shopId },
+        include: closeCheckInclude,
+      });
+      if (!check) throw new NotFoundException('Guest check not found');
+      if (check.status !== 'OPEN') {
+        throw new ConflictException('This guest check is already closed');
+      }
+      if (!check.currentSettlementId) {
+        throw new BadRequestException(
+          'Prepare checkout and record payment before closing this guest check',
+        );
+      }
+
+      const settlement = await tx.checkSettlement.findFirst({
+        where: {
+          id: check.currentSettlementId,
+          shopId,
+          guestCheckId: checkId,
+        },
+      });
+      if (!settlement) {
+        throw new ConflictException(
+          'The active checkout settlement could not be found. Refresh checkout and try again.',
+        );
+      }
+      if (settlement.state === 'VOID') {
+        throw new ConflictException(
+          'The active checkout settlement was voided. Refresh checkout before continuing.',
+        );
+      }
+
+      const zeroValueCheckout = settlement.total.isZero() && settlement.amountDue.isZero();
+      const paid =
+        settlement.state === 'PAID' ||
+        settlement.state === 'CLOSED' ||
+        zeroValueCheckout;
+      if (!paid) {
+        throw new BadRequestException({
+          message: 'Payment is not complete yet',
+          amountDue: serializeMoney(settlement.amountDue),
+          currency: settlement.currency,
+        });
+      }
+
+      const blockers: Array<{
+        type: 'ORDER' | 'PLAY_SESSION';
+        id: string;
+        label: string;
+        status: string;
+        action: 'orders' | 'sessions';
+      }> = [];
+
+      for (const order of check.shopOrders) {
+        if (order.status === 'COMPLETED' || order.status === 'CANCELED') continue;
+        blockers.push({
+          type: 'ORDER',
+          id: order.id,
+          label: order.label?.trim() || `Order ${order.id.slice(0, 8)}`,
+          status: order.status,
+          action: 'orders',
+        });
+      }
+
+      for (const play of check.playSessions) {
+        if (play.status === 'COMPLETED' || play.status === 'CANCELED') continue;
+        blockers.push({
+          type: 'PLAY_SESSION',
+          id: play.id,
+          label: play.label?.trim() || `Play session ${play.id.slice(0, 8)}`,
+          status: play.status,
+          action: 'sessions',
+        });
+      }
+
+      if (blockers.length > 0) {
+        throw new BadRequestException({
+          message: 'Finish the live activity before closing this guest check',
+          blockers,
+        });
+      }
+
+      if (settlement.state !== 'CLOSED') {
+        if (zeroValueCheckout && settlement.state === 'CALCULATED') {
+          this.states.assertTransition('CALCULATED', 'PAID');
+          this.states.assertTransition('PAID', 'CLOSED');
+        } else {
+          this.states.assertTransition(settlement.state, 'CLOSED');
+        }
+        await tx.checkSettlement.update({
+          where: { id: settlement.id },
+          data: { state: 'CLOSED', amountDue: new Prisma.Decimal(0) },
+        });
+      }
+
+      const result = await tx.guestCheck.updateMany({
+        where: { id: checkId, shopId, status: 'OPEN' },
+        data: {
+          status: 'SETTLED',
+          settledAt: new Date(),
+          currentSettlementId: null,
+          version: { increment: 1 },
+        },
+      });
+      if (result.count !== 1) {
+        throw new ConflictException(
+          'This guest check changed while it was being closed. Refresh and try again.',
+        );
+      }
+
+      await this.outbox.enqueue(tx, {
+        shopId,
+        aggregateType: 'check_settlement',
+        aggregateId: settlement.id,
+        eventType: 'settlement.closed',
+        payload: {
+          settlementId: settlement.id,
+          guestCheckId: checkId,
+          total: serializeMoney(settlement.total),
+          currency: settlement.currency,
+        },
+      });
+
+      return {
+        checkId,
+        settlementId: settlement.id,
+        status: 'SETTLED' as const,
+        settlementState: 'CLOSED' as const,
+        total: serializeMoney(settlement.total),
+        currency: settlement.currency,
+      };
+    });
+
+    await this.audit.record(actor, {
+      section: 'finance',
+      action: 'checkout.close',
+      summary: 'Closed paid guest check',
+      meta: closed,
+    });
+
+    return closed;
   }
 }
