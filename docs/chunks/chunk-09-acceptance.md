@@ -1,21 +1,91 @@
-# Chunk 09 acceptance checklist
+# Chunk 09 — Offline Lite acceptance
 
-**Status:** DONE — engineering acceptance gate passed and merged.
+## Status
+
+**VERIFYING on PR #36.** The implementation now covers the full initial offline-safe operation list from the execution plan, subject to the plan's explicit compliance boundary for cash/payment/fiscal operations.
+
+## Browser resilience
 
 - [x] Service worker provides app-shell/static resilience and never caches API responses.
-- [x] IndexedDB keeps cached open checks and queued local work across browser refresh.
-- [x] Minimal auth + venue shell snapshots allow an entitled already-open dashboard to recover from transient WAN loss without persisting credentials.
-- [x] Local data is namespaced by user + Shop and purged on logout/session revocation/venue switch.
-- [x] Stable operation IDs and payload hashes drive durable replay receipts.
-- [x] Reconnect replay reuses completed receipts and cannot duplicate the same offline operation.
-- [x] Check updates use expected versions and conflict instead of overwriting newer server state.
-- [x] Ambiguous online mutations are never converted into new local mutations after dispatch.
-- [x] Conflict/failed operations are operator-visible and never auto-overwritten.
-- [x] Card payments, fiscalization, KSeF, refunds, SaaS billing and final financial reconciliation are clearly online-only.
-- [x] Order and gaming write candidates remain explicitly disabled until authoritative conflict rules exist.
-- [x] Elapsed-time math is local; no 1-second API write loop exists.
-- [x] Offline Lite activation is guarded by the per-Shop `offline_lite` feature flag in browser activation and server replay.
-- [x] Exact final PR-head CI green — PR #22 head `03dfe8d5e43b7cf870ecd057215bbfbaecfabc9a`, GitHub Actions CI #261.
-- [x] Post-merge `main` CI green — merge commit `5b28738e567f9f6fca33bb8d391a9d47dc8e1213`, GitHub Actions CI #262.
+- [x] IndexedDB retains cached venue state and queued mutations across browser refresh.
+- [x] Cached open checks remain available.
+- [x] Operations floor/resources are cached for local inspection.
+- [x] Ordering catalog/menu is cached for local inspection/order entry.
+- [x] Local timers derive from timestamps and never require 1-second server writes.
+- [x] Local state is namespaced by authenticated user + Shop and purged on logout/session revocation/venue switch.
 
-Chunk 09 is therefore complete as the single-browser/device Offline Lite increment. Its deliberate scope boundaries remain in force; multi-device LAN authority is Chunk 10.
+## Durable mutation outbox
+
+Every queued operation contains stable:
+
+```text
+operationId / clientMutationId
+deviceId
+operationType
+entityId
+expectedVersion when required
+occurredAt
+payloadHash
+payload
+state / attempts / error
+```
+
+- [x] same operation ID + same content replays one durable server receipt;
+- [x] same operation ID + changed content returns `IDEMPOTENCY_CONFLICT`;
+- [x] ambiguous requests dispatched while believed online are not converted into a second local mutation.
+
+## Offline-safe mutations
+
+### GuestCheck
+
+- [x] create with client-addressed stable ID;
+- [x] update with expected version;
+- [x] settlement-started/non-open checks reject local edits;
+- [x] deterministic `VERSION_CONFLICT`/`STATE_CONFLICT`.
+
+### Order add
+
+- [x] operator can add a simple menu item locally while WAN is down;
+- [x] offline order has a stable client order ID and local occurrence time;
+- [x] replay validates menu item/variant/modifier references;
+- [x] replay recalculates price/tax using the existing server `OrderingPricingService` inside the transaction;
+- [x] client marks local order as pending server pricing and never makes its preview authoritative money;
+- [x] items requiring mandatory modifier interaction remain clearly online-only in the current Offline Lite UI rather than being guessed.
+
+### Gaming session start/end
+
+- [x] local start uses a stable session ID and local `occurredAt`;
+- [x] replay locks/revalidates the target resource and rejects cloud/resource conflicts deterministically;
+- [x] replay validates maintenance, GuestCheck, group, reservation and rate-plan state;
+- [x] authoritative rate snapshot is resolved on the server;
+- [x] local end carries expected version and local `occurredAt`;
+- [x] replay computes final accrued money server-side using the canonical Operations rate calculation;
+- [x] stale session version/state is rejected instead of overwritten.
+
+## Unsupported offline actions
+
+The execution plan permits offline cash only when compliance rules allow an explicitly configured mode. GoSpots does not currently have an approved Offline Lite fiscal/drawer authority, therefore these remain deliberately disabled rather than guessed:
+
+- [x] cash settlement finalization;
+- [x] terminal/card authorization;
+- [x] fiscal completion;
+- [x] KSeF submission;
+- [x] refund;
+- [x] SaaS subscription billing;
+- [x] final financial reconciliation.
+
+Multi-device LAN sequencing remains Chunk 10 Edge Hub, not browser Offline Lite.
+
+## Acceptance Gate 09
+
+- [x] browser refresh during WAN outage preserves cached/local work;
+- [x] reconnect uses durable idempotency and cannot duplicate the same queued operation;
+- [x] GuestCheck/session/resource conflicts are deterministic;
+- [x] unsupported money/provider/compliance actions are clearly disabled;
+- [x] timer does not depend on 1-second API writes;
+- [x] plan-listed local order addition is implemented;
+- [x] plan-listed local session start/end is implemented with conflict/version policy;
+- [x] Offline Lite remains protected by the per-Shop `offline_lite` feature flag;
+- [ ] **Final PR #36 exact-head CI green.**
+
+The last item must reference the exact final head after the last code/document change before this record is marked DONE.
