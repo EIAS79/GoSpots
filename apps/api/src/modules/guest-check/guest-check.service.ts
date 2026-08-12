@@ -15,7 +15,10 @@ import { ApiDomainErrorCode } from '../../common/api-error.codes';
 import { apiConflictException } from '../../common/api-error.util';
 import { guestCheckCloseReadiness } from '../../common/guest-check-close.util';
 import { computeGuestCheckRunningTotal } from '../../common/guest-check-total.util';
-import { postReservationBilled } from '../../common/ledger-post.util';
+import {
+  postReservationBilled,
+  postWalkInPlaySessionPaid,
+} from '../../common/ledger-post.util';
 import { serializeMoney, sumMoneyDecimal } from '../../common/money.util';
 import { hasPermission, PERMISSIONS } from '../../common/permissions';
 import { requireShopId } from '../../common/tenant';
@@ -52,6 +55,7 @@ const childInclude = {
       reservationId: true,
       label: true,
       startedAt: true,
+      endedAt: true,
       completedAt: true,
     },
     orderBy: { createdAt: 'desc' as const },
@@ -162,6 +166,7 @@ export class GuestCheckService {
         reservationId: p.reservationId,
         label: p.label,
         startedAt: p.startedAt.toISOString(),
+        endedAt: p.endedAt?.toISOString() ?? null,
         completedAt: p.completedAt?.toISOString() ?? null,
       })),
       reservations: check.reservations.map((r) => ({
@@ -362,6 +367,74 @@ export class GuestCheckService {
     return finalized;
   }
 
+  private async reconcilePaidPlayBilling(
+    actor: JwtAccessPayload,
+    shopId: string,
+    check: CheckWithChildren,
+    settlement: CurrentSettlement | null,
+  ): Promise<number> {
+    if (!settlement || !settlement.amountDue.isZero()) return 0;
+    if (settlement.state !== 'PAID' && settlement.state !== 'CALCULATED') return 0;
+
+    const candidates = check.playSessions.filter(
+      (session) =>
+        !session.reservationId &&
+        session.status !== 'CANCELED' &&
+        session.status !== 'COMPLETED' &&
+        session.endedAt != null &&
+        session.completedAt == null,
+    );
+    if (candidates.length === 0) return 0;
+
+    const now = new Date();
+    const paymentMethod = this.legacyPaymentMethod(settlement) ?? 'OTHER';
+    let finalized = 0;
+
+    await this.prisma.$transaction(async (tx) => {
+      for (const session of candidates) {
+        const snapshots = settlement.snapshots.filter(
+          (snapshot) =>
+            snapshot.sourceType === 'PLAY_SESSION' &&
+            snapshot.sourceId === session.id,
+        );
+        if (snapshots.length === 0) continue;
+        const amount = sumMoneyDecimal(
+          ...snapshots.map((snapshot) => snapshot.finalAmount),
+        );
+        const claimed = await tx.playSession.updateMany({
+          where: {
+            id: session.id,
+            shopId,
+            guestCheckId: check.id,
+            reservationId: null,
+            status: 'ACTIVE',
+            endedAt: { not: null },
+            completedAt: null,
+          },
+          data: {
+            amount,
+            paymentMethod,
+            status: 'COMPLETED',
+            completedAt: now,
+          },
+        });
+        if (claimed.count !== 1) continue;
+        finalized += 1;
+        await postWalkInPlaySessionPaid(tx, {
+          shopId,
+          sessionId: session.id,
+          amount,
+          currency: settlement.currency,
+          completedAt: now,
+          reservationId: null,
+          createdById: actor.sub,
+        });
+      }
+    });
+
+    return finalized;
+  }
+
   private requireAttachTarget(dto: AttachGuestCheckDto | DetachGuestCheckDto) {
     if (!dto.shopOrderId && !dto.playSessionId && !dto.reservationId) {
       throw new BadRequestException(
@@ -524,10 +597,9 @@ export class GuestCheckService {
   }
 
   /**
-   * Close-out contract: tender must be complete, linked operations must be finalized,
-   * then GuestCheck OPEN → SETTLED and CheckSettlement PAID → CLOSED atomically.
-   * Paid resource reservations are reconciled from the immutable checkout snapshot so
-   * Checkout V2 never asks the cashier to record the same payment a second time.
+   * Close-out contract: tender must be complete, linked operations must be bill-final,
+   * then Checkout V2 reconciles legacy reservation/play revenue stamps and atomically
+   * closes both GuestCheck and CheckSettlement. No second tender/cash movement occurs.
    */
   async settle(actor: JwtAccessPayload, id: string, dto: SettleGuestCheckDto = {}) {
     this.assert(actor, PERMISSIONS.TRANSACTION_WRITE);
@@ -537,13 +609,11 @@ export class GuestCheckService {
     const settlement = await this.loadCurrentSettlement(shopId, existing);
     this.assertSettlementPaid(settlement);
 
-    const autoFinalizedReservations = await this.reconcilePaidReservationBilling(
-      actor,
-      shopId,
-      existing,
-      settlement,
-    );
-    if (autoFinalizedReservations > 0) {
+    const [autoFinalizedReservations, autoFinalizedPlaySessions] = await Promise.all([
+      this.reconcilePaidReservationBilling(actor, shopId, existing, settlement),
+      this.reconcilePaidPlayBilling(actor, shopId, existing, settlement),
+    ]);
+    if (autoFinalizedReservations > 0 || autoFinalizedPlaySessions > 0) {
       existing = await this.loadCheck(shopId, id);
     }
 
@@ -643,6 +713,7 @@ export class GuestCheckService {
         runningTotal: totals.runningTotal,
         paymentMethod: effectivePaymentMethod ?? null,
         autoFinalizedReservations,
+        autoFinalizedPlaySessions,
       },
     });
 
