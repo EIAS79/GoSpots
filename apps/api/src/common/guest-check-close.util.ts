@@ -33,16 +33,11 @@ type GuestCheckCloseInput = {
 };
 
 /**
- * One close-readiness contract shared by the GuestCheck serializer and settle gate.
- *
- * Operational rules:
- * - Orders must be handed off (COMPLETED) or canceled.
- * - Standalone play sessions must be completed/canceled. Reservation-linked play is
- *   billed by its reservation and must not be counted twice.
- * - Resource reservations need a billing stamp unless canceled/no-show. Plain
- *   non-resource reservations have no checkout charge and therefore do not block.
+ * Sources whose amount/fulfilment is still operationally mutable. New checkout
+ * payments must not be recorded while these remain open, otherwise the immutable
+ * settlement snapshot can diverge from the eventual order/session amount.
  */
-export function guestCheckCloseReadiness(check: GuestCheckCloseInput) {
+export function guestCheckOperationalReadiness(check: GuestCheckCloseInput) {
   const blockers: GuestCheckCloseBlocker[] = [];
 
   for (const order of check.shopOrders) {
@@ -67,6 +62,21 @@ export function guestCheckCloseReadiness(check: GuestCheckCloseInput) {
       reason: 'PLAY_SESSION_OPEN',
     });
   }
+
+  return {
+    ready: blockers.length === 0,
+    blockers,
+  } as const;
+}
+
+/**
+ * Full close gate. Operational sources must be final and resource reservations
+ * must have a billing stamp. Paid Checkout V2 closes reconcile the reservation
+ * stamp from the immutable settlement before this final gate is evaluated.
+ */
+export function guestCheckCloseReadiness(check: GuestCheckCloseInput) {
+  const operational = guestCheckOperationalReadiness(check);
+  const blockers: GuestCheckCloseBlocker[] = [...operational.blockers];
 
   for (const reservation of check.reservations) {
     if (reservation.status === 'CANCELED' || reservation.status === 'NO_SHOW') {
