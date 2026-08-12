@@ -90,6 +90,15 @@ export class CheckoutController {
     );
   }
 
+  @Post('checks/:checkId/close')
+  @RequirePermissions(PERMISSIONS.CHECKOUT_WRITE)
+  closeCheck(
+    @CurrentUser() user: JwtAccessPayload,
+    @Param('checkId') checkId: string,
+  ) {
+    return this.checkout.closeCheck(user, checkId);
+  }
+
   @Get('settlements/:id')
   @RequirePermissions(PERMISSIONS.CHECKOUT_READ)
   getSettlement(
