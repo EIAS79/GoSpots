@@ -154,6 +154,15 @@ export type CheckoutPaymentState = {
   }>;
 };
 
+export type CheckoutCloseResult = {
+  checkId: string;
+  settlementId: string;
+  status: "SETTLED";
+  settlementState: "CLOSED";
+  total: string;
+  currency: string;
+};
+
 export type GuestCheckMergeResult = {
   mergeEventId: string;
   sourceCheckId: string;
@@ -188,6 +197,12 @@ export function createCheckSettlement(checkId: string, expectedVersion: number) 
       body: JSON.stringify(body),
     }),
   );
+}
+
+export function closeCheckoutCheck(checkId: string) {
+  return api<CheckoutCloseResult>(`/checkout/checks/${checkId}/close`, {
+    method: "POST",
+  });
 }
 
 export function fetchCheckoutPaymentState(settlementId: string) {
