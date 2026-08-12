@@ -14,6 +14,7 @@ test("offline payload hashes are deterministic across object key ordering", asyn
 
 test("Offline Lite blocks money/provider/compliance operations explicitly", () => {
   for (const capability of [
+    "cash_payment",
     "card_payment",
     "fiscal_receipt",
     "ksef_submit",
@@ -25,14 +26,34 @@ test("Offline Lite blocks money/provider/compliance operations explicitly", () =
     assert.equal(decision.allowed, false, capability);
     assert.ok(decision.reason.length > 10);
   }
-  assert.equal(offlinePolicy("check_create").allowed, true);
-  assert.equal(offlinePolicy("check_update").allowed, true);
 });
 
-test("gaming/order candidates stay disabled until conflict semantics are implemented", () => {
-  assert.equal(offlinePolicy("order_add").allowed, false);
-  assert.equal(offlinePolicy("gaming_session_start").allowed, false);
-  assert.equal(offlinePolicy("gaming_session_end").allowed, false);
+test("Offline Lite enables replay-safe checks, orders, and gaming session boundaries", () => {
+  for (const capability of [
+    "check_create",
+    "check_update",
+    "order_add",
+    "gaming_session_start",
+    "gaming_session_end",
+  ] as const) {
+    assert.equal(offlinePolicy(capability).allowed, true, capability);
+  }
+});
+
+test("offline replay envelope persists operation time and the new safe mutation types", async () => {
+  const outbox = await readFile(new URL("./offline-outbox.ts", import.meta.url), "utf8");
+  assert.match(outbox, /"ORDER_CREATE"/);
+  assert.match(outbox, /"SESSION_START"/);
+  assert.match(outbox, /"SESSION_END"/);
+  assert.match(outbox, /occurredAt: row\.occurredAt/);
+
+  const operations = await readFile(new URL("./operations-offline-client.ts", import.meta.url), "utf8");
+  assert.match(operations, /operationType: "SESSION_START"/);
+  assert.match(operations, /operationType: "SESSION_END"/);
+
+  const ordering = await readFile(new URL("./ordering-offline-client.ts", import.meta.url), "utf8");
+  assert.match(ordering, /operationType: "ORDER_CREATE"/);
+  assert.match(ordering, /pendingServerPricing: true/);
 });
 
 test("elapsed timers are derived locally from startedAt instead of server ticks", () => {
@@ -68,7 +89,6 @@ test("hard-refresh WAN recovery uses credential-free auth and venue snapshots", 
 test("auth cold-start recovery is bounded and never performs a second manual refresh", async () => {
   const authClient = await readFile(new URL("./auth-client.ts", import.meta.url), "utf8");
   const auth = await readFile(new URL("./use-auth.tsx", import.meta.url), "utf8");
-
   assert.match(authClient, /SESSION_REQUEST_TIMEOUT_MS = 12_000/);
   assert.match(authClient, /AbortSignal\.timeout\(SESSION_REQUEST_TIMEOUT_MS\)/);
   assert.match(authClient, /sessionRequest\(\{ method: "GET" \}\)/);
@@ -76,7 +96,6 @@ test("auth cold-start recovery is bounded and never performs a second manual ref
   assert.match(auth, /isTransientAuthFailure/);
   assert.match(auth, /error\.status >= 500/);
   assert.match(auth, /readOfflineAuthSnapshot/);
-
   const reloadStart = auth.indexOf("const reload = useCallback");
   const signOutStart = auth.indexOf("const signOut = useCallback", reloadStart);
   assert.ok(reloadStart >= 0 && signOutStart > reloadStart);
@@ -85,20 +104,12 @@ test("auth cold-start recovery is bounded and never performs a second manual ref
 });
 
 test("readiness probes and Render wakes have bounded recovery paths", async () => {
-  const connectivity = await readFile(
-    new URL("./connectivity-context.tsx", import.meta.url),
-    "utf8",
-  );
-  const render = await readFile(
-    new URL("../../../../render.yaml", import.meta.url),
-    "utf8",
-  );
-
+  const connectivity = await readFile(new URL("./connectivity-context.tsx", import.meta.url), "utf8");
+  const render = await readFile(new URL("../../../../render.yaml", import.meta.url), "utf8");
   assert.match(connectivity, /READY_POLL_MS = 30_000/);
   assert.match(connectivity, /READY_PROBE_TIMEOUT_MS = 8_000/);
   assert.match(connectivity, /AbortSignal\.timeout\(READY_PROBE_TIMEOUT_MS\)/);
   assert.match(render, /pnpm --filter @gospots\/api exec prisma migrate deploy/);
-
   const startCommand = render.slice(render.indexOf("startCommand:"), render.indexOf("healthCheckPath:"));
   assert.doesNotMatch(startCommand, /prisma migrate deploy/);
   assert.match(startCommand, /node dist\/main\.js/);

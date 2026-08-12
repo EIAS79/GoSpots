@@ -1,52 +1,45 @@
-# Chunk 01 Completion — Cross-Cutting Engineering Foundation
+# Chunk 01 — Cross-Cutting Engineering Foundation
 
 ## Status
 
-**PASS — implementation and blocking CI gate completed.**
+**DONE — repository acceptance gate complete on PR #36.**
 
-- Branch: `agent/gospots-00-repository-baseline`
-- Draft PR: #10
-- Main branch: **not merged / untouched**
-- Implementation verification run: GitHub Actions CI #92 (`31336182967`)
-- Verification commit: `0a23ced57675d304b3e8c4e89ee0d9246614b3cb`
+## Delivered foundation
 
-## Scope delivered
+### Money
 
-### Money conventions
-
-- Kept existing `Decimal(19,4)` venue-money storage and existing SaaS minor-unit billing fields.
-- Added canonical Prisma Decimal + explicit ISO currency helpers.
-- Added exact Decimal sum/multiplication/rounding utilities.
-- Retained legacy number-returning helpers for backward compatibility and marked them as non-authoritative.
-- Adopted exact Decimal summation in the existing GuestCheck running-total calculation without changing its 4-decimal API wire format.
+GoSpots keeps authoritative venue money in exact server-side representations rather than JS floating-point calculations. Shared money utilities provide explicit currency, Decimal/minor-unit conversions and rounding behavior. Existing GuestCheck/Checkout code consumes server-authoritative values.
 
 ### Idempotency
 
-- Reused the existing durable `IdempotencyReceipt` mechanism rather than creating a duplicate table.
-- Existing key scope remains `(shopId, scope, key)` with request hashing, stored response replay, TTL and concurrent-claim handling.
-- Added tests for same-key/same-request replay, same-key/different-request rejection and cross-Shop isolation.
+The repository reuses the durable `IdempotencyReceipt` rather than introducing a competing record type. The contract is:
+
+```text
+(shopId, scope/operation, key) + requestHash
+```
+
+- same key + same request → completed response replay;
+- same key + different request → `IDEMPOTENCY_CONFLICT`;
+- PENDING/COMPLETED state is durable;
+- concurrent claims are serialized by database behavior/transaction handling.
+
+The pattern is used by settlement/payment/refund/offline boundaries and is covered by replay/conflict tests.
 
 ### Correlation IDs
 
-- Added `x-correlation-id` support with validation and safe generation.
-- Preserved `x-request-id` as a compatibility alias.
-- Added a global interceptor before request logging so both headers and the existing structured `requestId` log field carry the same correlation value.
+`x-correlation-id` is validated/generated globally and reused as the compatibility request ID for structured request logging. PR #36 exposes/allows `x-correlation-id` through CORS, so browser/operator clients can supply and read it. `x-request-id` remains supported for compatibility.
 
-### Domain-event outbox
+### Domain events
 
-- Added `DomainEventOutbox` as an expand-only Shop-scoped model.
-- Added forced tenant RLS using the repository's existing `app_tenant_rls_ok(shopId)` policy function.
-- Added a transactional outbox service that requires a caller-supplied Prisma `TransactionClient`, preventing accidental event insertion outside the aggregate transaction.
-- Added canonical lower-case dot-separated event-name validation.
+`DomainEventOutbox` is the durable application outbox convention. The publisher requires a Prisma transaction client so aggregate mutation and event creation can share one transaction. Events use lower-case dot-separated names such as `payment.captured`.
 
 ### Optimistic concurrency
 
-- Kept the existing `BillingSubscription.version` convention.
-- Added a shared expected-version assertion helper with stable `VERSION_CONFLICT` error details for future high-contention aggregates.
+Shared expected-version helpers return stable `VERSION_CONFLICT` semantics. High-contention aggregates such as GuestCheck/settlement/operations use explicit versions where applicable.
 
 ### Error taxonomy
 
-Added the Chunk 01 cross-cutting error codes additively without removing existing public codes:
+The cross-cutting domain error vocabulary includes:
 
 - `VALIDATION_ERROR`
 - `PERMISSION_DENIED`
@@ -60,69 +53,37 @@ Added the Chunk 01 cross-cutting error codes additively without removing existin
 - `OFFLINE_UNSUPPORTED`
 - `RESOURCE_CONFLICT`
 
+Frontend/API error envelopes preserve stable operator-readable categories instead of leaking raw provider failures.
+
 ### Feature flags
 
-- Added `ShopFeatureFlag` with unique `(shopId, feature)` storage and forced tenant RLS.
-- Added central `FeatureFlagService.isFeatureEnabled(shopId, feature)`.
-- Database overrides are authoritative.
-- Missing production flags default to disabled.
-- Non-production environments may explicitly opt into named development flags through `FEATURE_FLAGS_DEV_ENABLED`.
-- Feature flags remain independent from subscription entitlement checks.
+`FeatureFlagService.isFeatureEnabled(shopId, feature)` is the per-Shop rollout boundary. Explicit database overrides are authoritative; non-default production features do not silently become enabled because of an environment variable. Development can opt into named flags.
 
 ### Audit context
 
-- Added a typed audit-context helper covering actor, Shop, optional device, correlation ID, action, target, before/after, reason and approval context.
-- Existing `AuditLog` storage was not replaced or destructively changed.
+The shared audit context covers actor, Shop, optional device, correlation, action, target, before/after, reason and approval data while preserving the existing `AuditLog` domain.
 
-## Database delta
+## Database
 
-Migration: `20260809223000_chunk01_foundation`
+The original Chunk 01 migration added the Shop feature-flag and domain-event-outbox persistence additively and under the repository's tenant/RLS policy. The durable idempotency table was reused rather than duplicated.
 
-New tables only:
+PR #36 adds no destructive Chunk 01 migration. The complete migration chain is revalidated on PostgreSQL 17 in CI.
 
-1. `ShopFeatureFlag`
-2. `DomainEventOutbox`
+## Acceptance Gate 01
 
-The migration is expand-only. It does not rename/drop existing columns, recalculate finance values, alter existing money columns, or replace `IdempotencyReceipt` / `MailOutbox`.
+- [x] Shared utilities are adopted by existing production domains.
+- [x] Shared money convention exists and is exercised by current financial domains.
+- [x] Durable idempotency supports same-request replay and changed-request conflict.
+- [x] Correlation ID is generated/reused in logs and is CORS-visible.
+- [x] Stable error taxonomy exists.
+- [x] Optimistic version convention exists and is used by high-contention aggregates.
+- [x] Durable transactional domain-event outbox exists.
+- [x] Per-Shop feature flag service exists with tenant isolation.
+- [x] Shared audit context exists.
+- [x] API spec linting uses `tsconfig.spec.json` correctly.
+- [x] No behavior regression in blocking tests/builds.
+- [x] Final PR #36 exact-head blocking CI is green before ready-for-review transition.
 
-## Automated verification
+## Compatibility / rollback
 
-GitHub Actions CI #92 passed all blocking jobs on the implementation commit:
-
-- API lint advisory step: completed
-- API Jest tests: **PASS**
-- API production build: **PASS**
-- Web TypeScript check: **PASS**
-- Web production build: **PASS**
-- Prisma generate: **PASS**
-- Fresh PostgreSQL `prisma migrate deploy`: **PASS**
-- `prisma migrate status`: **PASS**
-- `prisma validate`: **PASS**
-
-Chunk 00's documented pre-existing strict-lint debt remains advisory and was not mass-reformatted into this money-sensitive change set.
-
-## Chunk 01 acceptance gate
-
-- [x] Shared utilities adopted by safe existing code paths.
-- [x] Exact money rounding/summation tests added.
-- [x] Idempotency replay and payload-conflict behavior tested.
-- [x] Shop-scoped idempotency isolation tested.
-- [x] Version-conflict behavior tested.
-- [x] Correlation IDs propagate into existing structured request logging via the compatibility request-ID field.
-- [x] Per-Shop feature flag isolation tested.
-- [x] Durable transaction outbox pattern validated.
-- [x] Migration deploy/status/schema validation passed on disposable PostgreSQL.
-- [x] Existing API and web builds remain green.
-- [x] No merge to `main`.
-
-## Rollback / compatibility notes
-
-- Application rollback is safe because the new database objects are additive and unused by legacy flows unless explicitly called.
-- Feature flags default off in production when no Shop override exists.
-- Existing GuestCheck output shape and serialized money precision remain unchanged.
-- Existing `x-request-id` clients remain compatible.
-- New tables should be retained during an application rollback until the combined 00–03 rollout decision, consistent with the repository's expand-first migration policy.
-
-## Next dependency
-
-Chunk 02 may consume these foundations for versioned GuestCheck mutations, idempotent settlement operations, Shop-specific rollout and transactional domain events. No Chunk 02 implementation is included in this completion record.
+The foundation remains additive. Existing `x-request-id`, legacy callers and existing idempotency storage remain compatible. Rollback is code/feature rollback while additive database objects remain in place until a later deliberate contract phase.

@@ -2,7 +2,9 @@
 
 ## Status
 
-Implementation complete for the first real provider connector. Automated acceptance is green. Physical-reader/provider-account acceptance remains an explicit pre-production pilot gate because repository CI has no Stripe Terminal hardware or account credentials.
+**ENGINEERING DONE — EXTERNAL PILOT REQUIRED FOR THE EXECUTION-PLAN PRODUCTION GATE.**
+
+All repository implementation and automated acceptance for the first real provider connector are complete. The execution plan additionally requires a real provider sandbox/reference payment flow. That external evidence cannot be fabricated by repository CI and remains a controlled pre-production pilot requirement.
 
 ## Delivered
 
@@ -32,19 +34,31 @@ Implementation complete for the first real provider connector. Automated accepta
 
 ## Automated acceptance
 
-The Chunk 07 branch passes:
+PR #36 repository verification confirms the connector remains compatible with the full platform gate:
 
-- Stripe connector lifecycle tests
-- full API Jest suite
-- API TypeScript build
-- web checkout tests
-- web TypeScript typecheck/build
-- fresh PostgreSQL migration deploy/status/Prisma validate
+- Stripe connector lifecycle tests;
+- full API Jest suite;
+- API TypeScript/Nest build;
+- web checkout and Offline Lite tests;
+- web TypeScript typecheck/build;
+- Edge Hub tests/build;
+- fresh PostgreSQL 17 migration deploy/status/Prisma validate.
 
-## External acceptance gate
+## Execution-plan Gate 07
 
-The execution plan asks for a real provider sandbox/reference flow. That cannot be truthfully completed from repository CI without provisioned Stripe Terminal test credentials/reader access. The runbook therefore makes this a mandatory pilot gate before production enablement and lists the evidence to capture: reference payment, decline, timeout/unknown reconciliation, webhook replay, duplicate idempotency, cancellation, refund, reader offline and reassignment.
+Repository-verifiable items:
+
+- [x] duplicate webhook handling is harmless/idempotent;
+- [x] timeout/ambiguous provider state is represented as `UNKNOWN` and reconciled rather than blindly retried;
+- [x] refund path is implemented and tested;
+- [x] successful provider payment is linked to the settlement/payment domain;
+- [x] repeated operator/client requests are protected against double charge by idempotency and operation state.
+
+External pilot evidence still required before declaring the **full real-provider production gate** complete:
+
+- [ ] real Stripe Terminal sandbox/reference payment using provisioned test credentials/reader or Stripe-supported test terminal path;
+- [ ] reference decline, timeout/unknown reconciliation, webhook replay, cancellation and refund exercised against that external environment.
 
 ## Rollout
 
-The connector requires the existing venue payment gates plus `STRIPE_TERMINAL_ENABLED=true`. Keep it disabled by default. Re-check current Stripe Terminal availability/support in Poland immediately before pilot activation.
+The connector requires the existing venue payment gates plus `STRIPE_TERMINAL_ENABLED=true`. Keep it disabled by default until the external pilot evidence above is captured. Re-check current Stripe Terminal availability/support in Poland immediately before pilot activation.

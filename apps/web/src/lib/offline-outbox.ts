@@ -1,6 +1,11 @@
 import { api, ApiError } from "./api";
 
-export type OfflineOperationType = "CHECK_CREATE" | "CHECK_UPDATE";
+export type OfflineOperationType =
+  | "CHECK_CREATE"
+  | "CHECK_UPDATE"
+  | "ORDER_CREATE"
+  | "SESSION_START"
+  | "SESSION_END";
 export type OfflineSyncState = "PENDING" | "SYNCING" | "SYNCED" | "CONFLICT" | "FAILED";
 
 export type OfflineNamespace = { userId: string; shopId: string };
@@ -13,6 +18,7 @@ export type OfflineOperationRecord = {
   operationType: OfflineOperationType;
   entityId: string;
   expectedVersion?: number;
+  occurredAt: string;
   payloadHash: string;
   payload: Record<string, unknown>;
   createdAt: string;
@@ -147,6 +153,7 @@ export async function queueOfflineOperation(input: {
   operationType: OfflineOperationType;
   entityId: string;
   expectedVersion?: number;
+  occurredAt?: string;
   payload: Record<string, unknown>;
   operationId?: string;
 }): Promise<OfflineOperationRecord> {
@@ -154,6 +161,7 @@ export async function queueOfflineOperation(input: {
   const namespace = namespaceKey(context);
   const operationId = input.operationId ?? randomUuid();
   const payloadHash = await offlinePayloadHash(input.payload);
+  const occurredAt = input.occurredAt ?? new Date().toISOString();
   const record: OfflineOperationRecord = {
     key: `${namespace}:${operationId}`,
     namespace,
@@ -162,6 +170,7 @@ export async function queueOfflineOperation(input: {
     operationType: input.operationType,
     entityId: input.entityId,
     ...(input.expectedVersion !== undefined ? { expectedVersion: input.expectedVersion } : {}),
+    occurredAt,
     payloadHash,
     payload: input.payload,
     createdAt: new Date().toISOString(),
@@ -174,7 +183,13 @@ export async function queueOfflineOperation(input: {
   await inStore(OUTBOX_STORE, "readwrite", async (store) => {
     const existing = await requestValue(store.get(record.key)) as OfflineOperationRecord | undefined;
     if (existing) {
-      if (existing.payloadHash !== payloadHash) throw new Error("Offline operation ID already exists with different content.");
+      const same =
+        existing.payloadHash === payloadHash &&
+        existing.operationType === record.operationType &&
+        existing.entityId === record.entityId &&
+        existing.expectedVersion === record.expectedVersion &&
+        existing.occurredAt === record.occurredAt;
+      if (!same) throw new Error("Offline operation ID already exists with different content.");
       return;
     }
     await requestValue(store.add(record));
@@ -210,7 +225,7 @@ export async function countOfflineOperations(): Promise<OfflineCounts> {
 function syncError(error: unknown): { state: "PENDING" | "CONFLICT" | "FAILED"; code: string | null; message: string } {
   if (error instanceof ApiError) {
     if (error.status === 0) return { state: "PENDING", code: error.code ?? null, message: error.message };
-    if (["VERSION_CONFLICT", "STATE_CONFLICT", "IDEMPOTENCY_CONFLICT"].includes(error.code ?? "")) {
+    if (["VERSION_CONFLICT", "STATE_CONFLICT", "IDEMPOTENCY_CONFLICT", "RESOURCE_CONFLICT"].includes(error.code ?? "")) {
       return { state: "CONFLICT", code: error.code ?? null, message: error.message };
     }
     return { state: "FAILED", code: error.code ?? null, message: error.message };
@@ -230,6 +245,7 @@ async function syncOne(row: OfflineOperationRecord): Promise<void> {
         operationType: row.operationType,
         entityId: row.entityId,
         ...(row.expectedVersion !== undefined ? { expectedVersion: row.expectedVersion } : {}),
+        occurredAt: row.occurredAt,
         payloadHash: row.payloadHash,
         payload: row.payload,
       }),
