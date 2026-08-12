@@ -146,7 +146,9 @@ describe('OfflineSyncService', () => {
       },
       guestCheck: {
         findFirst: jest.fn().mockResolvedValue(null),
-        create: jest.fn().mockResolvedValue({ id: dto.entityId, version: 1, status: 'OPEN' }),
+        create: jest
+          .fn()
+          .mockResolvedValue({ id: dto.entityId, version: 1, status: 'OPEN' }),
       },
       shop: { findUnique: jest.fn().mockResolvedValue({ currency: 'PLN' }) },
       auditLog: { create: jest.fn().mockResolvedValue({}) },
@@ -164,7 +166,9 @@ describe('OfflineSyncService', () => {
       syncState: 'SYNCED',
     });
     expect(tx.guestCheck.create).toHaveBeenCalledWith(
-      expect.objectContaining({ data: expect.objectContaining({ openedAt: new Date(occurredAt) }) }),
+      expect.objectContaining({
+        data: expect.objectContaining({ openedAt: new Date(occurredAt) }),
+      }),
     );
     expect(receiptUpdate).toHaveBeenCalledTimes(1);
   });
@@ -192,7 +196,9 @@ describe('OfflineSyncService', () => {
       },
       venueOrder: {
         findFirst: jest.fn().mockResolvedValueOnce(null),
-        create: jest.fn().mockResolvedValue({ id: dto.entityId, status: 'OPEN', totalMinor: 2200 }),
+        create: jest
+          .fn()
+          .mockResolvedValue({ id: dto.entityId, status: 'OPEN', totalMinor: 2200 }),
       },
       operationsSession: {
         findFirst: jest.fn().mockResolvedValue({
@@ -203,7 +209,11 @@ describe('OfflineSyncService', () => {
         }),
       },
       guestCheck: {
-        findFirst: jest.fn().mockResolvedValue({ id: 'check-1', status: 'OPEN', currentSettlementId: null }),
+        findFirst: jest.fn().mockResolvedValue({
+          id: 'check-1',
+          status: 'OPEN',
+          currentSettlementId: null,
+        }),
       },
       shop: { findUnique: jest.fn().mockResolvedValue({ currency: 'PLN' }) },
       venueOrderLine: { create: jest.fn().mockResolvedValue({ id: 'line-1' }) },
@@ -215,19 +225,44 @@ describe('OfflineSyncService', () => {
       $transaction: jest.fn(async (fn: any) => fn(tx)),
     };
     const priceLine = jest.fn().mockResolvedValue({
-      menuItemId: 'menu-1', variantId: null, quantity: 2, seat: null,
-      nameSnapshot: 'Cola', variantNameSnapshot: null,
-      unitBaseMinor: 1000, variantMinor: 0, modifierMinor: 0,
-      unitPriceMinor: 1000, subtotalMinor: 2000,
-      taxCategorySnapshot: 'VAT10', taxRateBps: 1000, taxMinor: 200,
-      totalMinor: 2200, priceSnapshot: {}, modifiers: [],
+      menuItemId: 'menu-1',
+      variantId: null,
+      quantity: 2,
+      seat: null,
+      nameSnapshot: 'Cola',
+      variantNameSnapshot: null,
+      unitBaseMinor: 1000,
+      variantMinor: 0,
+      modifierMinor: 0,
+      unitPriceMinor: 1000,
+      subtotalMinor: 2000,
+      taxCategorySnapshot: 'VAT10',
+      taxRateBps: 1000,
+      taxMinor: 200,
+      totalMinor: 2200,
+      priceSnapshot: {},
+      modifiers: [],
     });
 
     const result = await service(prisma, { priceLine }).applyOperation(actor, dto);
-    expect(result).toMatchObject({ entityId: dto.entityId, status: 'OPEN', syncState: 'SYNCED' });
-    expect(priceLine).toHaveBeenCalledWith('shop-1', expect.objectContaining({ menuItemId: 'menu-1', quantity: 2 }), tx);
+    expect(result).toMatchObject({
+      entityId: dto.entityId,
+      status: 'OPEN',
+      syncState: 'SYNCED',
+    });
+    expect(priceLine).toHaveBeenCalledWith(
+      'shop-1',
+      expect.objectContaining({ menuItemId: 'menu-1', quantity: 2 }),
+      tx,
+    );
     expect(tx.venueOrder.create).toHaveBeenCalledWith(
-      expect.objectContaining({ data: expect.objectContaining({ id: dto.entityId, totalMinor: 2200, createdAt: new Date(occurredAt) }) }),
+      expect.objectContaining({
+        data: expect.objectContaining({
+          id: dto.entityId,
+          totalMinor: 2200,
+          createdAt: new Date(occurredAt),
+        }),
+      }),
     );
   });
 
@@ -260,7 +295,10 @@ describe('OfflineSyncService', () => {
         }),
       },
       operationsSession: {
-        findFirst: jest.fn().mockResolvedValue({ id: 'cloud-session', status: 'ACTIVE' }),
+        findFirst: jest
+          .fn()
+          .mockResolvedValueOnce(null)
+          .mockResolvedValueOnce({ id: 'cloud-session', status: 'ACTIVE' }),
       },
     };
     const prisma: any = {
