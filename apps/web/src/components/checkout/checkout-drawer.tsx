@@ -1,6 +1,11 @@
 "use client";
 
-import { ArrowLeftRight, RefreshCw, ReceiptText } from "lucide-react";
+import {
+  ArrowLeftRight,
+  RefreshCw,
+  ReceiptText,
+  Trash2,
+} from "lucide-react";
 import { useCallback, useEffect, useState } from "react";
 import {
   closeCheckoutCheck,
@@ -13,14 +18,21 @@ import {
   type CheckoutPaymentState,
   type CheckoutPreview,
 } from "@/lib/checkout-client";
-import type { GuestCheck } from "@/lib/guest-check-client";
+import {
+  updateGuestCheck,
+  voidGuestCheck,
+  type GuestCheck,
+} from "@/lib/guest-check-client";
+import { ApiError } from "@/lib/api";
 import { ChargeGroups } from "./charge-groups";
 import { CheckMergePanel } from "./check-merge-panel";
 import { CheckoutFlowStatus } from "./checkout-flow-status";
 import { CheckoutSourcePicker } from "./checkout-source-picker";
 import { CheckoutTotals } from "./checkout-totals";
 import {
+  checkoutBillBlockers,
   checkoutCloseErrorMessage,
+  checkoutErrorMessage,
   checkoutOperationalBlockers,
   classifyCheckoutError,
   formatCheckoutMoney,
@@ -33,11 +45,6 @@ import {
   TenderButtons,
   type CheckoutTender,
 } from "./tender-buttons";
-
-function errorDetail(error: unknown): string | null {
-  if (error instanceof Error && error.message.trim()) return error.message;
-  return null;
-}
 
 function numericAmount(value: string | undefined | null) {
   if (!value) return null;
@@ -64,7 +71,7 @@ function tenderMethod(tender: CheckoutTender): CheckoutPaymentMethod | null {
 
 function paymentMethodLabel(method: string) {
   if (method === "CASH") return "Cash";
-  if (method === "MANUAL_CARD") return "Card · recorded manually";
+  if (method === "MANUAL_CARD") return "Card · external terminal";
   if (method === "OTHER") return "Other recorded payment";
   return method.replaceAll("_", " ").toLowerCase();
 }
@@ -89,6 +96,7 @@ export function CheckoutDrawer({
   const [mergeOpen, setMergeOpen] = useState(false);
   const [pendingTender, setPendingTender] = useState<CheckoutTender | null>(null);
   const [closingCheck, setClosingCheck] = useState(false);
+  const [voidingCheck, setVoidingCheck] = useState(false);
   const [closeError, setCloseError] = useState<string | null>(null);
   const [issue, setIssue] = useState<CheckoutIssueKind | null>(null);
   const [detail, setDetail] = useState<string | null>(null);
@@ -124,14 +132,14 @@ export function CheckoutDrawer({
           } catch (reloadError) {
             setPreview(null);
             setIssue(classifyCheckoutError(reloadError));
-            setDetail(errorDetail(reloadError));
+            setDetail(checkoutErrorMessage(reloadError));
             return null;
           }
         }
 
         setPreview(null);
         setIssue(nextIssue);
-        setDetail(errorDetail(error));
+        setDetail(checkoutErrorMessage(error));
         return null;
       } finally {
         setLoading(false);
@@ -145,10 +153,13 @@ export function CheckoutDrawer({
       try {
         const next = await fetchCheckoutPaymentState(settlementId);
         setPaymentState(next);
+        setPaymentError(null);
         return next;
       } catch (error) {
         setPaymentState(null);
-        setPaymentError(errorDetail(error));
+        setPaymentError(
+          checkoutErrorMessage(error, "Could not load recorded payment state."),
+        );
         return null;
       }
     },
@@ -202,8 +213,40 @@ export function CheckoutDrawer({
     return next;
   }
 
+  async function recoverStaleUnpaidSettlement(error: unknown) {
+    if (
+      !(error instanceof ApiError) ||
+      error.code !== "VERSION_CONFLICT" ||
+      !check.currentSettlementId ||
+      !paymentState ||
+      hasPositiveAmount(paymentState.paidAmount)
+    ) {
+      return false;
+    }
+
+    try {
+      await updateGuestCheck(check.id, {});
+      setPaymentState(null);
+      setPendingTender(null);
+      await onCheckChanged();
+      await loadPreview(false);
+      setPaymentError(
+        "The bill changed after it was calculated, so GoSpots discarded the old unpaid snapshot. Review the refreshed bill and take payment again only after it is final.",
+      );
+      return true;
+    } catch {
+      return false;
+    }
+  }
+
   async function handleTender(tender: CheckoutTender) {
     if (!preview || paymentBusy) return;
+    if (billBlockers.length > 0) {
+      setPaymentError(
+        "Payment is locked until every open order is handed off and every running standalone play timer is ended.",
+      );
+      return;
+    }
     setPaymentError(null);
     setCloseError(null);
 
@@ -222,7 +265,10 @@ export function CheckoutDrawer({
       setSplitOpen(true);
       setMergeOpen(false);
     } catch (error) {
-      setPaymentError(errorDetail(error) ?? "Unable to prepare split payment.");
+      if (await recoverStaleUnpaidSettlement(error)) return;
+      setPaymentError(
+        checkoutErrorMessage(error, "Unable to prepare split payment."),
+      );
     } finally {
       setPaymentBusy(false);
     }
@@ -263,7 +309,10 @@ export function CheckoutDrawer({
       await onCheckChanged();
       await loadPreview(false);
     } catch (error) {
-      setPaymentError(errorDetail(error) ?? "Unable to record payment.");
+      if (await recoverStaleUnpaidSettlement(error)) return;
+      setPaymentError(
+        checkoutErrorMessage(error, "Unable to record payment."),
+      );
     } finally {
       setPaymentBusy(false);
     }
@@ -292,9 +341,6 @@ export function CheckoutDrawer({
     setPaymentError(null);
     await onCheckChanged();
     await loadPreview(false);
-    if (check.currentSettlementId) {
-      await loadPaymentState(check.currentSettlementId);
-    }
   }
 
   const blockingIssue =
@@ -313,16 +359,19 @@ export function CheckoutDrawer({
       paymentState.state === "CLOSED" ||
       isZeroAmount(paymentState.amountDue)
     : zeroValueBill;
+  const billBlockers = checkoutBillBlockers(check);
   const blockers = checkoutOperationalBlockers(check);
   const billEditable = canWrite && !paymentStarted && !fullyPaid;
   const paymentsEnabled =
     canWrite &&
     !blockingIssue &&
     !fullyPaid &&
+    billBlockers.length === 0 &&
     hasPositiveAmount(paymentState?.amountDue ?? preview?.amountDue);
   const pendingMethod = pendingTender ? tenderMethod(pendingTender) : null;
   const pendingAmount = paymentState?.amountDue ?? preview?.amountDue ?? "0.0000";
-  const paymentCurrency = paymentState?.currency ?? preview?.currency ?? check.currency ?? "PLN";
+  const paymentCurrency =
+    paymentState?.currency ?? preview?.currency ?? check.currency ?? "PLN";
 
   async function finishCheck() {
     if (!fullyPaid || closingCheck) return;
@@ -346,9 +395,28 @@ export function CheckoutDrawer({
     }
   }
 
+  async function handleVoidCheck() {
+    if (!canWrite || paymentStarted || fullyPaid || voidingCheck) return;
+    const confirmed = window.confirm(
+      "Void this unpaid guest check? Its linked activity will be detached, not canceled.",
+    );
+    if (!confirmed) return;
+
+    setVoidingCheck(true);
+    setPaymentError(null);
+    try {
+      await voidGuestCheck(check.id);
+      await onCheckChanged();
+    } catch (error) {
+      setPaymentError(checkoutErrorMessage(error, "Could not void this check."));
+    } finally {
+      setVoidingCheck(false);
+    }
+  }
+
   return (
-    <div className="flex min-h-0 min-w-0 flex-1 flex-col bg-zinc-950/20">
-      <div className="flex shrink-0 flex-wrap items-center justify-between gap-3 border-b border-white/8 px-4 py-3 sm:px-5">
+    <div className="min-w-0 bg-zinc-950/20">
+      <div className="flex flex-wrap items-center justify-between gap-3 border-b border-white/8 px-4 py-3 sm:px-5">
         <div className="flex min-w-0 items-center gap-3">
           <span className="grid h-10 w-10 shrink-0 place-items-center rounded-xl bg-emerald-400/10 text-emerald-300">
             <ReceiptText className="h-5 w-5" />
@@ -379,6 +447,17 @@ export function CheckoutDrawer({
               Merge / move
             </button>
           ) : null}
+          {!paymentStarted && !fullyPaid && canWrite ? (
+            <button
+              type="button"
+              onClick={() => void handleVoidCheck()}
+              disabled={voidingCheck}
+              className="inline-flex min-h-10 items-center gap-2 rounded-xl border border-rose-400/15 bg-rose-400/[0.04] px-3 py-2 text-xs font-semibold text-rose-200/80 transition hover:border-rose-400/30 hover:bg-rose-400/[0.08] disabled:opacity-50"
+            >
+              <Trash2 className="h-3.5 w-3.5" />
+              {voidingCheck ? "Voiding…" : "Void"}
+            </button>
+          ) : null}
           <button
             type="button"
             onClick={() => void refreshCheckout()}
@@ -393,7 +472,7 @@ export function CheckoutDrawer({
         </div>
       </div>
 
-      <div className="shrink-0 border-b border-white/8 p-3 sm:p-4">
+      <div className="border-b border-white/8 p-3 sm:p-4">
         <CheckoutFlowStatus
           check={check}
           lineCount={preview?.lines.length ?? 0}
@@ -403,8 +482,8 @@ export function CheckoutDrawer({
         />
       </div>
 
-      <div className="grid min-h-0 flex-1 xl:grid-cols-[minmax(0,1fr)_22rem] xl:overflow-hidden">
-        <div className="min-h-0 space-y-4 overflow-y-auto overscroll-y-contain p-3 sm:p-4">
+      <div className="grid min-w-0 xl:grid-cols-[minmax(0,1fr)_22rem]">
+        <div className="min-w-0 space-y-4 p-3 sm:p-4">
           {mergeOpen ? (
             <CheckMergePanel
               currentCheck={check}
@@ -428,7 +507,7 @@ export function CheckoutDrawer({
 
           {paymentStarted && !fullyPaid ? (
             <div className="rounded-xl border border-amber-400/20 bg-amber-400/[0.06] px-3 py-2.5 text-xs leading-5 text-amber-100">
-              Partially paid. The bill is now locked so already-recorded payment allocations cannot drift or be moved.
+              Partially paid. The bill is locked so recorded payment allocations cannot drift or be moved. Finish the remaining payment from this checkout.
             </div>
           ) : null}
 
@@ -461,7 +540,7 @@ export function CheckoutDrawer({
                     Current bill
                   </h3>
                   <p className="mt-0.5 text-xs text-zinc-600">
-                    This is the exact bill GoSpots will use for payment.
+                    This is the bill GoSpots will snapshot for payment once the open activity above is final.
                   </p>
                 </div>
                 <span className="rounded-full bg-white/[0.05] px-2.5 py-1 text-[11px] font-medium text-zinc-500">
@@ -477,8 +556,8 @@ export function CheckoutDrawer({
           ) : null}
         </div>
 
-        <aside className="border-t border-white/8 bg-black/15 p-3 xl:min-h-0 xl:overflow-y-auto xl:overscroll-y-contain xl:border-l xl:border-t-0 xl:p-4">
-          <div className="space-y-3 pb-1">
+        <aside className="border-t border-white/8 bg-black/15 p-3 sm:p-4 xl:border-l xl:border-t-0">
+          <div className="space-y-3 pb-1 xl:sticky xl:top-4">
             {preview ? (
               <CheckoutTotals
                 preview={preview}
@@ -494,12 +573,19 @@ export function CheckoutDrawer({
                 </p>
                 <div className="mt-2 divide-y divide-white/7">
                   {paymentState.payments.map((payment) => (
-                    <div key={payment.id} className="flex items-center justify-between gap-3 py-2 text-xs">
+                    <div
+                      key={payment.id}
+                      className="flex items-center justify-between gap-3 py-2 text-xs"
+                    >
                       <span className="font-medium text-zinc-300">
                         {paymentMethodLabel(payment.method)}
                       </span>
                       <span className="font-bold tabular-nums text-emerald-300">
-                        {formatCheckoutMoney(payment.amount, payment.currency, locale)}
+                        {formatCheckoutMoney(
+                          payment.amount,
+                          payment.currency,
+                          locale,
+                        )}
                       </span>
                     </div>
                   ))}
@@ -529,7 +615,9 @@ export function CheckoutDrawer({
             {fullyPaid ? (
               blockers.length > 0 ? (
                 <section className="rounded-2xl border border-amber-400/20 bg-amber-400/[0.055] p-3">
-                  <p className="text-sm font-bold text-amber-200">Paid — activity still open</p>
+                  <p className="text-sm font-bold text-amber-200">
+                    Paid — activity still open
+                  </p>
                   <p className="mt-1 text-xs leading-5 text-zinc-400">
                     Do not charge again. Finish the live order or play session shown above, then refresh Checkout.
                   </p>
@@ -549,9 +637,11 @@ export function CheckoutDrawer({
                 </section>
               ) : (
                 <section className="rounded-2xl border border-emerald-400/20 bg-emerald-400/[0.055] p-3">
-                  <p className="text-sm font-bold text-emerald-200">Ready to close</p>
+                  <p className="text-sm font-bold text-emerald-200">
+                    Ready to close
+                  </p>
                   <p className="mt-1 text-xs leading-5 text-zinc-400">
-                    Payment is complete. Closing does not charge the customer again; it only finalizes and archives this guest check.
+                    Payment is complete. Closing does not charge the customer again; it reconciles billing state and archives this guest check.
                   </p>
                   {closeError ? (
                     <div className="mt-3 rounded-xl border border-amber-400/20 bg-amber-400/[0.07] px-3 py-2 text-xs leading-5 text-amber-100">

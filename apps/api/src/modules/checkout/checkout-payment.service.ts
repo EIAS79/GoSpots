@@ -10,6 +10,9 @@ import {
   CheckoutPaymentStatus,
   Prisma,
 } from '@prisma/client';
+import { ApiDomainErrorCode } from '../../common/api-error.codes';
+import { apiConflictException } from '../../common/api-error.util';
+import { checkoutBillReadiness } from '../../common/checkout-integrity.util';
 import { assertExpectedVersion } from '../../common/optimistic-concurrency.util';
 import {
   hasPermission,
@@ -46,6 +49,29 @@ const paymentSettlementInclude = {
       status: true,
       version: true,
       currentSettlementId: true,
+      shopOrders: {
+        select: { id: true, status: true, label: true, updatedAt: true },
+      },
+      playSessions: {
+        select: {
+          id: true,
+          status: true,
+          reservationId: true,
+          label: true,
+          endedAt: true,
+          updatedAt: true,
+        },
+      },
+      reservations: {
+        select: {
+          id: true,
+          status: true,
+          guestName: true,
+          resourceId: true,
+          billedAmount: true,
+          updatedAt: true,
+        },
+      },
     },
   },
   snapshots: {
@@ -130,11 +156,59 @@ export class CheckoutPaymentService {
     }
   }
 
+  private assertBillReadyForPayment(settlement: PaymentSettlement) {
+    const readiness = checkoutBillReadiness(settlement.guestCheck);
+    if (!readiness.ready) {
+      throw apiConflictException(
+        ApiDomainErrorCode.STATE_CONFLICT,
+        'Finalize open orders and standalone play timers before taking payment.',
+        {
+          stage: 'FINALIZE_BILL',
+          blockers: readiness.blockers,
+        },
+      );
+    }
+
+    const changedSources = [
+      ...settlement.guestCheck.shopOrders.map((row) => ({
+        sourceType: 'SHOP_ORDER',
+        sourceId: row.id,
+        updatedAt: row.updatedAt,
+      })),
+      ...settlement.guestCheck.playSessions.map((row) => ({
+        sourceType: 'PLAY_SESSION',
+        sourceId: row.id,
+        updatedAt: row.updatedAt,
+      })),
+      ...settlement.guestCheck.reservations.map((row) => ({
+        sourceType: 'RESERVATION',
+        sourceId: row.id,
+        updatedAt: row.updatedAt,
+      })),
+    ].filter((row) => row.updatedAt.getTime() > settlement.createdAt.getTime());
+
+    if (changedSources.length > 0) {
+      throw apiConflictException(
+        ApiDomainErrorCode.VERSION_CONFLICT,
+        'Linked activity changed after this bill was calculated. Recalculate checkout before taking payment.',
+        {
+          stage: 'SOURCE_CHANGED',
+          sources: changedSources.map(({ sourceType, sourceId }) => ({
+            sourceType,
+            sourceId,
+          })),
+        },
+      );
+    }
+  }
+
   private serializePaymentState(settlement: PaymentSettlement) {
     const successful = settlement.payments.filter(
       (payment) => payment.status === CheckoutPaymentStatus.SUCCESS,
     );
-    const paidAmount = sumMoneyDecimal(...successful.map((payment) => payment.amount));
+    const paidAmount = sumMoneyDecimal(
+      ...successful.map((payment) => payment.amount),
+    );
     return {
       settlementId: settlement.id,
       guestCheckId: settlement.guestCheckId,
@@ -243,6 +317,7 @@ export class CheckoutPaymentService {
           aggregateId: settlement.guestCheckId,
         },
       );
+      this.assertBillReadyForPayment(settlement);
 
       const cashSessionId =
         dto.method === CheckoutPaymentMethod.CASH
@@ -256,7 +331,9 @@ export class CheckoutPaymentService {
       const remainingRows = this.allocator.buildRemainingSnapshots(
         this.allocationInputs(settlement),
       );
-      const byId = new Map(remainingRows.map((row) => [row.id, row] as const));
+      const byId = new Map(
+        remainingRows.map((row) => [row.id, row] as const),
+      );
       const seen = new Set<string>();
       const normalized = dto.allocations.map((allocation) => {
         if (seen.has(allocation.snapshotId)) {
@@ -273,7 +350,9 @@ export class CheckoutPaymentService {
         }
         const amount = roundMoneyDecimal(allocation.amount, 4);
         if (amount.lte(0)) {
-          throw new BadRequestException('Allocation amount must be greater than zero');
+          throw new BadRequestException(
+            'Allocation amount must be greater than zero',
+          );
         }
         if (amount.gt(row.remainingAmountDecimal)) {
           throw new BadRequestException(

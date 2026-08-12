@@ -31,14 +31,14 @@ export default function CheckoutPage() {
       title={polish ? "Kasa" : "Checkout"}
       description={
         polish
-          ? "Jeden rachunek gościa: sprawdź pozycje, przyjmij płatność, zakończ aktywną grę lub zamówienie i zamknij rachunek."
-          : "One guest bill: review charges, take payment, finish any live play or order, then close the check."
+          ? "Jeden rachunek gościa: zbuduj rachunek, ustal końcową kwotę, przyjmij płatność i zamknij rachunek."
+          : "One guest bill: build it, finalize the amount, take payment, then close the check."
       }
       capabilities={[
         "One bill across play, orders, and booking charges",
-        "Server-authoritative total and remaining balance",
+        "Final-bill gate before any new payment",
         "Cash, external-terminal card, split, and other recorded payments",
-        "Live close-readiness with clear blockers and next actions",
+        "Authoritative close with payment and billing reconciliation",
       ]}
       className="bg-zinc-950/30 p-2 sm:p-3 md:p-4 lg:p-4"
     >
@@ -51,8 +51,13 @@ export default function CheckoutPage() {
             {polish ? "Najważniejsza zasada: " : "The important rule: "}
           </span>
           {polish
-            ? "płatność zmniejsza saldo; zamknięcie rachunku tylko finalizuje obsługę. Jeśli gra lub zamówienie nadal trwa, zakończ je najpierw. Nie pobieraj tej samej płatności drugi raz."
-            : "payment reduces the balance; closing the check only finalizes the workflow. If a play session or order is still live, finish it first. Never take the same payment twice."}
+            ? "najpierw zakończ otwarte zamówienia i bieżące samodzielne timery gry, aby kwota była ostateczna. Dopiero potem przyjmij płatność. Po zapisaniu płatności nie pobieraj jej drugi raz — zamknięcie rachunku finalizuje tylko rozliczenie i stan operacyjny."
+            : "finalize open orders and running standalone play timers first so the amount is stable. Only then take payment. Once payment is recorded, never take it again — closing the check only finalizes billing and operational state."}
+        </p>
+        <p className="mt-1 text-[11px] leading-4 text-zinc-600">
+          {polish
+            ? "Paragon fiskalny lub faktura to osobny etap zgodności i nie zmienia statusu zapłaty."
+            : "Fiscal receipt or invoice is a separate compliance step and does not change whether the guest has paid."}
         </p>
       </section>
 

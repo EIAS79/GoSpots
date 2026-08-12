@@ -42,6 +42,7 @@ const childInclude = {
       reservationId: true,
       label: true,
       startedAt: true,
+      endedAt: true,
       completedAt: true,
     },
     orderBy: { createdAt: 'desc' as const },
@@ -129,6 +130,7 @@ export class GuestCheckService {
         reservationId: p.reservationId,
         label: p.label,
         startedAt: p.startedAt.toISOString(),
+        endedAt: p.endedAt?.toISOString() ?? null,
         completedAt: p.completedAt?.toISOString() ?? null,
       })),
       reservations: check.reservations.map((r) => ({
@@ -164,7 +166,69 @@ export class GuestCheckService {
     }
   }
 
+  private async assertCheckoutMutable(
+    shopId: string,
+    check: Pick<GuestCheck, 'id' | 'currentSettlementId'>,
+  ) {
+    if (!check.currentSettlementId) return;
+    const settlement = await this.prisma.checkSettlement.findFirst({
+      where: {
+        id: check.currentSettlementId,
+        shopId,
+        guestCheckId: check.id,
+      },
+      select: {
+        id: true,
+        state: true,
+        payments: {
+          where: { status: 'SUCCESS' },
+          select: { id: true },
+          take: 1,
+        },
+      },
+    });
+    if (!settlement) {
+      throw new ConflictException(
+        'Checkout state is stale. Refresh the guest check before editing it.',
+      );
+    }
+    if (
+      settlement.payments.length > 0 ||
+      settlement.state === 'PARTIALLY_PAID' ||
+      settlement.state === 'PAID' ||
+      settlement.state === 'CLOSED'
+    ) {
+      throw new ConflictException(
+        'A payment has already been recorded. The bill is locked and cannot be edited, detached, or voided.',
+      );
+    }
+  }
+
   private async invalidateCurrentSettlement(shopId: string, id: string) {
+    const check = await this.prisma.guestCheck.findFirst({
+      where: { id, shopId, status: 'OPEN' },
+      select: { currentSettlementId: true },
+    });
+    if (!check) throw new ConflictException('Guest check is no longer open');
+
+    if (check.currentSettlementId) {
+      const voided = await this.prisma.checkSettlement.updateMany({
+        where: {
+          id: check.currentSettlementId,
+          shopId,
+          guestCheckId: id,
+          state: { in: ['OPEN', 'CALCULATED'] },
+          payments: { none: { status: 'SUCCESS' } },
+        },
+        data: { state: 'VOID' },
+      });
+      if (voided.count !== 1) {
+        throw new ConflictException(
+          'Checkout changed while the bill was being edited. Refresh before continuing.',
+        );
+      }
+    }
+
     const result = await this.prisma.guestCheck.updateMany({
       where: { id, shopId, status: 'OPEN' },
       data: { currentSettlementId: null, version: { increment: 1 } },
@@ -249,8 +313,13 @@ export class GuestCheckService {
     const shopId = requireShopId(actor);
     const existing = await this.loadCheck(shopId, id);
     this.assertOpen(existing);
+    await this.assertCheckoutMutable(shopId, existing);
 
-    await this.prisma.guestCheck.updateMany({
+    if (existing.currentSettlementId) {
+      await this.invalidateCurrentSettlement(shopId, id);
+    }
+
+    const result = await this.prisma.guestCheck.updateMany({
       where: { id, shopId, status: 'OPEN' },
       data: {
         ...(dto.guestName !== undefined
@@ -267,10 +336,12 @@ export class GuestCheckService {
           ? { label: dto.label?.trim() || null }
           : {}),
         ...(dto.note !== undefined ? { note: dto.note?.trim() || null } : {}),
-        currentSettlementId: null,
         version: { increment: 1 },
       },
     });
+    if (result.count !== 1) {
+      throw new ConflictException('Guest check changed while it was being updated');
+    }
 
     return this.serialize(await this.loadCheck(shopId, id));
   }
@@ -280,8 +351,26 @@ export class GuestCheckService {
     const shopId = requireShopId(actor);
     const existing = await this.loadCheck(shopId, id);
     this.assertOpen(existing);
+    await this.assertCheckoutMutable(shopId, existing);
 
     const updated = await this.prisma.$transaction(async (tx) => {
+      if (existing.currentSettlementId) {
+        const voided = await tx.checkSettlement.updateMany({
+          where: {
+            id: existing.currentSettlementId,
+            shopId,
+            guestCheckId: id,
+            state: { in: ['OPEN', 'CALCULATED'] },
+            payments: { none: { status: 'SUCCESS' } },
+          },
+          data: { state: 'VOID' },
+        });
+        if (voided.count !== 1) {
+          throw new ConflictException(
+            'Checkout changed while the check was being voided. Refresh and try again.',
+          );
+        }
+      }
       await tx.shopOrder.updateMany({
         where: { guestCheckId: id, shopId },
         data: { guestCheckId: null },
@@ -294,7 +383,7 @@ export class GuestCheckService {
         where: { guestCheckId: id, shopId },
         data: { guestCheckId: null },
       });
-      await tx.guestCheck.updateMany({
+      const claimed = await tx.guestCheck.updateMany({
         where: { id, shopId, status: 'OPEN' },
         data: {
           status: 'VOID',
@@ -303,6 +392,9 @@ export class GuestCheckService {
           version: { increment: 1 },
         },
       });
+      if (claimed.count !== 1) {
+        throw new ConflictException('Guest check is no longer open');
+      }
       return tx.guestCheck.findFirst({
         where: { id, shopId },
         include: childInclude,
@@ -314,7 +406,7 @@ export class GuestCheckService {
     await this.audit.record(actor, {
       section: 'operations',
       action: 'guest_check.void',
-      summary: 'Voided guest check (children detached)',
+      summary: 'Voided unpaid guest check (linked activity detached)',
       meta: { guestCheckId: id },
     });
 
@@ -322,9 +414,8 @@ export class GuestCheckService {
   }
 
   /**
-   * Phase 3 close-out: OPEN → SETTLED.
-   * Children must already be billed/completed via existing money paths (Option A → settle gate).
-   * Does not post a second revenue stamp (avoids double-count with finance contract).
+   * Legacy close path retained for non-Checkout callers. Checkout V3 owns paid
+   * settlement finalization; callers with currentSettlementId must use /checkout.
    */
   async settle(actor: JwtAccessPayload, id: string, dto: SettleGuestCheckDto = {}) {
     this.assert(actor, PERMISSIONS.TRANSACTION_WRITE);
@@ -332,17 +423,25 @@ export class GuestCheckService {
     const existing = await this.loadCheck(shopId, id);
     this.assertOpen(existing);
 
+    if (existing.currentSettlementId) {
+      throw new ConflictException(
+        'This check uses Checkout payment. Close it from Checkout so payment and billing stay synchronized.',
+      );
+    }
+
     const blockers: string[] = [];
     for (const o of existing.shopOrders) {
       if (o.status !== 'COMPLETED' && o.status !== 'CANCELED') {
-        blockers.push(`order ${o.id.slice(0, 8)} is ${o.status} (need COMPLETED or CANCELED)`);
+        blockers.push(
+          `Order ${o.label?.trim() || o.id.slice(0, 8)} is still ${o.status.toLowerCase()}.`,
+        );
       }
     }
     for (const p of existing.playSessions) {
-      if (p.reservationId) continue; // billed via reservation
+      if (p.reservationId) continue;
       if (p.status !== 'COMPLETED' && p.status !== 'CANCELED') {
         blockers.push(
-          `play ${p.id.slice(0, 8)} is ${p.status} (need COMPLETED or CANCELED)`,
+          `Play ${p.label?.trim() || p.id.slice(0, 8)} is still ${p.status.toLowerCase()}.`,
         );
       }
     }
@@ -350,13 +449,14 @@ export class GuestCheckService {
       if (r.status === 'CANCELED' || r.status === 'NO_SHOW') continue;
       if (r.billedAmount == null) {
         blockers.push(
-          `reservation ${r.id.slice(0, 8)} has no billedAmount (mark paid first)`,
+          `Reservation ${r.guestName?.trim() || r.id.slice(0, 8)} has not been billed yet.`,
         );
       }
     }
     if (blockers.length > 0) {
       throw new BadRequestException({
-        message: 'Guest check cannot settle until attached children are closed',
+        message:
+          'This check still has activity that must be finished or billed before it can close.',
         blockers,
       });
     }
@@ -414,6 +514,7 @@ export class GuestCheckService {
     const shopId = requireShopId(actor);
     const check = await this.loadCheck(shopId, id);
     this.assertOpen(check);
+    await this.assertCheckoutMutable(shopId, check);
 
     if (dto.shopOrderId) {
       const order = await this.prisma.shopOrder.findFirst({
@@ -469,7 +570,7 @@ export class GuestCheckService {
     await this.audit.record(actor, {
       section: 'operations',
       action: 'guest_check.attach',
-      summary: 'Attached child to guest check',
+      summary: 'Attached activity to guest check',
       meta: {
         guestCheckId: id,
         shopOrderId: dto.shopOrderId ?? null,
@@ -487,6 +588,7 @@ export class GuestCheckService {
     const shopId = requireShopId(actor);
     const check = await this.loadCheck(shopId, id);
     this.assertOpen(check);
+    await this.assertCheckoutMutable(shopId, check);
 
     if (dto.shopOrderId) {
       const result = await this.prisma.shopOrder.updateMany({
@@ -521,7 +623,7 @@ export class GuestCheckService {
     await this.audit.record(actor, {
       section: 'operations',
       action: 'guest_check.detach',
-      summary: 'Detached child from guest check',
+      summary: 'Detached activity from guest check',
       meta: {
         guestCheckId: id,
         shopOrderId: dto.shopOrderId ?? null,

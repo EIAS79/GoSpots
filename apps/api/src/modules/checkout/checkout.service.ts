@@ -8,13 +8,18 @@ import {
 import { Prisma } from '@prisma/client';
 import { ApiDomainErrorCode } from '../../common/api-error.codes';
 import { apiConflictException } from '../../common/api-error.util';
+import { checkoutBillReadiness } from '../../common/checkout-integrity.util';
+import {
+  postReservationBilled,
+  postWalkInPlaySessionPaid,
+} from '../../common/ledger-post.util';
 import { assertExpectedVersion } from '../../common/optimistic-concurrency.util';
 import {
   hasPermission,
   PERMISSIONS,
   type PermissionKey,
 } from '../../common/permissions';
-import { serializeMoney } from '../../common/money.util';
+import { serializeMoney, sumMoneyDecimal } from '../../common/money.util';
 import { requireShopId } from '../../common/tenant';
 import { PrismaService } from '../../prisma/prisma.service';
 import { AuditService } from '../audit/audit.service';
@@ -58,6 +63,7 @@ const checkoutCheckInclude = {
       amount: true,
       currency: true,
       billingDiscountPercent: true,
+      endedAt: true,
       completedAt: true,
       reservationId: true,
     },
@@ -120,6 +126,17 @@ const closeCheckInclude = {
       status: true,
       label: true,
       reservationId: true,
+      endedAt: true,
+      completedAt: true,
+    },
+  },
+  reservations: {
+    select: {
+      id: true,
+      status: true,
+      guestName: true,
+      resourceId: true,
+      billedAmount: true,
     },
   },
 } satisfies Prisma.GuestCheckInclude;
@@ -128,8 +145,27 @@ const settlementInclude = {
   snapshots: { orderBy: { position: 'asc' as const } },
 } satisfies Prisma.CheckSettlementInclude;
 
+const closeSettlementInclude = {
+  snapshots: {
+    select: {
+      sourceType: true,
+      sourceId: true,
+      finalAmount: true,
+    },
+  },
+  payments: {
+    where: { status: 'SUCCESS' as const },
+    select: { method: true },
+    orderBy: { createdAt: 'asc' as const },
+  },
+} satisfies Prisma.CheckSettlementInclude;
+
 type SettlementWithSnapshots = Prisma.CheckSettlementGetPayload<{
   include: typeof settlementInclude;
+}>;
+
+type CloseSettlement = Prisma.CheckSettlementGetPayload<{
+  include: typeof closeSettlementInclude;
 }>;
 
 @Injectable()
@@ -154,6 +190,47 @@ export class CheckoutService {
     if (!(await this.flags.isFeatureEnabled(shopId, 'checkout_v2'))) {
       throw new ForbiddenException('Checkout V2 is not enabled for this venue');
     }
+  }
+
+  private assertBillFinalized(
+    check: Prisma.GuestCheckGetPayload<{ include: typeof checkoutCheckInclude }>,
+  ) {
+    const readiness = checkoutBillReadiness(check);
+    if (readiness.ready) return;
+    throw apiConflictException(
+      ApiDomainErrorCode.STATE_CONFLICT,
+      'Finalize open orders and standalone play timers before taking payment.',
+      {
+        stage: 'FINALIZE_BILL',
+        blockers: readiness.blockers,
+      },
+    );
+  }
+
+  private legacyPaymentMethod(settlement: CloseSettlement) {
+    const methods = [
+      ...new Set(settlement.payments.map((payment) => payment.method)),
+    ];
+    if (methods.length === 1 && methods[0] === 'CASH') return 'CASH' as const;
+    if (methods.length === 1 && methods[0] === 'MANUAL_CARD') {
+      return 'CARD' as const;
+    }
+    return 'OTHER' as const;
+  }
+
+  private snapshotAmount(
+    settlement: CloseSettlement,
+    sourceType: 'PLAY_SESSION' | 'RESERVATION',
+    sourceId: string,
+  ) {
+    const snapshots = settlement.snapshots.filter(
+      (snapshot) =>
+        snapshot.sourceType === sourceType && snapshot.sourceId === sourceId,
+    );
+    if (snapshots.length === 0) return null;
+    return sumMoneyDecimal(
+      ...snapshots.map((snapshot) => snapshot.finalAmount),
+    );
   }
 
   private serializeSettlement(row: SettlementWithSnapshots) {
@@ -241,6 +318,7 @@ export class CheckoutService {
           aggregateType: 'guest_check',
           aggregateId: checkId,
         });
+        this.assertBillFinalized(check);
 
         const preview = this.calculator.calculate(check);
         const nextVersion = check.version + 1;
@@ -375,8 +453,9 @@ export class CheckoutService {
   }
 
   /**
-   * Checkout V3 finalization. Payment is authoritative in CheckSettlement;
-   * operational sources only need to be finished, not paid a second time.
+   * Authoritative close. Checkout payment is the tender source of truth; this
+   * method only reconciles legacy revenue/billing stamps from that immutable paid
+   * settlement and then closes the settlement + GuestCheck. It never charges twice.
    */
   async closeCheck(actor: JwtAccessPayload, checkId: string) {
     this.assertPermission(actor, PERMISSIONS.CHECKOUT_WRITE);
@@ -388,7 +467,7 @@ export class CheckoutService {
         Prisma.sql`SELECT "id" FROM "GuestCheck" WHERE "id" = ${checkId} AND "shopId" = ${shopId} FOR UPDATE`,
       );
 
-      const check = await tx.guestCheck.findFirst({
+      let check = await tx.guestCheck.findFirst({
         where: { id: checkId, shopId },
         include: closeCheckInclude,
       });
@@ -408,6 +487,7 @@ export class CheckoutService {
           shopId,
           guestCheckId: checkId,
         },
+        include: closeSettlementInclude,
       });
       if (!settlement) {
         throw new ConflictException(
@@ -420,7 +500,8 @@ export class CheckoutService {
         );
       }
 
-      const zeroValueCheckout = settlement.total.isZero() && settlement.amountDue.isZero();
+      const zeroValueCheckout =
+        settlement.total.isZero() && settlement.amountDue.isZero();
       const paid =
         settlement.state === 'PAID' ||
         settlement.state === 'CLOSED' ||
@@ -454,6 +535,9 @@ export class CheckoutService {
 
       for (const play of check.playSessions) {
         if (play.status === 'COMPLETED' || play.status === 'CANCELED') continue;
+        const canReconcileEndedStandalone =
+          !play.reservationId && play.endedAt != null;
+        if (canReconcileEndedStandalone) continue;
         blockers.push({
           type: 'PLAY_SESSION',
           id: play.id,
@@ -470,6 +554,115 @@ export class CheckoutService {
         });
       }
 
+      const paymentMethod = this.legacyPaymentMethod(settlement);
+      const completedAt = new Date();
+      let reconciledReservations = 0;
+      let reconciledPlaySessions = 0;
+
+      for (const reservation of check.reservations) {
+        if (
+          reservation.status === 'CANCELED' ||
+          reservation.status === 'NO_SHOW' ||
+          !reservation.resourceId ||
+          reservation.billedAmount != null
+        ) {
+          continue;
+        }
+        const amount = this.snapshotAmount(
+          settlement,
+          'RESERVATION',
+          reservation.id,
+        );
+        if (!amount) {
+          throw new ConflictException(
+            `Paid checkout is missing the reservation charge for ${reservation.id}`,
+          );
+        }
+        const claimed = await tx.reservation.updateMany({
+          where: {
+            id: reservation.id,
+            shopId,
+            guestCheckId: checkId,
+            billedAmount: null,
+            status: { notIn: ['CANCELED', 'NO_SHOW'] },
+          },
+          data: {
+            billedAmount: amount,
+            billedAt: completedAt,
+            billingPaymentMethod: paymentMethod,
+          },
+        });
+        if (claimed.count !== 1) continue;
+        reconciledReservations += 1;
+        await postReservationBilled(tx, {
+          shopId,
+          reservationId: reservation.id,
+          billedAmount: amount,
+          currency: settlement.currency,
+          billedAt: completedAt,
+          resourceId: reservation.resourceId,
+          createdById: actor.sub,
+        });
+      }
+
+      for (const play of check.playSessions) {
+        if (
+          play.reservationId ||
+          play.status === 'COMPLETED' ||
+          play.status === 'CANCELED' ||
+          play.endedAt == null ||
+          play.completedAt != null
+        ) {
+          continue;
+        }
+        const amount = this.snapshotAmount(
+          settlement,
+          'PLAY_SESSION',
+          play.id,
+        );
+        if (!amount) {
+          throw new ConflictException(
+            `Paid checkout is missing the play charge for ${play.id}`,
+          );
+        }
+        const claimed = await tx.playSession.updateMany({
+          where: {
+            id: play.id,
+            shopId,
+            guestCheckId: checkId,
+            reservationId: null,
+            status: 'ACTIVE',
+            endedAt: { not: null },
+            completedAt: null,
+          },
+          data: {
+            amount,
+            paymentMethod,
+            status: 'COMPLETED',
+            completedAt,
+          },
+        });
+        if (claimed.count !== 1) continue;
+        reconciledPlaySessions += 1;
+        await postWalkInPlaySessionPaid(tx, {
+          shopId,
+          sessionId: play.id,
+          amount,
+          currency: settlement.currency,
+          completedAt,
+          reservationId: null,
+          createdById: actor.sub,
+        });
+      }
+
+      if (reconciledReservations > 0 || reconciledPlaySessions > 0) {
+        check = await tx.guestCheck.findFirst({
+          where: { id: checkId, shopId },
+          include: closeCheckInclude,
+        });
+        if (!check) throw new NotFoundException('Guest check not found');
+      }
+
       if (settlement.state !== 'CLOSED') {
         if (zeroValueCheckout && settlement.state === 'CALCULATED') {
           this.states.assertTransition('CALCULATED', 'PAID');
@@ -484,11 +677,17 @@ export class CheckoutService {
       }
 
       const result = await tx.guestCheck.updateMany({
-        where: { id: checkId, shopId, status: 'OPEN' },
+        where: {
+          id: checkId,
+          shopId,
+          status: 'OPEN',
+          currentSettlementId: settlement.id,
+        },
         data: {
           status: 'SETTLED',
-          settledAt: new Date(),
+          settledAt: completedAt,
           currentSettlementId: null,
+          paymentMethod,
           version: { increment: 1 },
         },
       });
@@ -508,6 +707,8 @@ export class CheckoutService {
           guestCheckId: checkId,
           total: serializeMoney(settlement.total),
           currency: settlement.currency,
+          reconciledReservations,
+          reconciledPlaySessions,
         },
       });
 
@@ -518,6 +719,8 @@ export class CheckoutService {
         settlementState: 'CLOSED' as const,
         total: serializeMoney(settlement.total),
         currency: settlement.currency,
+        reconciledReservations,
+        reconciledPlaySessions,
       };
     });
 

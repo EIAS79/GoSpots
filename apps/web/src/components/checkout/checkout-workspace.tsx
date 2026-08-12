@@ -1,7 +1,7 @@
 "use client";
 
-import { Loader2, Plus, RefreshCw } from "lucide-react";
-import { useCallback, useEffect, useState } from "react";
+import { Loader2, Plus, RefreshCw, X } from "lucide-react";
+import { FormEvent, useCallback, useEffect, useState } from "react";
 import {
   createGuestCheck,
   fetchGuestChecks,
@@ -29,12 +29,17 @@ export function CheckoutWorkspace({
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [loading, setLoading] = useState(canRead);
   const [creating, setCreating] = useState(false);
-  const [error, setError] = useState<string | null>(null);
+  const [loadError, setLoadError] = useState<string | null>(null);
+  const [actionError, setActionError] = useState<string | null>(null);
+  const [newCheckOpen, setNewCheckOpen] = useState(false);
+  const [guestName, setGuestName] = useState("");
+  const [label, setLabel] = useState("");
+  const [partySize, setPartySize] = useState(1);
 
   const loadChecks = useCallback(async () => {
     if (!canRead) return;
     setLoading(true);
-    setError(null);
+    setLoadError(null);
     try {
       const response = await fetchGuestChecks("OPEN");
       setChecks(response.checks);
@@ -44,12 +49,10 @@ export function CheckoutWorkspace({
         }
         return response.checks[0]?.id ?? null;
       });
-    } catch (loadError) {
-      setChecks([]);
-      setSelectedId(null);
-      setError(
-        loadError instanceof Error
-          ? loadError.message
+    } catch (loadErrorValue) {
+      setLoadError(
+        loadErrorValue instanceof Error
+          ? loadErrorValue.message
           : "Could not load open checks.",
       );
     } finally {
@@ -61,16 +64,25 @@ export function CheckoutWorkspace({
     void loadChecks();
   }, [loadChecks]);
 
-  async function onCreateCheck() {
+  async function onCreateCheck(event?: FormEvent) {
+    event?.preventDefault();
     if (!canWrite || creating) return;
     setCreating(true);
-    setError(null);
+    setActionError(null);
     try {
-      const created = await createGuestCheck({});
+      const created = await createGuestCheck({
+        guestName: guestName.trim() || undefined,
+        label: label.trim() || undefined,
+        partySize,
+      });
+      setGuestName("");
+      setLabel("");
+      setPartySize(1);
+      setNewCheckOpen(false);
       await loadChecks();
       setSelectedId(created.id);
     } catch (createError) {
-      setError(
+      setActionError(
         createError instanceof Error
           ? createError.message
           : "Could not create a new check.",
@@ -82,7 +94,7 @@ export function CheckoutWorkspace({
 
   if (!canRead) return <SettlementStatus issue="unauthorized" />;
 
-  if (loading && checks.length === 0) {
+  if (loading && checks.length === 0 && !loadError) {
     return (
       <div className="flex min-h-[22rem] items-center justify-center gap-2 rounded-2xl border border-white/8 bg-zinc-950/60 text-sm text-zinc-400">
         <Loader2 className="h-4 w-4 animate-spin" />
@@ -91,10 +103,10 @@ export function CheckoutWorkspace({
     );
   }
 
-  if (error) {
+  if (loadError && checks.length === 0) {
     return (
       <div className="space-y-3">
-        <SettlementStatus issue="error" detail={error} />
+        <SettlementStatus issue="error" detail={loadError} />
         <button
           type="button"
           onClick={() => void loadChecks()}
@@ -109,26 +121,43 @@ export function CheckoutWorkspace({
 
   if (checks.length === 0) {
     return (
-      <div className="rounded-2xl border border-dashed border-white/10 bg-zinc-950/45 px-5 py-20 text-center">
+      <div className="rounded-2xl border border-dashed border-white/10 bg-zinc-950/45 px-5 py-14 text-center">
         <p className="text-lg font-semibold text-zinc-100">No open checks</p>
         <p className="mx-auto mt-2 max-w-lg text-sm leading-6 text-zinc-500">
-          Create a check, then add menu items or attach an existing reservation,
-          order, or play session from the same screen.
+          A guest check is one customer or group bill. Create it, attach their play,
+          orders, or booking, finalize the amount, then take payment.
         </p>
         {canWrite ? (
-          <button
-            type="button"
-            onClick={() => void onCreateCheck()}
-            disabled={creating}
-            className="mt-6 inline-flex min-h-11 items-center gap-2 rounded-xl bg-emerald-400 px-5 py-2.5 text-sm font-bold text-zinc-950 transition hover:bg-emerald-300 disabled:opacity-50"
-          >
-            {creating ? (
-              <Loader2 className="h-4 w-4 animate-spin" />
+          <div className="mx-auto mt-6 max-w-xl text-left">
+            {newCheckOpen ? (
+              <NewCheckForm
+                guestName={guestName}
+                label={label}
+                partySize={partySize}
+                creating={creating}
+                error={actionError}
+                onGuestName={setGuestName}
+                onLabel={setLabel}
+                onPartySize={setPartySize}
+                onCancel={() => {
+                  setNewCheckOpen(false);
+                  setActionError(null);
+                }}
+                onSubmit={onCreateCheck}
+              />
             ) : (
-              <Plus className="h-4 w-4" />
+              <div className="text-center">
+                <button
+                  type="button"
+                  onClick={() => setNewCheckOpen(true)}
+                  className="inline-flex min-h-11 items-center gap-2 rounded-xl bg-emerald-400 px-5 py-2.5 text-sm font-bold text-zinc-950 transition hover:bg-emerald-300"
+                >
+                  <Plus className="h-4 w-4" />
+                  New guest check
+                </button>
+              </div>
             )}
-            New check
-          </button>
+          </div>
         ) : null}
       </div>
     );
@@ -137,36 +166,36 @@ export function CheckoutWorkspace({
   const selected = checks.find((check) => check.id === selectedId) ?? checks[0];
 
   return (
-    <div className="grid h-full min-h-[32rem] flex-1 overflow-hidden rounded-2xl border border-white/10 bg-zinc-950/45 lg:grid-cols-[15rem_minmax(0,1fr)]">
-      <aside className="flex min-h-0 flex-col border-b border-white/8 bg-black/15 p-3 lg:border-b-0 lg:border-r">
-        <div className="mb-3 flex items-center justify-between gap-2 px-1">
+    <div className="grid min-h-[32rem] min-w-0 rounded-2xl border border-white/10 bg-zinc-950/45 lg:grid-cols-[16rem_minmax(0,1fr)]">
+      <aside className="min-w-0 border-b border-white/8 bg-black/15 p-3 lg:sticky lg:top-4 lg:max-h-[calc(100dvh-9rem)] lg:self-start lg:border-b-0 lg:border-r">
+        <div className="flex items-center justify-between gap-2 px-1">
           <div>
             <p className="text-xs font-semibold uppercase tracking-[0.16em] text-zinc-500">
               Open checks
             </p>
             <p className="mt-1 text-xs text-zinc-600">
-              {checks.length} active
+              {checks.length} active · one bill per guest/group
             </p>
           </div>
           <div className="flex items-center gap-1">
             {canWrite ? (
               <button
                 type="button"
-                title="New check"
-                onClick={() => void onCreateCheck()}
-                disabled={creating}
-                className="grid h-9 w-9 place-items-center rounded-lg bg-emerald-400 text-zinc-950 transition hover:bg-emerald-300 disabled:opacity-40"
+                title="New guest check"
+                aria-label="New guest check"
+                onClick={() => {
+                  setNewCheckOpen((current) => !current);
+                  setActionError(null);
+                }}
+                className="grid h-9 w-9 place-items-center rounded-lg bg-emerald-400 text-zinc-950 transition hover:bg-emerald-300"
               >
-                {creating ? (
-                  <Loader2 className="h-4 w-4 animate-spin" />
-                ) : (
-                  <Plus className="h-4 w-4" />
-                )}
+                {newCheckOpen ? <X className="h-4 w-4" /> : <Plus className="h-4 w-4" />}
               </button>
             ) : null}
             <button
               type="button"
               title="Refresh checks"
+              aria-label="Refresh checks"
               onClick={() => void loadChecks()}
               disabled={loading}
               className="grid h-9 w-9 place-items-center rounded-lg text-zinc-500 transition hover:bg-white/5 hover:text-zinc-200 disabled:opacity-40"
@@ -178,12 +207,39 @@ export function CheckoutWorkspace({
           </div>
         </div>
 
-        <ul className="flex min-h-0 gap-2 overflow-x-auto lg:flex-1 lg:flex-col lg:overflow-y-auto lg:overflow-x-hidden lg:overscroll-contain lg:pr-1">
+        {newCheckOpen && canWrite ? (
+          <div className="mt-3">
+            <NewCheckForm
+              guestName={guestName}
+              label={label}
+              partySize={partySize}
+              creating={creating}
+              error={actionError}
+              compact
+              onGuestName={setGuestName}
+              onLabel={setLabel}
+              onPartySize={setPartySize}
+              onCancel={() => {
+                setNewCheckOpen(false);
+                setActionError(null);
+              }}
+              onSubmit={onCreateCheck}
+            />
+          </div>
+        ) : null}
+
+        {loadError ? (
+          <div className="mt-3 rounded-lg border border-amber-400/15 bg-amber-400/[0.05] px-2.5 py-2 text-[11px] leading-4 text-amber-200">
+            Refresh failed. Existing checks are kept on screen.
+          </div>
+        ) : null}
+
+        <ul className="mt-3 flex gap-2 overflow-x-auto pb-1 lg:max-h-[calc(100dvh-18rem)] lg:flex-col lg:overflow-y-auto lg:overflow-x-hidden lg:overscroll-contain lg:pr-1">
           {checks.map((check) => {
             const active = check.id === selected.id;
             const sources = sourceCount(check);
             return (
-              <li key={check.id} className="min-w-[12rem] lg:min-w-0">
+              <li key={check.id} className="min-w-[13rem] lg:min-w-0">
                 <button
                   type="button"
                   onClick={() => setSelectedId(check.id)}
@@ -200,15 +256,20 @@ export function CheckoutWorkspace({
                   >
                     {check.label?.trim() ||
                       check.guestName?.trim() ||
-                      "Guest check"}
+                      `Check #${check.id.slice(0, 8)}`}
                   </p>
                   <p className="mt-1 truncate text-xs text-zinc-500">
-                    {check.guestName?.trim() || `#${check.id.slice(0, 8)}`}
+                    {check.guestName?.trim() || "Walk-in / unnamed guest"}
                   </p>
-                  <p className="mt-2 text-xs font-medium text-zinc-400">
-                    {check.partySize} guest{check.partySize === 1 ? "" : "s"} · {sources}{" "}
-                    source{sources === 1 ? "" : "s"}
-                  </p>
+                  <div className="mt-2 flex flex-wrap items-center gap-x-2 gap-y-1 text-[11px] text-zinc-500">
+                    <span>
+                      {check.partySize} guest{check.partySize === 1 ? "" : "s"}
+                    </span>
+                    <span>·</span>
+                    <span>
+                      {sources} source{sources === 1 ? "" : "s"}
+                    </span>
+                  </div>
                 </button>
               </li>
             );
@@ -224,5 +285,103 @@ export function CheckoutWorkspace({
         onCheckChanged={loadChecks}
       />
     </div>
+  );
+}
+
+function NewCheckForm({
+  guestName,
+  label,
+  partySize,
+  creating,
+  error,
+  compact = false,
+  onGuestName,
+  onLabel,
+  onPartySize,
+  onCancel,
+  onSubmit,
+}: {
+  guestName: string;
+  label: string;
+  partySize: number;
+  creating: boolean;
+  error: string | null;
+  compact?: boolean;
+  onGuestName: (value: string) => void;
+  onLabel: (value: string) => void;
+  onPartySize: (value: number) => void;
+  onCancel: () => void;
+  onSubmit: (event: FormEvent) => Promise<void>;
+}) {
+  return (
+    <form
+      onSubmit={(event) => void onSubmit(event)}
+      className={`rounded-xl border border-white/10 bg-black/20 ${compact ? "p-3" : "p-4"}`}
+    >
+      <p className="text-xs font-bold uppercase tracking-[0.14em] text-zinc-400">
+        New guest check
+      </p>
+      <p className="mt-1 text-[11px] leading-4 text-zinc-600">
+        Guest name and label are optional, but using one makes busy shifts much easier.
+      </p>
+      <div className={`mt-3 grid gap-2 ${compact ? "" : "sm:grid-cols-3"}`}>
+        <label className="text-[11px] font-medium text-zinc-500">
+          Guest name
+          <input
+            value={guestName}
+            onChange={(event) => onGuestName(event.target.value)}
+            placeholder="e.g. Anna"
+            className="mt-1 h-10 w-full rounded-lg border border-white/10 bg-zinc-950/80 px-3 text-sm text-zinc-100 outline-none transition focus:border-emerald-400/40"
+          />
+        </label>
+        <label className="text-[11px] font-medium text-zinc-500">
+          Check label
+          <input
+            value={label}
+            onChange={(event) => onLabel(event.target.value)}
+            placeholder="e.g. Table 5"
+            className="mt-1 h-10 w-full rounded-lg border border-white/10 bg-zinc-950/80 px-3 text-sm text-zinc-100 outline-none transition focus:border-emerald-400/40"
+          />
+        </label>
+        <label className="text-[11px] font-medium text-zinc-500">
+          Guests
+          <input
+            type="number"
+            min={1}
+            max={99}
+            value={partySize}
+            onChange={(event) =>
+              onPartySize(Math.min(99, Math.max(1, Number(event.target.value) || 1)))
+            }
+            className="mt-1 h-10 w-full rounded-lg border border-white/10 bg-zinc-950/80 px-3 text-sm text-zinc-100 outline-none transition focus:border-emerald-400/40"
+          />
+        </label>
+      </div>
+      {error ? (
+        <p className="mt-2 text-xs leading-5 text-rose-300">{error}</p>
+      ) : null}
+      <div className="mt-3 flex flex-wrap justify-end gap-2">
+        <button
+          type="button"
+          onClick={onCancel}
+          disabled={creating}
+          className="min-h-10 rounded-lg border border-white/10 px-3 text-xs font-semibold text-zinc-400 transition hover:bg-white/[0.04] disabled:opacity-50"
+        >
+          Cancel
+        </button>
+        <button
+          type="submit"
+          disabled={creating}
+          className="inline-flex min-h-10 items-center gap-2 rounded-lg bg-emerald-400 px-3 text-xs font-bold text-zinc-950 transition hover:bg-emerald-300 disabled:opacity-50"
+        >
+          {creating ? (
+            <Loader2 className="h-3.5 w-3.5 animate-spin" />
+          ) : (
+            <Plus className="h-3.5 w-3.5" />
+          )}
+          Create check
+        </button>
+      </div>
+    </form>
   );
 }

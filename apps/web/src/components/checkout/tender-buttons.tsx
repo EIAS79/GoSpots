@@ -49,7 +49,7 @@ export function TenderButtons({
         </div>
         {paymentsEnabled && onlineForFinance ? (
           <span className="rounded-full bg-emerald-400/10 px-2 py-1 text-[10px] font-semibold uppercase tracking-wide text-emerald-300">
-            Ready
+            Bill final
           </span>
         ) : !onlineForFinance ? (
           <span className="rounded-full bg-amber-400/10 px-2 py-1 text-[10px] font-semibold uppercase tracking-wide text-amber-300">
@@ -76,7 +76,7 @@ export function TenderButtons({
           ? "Payments and final checkout are disabled offline. Reconnect before taking money."
           : paymentsEnabled
             ? "Cash posts to the open cash shift. Card · external terminal only records a card payment that was already approved elsewhere; GoSpots does not charge the card itself."
-            : "Add at least one non-zero charge before taking payment."}
+            : "Payment unlocks only when the check has a non-zero charge and every open order or standalone play timer has been finalized."}
       </p>
     </section>
   );

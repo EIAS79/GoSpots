@@ -56,6 +56,7 @@ export type GuestCheck = {
     reservationId: string | null;
     label: string | null;
     startedAt: string;
+    endedAt: string | null;
     completedAt: string | null;
   }>;
   reservations: Array<{
@@ -162,7 +163,9 @@ function localCheck(body: GuestCheckMutation): GuestCheck {
   };
 }
 
-async function createGuestCheckOffline(body: GuestCheckMutation): Promise<GuestCheck> {
+async function createGuestCheckOffline(
+  body: GuestCheckMutation,
+): Promise<GuestCheck> {
   requireOfflineLite();
   const check = localCheck(body);
   await queueOfflineOperation({
@@ -174,7 +177,10 @@ async function createGuestCheckOffline(body: GuestCheckMutation): Promise<GuestC
   return check;
 }
 
-async function updateGuestCheckOffline(id: string, body: GuestCheckMutation): Promise<GuestCheck> {
+async function updateGuestCheckOffline(
+  id: string,
+  body: GuestCheckMutation,
+): Promise<GuestCheck> {
   requireOfflineLite();
   const cached = await readOfflineValue<GuestCheck>(`guest-check:${id}`);
   if (!cached) throw new Error("This check is not available in the offline cache.");
@@ -182,9 +188,15 @@ async function updateGuestCheckOffline(id: string, body: GuestCheckMutation): Pr
   const expectedVersion = cached.version;
   const next: GuestCheck = {
     ...cached,
-    ...(body.guestName !== undefined ? { guestName: body.guestName.trim() || null } : {}),
-    ...(body.guestEmail !== undefined ? { guestEmail: body.guestEmail.trim() || null } : {}),
-    ...(body.guestPhone !== undefined ? { guestPhone: body.guestPhone.trim() || null } : {}),
+    ...(body.guestName !== undefined
+      ? { guestName: body.guestName.trim() || null }
+      : {}),
+    ...(body.guestEmail !== undefined
+      ? { guestEmail: body.guestEmail.trim() || null }
+      : {}),
+    ...(body.guestPhone !== undefined
+      ? { guestPhone: body.guestPhone.trim() || null }
+      : {}),
     ...(body.partySize !== undefined ? { partySize: body.partySize } : {}),
     ...(body.label !== undefined ? { label: body.label.trim() || null } : {}),
     ...(body.note !== undefined ? { note: body.note.trim() || null } : {}),
@@ -202,11 +214,15 @@ async function updateGuestCheckOffline(id: string, body: GuestCheckMutation): Pr
   return next;
 }
 
-export async function fetchGuestChecks(status: GuestCheckStatus | "ALL" = "OPEN") {
+export async function fetchGuestChecks(
+  status: GuestCheckStatus | "ALL" = "OPEN",
+) {
   const q = status === "OPEN" ? "" : `?status=${status}`;
   if (offlineNow()) {
     requireOfflineLite();
-    if (status !== "OPEN") return { checks: [], canWrite: false } satisfies GuestCheckListResponse;
+    if (status !== "OPEN") {
+      return { checks: [], canWrite: false } satisfies GuestCheckListResponse;
+    }
     return cachedOpenChecks();
   }
   try {
@@ -214,7 +230,11 @@ export async function fetchGuestChecks(status: GuestCheckStatus | "ALL" = "OPEN"
     if (status === "OPEN") await cacheOpenChecks(response);
     return response;
   } catch (error) {
-    if (status === "OPEN" && isNetworkFailure(error) && offlineLiteEnabled()) {
+    if (
+      status === "OPEN" &&
+      isNetworkFailure(error) &&
+      offlineLiteEnabled()
+    ) {
       return cachedOpenChecks();
     }
     throw error;
@@ -262,7 +282,9 @@ export async function updateGuestCheck(id: string, body: GuestCheckMutation) {
 }
 
 function requireOnline(label: string) {
-  if (offlineNow()) throw new Error(`${label} is unavailable offline. Reconnect before continuing.`);
+  if (offlineNow()) {
+    throw new Error(`${label} is unavailable offline. Reconnect before continuing.`);
+  }
 }
 
 export function voidGuestCheck(id: string) {
