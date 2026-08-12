@@ -46,6 +46,11 @@ export function TenantPage({
       >
         <DashboardPageBody className="flex h-full min-h-0 flex-col">
           {children}
+          <div
+            aria-hidden="true"
+            className="h-6 shrink-0 sm:h-8"
+            data-dashboard-bottom-spacing
+          />
         </DashboardPageBody>
       </div>
     </div>
