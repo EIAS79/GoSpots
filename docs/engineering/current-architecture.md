@@ -1,211 +1,184 @@
-# GoSpots current architecture baseline
+# GoSpots current architecture
 
-**Baseline date:** 2026-08-09  
-**Baseline commit:** `fe8082c0b5c3c4f45b5a3cd71e0eacb94511d9ff`  
-**Repository:** `EIAS79/GoSpots`
+**Updated:** 2026-08-12  
+**Repository:** `EIAS79/GoSpots`  
+**Purpose:** Chunk 00 safety baseline for the architecture that exists now, after Chunks 01–27 and Checkout V3 work.
 
-This file is the Chunk 00 safety baseline. It describes the system that exists before the settlement/checkout architecture is expanded. Future chunks should update this document only when the architecture intentionally changes.
+## 1. Runtime and repository
 
-## 1. Repository and runtime
+GoSpots remains a pnpm monorepo on Node 24:
 
-GoSpots is a pnpm monorepo using pnpm `10.12.1` and Node `24.x`.
+- `apps/api` — NestJS 11 API;
+- `apps/web` — Next.js 16 tenant/public web application;
+- `apps/edge` — Node 24 local Edge Hub using SQLite for durable LAN state;
+- `apps/api/prisma` — Prisma 6 multi-file PostgreSQL schema + committed migrations;
+- `.github/workflows/ci.yml` — API/web/Edge/migration regression gate;
+- `render.yaml` — API deployment definition;
+- Vercel — web deployment;
+- Neon PostgreSQL — production database.
 
-- `apps/api` — NestJS 11 API
-- `apps/web` — Next.js 16 tenant/public web application
-- `apps/api/prisma/schema.prisma` — PostgreSQL/Prisma 6 data model
-- `apps/api/prisma/migrations` — forward database migrations
-- `.github/workflows/ci.yml` — repository CI
-- `render.yaml` — API production deployment definition
-- Vercel — web production deployment, documented separately in the repository
-- Neon PostgreSQL — production database target
+`pnpm-lock.yaml` is the dependency source of truth. Production/application migrations use committed Prisma migrations and `prisma migrate deploy`, never `db push` or `migrate reset`.
 
-`pnpm-lock.yaml` is the canonical workspace lockfile. A legacy/root `package-lock.json` is also present and must not become the dependency source of truth for workspace installs. CI and Render both install with `pnpm --frozen-lockfile`.
+## 2. Tenant and identity boundary
 
-## 2. API composition
+`Shop` remains the operational tenant boundary. Global `User` identity is joined to Shops through membership/RBAC. Global authentication, permission, trial/subscription, venue-context and tenant/RLS infrastructure remain authoritative.
 
-`AppModule` composes the main business modules, including:
+Rules for every domain:
 
-- auth
-- staff
-- dashboard
-- menu
-- resources
-- reservations
-- finance
-- billing
-- audit
-- public/guest
-- shop/onboarding
-- notifications
-- hours/gallery/media/notes
-- GDPR
-- guest-check
-- staff approvals
-- health/metrics
+1. never trust a payload `shopId` as authorization;
+2. query/mutate through the authenticated Shop context;
+3. new direct tenant tables must follow the repository RLS convention where applicable;
+4. organization-wide reads require explicit organization membership/access validation and must not leave tenant-RLS bypass enabled afterward.
 
-The application already has global request/security infrastructure. Do not duplicate it in future chunks without a concrete gap.
+## 3. Cross-cutting foundation
 
-Global guards/interceptors include:
+Shared infrastructure now includes:
 
-- throttling
-- CSRF protection
-- JWT authentication
-- role authorization
-- trial/subscription access
-- request logging
-- venue context resolution
-- tenant RLS context
+- exact money/currency utilities;
+- durable `IdempotencyReceipt` with request hashes;
+- global correlation/request IDs;
+- stable API domain error taxonomy;
+- optimistic-version helpers;
+- durable `DomainEventOutbox` convention;
+- per-Shop feature flags;
+- typed audit context;
+- structured request logging;
+- optional redacted Sentry telemetry.
 
-Sentry is installed as the global exception filter.
+The invariant is same idempotency key + same request = replay, while the same key + different request = conflict.
 
-## 3. Multi-tenancy and RBAC
+## 4. Financial bounded contexts
 
-`Shop` is the operational tenant boundary. Shop-scoped domain records carry `shopId` and relations back to `Shop`.
+Two money systems remain intentionally separate:
 
-Identity is global (`User`) and venue access is mediated through membership/RBAC. The API applies global JWT and role guards, then request/tenant context interceptors. Any new financial or operational model must remain shop-scoped unless the model is intentionally platform-global.
+1. GoSpots SaaS subscription billing for charging venues for GoSpots;
+2. venue guest checkout/payment/fiscal flows for charging a venue's guests.
 
-Future services must not rely on a client-supplied `shopId` without validating it against the authenticated venue context.
+They must not share payment authority merely because both represent money.
 
-## 4. Existing subscription and entitlement architecture
+### Visit / checkout spine
 
-There are two related billing concerns that must remain distinct:
+`GuestCheck` remains the visit/open-tab container. The canonical checkout path is:
 
-1. **GoSpots SaaS subscription billing** — provider-neutral billing models/services for charging venues for GoSpots.
-2. **Venue guest checkout/payment** — future settlement/payment architecture for a venue charging its own guests.
-
-The repository already contains provider-neutral SaaS billing concepts including billing accounts, subscriptions, payments, operations, webhook processing, provider registry/adapters, reconciliation, and state-machine tests. Stripe is the explicit production default in `render.yaml`; Mollie is present but disabled by default.
-
-Do not reuse SaaS billing payment records as guest checkout payments merely because both represent money. They are separate bounded contexts.
-
-Existing subscription data includes venue pack/add-on/seat concepts and a trial-access guard. Chunk 01 feature flags should integrate cleanly with this entitlement layer rather than scatter new conditional logic through controllers/UI.
-
-## 5. Current visit and commerce model
-
-### GuestCheck
-
-`GuestCheck` is the current open-tab / visit container.
-
-Current states:
-
-- `OPEN`
-- `SETTLED`
-- `VOID`
-
-It can contain:
-
-- `ShopOrder[]`
-- `PlaySession[]`
-- `Reservation[]`
-- `LedgerEntry[]`
-
-It already stores guest metadata, party size, label/note, currency, payment method, opened/settled/void timestamps and creator metadata.
-
-The current model is a container, not yet the future immutable settlement domain. Chunk 02 must preserve that distinction.
-
-### Reservation
-
-Reservations are shop-scoped and can be attached to a resource and optionally a GuestCheck. The current model includes timing, guest information, status, billed amount/time, discount/base amount/payment method and currency stamps.
-
-### PlaySession
-
-Play sessions represent walk-in or reservation-linked timed activity. They contain resource, timing/duration, amount, currency, discount/payment method, lifecycle status and optional GuestCheck linkage.
-
-### ShopOrder
-
-Shop orders are staff-managed tickets with order status, payment method, total, guest count, reservation fee, currency and optional GuestCheck linkage. Order lines snapshot name, quantity and unit price.
-
-### Transaction / Ledger
-
-The system also has transaction and ledger concepts used by current finance reporting. Later settlement/payment work must reconcile with those existing finance paths rather than create duplicate revenue. Until Chunk 02 explicitly changes finance reads, existing finance behavior remains authoritative.
-
-## 6. GuestCheck service boundary
-
-The API has a dedicated `modules/guest-check` module with controller, service and DTOs. This is the current ownership boundary for GuestCheck behavior.
-
-Chunk 02 may add a separate `checkout`/settlement domain, but should not collapse settlement logic into generic finance code or provider-specific code.
-
-## 7. Finance baseline
-
-The finance module currently owns reporting and play-billing behavior. The most recent baseline commit fixes play-billing tab classification/count consistency. That code is therefore regression-sensitive.
-
-When checkout/settlement is introduced:
-
-- finance reports must stay unchanged with `checkout_v2` disabled;
-- new settlement records must not double-post revenue;
-- historical reservations/sessions/orders must remain readable;
-- money calculations must remain server-authoritative.
-
-## 8. Database and migration baseline
-
-Prisma targets PostgreSQL. Production deployment runs `prisma migrate deploy` before API startup.
-
-CI already provisions an ephemeral PostgreSQL 16 service and executes:
-
-1. Prisma generate
-2. `prisma migrate deploy`
-3. `prisma migrate status`
-4. `prisma validate`
-
-This is the minimum migration regression path. Money-domain changes require the stricter process in `docs/engineering/migration-policy.md`.
-
-A tracked `apps/api/prisma/dev.db` exists even though the active datasource is PostgreSQL. Treat it as legacy/local data; it is not evidence that production uses SQLite.
-
-## 9. Production deployment
-
-### API / Render
-
-Render installs pnpm `10.12.1`, installs the frozen workspace, generates Prisma client, builds the Nest API, verifies `apps/api/dist/main.js`, then runs `prisma migrate deploy` immediately before starting the API.
-
-Health check: `/api/v1/ready`.
-
-Important production environment domains include database, JWT/auth, web origins/CSRF, Resend mail and SaaS billing provider credentials.
-
-### Web / Vercel
-
-The Next.js application is deployed separately on Vercel. Root `build:vercel` delegates to the web build.
-
-## 10. Test/build baseline
-
-Chunk 00 standardizes these root commands:
-
-```bash
-pnpm lint
-pnpm test
-pnpm build
-pnpm verify
-pnpm verify:strict
+```text
+GuestCheck
+  → CheckSettlement
+  → immutable ChargeSnapshot
+  → Payment / PaymentAllocation
+  → Refund / RefundAllocation
+  → ledger / cash / fiscal consequences
 ```
 
-- `pnpm verify` is the blocking regression gate for the current baseline: API Jest tests, API build and web production build.
-- `pnpm verify:strict` additionally runs strict lint first.
-- `pnpm lint` is deliberately non-destructive. It never rewrites source files.
+Checkout V3 preserves server-authoritative totals and payment-safe state transitions. Legacy billed/payment fields on older source models remain compatibility data until a deliberate later contract migration; new work must not create a second financial truth.
 
-The API has Jest tests, including billing state-machine/catalog/webhook coverage. The web currently has typecheck/lint/build tooling but no established unit-test runner, so root `test` intentionally runs the API suite only. A future web test framework should be added deliberately, not faked with a no-op command.
+## 5. Cash, devices, payment terminal and compliance
 
-### Existing lint debt
+The repository contains:
 
-The first non-destructive baseline scan exposed **806 existing API lint findings (801 errors, 5 warnings)**, of which 738 were reported as auto-fixable. Most are Prettier/formatting findings, with additional existing typed-ESLint findings. The pre-Chunk-00 `lint` script used `--fix`, which hid this debt by mutating the tree whenever lint was run.
+- cash drawers/sessions/movements/counts/variance approval;
+- tenant-scoped device and payment-terminal registry;
+- provider-neutral payment connector boundary;
+- durable payment operations with explicit `UNKNOWN` reconciliation state;
+- Stripe Terminal connector, webhook handling, terminal mapping, refund/cancel/status reconciliation;
+- Poland compliance domain, tax categories and immutable fiscal documents;
+- fiscal connector boundary;
+- KSeF 2.x connector, encrypted credentials, submission/status/reference/UPO handling and duplicate/UNKNOWN safeguards.
 
-Chunk 00 does not mass-reformat or semantically edit hundreds of unrelated files because that would make the safety-baseline PR itself high-risk and difficult to review. CI therefore reports API lint as an advisory baseline signal while tests/build/migration remain blocking. New chunks should avoid increasing this debt, and lint cleanup should be handled as a deliberately scoped cleanup series rather than mixed into money-domain work.
+Provider and regulatory adapters remain behind rollout/configuration gates. Repository engineering completion does not fabricate external provider credentials, certified-device evidence or legal/accounting approval.
 
-## 11. Critical invariants for Chunk 01+
+## 6. Offline architecture
 
-1. `Shop` remains the tenant boundary.
-2. Existing JWT/RBAC/trial/tenant guards remain authoritative.
-3. Guest checkout is not SaaS subscription billing.
-4. `GuestCheck` remains a visit container unless an explicit migration changes that contract.
-5. Existing finance behavior must remain unchanged with new feature flags disabled.
-6. No authoritative money calculations move into client-only code.
-7. New migrations are expand-first and production-forward-safe.
-8. Blocking CI gates must stay green before a dependent chunk starts.
+Two distinct layers exist.
 
-## 12. Known baseline risks / debt
+### Offline Lite
 
-- Root had no aggregate `test` command before Chunk 00.
-- API `lint` previously used `--fix`, so a validation command could mutate source; Chunk 00 splits validation from `lint:fix`.
-- API strict lint has 806 pre-existing findings; it is visible but not silently auto-fixed.
-- CI previously typechecked the web but did not build it, and did not run the API Jest suite.
-- Both pnpm and npm lockfiles exist at repository root; pnpm remains canonical.
-- The schema contains mature SaaS payment abstractions that could be confused with the future guest payment domain. Preserve the bounded-context separation.
+Single-browser transient WAN resilience:
 
-These are baseline observations, not permission for unrelated cleanup in later chunks.
+- service-worker shell/static cache, never API-cache authority;
+- IndexedDB private cache + mutation outbox;
+- cached checks, floor/resources and menu/catalog;
+- local elapsed timers;
+- stable device/operation/entity IDs, payload hash, occurrence time and expected versions;
+- replay-safe GuestCheck create/update;
+- replay-safe simple order addition with authoritative server pricing on reconnect;
+- replay-safe gaming session start/end with resource/version conflict checks;
+- explicit online-only payment/fiscal/refund/reconciliation boundary.
+
+### Edge Hub
+
+Multi-device/LAN authority is separate in `apps/edge`: durable local event log, signed device identity, authenticated LAN protocol, reconnect replay and hardware/printing integration. Browser Offline Lite is not promoted into a multi-device payment/fiscal authority.
+
+## 7. Operations / hospitality / growth
+
+Current major domains also include:
+
+- Operations Workspace / Resource Engine 2.0;
+- ordering variants/modifiers/server pricing;
+- KDS/prep routing;
+- inventory/recipes/purchasing/COGS;
+- workforce scheduling/time/labor;
+- Reservations 2.0, deposits, waitlist and capacity engine;
+- promotions/packages/tips;
+- CRM/membership/loyalty/stored value;
+- events/parties execution;
+- Analytics 2.0 using Ledger/provider/COGS/labor/tip/pricing evidence;
+- organization/multi-location;
+- integration jobs/webhooks/API credentials and fail-closed GoPOS boundary;
+- printers/customer displays/barcodes;
+- ticketing/RFID;
+- reliability diagnostics;
+- automation execution/dead-letter infrastructure;
+- evidence-backed AI insights.
+
+## 8. Deployment and readiness
+
+API production is deployed separately from the web. `/api/v1/live` is liveness; `/api/v1/ready` is the database/config readiness boundary. The web proxies `/api/v1` to the configured API origin. Edge is a venue-local process and is not a replacement for cloud deployment.
+
+High-risk rollout uses per-Shop feature flags and pilot Shops before broader activation.
+
+## 9. CI and migration baseline
+
+Chunk 00's current blocking regression path is:
+
+- frozen pnpm install;
+- changed production API semantic lint ratchet;
+- API Jest;
+- API production build;
+- PostgreSQL 17 empty-database migration deploy/status/Prisma validate;
+- web checkout tests;
+- web Offline Lite tests;
+- web TypeScript check;
+- web production build against an inert CI proxy target;
+- Edge tests/build.
+
+Repository-wide inherited lint/format debt remains visible as a non-destructive advisory report; it is not silently auto-fixed during validation.
+
+Migration policy is `expand → compatibility/dual-write when needed → backfill → verify → switch-read → observe → contract`. High-risk money changes require reconciliation and a restore/forward-fix plan before destructive contraction.
+
+## 10. Critical invariants
+
+1. `Shop` remains tenant authority.
+2. Guest checkout and SaaS billing remain separate bounded contexts.
+3. `GuestCheck` remains the visit spine; settlement/payment are explicit domains.
+4. Authoritative money is server-side and exact.
+5. Financial history is append-only/immutable where defined; corrections are new records.
+6. External timeouts are not silently treated as failures when provider state may be unknown.
+7. Idempotency changed-payload reuse is a conflict.
+8. Offline replay cannot silently overwrite a newer cloud aggregate.
+9. Terminal/fiscal/KSeF actions are not claimed offline unless an explicit provider/compliance mode proves them safe.
+10. New migrations are expand-first and `main` must remain deployable.
+11. Feature flags are per-Shop rollout controls, not UI-only hiding.
+12. Exact-head CI, not an earlier green commit, is the repository acceptance evidence.
+
+## 11. Known external acceptance boundaries
+
+Repository CI cannot manufacture:
+
+- a live Stripe Terminal account/reader sandbox transaction;
+- certified fiscal hardware/provider behavior;
+- KSeF TEST/DEMO credentials in an operator-owned environment;
+- Polish legal/accounting sign-off;
+- licensed GoPOS production API access;
+- certification of every physical printer/scanner/display device.
+
+These are explicit release/pilot evidence, not reasons to weaken or falsify repository gates.
