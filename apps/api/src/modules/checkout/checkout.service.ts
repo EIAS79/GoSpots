@@ -6,6 +6,7 @@ import {
 import { Prisma } from '@prisma/client';
 import { ApiDomainErrorCode } from '../../common/api-error.codes';
 import { apiConflictException } from '../../common/api-error.util';
+import { guestCheckOperationalReadiness } from '../../common/guest-check-close.util';
 import { assertExpectedVersion } from '../../common/optimistic-concurrency.util';
 import {
   hasPermission,
@@ -136,6 +137,19 @@ export class CheckoutService {
     }
   }
 
+  private assertBillFinalized(check: Prisma.GuestCheckGetPayload<{ include: typeof checkoutCheckInclude }>) {
+    const readiness = guestCheckOperationalReadiness(check);
+    if (readiness.ready) return;
+    throw apiConflictException(
+      ApiDomainErrorCode.GUEST_CHECK_ACTIVITY_OPEN,
+      'Finish open orders and play sessions before taking payment.',
+      {
+        stage: 'FINALIZE_BILL',
+        blockers: readiness.blockers,
+      },
+    );
+  }
+
   private serializeSettlement(row: SettlementWithSnapshots) {
     return {
       id: row.id,
@@ -221,6 +235,7 @@ export class CheckoutService {
           aggregateType: 'guest_check',
           aggregateId: checkId,
         });
+        this.assertBillFinalized(check);
 
         const preview = this.calculator.calculate(check);
         const nextVersion = check.version + 1;
