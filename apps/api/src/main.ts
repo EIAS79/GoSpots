@@ -120,10 +120,11 @@ async function bootstrap() {
       'Authorization',
       'x-venue-path',
       'x-csrf-token',
+      'x-correlation-id',
       'x-request-id',
       'Idempotency-Key',
     ],
-    exposedHeaders: ['x-request-id'],
+    exposedHeaders: ['x-correlation-id', 'x-request-id'],
   });
 
   if (config.get('NODE_ENV') !== 'production') {
