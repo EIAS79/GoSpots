@@ -204,6 +204,21 @@ jobs:
           cp -R apps/api/prisma/migrations /tmp/gospots-upgrade-prisma/migrations
           pnpm --dir apps/api exec prisma migrate deploy --schema /tmp/gospots-upgrade-prisma
           pnpm --dir apps/api exec prisma migrate status --schema /tmp/gospots-upgrade-prisma
+      - name: Schema/migration drift report
+        continue-on-error: true
+        shell: bash
+        run: |
+          set -o pipefail
+          pnpm --dir apps/api exec prisma migrate diff \
+            --from-url "$DATABASE_URL" \
+            --to-schema apps/api/prisma \
+            --script | tee /tmp/phase1-schema-drift.sql
+          {
+            echo '### Prisma schema / migration drift report'
+            echo '```sql'
+            cat /tmp/phase1-schema-drift.sql
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
       - name: Prisma generate and assert preservation
         shell: bash
         run: |
