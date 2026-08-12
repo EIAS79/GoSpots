@@ -5,6 +5,7 @@ export type OfflineCapability =
   | "order_add"
   | "gaming_session_start"
   | "gaming_session_end"
+  | "cash_payment"
   | "card_payment"
   | "fiscal_receipt"
   | "ksef_submit"
@@ -22,16 +23,20 @@ const POLICY: Record<OfflineCapability, OfflinePolicyDecision> = {
   check_create: { allowed: true, reason: "Queued locally and replayed with a stable operation ID." },
   check_update: { allowed: true, reason: "Queued with the check version captured before WAN loss." },
   order_add: {
-    allowed: false,
-    reason: "Offline order mutation is not enabled in Offline Lite until stock/conflict replay is authoritative.",
+    allowed: true,
+    reason: "Queued locally; menu references are validated and prices are recalculated authoritatively by the server during replay.",
   },
   gaming_session_start: {
-    allowed: false,
-    reason: "Offline gaming mutation is reserved for a later approved conflict policy.",
+    allowed: true,
+    reason: "Queued with a stable session ID and local start time; replay re-checks resource conflicts before commit.",
   },
   gaming_session_end: {
+    allowed: true,
+    reason: "Queued with the captured session version and local end time; replay rejects stale versions deterministically.",
+  },
+  cash_payment: {
     allowed: false,
-    reason: "Offline gaming mutation is reserved for a later approved conflict policy.",
+    reason: "Offline Lite does not finalize cash settlement because fiscal and drawer policy remain cloud-authoritative; Edge/local-compliance mode may add this separately.",
   },
   card_payment: { allowed: false, reason: "Card authorization requires an online payment provider." },
   fiscal_receipt: { allowed: false, reason: "Fiscal-device completion must not be guessed while offline." },
