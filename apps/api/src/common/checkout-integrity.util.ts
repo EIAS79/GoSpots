@@ -11,12 +11,12 @@ export type CheckoutBillBlocker = {
 };
 
 type CheckoutBillInput = {
-  shopOrders: Array<{
+  shopOrders?: Array<{
     id: string;
     status: string;
     label?: string | null;
   }>;
-  playSessions: Array<{
+  playSessions?: Array<{
     id: string;
     status: string;
     reservationId?: string | null;
@@ -37,7 +37,7 @@ type CheckoutBillInput = {
 export function checkoutBillReadiness(check: CheckoutBillInput) {
   const blockers: CheckoutBillBlocker[] = [];
 
-  for (const order of check.shopOrders) {
+  for (const order of check.shopOrders ?? []) {
     if (order.status === 'COMPLETED' || order.status === 'CANCELED') continue;
     blockers.push({
       sourceType: 'SHOP_ORDER',
@@ -48,7 +48,7 @@ export function checkoutBillReadiness(check: CheckoutBillInput) {
     });
   }
 
-  for (const play of check.playSessions) {
+  for (const play of check.playSessions ?? []) {
     if (play.reservationId) continue;
     if (play.status === 'COMPLETED' || play.status === 'CANCELED') continue;
     if (play.endedAt != null) continue;
