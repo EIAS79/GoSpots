@@ -24,7 +24,11 @@ export type GuestCheckCloseBlocker = {
   sourceId: string;
   status: string;
   label: string;
-  reason: "ORDER_OPEN" | "PLAY_SESSION_OPEN" | "RESERVATION_UNBILLED";
+  reason:
+    | "ORDER_OPEN"
+    | "PLAY_SESSION_OPEN"
+    | "PLAY_SESSION_UNPAID"
+    | "RESERVATION_UNBILLED";
 };
 
 export type GuestCheckCloseReadiness = {
@@ -69,6 +73,7 @@ export type GuestCheck = {
     reservationId: string | null;
     label: string | null;
     startedAt: string;
+    endedAt: string | null;
     completedAt: string | null;
   }>;
   reservations: Array<{
@@ -86,7 +91,8 @@ export type GuestCheck = {
   playTotal: string;
   reservationTotal: string;
   totalLines: GuestCheckTotalLine[];
-  closeReadiness: GuestCheckCloseReadiness;
+  /** Optional during rolling deploys so a new web build can tolerate an older API. */
+  closeReadiness?: GuestCheckCloseReadiness;
 };
 
 export type GuestCheckListResponse = {
