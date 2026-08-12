@@ -48,6 +48,9 @@ export const ApiDomainErrorCode = {
   SHOP_ORDER_STATE: 'SHOP_ORDER_STATE',
   PLAY_SESSION_ACTIVE: 'PLAY_SESSION_ACTIVE',
   GUEST_CHECK_CLOSED: 'GUEST_CHECK_CLOSED',
+  GUEST_CHECK_ACTIVITY_OPEN: 'GUEST_CHECK_ACTIVITY_OPEN',
+  GUEST_CHECK_PAYMENT_INCOMPLETE: 'GUEST_CHECK_PAYMENT_INCOMPLETE',
+  GUEST_CHECK_PAYMENT_LOCKED: 'GUEST_CHECK_PAYMENT_LOCKED',
   // Guest / public
   GUEST_TOKEN_EXPIRED: 'GUEST_TOKEN_EXPIRED',
   GUEST_TOKEN_REVOKED: 'GUEST_TOKEN_REVOKED',
@@ -80,7 +83,7 @@ const STATUS_TO_CODE: Partial<Record<number, ApiErrorCodeValue>> = {
 };
 
 /**
- * Map HTTP status → stable envelope code.
+ * Map HTTP status → stable machine code when exception has no custom `code`.
  * Known 4xx use ApiErrorCode; 5xx → INTERNAL; others → `HTTP_<status>`.
  */
 export function errorCodeForHttpStatus(status: number): string {
