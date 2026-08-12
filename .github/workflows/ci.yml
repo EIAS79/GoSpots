@@ -364,7 +364,7 @@ jobs:
           done
           curl -fsS http://127.0.0.1:4000/api/v1/live
 
-          nohup pnpm --dir apps/web run start -- --hostname 127.0.0.1 --port 3000 > /tmp/gospots-web.log 2>&1 &
+          nohup pnpm --dir apps/web run start --hostname 127.0.0.1 --port 3000 > /tmp/gospots-web.log 2>&1 &
           echo $! > /tmp/gospots-web.pid
           for i in {1..60}; do
             if curl -fsS http://127.0.0.1:3000/login >/dev/null; then break; fi
