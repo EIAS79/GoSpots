@@ -1,16 +1,54 @@
 import { BadRequestException, Injectable } from '@nestjs/common';
 import { Prisma } from '@prisma/client';
 
+export const CURRENT_DOMAIN_EVENT_SCHEMA_VERSION = 1;
+
 export type DomainEventInput = {
   shopId: string;
   aggregateType: string;
   aggregateId: string;
   eventType: string;
   payload: Prisma.InputJsonValue;
+  eventSchemaVersion?: number;
   occurredAt?: Date;
 };
 
 const EVENT_TYPE_PATTERN = /^[a-z0-9]+(?:-[a-z0-9]+)*(?:\.[a-z0-9]+(?:-[a-z0-9]+)*)+$/;
+
+function versionedPayload(
+  payload: Prisma.InputJsonValue,
+  eventSchemaVersion: number,
+): Prisma.InputJsonValue {
+  if (typeof payload === 'object' && payload !== null && !Array.isArray(payload)) {
+    return {
+      ...(payload as Prisma.InputJsonObject),
+      eventSchemaVersion,
+    };
+  }
+  return { eventSchemaVersion, data: payload };
+}
+
+/**
+ * Legacy outbox rows predate explicit event versioning and are therefore v1.
+ * Consumers must call this before decoding the event-specific payload. Unknown
+ * future versions are intentionally reported as unsupported so a dispatcher can
+ * dead-letter them instead of attempting an unsafe decode.
+ */
+export function readDomainEventSchemaVersion(payload: unknown): number {
+  if (typeof payload !== 'object' || payload === null || Array.isArray(payload)) {
+    return CURRENT_DOMAIN_EVENT_SCHEMA_VERSION;
+  }
+  const value = (payload as Record<string, unknown>).eventSchemaVersion;
+  if (value === undefined) return CURRENT_DOMAIN_EVENT_SCHEMA_VERSION;
+  if (typeof value !== 'number' || !Number.isInteger(value) || value < 1) {
+    return Number.NaN;
+  }
+  return value;
+}
+
+export function isSupportedDomainEventSchemaVersion(payload: unknown): boolean {
+  return readDomainEventSchemaVersion(payload) === CURRENT_DOMAIN_EVENT_SCHEMA_VERSION;
+}
 
 /**
  * Writes durable application-domain events through a caller-supplied transaction.
@@ -35,13 +73,24 @@ export class DomainEventOutboxService {
       throw new BadRequestException('Domain event tenant and aggregate are required');
     }
 
+    const eventSchemaVersion =
+      event.eventSchemaVersion ?? CURRENT_DOMAIN_EVENT_SCHEMA_VERSION;
+    if (
+      !Number.isInteger(eventSchemaVersion) ||
+      eventSchemaVersion !== CURRENT_DOMAIN_EVENT_SCHEMA_VERSION
+    ) {
+      throw new BadRequestException(
+        `Unsupported domain event schema version: ${eventSchemaVersion}`,
+      );
+    }
+
     return tx.domainEventOutbox.create({
       data: {
         shopId: event.shopId,
         aggregateType: event.aggregateType,
         aggregateId: event.aggregateId,
         eventType: event.eventType,
-        payload: event.payload,
+        payload: versionedPayload(event.payload, eventSchemaVersion),
         occurredAt: event.occurredAt,
       },
       select: { id: true },

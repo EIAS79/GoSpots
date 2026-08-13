@@ -1,10 +1,9 @@
 import { createHash } from 'crypto';
-import {
-  BadRequestException,
-  ConflictException,
-} from '@nestjs/common';
+import { BadRequestException } from '@nestjs/common';
 import { Prisma } from '@prisma/client';
 import type { PrismaClient } from '@prisma/client';
+import { ApiDomainErrorCode } from './api-error.codes';
+import { apiConflictException } from './api-error.util';
 
 /** Default receipt TTL (24h). */
 export const IDEMPOTENCY_DEFAULT_TTL_MS = 24 * 60 * 60 * 1000;
@@ -137,10 +136,42 @@ function normalizeKey(raw: string | undefined | null): string | null {
   return key;
 }
 
-/** Stable SHA-256 hex of a JSON-serializable request body (or string). */
+function canonicalizeJson(value: unknown): unknown {
+  if (value === null || typeof value !== 'object') return value;
+  if (value instanceof Date) return value.toJSON();
+  if (Array.isArray(value)) return value.map((item) => canonicalizeJson(item));
+
+  const maybeSerializable = value as { toJSON?: () => unknown };
+  if (typeof maybeSerializable.toJSON === 'function') {
+    return canonicalizeJson(maybeSerializable.toJSON());
+  }
+
+  const source = value as Record<string, unknown>;
+  const canonical: Record<string, unknown> = {};
+  for (const key of Object.keys(source).sort()) {
+    const item = source[key];
+    if (
+      item === undefined ||
+      typeof item === 'function' ||
+      typeof item === 'symbol'
+    ) {
+      continue;
+    }
+    canonical[key] = canonicalizeJson(item);
+  }
+  return canonical;
+}
+
+/**
+ * Stable SHA-256 hex of a JSON-serializable request body (or raw string).
+ * Object keys are recursively sorted so semantically identical JSON requests
+ * cannot produce different receipt hashes merely because property order changed.
+ */
 export function hashIdempotencyRequest(body: unknown): string {
   const payload =
-    typeof body === 'string' ? body : JSON.stringify(body ?? null);
+    typeof body === 'string'
+      ? body
+      : JSON.stringify(canonicalizeJson(body ?? null));
   return createHash('sha256').update(payload).digest('hex');
 }
 
@@ -153,13 +184,24 @@ function parseStoredResponse(responseJson: string | null): unknown {
   }
 }
 
+function idempotencyConflict(
+  message: string,
+  details?: Record<string, unknown>,
+) {
+  return apiConflictException(
+    ApiDomainErrorCode.IDEMPOTENCY_CONFLICT,
+    message,
+    details,
+  );
+}
+
 function assertRequestHashMatch(
   stored: string | null,
   incoming: string | null | undefined,
 ): void {
   if (!stored || !incoming) return;
   if (stored !== incoming) {
-    throw new ConflictException(
+    throw idempotencyConflict(
       'Idempotency-Key reused with a different request payload',
     );
   }
@@ -170,7 +212,7 @@ function readMemory(
   scope: string,
   key: string,
   requestHash: string | null | undefined,
-): unknown | undefined {
+): MemoryEntry | undefined {
   const mk = memoryKey(shopId, scope, key);
   const hit = memoryCache.get(mk);
   if (!hit) return undefined;
@@ -179,7 +221,7 @@ function readMemory(
     return undefined;
   }
   assertRequestHashMatch(hit.requestHash, requestHash);
-  return hit.response;
+  return hit;
 }
 
 function writeMemory(
@@ -258,7 +300,7 @@ export async function withClientIdempotency<T>(
   const expiresAt = new Date(Date.now() + ttlMs);
 
   const fromMem = readMemory(shopId, scope, key, requestHash);
-  if (fromMem !== undefined) return fromMem as T;
+  if (fromMem) return fromMem.response as T;
 
   const existing = await loadReceipt(prisma, shopId, scope, key);
   if (existing && receiptStillValid(existing)) {
@@ -269,22 +311,32 @@ export async function withClientIdempotency<T>(
       return parsed;
     }
     if (existing.status === 'PENDING') {
-      const replay = await waitForCompleted(prisma, shopId, scope, key, requestHash);
-      if (replay !== undefined) {
-        writeMemory(shopId, scope, key, replay, requestHash, ttlMs);
-        return replay as T;
+      const replay = await waitForCompleted(
+        prisma,
+        shopId,
+        scope,
+        key,
+        requestHash,
+      );
+      if (replay) {
+        const parsed = parseStoredResponse(replay.responseJson) as T;
+        writeMemory(shopId, scope, key, parsed, replay.requestHash, ttlMs);
+        return parsed;
       }
-      throw new ConflictException(
+      throw idempotencyConflict(
         'Idempotency-Key request is already in progress',
+        { scope },
       );
     }
   }
 
   // Expired or missing — claim with PENDING (unique).
   if (existing && !receiptStillValid(existing)) {
-    await prisma.idempotencyReceipt.delete({
-      where: { shopId_scope_key: { shopId, scope, key } },
-    }).catch(() => undefined);
+    await prisma.idempotencyReceipt
+      .delete({
+        where: { shopId_scope_key: { shopId, scope, key } },
+      })
+      .catch(() => undefined);
   }
 
   try {
@@ -308,13 +360,21 @@ export async function withClientIdempotency<T>(
       writeMemory(shopId, scope, key, parsed, raced.requestHash, ttlMs);
       return parsed;
     }
-    const replay = await waitForCompleted(prisma, shopId, scope, key, requestHash);
-    if (replay !== undefined) {
-      writeMemory(shopId, scope, key, replay, requestHash, ttlMs);
-      return replay as T;
+    const replay = await waitForCompleted(
+      prisma,
+      shopId,
+      scope,
+      key,
+      requestHash,
+    );
+    if (replay) {
+      const parsed = parseStoredResponse(replay.responseJson) as T;
+      writeMemory(shopId, scope, key, parsed, replay.requestHash, ttlMs);
+      return parsed;
     }
-    throw new ConflictException(
+    throw idempotencyConflict(
       'Idempotency-Key request is already in progress',
+      { scope },
     );
   }
 
@@ -348,14 +408,14 @@ async function waitForCompleted(
   requestHash: string | null | undefined,
   attempts = 8,
   delayMs = 25,
-): Promise<unknown | undefined> {
+): Promise<ReceiptRow | undefined> {
   for (let i = 0; i < attempts; i++) {
     await sleep(delayMs);
     const row = await loadReceipt(prisma, shopId, scope, key);
     if (!row || !receiptStillValid(row)) return undefined;
     if (row.status === 'COMPLETED') {
       assertRequestHashMatch(row.requestHash, requestHash);
-      return parseStoredResponse(row.responseJson);
+      return row;
     }
   }
   return undefined;

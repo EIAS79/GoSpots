@@ -2,8 +2,37 @@ import { PrismaClient } from '@prisma/client';
 
 const prisma = new PrismaClient();
 
+const PHASE2_REQUIRED_CONSTRAINTS = [
+  'Ticket_product_same_shop_fk',
+  'Ticket_order_same_shop_fk',
+  'TicketScan_ticket_same_shop_fk',
+  'RfidCredential_wallet_same_shop_fk',
+  'RfidWalletEntry_wallet_same_shop_fk',
+  'RfidWalletEntry_reversal_same_shop_fk',
+  'RfidTap_credential_same_shop_fk',
+  'RfidTap_wallet_same_shop_fk',
+  'AutomationExecution_rule_same_shop_fk',
+  'AutomationStep_execution_same_shop_fk',
+  'AutomationDead_execution_same_shop_fk',
+  'AiInsightRun_snapshot_same_shop_fk',
+  'AiInsight_run_same_shop_fk',
+  'AiInsightFeedback_insight_same_shop_fk',
+  'TicketProduct_price_nonnegative_ck',
+  'TicketProduct_scan_count_ck',
+  'TicketProduct_validity_ck',
+  'TicketOrder_total_nonnegative_ck',
+  'Ticket_scan_bounds_ck',
+  'RfidWallet_balance_nonnegative_ck',
+  'RfidWallet_version_nonnegative_ck',
+  'RfidWalletEntry_balance_nonnegative_ck',
+  'AutomationExecution_attempt_nonnegative_ck',
+  'AutomationStep_index_nonnegative_ck',
+  'AutomationDead_replay_nonnegative_ck',
+  'AiInsightFeedback_rating_ck',
+] as const;
+
 function invariant(condition: unknown, message: string): asserts condition {
-  if (!condition) throw new Error(`Phase 1 upgrade assertion failed: ${message}`);
+  if (!condition) throw new Error(`Migration upgrade assertion failed: ${message}`);
 }
 
 async function main() {
@@ -60,7 +89,33 @@ async function main() {
   const missing = requiredTables.filter((row) => !row.present).map((row) => row.name);
   invariant(missing.length === 0, `current migration chain is missing tables: ${missing.join(', ')}`);
 
-  console.log('Phase 1 migration-upgrade assertions passed.');
+  const constraints = await prisma.$queryRaw<Array<{ conname: string; contype: string }>>`
+    SELECT conname, contype FROM pg_constraint
+  `;
+  const byConstraint = new Map(
+    constraints.map((constraint) => [constraint.conname, constraint]),
+  );
+  const missingConstraints = PHASE2_REQUIRED_CONSTRAINTS.filter(
+    (name) => !byConstraint.has(name),
+  );
+  invariant(
+    missingConstraints.length === 0,
+    `Phase 2 DB constraints missing after upgrade: ${missingConstraints.join(', ')}`,
+  );
+  const wrongType = PHASE2_REQUIRED_CONSTRAINTS.map((name) =>
+    byConstraint.get(name),
+  ).filter(
+    (constraint) =>
+      constraint && constraint.contype !== 'f' && constraint.contype !== 'c',
+  );
+  invariant(
+    wrongType.length === 0,
+    `Phase 2 constraints have unexpected types: ${wrongType
+      .map((constraint) => `${constraint!.conname}:${constraint!.contype}`)
+      .join(', ')}`,
+  );
+
+  console.log('Migration-upgrade and Phase 2 integrity assertions passed.');
 }
 
 main()

@@ -1,4 +1,5 @@
 import {
+  BadRequestException,
   Body,
   Controller,
   Get,
@@ -9,11 +10,18 @@ import {
   UseGuards,
 } from '@nestjs/common';
 import { ApiTags } from '@nestjs/swagger';
+import {
+  hashIdempotencyRequest,
+  withClientIdempotency,
+} from '../../common/idempotency.util';
 import { PERMISSIONS } from '../../common/permissions';
+import { PrismaService } from '../../prisma/prisma.service';
 import { CurrentUser } from '../auth/decorators/current-user.decorator';
 import { RequirePermissions } from '../auth/decorators/roles.decorator';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import type { JwtAccessPayload } from '../auth/auth.service';
+import { FeatureFlagGuard } from '../foundation/feature-flag.guard';
+import { RequireFeature } from '../foundation/require-feature.decorator';
 import {
   CreateConnectorInstallationDto,
   CreateIntegrationCredentialDto,
@@ -26,10 +34,21 @@ import { IntegrationsService } from './integrations.service';
 
 @ApiTags('integrations')
 @Controller('integrations')
-@UseGuards(JwtAuthGuard)
+@UseGuards(JwtAuthGuard, FeatureFlagGuard)
+@RequireFeature('integrations_v1')
 @RequirePermissions(PERMISSIONS.SHOP_MANAGE)
 export class IntegrationsController {
-  constructor(private readonly integrations: IntegrationsService) {}
+  constructor(
+    private readonly integrations: IntegrationsService,
+    private readonly prisma: PrismaService,
+  ) {}
+
+  private shopId(user: JwtAccessPayload): string {
+    if (!user.shopId) {
+      throw new BadRequestException('Venue context is required.');
+    }
+    return user.shopId;
+  }
 
   @Get('providers')
   providers(@CurrentUser() user: JwtAccessPayload) {
@@ -78,7 +97,18 @@ export class IntegrationsController {
     @Param('id') id: string,
     @Body() dto: CreateIntegrationJobDto,
   ) {
-    return this.integrations.enqueueJob(user, id, dto);
+    return withClientIdempotency(
+      this.prisma,
+      {
+        shopId: this.shopId(user),
+        // IntegrationJob's durable uniqueness is scoped to installation as
+        // well as Shop. Preserve that namespace in the canonical operation.
+        scope: `integrations.jobs.enqueue:${id}`,
+        key: dto.idempotencyKey,
+        requestHash: hashIdempotencyRequest({ installationId: id, dto }),
+      },
+      () => this.integrations.enqueueJob(user, id, dto),
+    );
   }
 
   @Get('jobs')
