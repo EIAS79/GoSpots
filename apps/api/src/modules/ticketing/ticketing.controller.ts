@@ -18,6 +18,7 @@ import type { JwtAccessPayload } from '../auth/auth.service';
 import { CurrentUser } from '../auth/decorators/current-user.decorator';
 import { RequirePermissions } from '../auth/decorators/roles.decorator';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
+import { CapabilityService } from '../foundation/capability.service';
 import { FeatureFlagGuard } from '../foundation/feature-flag.guard';
 import { RequireFeature } from '../foundation/require-feature.decorator';
 import {
@@ -41,6 +42,7 @@ export class TicketingController {
   constructor(
     private readonly ticketing: TicketingService,
     private readonly prisma: PrismaService,
+    private readonly capabilities: CapabilityService,
   ) {}
 
   private shopId(user: JwtAccessPayload): string {
@@ -213,7 +215,12 @@ export class TicketingController {
   }
 
   @Get('readiness')
-  readiness(@CurrentUser() user: JwtAccessPayload) {
-    return this.ticketing.readiness(user);
+  async readiness(@CurrentUser() user: JwtAccessPayload) {
+    const shopId = this.shopId(user);
+    const [domain, capabilities] = await Promise.all([
+      this.ticketing.readiness(user),
+      this.capabilities.snapshot(shopId),
+    ]);
+    return { ...domain, capabilities };
   }
 }
