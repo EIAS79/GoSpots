@@ -154,6 +154,19 @@ export async function completeLegacyOrder(
   return order;
 }
 
+async function ensureE2EPlayHours(page: Page) {
+  await api(page, 'PUT', '/hours/weekly', {
+    data: {
+      days: Array.from({ length: 7 }, (_, weekday) => ({
+        weekday,
+        isClosed: false,
+        opensAt: '00:00',
+        closesAt: '23:59',
+      })),
+    },
+  });
+}
+
 export async function endedPlaySession(
   page: Page,
   checkId: string,
@@ -161,6 +174,7 @@ export async function endedPlaySession(
   label: string,
   amount = 30,
 ) {
+  await ensureE2EPlayHours(page);
   const session = await api<any>(page, 'POST', '/finance/play-sessions', {
     data: { resourceId, amount, label },
     idempotencyKey: `${label}-play-create`,
