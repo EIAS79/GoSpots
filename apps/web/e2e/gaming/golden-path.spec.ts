@@ -76,7 +76,12 @@ test('@smoke E2E-01 gaming cashier golden path', async ({ page }) => {
     },
   });
   const device = await api<any>(page, 'PUT', '/compliance/fiscal-devices', {
-    data: { label: 'E2E simulated fiscal', provider: 'SIMULATED', enabled: true },
+    data: {
+      label: 'E2E simulated fiscal',
+      provider: 'SIMULATED',
+      externalDeviceId: 'e2e-simulated-fiscal-device',
+      enabled: true,
+    },
   });
   const document = await api<any>(page, 'POST', `/compliance/settlements/${settlement.id}/documents`, {
     data: { kind: 'RECEIPT' },
