@@ -32,6 +32,14 @@ test('@smoke E2E-04 Offline Lite survives refresh and replays once', async ({ pa
   await expect(reloadedCard.getByRole('button', { name: 'Start' })).toBeVisible();
 
   await context.setOffline(false);
+  await expect.poll(
+    () => page.evaluate(() => navigator.onLine),
+    { timeout: 5_000, intervals: [100, 250, 500] },
+  ).toBe(true);
+  // Playwright's network emulation does not guarantee the browser emits an
+  // `online` event after a reload. Dispatch the same browser event the
+  // production connectivity provider listens for so its normal sync path runs.
+  await page.evaluate(() => window.dispatchEvent(new Event('online')));
 
   // The server resource is AVAILABLE before replay starts, so that state alone
   // cannot prove the outbox drained. Wait for the queued ORDER_CREATE itself;
