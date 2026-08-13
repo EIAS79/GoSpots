@@ -61,6 +61,9 @@ test('@smoke E2E-01 gaming cashier golden path', async ({ page }) => {
   await page.getByRole('button', { name: /close paid check/i }).click();
   await expect(page.getByText(/ready to close/i)).toHaveCount(0, { timeout: 15_000 });
 
+  await api(page, 'PUT', '/compliance/tax-categories', {
+    data: { code: 'VAT23', label: 'VAT 23%', ratePercent: '23', active: true },
+  });
   await api(page, 'PUT', '/compliance/profile', {
     data: {
       legalName: 'GoSpots E2E Sp. z o.o.',
@@ -71,9 +74,6 @@ test('@smoke E2E-01 gaming cashier golden path', async ({ page }) => {
       defaultTaxCategoryCode: 'VAT23',
       ksefEnvironment: 'TEST',
     },
-  });
-  await api(page, 'PUT', '/compliance/tax-categories', {
-    data: { code: 'VAT23', label: 'VAT 23%', ratePercent: '23', active: true },
   });
   const device = await api<any>(page, 'PUT', '/compliance/fiscal-devices', {
     data: { label: 'E2E simulated fiscal', provider: 'SIMULATED', enabled: true },
