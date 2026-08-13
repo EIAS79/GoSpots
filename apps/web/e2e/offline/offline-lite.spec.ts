@@ -32,6 +32,22 @@ test('@smoke E2E-04 Offline Lite survives refresh and replays once', async ({ pa
   await expect(reloadedCard.getByRole('button', { name: 'Start' })).toBeVisible();
 
   await context.setOffline(false);
+
+  // The server resource is AVAILABLE before replay starts, so that state alone
+  // cannot prove the outbox drained. Wait for the queued ORDER_CREATE itself;
+  // then verify the following SESSION_END returned the resource to AVAILABLE.
+  await expect.poll(
+    async () => {
+      try {
+        const orders = await api<any[]>(page, 'GET', '/ordering/orders');
+        return orders.filter((row) => row.resourceId === 'e2e-resource-offline-1').length;
+      } catch {
+        return -1;
+      }
+    },
+    { timeout: 30_000, intervals: [500, 1000, 2000] },
+  ).toBe(1);
+
   await expect.poll(
     async () => {
       try {
