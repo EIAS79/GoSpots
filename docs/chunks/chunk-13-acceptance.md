@@ -1,6 +1,6 @@
 # Chunk 13 — KDS / Production
 
-Status: COMPLETE_ON_UNMERGED_REVIEW_BRANCH
+Status: **ENGINEERING COMPLETE / PHYSICAL PILOT OPEN**
 
 ## Delivered
 - Prep stations (kitchen/bar/dessert/other), route keys, tickets, ticket lines, status history and display-device registry.
@@ -12,11 +12,19 @@ Status: COMPLETE_ON_UNMERGED_REVIEW_BRANCH
 - Authenticated SSE endpoint is available with resilient 2-second polling fallback for tenant-header browser constraints.
 - Edge-safe KDS projection excludes money/payment/fiscal/KSeF data; tests protect the boundary and alert projection.
 
-## Gate 13
+## Repository Gate 13
 - [x] kitchen and bar routing.
 - [x] line-level cancellation.
 - [x] timing metrics and production alerts.
 - [x] KDS usable touch-only.
 - [x] Edge-enabled offline relay scenario represented/tested as a non-financial projection; local financial/compliance mutations remain prohibited.
 
-This PR is intentionally unmerged. Exact-head CI must remain green before merge is ever requested.
+## Phase 4 physical acceptance still required
+- [ ] real touch display validation;
+- [ ] kitchen + bar routing on supported physical displays/network;
+- [ ] physical line-cancellation workflow;
+- [ ] late-ticket timing observed on device;
+- [ ] Edge local relay on the supported deployment where enabled;
+- [ ] power/network interruption and recovery drill.
+
+The engineering work is present on `main`. Chunk 13 must not be represented as physically certified until the Phase 4 pilot evidence above is captured.
