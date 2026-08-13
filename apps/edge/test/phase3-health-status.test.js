@@ -5,7 +5,7 @@ import { join } from 'node:path';
 import { tmpdir } from 'node:os';
 import { EdgeHub } from '../src/hub.js';
 
-test('Edge diagnostics expose persistent cloud connectivity state', () => {
+test('Edge status exposes persistent cloud connectivity state', () => {
   const dir = mkdtempSync(join(tmpdir(), 'gospots-phase3-status-'));
   const hub = new EdgeHub({ dbPath: join(dir, 'edge.db'), keyPath: join(dir, 'edge-master.key'), pairToken: 'phase3' });
   try {
@@ -13,7 +13,7 @@ test('Edge diagnostics expose persistent cloud connectivity state', () => {
     hub.store.setMeta('cloudConnectivityState', 'OFFLINE');
     hub.store.setMeta('cloudLastFailureAt', '2026-08-13T12:00:00.000Z');
     hub.store.setMeta('cloudLastError', 'ENETUNREACH');
-    assert.deepEqual(hub.cloud.connectivityStatus(), {
+    assert.deepEqual(hub.status().cloudConnectivity, {
       state: 'OFFLINE',
       lastSuccessAt: null,
       lastFailureAt: '2026-08-13T12:00:00.000Z',
