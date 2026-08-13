@@ -1,6 +1,31 @@
 import { expect, test } from '@playwright/test';
 import { E2E, api, bindVenue, loginOwner } from '../helpers/app';
 
+async function queuedOrderCount(page: import('@playwright/test').Page) {
+  return page.evaluate(async () => {
+    return new Promise<number>((resolve, reject) => {
+      const request = indexedDB.open('gospots-offline-v1', 1);
+      request.onerror = () => reject(request.error ?? new Error('Unable to inspect offline database.'));
+      request.onsuccess = () => {
+        const db = request.result;
+        try {
+          const tx = db.transaction('outbox', 'readonly');
+          const getAll = tx.objectStore('outbox').getAll();
+          getAll.onerror = () => reject(getAll.error ?? new Error('Unable to inspect offline outbox.'));
+          getAll.onsuccess = () => {
+            const rows = getAll.result as Array<{ operationType?: string; state?: string }>;
+            resolve(rows.filter((row) => row.operationType === 'ORDER_CREATE' && row.state === 'PENDING').length);
+          };
+          tx.oncomplete = () => db.close();
+        } catch (error) {
+          db.close();
+          reject(error);
+        }
+      };
+    });
+  });
+}
+
 test('@smoke E2E-04 Offline Lite survives refresh and replays once', async ({ page, context }) => {
   await loginOwner(page);
   await bindVenue(page, E2E.venues.offline);
@@ -23,6 +48,14 @@ test('@smoke E2E-04 Offline Lite survives refresh and replays once', async ({ pa
   await page.getByRole('button', { name: 'Orders' }).click();
   await expect(page.getByRole('option', { name: 'Cola E2E' })).toBeAttached();
   await card.getByRole('button', { name: 'Add item' }).click();
+
+  // The click handler persists asynchronously to IndexedDB. Do not reload until
+  // the queued order is durably present; otherwise the test itself can abort the
+  // write and manufacture a false Offline Lite data-loss failure.
+  await expect.poll(() => queuedOrderCount(page), {
+    timeout: 10_000,
+    intervals: [50, 100, 250],
+  }).toBe(1);
 
   await page.reload({ waitUntil: 'domcontentloaded' });
   await expect(page.getByText('Offline Table', { exact: true })).toBeVisible({ timeout: 15_000 });
