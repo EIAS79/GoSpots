@@ -38,9 +38,27 @@ test('E2E-06 payment UNKNOWN reconciles the same provider transaction', async ({
   await loginOwner(page);
   await bindVenue(page, E2E.venues.payment);
 
+  const devices = await api<{ devices: Array<any> }>(page, 'GET', '/devices');
+  let terminal = devices.devices.find(
+    (device) => device.type === 'PAYMENT_TERMINAL' && device.provider === 'fake',
+  )?.terminal;
+  if (!terminal) {
+    const created = await api<any>(page, 'POST', '/devices', {
+      data: {
+        label: 'E2E Fake Terminal',
+        type: 'PAYMENT_TERMINAL',
+        provider: 'fake',
+        externalTerminalId: 'e2e-fake-terminal',
+      },
+    });
+    terminal = created.terminal;
+  }
+  expect(terminal?.id).toBeTruthy();
+
   const key = 'e2e-payment-timeout-captured';
   const request = {
     provider: 'fake',
+    terminalId: terminal.id,
     amount: '12.3400',
     currency: 'PLN',
     metadata: { scenario: 'timeout_captured' },
@@ -74,7 +92,7 @@ test('E2E-06 payment UNKNOWN reconciles the same provider transaction', async ({
   expect(reconciled.providerPaymentId).toBe(first.providerPaymentId);
 });
 
-test('E2E-07 cash shift reconciles sales movements blind count variance and approval', async ({ page }) => {
+test('E2E-07 cash shift reconciles sales movements count variance and approval', async ({ page }) => {
   await loginOwner(page);
   await bindVenue(page, E2E.venues.cash);
 
@@ -104,22 +122,27 @@ test('E2E-07 cash shift reconciles sales movements blind count variance and appr
     idempotencyKey: 'e2e-cash-refund',
   });
 
-  const beforeCount = await api<any>(page, 'GET', '/cash/my-shift');
-  expect(beforeCount.expectedCash).toBeNull();
   const exactExpected = 100 + Number(cashPayment.amount) + 10 - 5 - 2;
+  const beforeCount = await api<any>(page, 'GET', '/cash/my-shift');
+  expect(beforeCount.session?.id).toBe(shift.id);
+  expect(beforeCount.session?.expectedHidden).toBeFalsy();
+  expect(Number(beforeCount.session?.expectedCash)).toBeCloseTo(exactExpected, 4);
+
   const countedAmount = (exactExpected + 2).toFixed(2);
   const counted = await api<any>(page, 'POST', `/cash/sessions/${shift.id}/counts`, {
     data: { countedAmount },
     idempotencyKey: 'e2e-cash-count',
   });
-  expect(Number(counted.latestCount.variance)).toBeCloseTo(2, 4);
+  expect(Number(counted.variance)).toBeCloseTo(2, 4);
+  expect(counted.requiresApproval).toBeTruthy();
+  expect(counted.cashCountId).toBeTruthy();
 
   await api(page, 'POST', `/cash/sessions/${shift.id}/approve-variance`, {
-    data: { cashCountId: counted.latestCount.id, note: 'E2E variance approval' },
+    data: { cashCountId: counted.cashCountId, note: 'E2E variance approval' },
     idempotencyKey: 'e2e-cash-approve',
   });
   const closed = await api<any>(page, 'POST', `/cash/sessions/${shift.id}/close`, {
-    data: { cashCountId: counted.latestCount.id, note: 'E2E close' },
+    data: { cashCountId: counted.cashCountId, note: 'E2E close' },
     idempotencyKey: 'e2e-cash-close',
   });
   expect(closed.status).toBe('CLOSED');
