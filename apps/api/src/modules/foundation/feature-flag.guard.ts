@@ -20,8 +20,10 @@ export class FeatureFlagGuard implements CanActivate {
     );
     if (!feature) return true;
 
-    const request = ctx.switchToHttp().getRequest();
-    const user = request.user as JwtAccessPayload | undefined;
+    const request = ctx
+      .switchToHttp()
+      .getRequest<{ user?: JwtAccessPayload }>();
+    const user = request.user;
     if (!user?.shopId) {
       throw apiForbiddenException(
         ApiDomainErrorCode.VENUE_ACCESS_DENIED,
