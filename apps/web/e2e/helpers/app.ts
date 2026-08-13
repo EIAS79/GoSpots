@@ -54,6 +54,18 @@ async function dismissCookiePreferences(page: Page) {
   await expect(preferences).toBeHidden();
 }
 
+async function mutationHeaders(page: Page, options: ApiOptions) {
+  const headers: Record<string, string> = {
+    ...(options.headers ?? {}),
+  };
+  const cookies = await page.context().cookies();
+  const csrf = cookies.find((cookie) => cookie.name === 'csrf_token')?.value;
+  if (!csrf) throw new Error('Missing csrf_token before mutation request');
+  headers['x-csrf-token'] = csrf;
+  if (options.idempotencyKey) headers['Idempotency-Key'] = options.idempotencyKey;
+  return headers;
+}
+
 export async function api<T = any>(
   page: Page,
   method: 'GET' | 'POST' | 'PUT' | 'PATCH' | 'DELETE',
@@ -61,26 +73,37 @@ export async function api<T = any>(
   options: ApiOptions = {},
 ): Promise<T> {
   const mutation = method !== 'GET';
-  const headers: Record<string, string> = {
-    ...(options.headers ?? {}),
+
+  const perform = async () => {
+    const headers: Record<string, string> = mutation
+      ? await mutationHeaders(page, options)
+      : { ...(options.headers ?? {}) };
+    if (!mutation && options.idempotencyKey) {
+      headers['Idempotency-Key'] = options.idempotencyKey;
+    }
+    const response = await page.request.fetch(`/api/v1${path}`, {
+      method,
+      data: options.data,
+      headers,
+      failOnStatusCode: false,
+    });
+    return { response, body: await responseBody(response) };
   };
-  if (mutation) {
-    const cookies = await page.context().cookies();
-    const csrf = cookies.find((cookie) => cookie.name === 'csrf_token')?.value;
-    if (!csrf) throw new Error(`Missing csrf_token before ${method} ${path}`);
-    headers['x-csrf-token'] = csrf;
-  }
-  if (options.idempotencyKey) {
-    headers['Idempotency-Key'] = options.idempotencyKey;
+
+  let { response, body } = await perform();
+  if (
+    mutation &&
+    response.status() === 403 &&
+    body &&
+    typeof body === 'object' &&
+    !Array.isArray(body) &&
+    (body as { code?: unknown }).code === 'CSRF_INVALID'
+  ) {
+    const bootstrap = await page.request.get('/api/v1/auth/csrf', { failOnStatusCode: false });
+    expect(bootstrap.ok(), `GET /auth/csrf before retry: ${await bootstrap.text()}`).toBeTruthy();
+    ({ response, body } = await perform());
   }
 
-  const response = await page.request.fetch(`/api/v1${path}`, {
-    method,
-    data: options.data,
-    headers,
-    failOnStatusCode: false,
-  });
-  const body = await responseBody(response);
   const expectedStatus = options.expectedStatus;
   if (expectedStatus != null) {
     expect(response.status(), `${method} ${path}: ${JSON.stringify(body)}`).toBe(expectedStatus);
