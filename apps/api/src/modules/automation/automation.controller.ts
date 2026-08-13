@@ -5,12 +5,15 @@ import type { JwtAccessPayload } from '../auth/auth.service';
 import { CurrentUser } from '../auth/decorators/current-user.decorator';
 import { RequirePermissions } from '../auth/decorators/roles.decorator';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
+import { FeatureFlagGuard } from '../foundation/feature-flag.guard';
+import { RequireFeature } from '../foundation/require-feature.decorator';
 import { AutomationService } from './automation.service';
 import { CreateAutomationRuleDto, TriggerAutomationDto, UpdateAutomationRuleDto } from './dto/automation.dto';
 
 @ApiTags('automation')
 @Controller('automation')
-@UseGuards(JwtAuthGuard)
+@UseGuards(JwtAuthGuard, FeatureFlagGuard)
+@RequireFeature('automation_v1')
 @RequirePermissions(PERMISSIONS.AUTOMATION_MANAGE)
 export class AutomationController {
   constructor(private readonly automation: AutomationService) {}
