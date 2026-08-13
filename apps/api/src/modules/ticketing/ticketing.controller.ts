@@ -5,6 +5,8 @@ import type { JwtAccessPayload } from '../auth/auth.service';
 import { CurrentUser } from '../auth/decorators/current-user.decorator';
 import { RequirePermissions } from '../auth/decorators/roles.decorator';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
+import { FeatureFlagGuard } from '../foundation/feature-flag.guard';
+import { RequireFeature } from '../foundation/require-feature.decorator';
 import {
   BindRfidCredentialDto,
   CreateRfidWalletDto,
@@ -19,7 +21,8 @@ import { TicketingService } from './ticketing.service';
 
 @ApiTags('ticketing')
 @Controller('ticketing')
-@UseGuards(JwtAuthGuard)
+@UseGuards(JwtAuthGuard, FeatureFlagGuard)
+@RequireFeature('access_v1')
 @RequirePermissions(PERMISSIONS.TICKETING_MANAGE)
 export class TicketingController {
   constructor(private readonly ticketing: TicketingService) {}
