@@ -20,6 +20,8 @@ import { CurrentUser } from '../auth/decorators/current-user.decorator';
 import { RequirePermissions } from '../auth/decorators/roles.decorator';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import type { JwtAccessPayload } from '../auth/auth.service';
+import { FeatureFlagGuard } from '../foundation/feature-flag.guard';
+import { RequireFeature } from '../foundation/require-feature.decorator';
 import {
   CreateConnectorInstallationDto,
   CreateIntegrationCredentialDto,
@@ -32,7 +34,8 @@ import { IntegrationsService } from './integrations.service';
 
 @ApiTags('integrations')
 @Controller('integrations')
-@UseGuards(JwtAuthGuard)
+@UseGuards(JwtAuthGuard, FeatureFlagGuard)
+@RequireFeature('integrations_v1')
 @RequirePermissions(PERMISSIONS.SHOP_MANAGE)
 export class IntegrationsController {
   constructor(
