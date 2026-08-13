@@ -86,6 +86,7 @@ export class CloudClient {
         operationType: event.operationType,
         entityId: event.entityId,
         ...(event.expectedVersion === undefined ? {} : { expectedVersion: event.expectedVersion }),
+        occurredAt: event.occurredAt,
         payloadHash: event.payloadHash,
         payload: event.payload,
       };
