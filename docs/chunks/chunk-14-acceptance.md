@@ -1,6 +1,6 @@
 # Chunk 14 — Inventory, Recipes and Purchasing
 
-Status: COMPLETE_ON_UNMERGED_REVIEW_BRANCH
+Status: **ENGINEERING COMPLETE / OPERATIONAL PILOT OPEN**
 
 ## Delivered
 - Inventory 2.0 starts disabled; `LegacyInventoryMapping` provides the explicit mapping/migration bridge while legacy `MenuItem.stock` remains available in dual mode.
@@ -13,7 +13,7 @@ Status: COMPLETE_ON_UNMERGED_REVIEW_BRANCH
 - COGS uses snapshotted movement cost and excludes fully refunded orders from recognized order revenue.
 - Stock items remain generic for food, drink and gaming/retail accessories.
 
-## Gate 14
+## Repository Gate 14
 - [x] order completion consumes recipe correctly.
 - [x] cancellation/refund policy defined.
 - [x] stocktake posts adjustments.
@@ -21,4 +21,14 @@ Status: COMPLETE_ON_UNMERGED_REVIEW_BRANCH
 - [x] COGS report.
 - [x] simple gaming venue does not need Inventory enabled.
 
-This PR is intentionally unmerged. Exact-head CI must remain green before merge is ever requested.
+## Phase 4 operational acceptance still required
+- [ ] receive a real/pilot purchase order;
+- [ ] record goods receipt;
+- [ ] observe recipe consumption from a completed order;
+- [ ] exercise the documented refund/cancel inventory policy;
+- [ ] post waste/loss;
+- [ ] perform a stocktake adjustment;
+- [ ] reconcile weighted-average cost and COGS against the pilot records;
+- [ ] validate movement/report behavior against representative production-scale stock data.
+
+The engineering work is present on `main`. Chunk 14 must not be represented as operationally piloted until the Phase 4 evidence above is captured.
