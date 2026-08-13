@@ -3,14 +3,15 @@ import { Reflector } from '@nestjs/core';
 import { ApiDomainErrorCode } from '../../common/api-error.codes';
 import { apiForbiddenException } from '../../common/api-error.util';
 import type { JwtAccessPayload } from '../auth/auth.types';
-import { FeatureFlagService, type FeatureKey } from './feature-flag.service';
+import { CapabilityService } from './capability.service';
+import type { FeatureKey } from './feature-flag.service';
 import { REQUIRED_FEATURE_KEY } from './require-feature.decorator';
 
 @Injectable()
 export class FeatureFlagGuard implements CanActivate {
   constructor(
     private readonly reflector: Reflector,
-    private readonly featureFlags: FeatureFlagService,
+    private readonly capabilities: CapabilityService,
   ) {}
 
   async canActivate(ctx: ExecutionContext): Promise<boolean> {
@@ -31,7 +32,7 @@ export class FeatureFlagGuard implements CanActivate {
       );
     }
 
-    if (!(await this.featureFlags.isFeatureEnabled(user.shopId, feature))) {
+    if (!(await this.capabilities.canUseFeature(user.shopId, feature))) {
       throw apiForbiddenException(
         ApiDomainErrorCode.FEATURE_DISABLED,
         'Feature is disabled for this venue.',
