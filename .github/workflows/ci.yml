@@ -142,6 +142,90 @@ jobs:
       - name: Prisma validate
         run: pnpm exec prisma validate
 
+  api-migrate-upgrade:
+    name: API migration upgrade (representative prior data)
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    services:
+      postgres:
+        image: postgres:17
+        env:
+          POSTGRES_USER: ci
+          POSTGRES_PASSWORD: ci
+          POSTGRES_DB: upgrade_ci
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U ci -d upgrade_ci"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+    env:
+      DATABASE_URL: postgresql://ci:ci@localhost:5432/upgrade_ci?schema=public
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 10.12.1
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+          cache: pnpm
+          cache-dependency-path: pnpm-lock.yaml
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+      - name: Build representative pre-Chunk-01 schema
+        shell: bash
+        run: |
+          set -euo pipefail
+          rm -rf /tmp/gospots-upgrade-prisma
+          cp -R apps/api/prisma /tmp/gospots-upgrade-prisma
+          cutoff="20260809044000_organization_trial_policy"
+          while IFS= read -r dir; do
+            name=$(basename "$dir")
+            if [[ "$name" > "$cutoff" ]]; then
+              rm -rf "$dir"
+            fi
+          done < <(find /tmp/gospots-upgrade-prisma/migrations -mindepth 1 -maxdepth 1 -type d -name '20*' | sort)
+          pnpm --dir apps/api exec prisma migrate deploy --schema /tmp/gospots-upgrade-prisma
+      - name: Seed representative historical data
+        run: >-
+          pnpm --dir apps/api exec prisma db execute
+          --file "$GITHUB_WORKSPACE/apps/api/prisma/upgrade-fixtures/phase1-pre-chunk.sql"
+          --schema /tmp/gospots-upgrade-prisma
+      - name: Upgrade to current migration chain
+        shell: bash
+        run: |
+          set -euo pipefail
+          rm -rf /tmp/gospots-upgrade-prisma/migrations
+          cp -R apps/api/prisma/migrations /tmp/gospots-upgrade-prisma/migrations
+          pnpm --dir apps/api exec prisma migrate deploy --schema /tmp/gospots-upgrade-prisma
+          pnpm --dir apps/api exec prisma migrate status --schema /tmp/gospots-upgrade-prisma
+      - name: Schema/migration drift report
+        continue-on-error: true
+        shell: bash
+        run: |
+          set -o pipefail
+          pnpm --dir apps/api exec prisma migrate diff \
+            --from-url "$DATABASE_URL" \
+            --to-schema-datamodel prisma/schema.prisma \
+            --script | tee /tmp/phase1-schema-drift.sql
+          {
+            echo '### Prisma schema / migration drift report'
+            echo '```sql'
+            cat /tmp/phase1-schema-drift.sql
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
+      - name: Prisma generate and assert preservation
+        shell: bash
+        run: |
+          pnpm --dir apps/api exec prisma generate
+          pnpm --dir apps/api exec tsx prisma/upgrade-assert.ts
+          pnpm --dir apps/api exec prisma validate
+
   web:
     name: Web checks · offline tests · typecheck · build
     runs-on: ubuntu-latest
@@ -200,3 +284,108 @@ jobs:
         run: node --test test/*.test.js
       - name: Build
         run: node --check src/canonical.js && node --check src/crypto.js && node --check src/store.js && node --check src/cloud-client.js && node --check src/printer.js && node --check src/hub.js && node --check src/server.js
+
+  browser-e2e:
+    name: Browser E2E smoke
+    runs-on: ubuntu-latest
+    timeout-minutes: 35
+    services:
+      postgres:
+        image: postgres:17
+        env:
+          POSTGRES_USER: ci
+          POSTGRES_PASSWORD: ci
+          POSTGRES_DB: gospots_e2e
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U ci -d gospots_e2e"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+    env:
+      DATABASE_URL: postgresql://ci:ci@localhost:5432/gospots_e2e?schema=public
+      GOSPOTS_E2E_DB: 'true'
+      JWT_ACCESS_SECRET: ci-e2e-access-secret-not-production
+      COOKIE_SECURE: 'false'
+      COOKIE_SAME_SITE: lax
+      WEB_APP_URL: http://127.0.0.1:3000
+      WEB_ORIGIN: http://127.0.0.1:3000
+      CORS_ORIGINS: http://127.0.0.1:3000
+      THROTTLE_DISABLED: 'true'
+      LEGACY_UPLOADS_STATIC: 'false'
+      TENANT_RLS: 'off'
+      E2E_FAKE_PAYMENT_ENABLED: 'true'
+      STRIPE_TERMINAL_ENABLED: 'false'
+      NEXT_PUBLIC_SITE_URL: http://127.0.0.1:3000
+      NEXT_PUBLIC_API_BASE_URL: /api/v1
+      API_PROXY_TARGET: http://127.0.0.1:4000
+      E2E_BASE_URL: http://127.0.0.1:3000
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 10.12.1
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+          cache: pnpm
+          cache-dependency-path: pnpm-lock.yaml
+      - name: Install application dependencies
+        run: pnpm install --frozen-lockfile
+      - name: Prepare isolated PostgreSQL 17 database
+        shell: bash
+        run: |
+          pnpm --dir apps/api exec prisma generate
+          pnpm --dir apps/api exec prisma migrate deploy
+          pnpm --dir apps/api exec tsx prisma/e2e-seed.ts > /tmp/e2e-seed.json
+      - name: Build API and web
+        shell: bash
+        run: |
+          pnpm --dir apps/api run build
+          pnpm --dir apps/web run build
+      - name: Install Playwright harness and Chromium
+        working-directory: apps/web/e2e
+        run: |
+          npm install --no-package-lock --ignore-scripts
+          npx playwright install --with-deps chromium
+      - name: Start API and web
+        shell: bash
+        run: |
+          set -euo pipefail
+          nohup env NODE_ENV=test PORT=4000 pnpm --dir apps/api run start:prod > /tmp/gospots-api.log 2>&1 &
+          echo $! > /tmp/gospots-api.pid
+          for i in {1..60}; do
+            if curl -fsS http://127.0.0.1:4000/api/v1/live >/dev/null; then break; fi
+            sleep 1
+          done
+          curl -fsS http://127.0.0.1:4000/api/v1/live
+
+          nohup pnpm --dir apps/web run start --hostname 127.0.0.1 --port 3000 > /tmp/gospots-web.log 2>&1 &
+          echo $! > /tmp/gospots-web.pid
+          for i in {1..60}; do
+            if curl -fsS http://127.0.0.1:3000/login >/dev/null; then break; fi
+            sleep 1
+          done
+          curl -fsS http://127.0.0.1:3000/login >/dev/null
+      - name: Run permanent browser E2E suite
+        working-directory: apps/web/e2e
+        run: npm test
+      - name: Assert canonical persisted results
+        run: pnpm --dir apps/api exec tsx prisma/e2e-assert.ts
+      - name: Upload browser diagnostics
+        if: ${{ always() }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: browser-e2e-diagnostics-${{ github.run_id }}
+          if-no-files-found: ignore
+          retention-days: 14
+          path: |
+            apps/web/e2e/playwright-report
+            apps/web/e2e/test-results
+            /tmp/gospots-api.log
+            /tmp/gospots-web.log
+            /tmp/e2e-seed.json

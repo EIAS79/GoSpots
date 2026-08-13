@@ -14,5 +14,7 @@ Thumbs.db
 apps/api/uploads
 apps/api/prisma/*.db
 apps/api/prisma/*.db-journal
+apps/web/e2e/playwright-report
+apps/web/e2e/test-results
 .vercel
 .env.production

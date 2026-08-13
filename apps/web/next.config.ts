@@ -3,6 +3,8 @@ import path from "path";
 
 const monorepoRoot = path.join(__dirname, "../..");
 const isProd = process.env.NODE_ENV === "production";
+const isIsolatedGitHubE2E =
+  process.env.GITHUB_ACTIONS === "true" && process.env.GOSPOTS_E2E_DB === "true";
 
 function apiUploadPatterns(): NonNullable<NextConfig["images"]>["remotePatterns"] {
   const patterns: NonNullable<NextConfig["images"]>["remotePatterns"] = [
@@ -73,6 +75,7 @@ if (apiProxyTarget) {
   }
   if (
     isProd &&
+    !isIsolatedGitHubE2E &&
     (parsed.hostname === "localhost" || parsed.hostname === "127.0.0.1")
   ) {
     throw new Error("API_PROXY_TARGET must not point to localhost in production.");

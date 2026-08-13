@@ -1,0 +1,107 @@
+import { expect, test } from '@playwright/test';
+import { E2E, api, bindVenue, loginOwner } from '../helpers/app';
+
+async function queuedOrderCount(page: import('@playwright/test').Page) {
+  return page.evaluate(async () => {
+    return new Promise<number>((resolve, reject) => {
+      const request = indexedDB.open('gospots-offline-v1', 1);
+      request.onerror = () => reject(request.error ?? new Error('Unable to inspect offline database.'));
+      request.onsuccess = () => {
+        const db = request.result;
+        try {
+          const tx = db.transaction('outbox', 'readonly');
+          const getAll = tx.objectStore('outbox').getAll();
+          getAll.onerror = () => reject(getAll.error ?? new Error('Unable to inspect offline outbox.'));
+          getAll.onsuccess = () => {
+            const rows = getAll.result as Array<{ operationType?: string; state?: string }>;
+            resolve(rows.filter((row) => row.operationType === 'ORDER_CREATE' && row.state === 'PENDING').length);
+          };
+          tx.oncomplete = () => db.close();
+        } catch (error) {
+          db.close();
+          reject(error);
+        }
+      };
+    });
+  });
+}
+
+test('@smoke E2E-04 Offline Lite survives refresh and replays once', async ({ page, context }) => {
+  await loginOwner(page);
+  await bindVenue(page, E2E.venues.offline);
+  await page.goto(`/dashboard/${E2E.venues.offline}/operations`);
+  await expect(page.getByText('Offline Table', { exact: true })).toBeVisible();
+
+  // Allow the production service worker to install, then reload once online so
+  // the dashboard shell is controlled before WAN is cut.
+  await page.evaluate(async () => {
+    if ('serviceWorker' in navigator) await navigator.serviceWorker.ready;
+  });
+  await page.reload();
+  await expect(page.getByText('Offline Table', { exact: true })).toBeVisible();
+
+  await context.setOffline(true);
+  const card = page.locator('article').filter({ hasText: 'Offline Table' });
+  await card.getByRole('button', { name: 'Start' }).click();
+  await expect(card.getByRole('button', { name: 'Finish' })).toBeVisible({ timeout: 15_000 });
+
+  await page.getByRole('button', { name: 'Orders' }).click();
+  await expect(page.getByRole('option', { name: 'Cola E2E' })).toBeAttached();
+  await card.getByRole('button', { name: 'Add item' }).click();
+
+  // The click handler persists asynchronously to IndexedDB. Do not reload until
+  // the queued order is durably present; otherwise the test itself can abort the
+  // write and manufacture a false Offline Lite data-loss failure.
+  await expect.poll(() => queuedOrderCount(page), {
+    timeout: 10_000,
+    intervals: [50, 100, 250],
+  }).toBe(1);
+
+  await page.reload({ waitUntil: 'domcontentloaded' });
+  await expect(page.getByText('Offline Table', { exact: true })).toBeVisible({ timeout: 15_000 });
+  const reloadedCard = page.locator('article').filter({ hasText: 'Offline Table' });
+  await expect(reloadedCard.getByRole('button', { name: 'Finish' })).toBeVisible();
+  await reloadedCard.getByRole('button', { name: 'Finish' }).click();
+  await expect(reloadedCard.getByRole('button', { name: 'Start' })).toBeVisible();
+
+  await context.setOffline(false);
+  await expect.poll(
+    () => page.evaluate(() => navigator.onLine),
+    { timeout: 5_000, intervals: [100, 250, 500] },
+  ).toBe(true);
+  // Playwright's network emulation does not guarantee the browser emits an
+  // `online` event after a reload. Dispatch the same browser event the
+  // production connectivity provider listens for so its normal sync path runs.
+  await page.evaluate(() => window.dispatchEvent(new Event('online')));
+
+  // The server resource is AVAILABLE before replay starts, so that state alone
+  // cannot prove the outbox drained. Wait for the queued ORDER_CREATE itself;
+  // then verify the following SESSION_END returned the resource to AVAILABLE.
+  await expect.poll(
+    async () => {
+      try {
+        const orders = await api<any[]>(page, 'GET', '/ordering/orders');
+        return orders.filter((row) => row.resourceId === 'e2e-resource-offline-1').length;
+      } catch {
+        return -1;
+      }
+    },
+    { timeout: 30_000, intervals: [500, 1000, 2000] },
+  ).toBe(1);
+
+  await expect.poll(
+    async () => {
+      try {
+        const floor = await api<any>(page, 'GET', '/operations/floor');
+        return floor.resources.find((row: any) => row.id === 'e2e-resource-offline-1')?.state;
+      } catch {
+        return 'UNREACHABLE';
+      }
+    },
+    { timeout: 30_000, intervals: [500, 1000, 2000] },
+  ).toBe('AVAILABLE');
+
+  const orders = await api<any[]>(page, 'GET', '/ordering/orders');
+  const replayed = orders.filter((row) => row.resourceId === 'e2e-resource-offline-1');
+  expect(replayed).toHaveLength(1);
+});

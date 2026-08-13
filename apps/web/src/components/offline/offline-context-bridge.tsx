@@ -49,11 +49,23 @@ export function OfflineContextBridge() {
   const refreshOfflineCounts = connectivity?.refreshOfflineCounts;
 
   useEffect(() => {
+    const previous = readPreviousNamespace();
+
+    // A hard refresh always starts AuthProvider in `loading`. While offline,
+    // that state can last until the cached auth snapshot is restored. Treating
+    // it as a confirmed logout would purge the IndexedDB namespace containing
+    // unsynced operations. Rehydrate the last namespace for that transient
+    // window and defer any destructive transition until auth is resolved.
+    if (state.status === "loading") {
+      configureOfflineContext(previous);
+      void refreshOfflineCounts?.();
+      return;
+    }
+
     const next: OfflineNamespace | null =
       state.status === "authed" && membership
         ? { userId: state.user.id, shopId: membership.shop.id }
         : null;
-    const previous = readPreviousNamespace();
 
     if (!sameNamespace(previous, next) && previous) {
       void purgeOfflineNamespace(previous);

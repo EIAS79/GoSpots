@@ -1,0 +1,16 @@
+# Default owner for GoSpots repository changes.
+* @EIAS79
+
+# High-risk data and money surfaces.
+/apps/api/prisma/ @EIAS79
+/apps/api/src/modules/checkout/ @EIAS79
+/apps/api/src/modules/device-payment/ @EIAS79
+/apps/api/src/modules/cash/ @EIAS79
+/apps/api/src/modules/compliance/ @EIAS79
+/apps/api/src/modules/auth/ @EIAS79
+/apps/api/src/modules/edge-hub/ @EIAS79
+/apps/edge/ @EIAS79
+
+# Release controls.
+/.github/workflows/ @EIAS79
+/.github/CODEOWNERS @EIAS79
