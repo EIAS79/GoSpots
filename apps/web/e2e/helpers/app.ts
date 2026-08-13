@@ -41,6 +41,19 @@ async function responseBody(response: APIResponse) {
   }
 }
 
+async function dismissCookiePreferences(page: Page) {
+  const preferences = page.locator('aside[aria-label="Cookie preferences"]');
+
+  try {
+    await preferences.waitFor({ state: 'visible', timeout: 2_000 });
+  } catch {
+    return;
+  }
+
+  await preferences.getByRole('button', { name: /reject optional/i }).click();
+  await expect(preferences).toBeHidden();
+}
+
 export async function api<T = any>(
   page: Page,
   method: 'GET' | 'POST' | 'PUT' | 'PATCH' | 'DELETE',
@@ -82,6 +95,7 @@ export async function loginOwner(
   credentials: { email: string; password: string } = E2E.owner,
 ) {
   await page.goto('/login');
+  await dismissCookiePreferences(page);
   const ownerTab = page.getByRole('tab', { name: /owner/i });
   if (await ownerTab.count()) await ownerTab.click();
   await page.locator('input[type="email"]').first().fill(credentials.email);
