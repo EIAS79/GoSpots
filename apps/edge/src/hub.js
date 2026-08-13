@@ -4,6 +4,7 @@ import { hostname } from 'node:os';
 import { decryptSecret, encryptSecret, generateCloudKeyPair, loadOrCreateMasterKey, verifyLanSignature } from './crypto.js';
 import { EdgeStore } from './store.js';
 import { CloudClient } from './cloud-client.js';
+import { cloudConnectivityStatus } from './status-health.js';
 import { executePrintJob } from './printer.js';
 
 export const EDGE_VERSION = '0.1.0';
@@ -76,6 +77,7 @@ export class EdgeHub {
       service: 'gospots-edge', version: EDGE_VERSION,
       cloudRegistered: Boolean(this.cloud.registeredDeviceId),
       cloudDeviceId: this.cloud.registeredDeviceId,
+      cloudConnectivity: cloudConnectivityStatus(this.cloud),
       shopId: this.store.getMeta('shopId'),
       pendingEvents: diagnostics.events.pending,
       lastSequence: diagnostics.events.lastSequence,
