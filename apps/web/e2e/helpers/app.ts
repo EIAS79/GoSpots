@@ -138,15 +138,15 @@ export async function completeLegacyOrder(
 ) {
   const order = await api<any>(page, 'POST', '/finance/orders', {
     data: { label, guestCount: 1 },
-    idempotencyKey: `${label}-order-create`,
+    idempotencyKey: `${checkId}-${label}-order-create`,
   });
   await api(page, 'POST', `/finance/orders/${order.id}/lines`, {
     data: { menuItemId, quantity: 1 },
-    idempotencyKey: `${label}-order-line`,
+    idempotencyKey: `${checkId}-${label}-order-line`,
   });
   await api(page, 'PATCH', `/finance/orders/${order.id}`, {
     data: { status: 'COMPLETED' },
-    idempotencyKey: `${label}-order-complete`,
+    idempotencyKey: `${checkId}-${label}-order-complete`,
   });
   await api(page, 'POST', `/guest-checks/${checkId}/attach`, {
     data: { shopOrderId: order.id },
@@ -177,14 +177,14 @@ export async function endedPlaySession(
   await ensureE2EPlayHours(page);
   const session = await api<any>(page, 'POST', '/finance/play-sessions', {
     data: { resourceId, amount, label },
-    idempotencyKey: `${label}-play-create`,
+    idempotencyKey: `${checkId}-${label}-play-create`,
   });
   await api(page, 'POST', `/guest-checks/${checkId}/attach`, {
     data: { playSessionId: session.id },
   });
   const ended = await api<any>(page, 'PATCH', `/finance/play-sessions/${session.id}`, {
     data: { endSession: true },
-    idempotencyKey: `${label}-play-end`,
+    idempotencyKey: `${checkId}-${label}-play-end`,
   });
   expect(ended.endedAt).toBeTruthy();
   return ended;
