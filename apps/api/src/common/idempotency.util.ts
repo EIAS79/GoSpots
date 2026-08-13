@@ -212,7 +212,7 @@ function readMemory(
   scope: string,
   key: string,
   requestHash: string | null | undefined,
-): unknown | undefined {
+): MemoryEntry | undefined {
   const mk = memoryKey(shopId, scope, key);
   const hit = memoryCache.get(mk);
   if (!hit) return undefined;
@@ -221,7 +221,7 @@ function readMemory(
     return undefined;
   }
   assertRequestHashMatch(hit.requestHash, requestHash);
-  return hit.response;
+  return hit;
 }
 
 function writeMemory(
@@ -300,7 +300,7 @@ export async function withClientIdempotency<T>(
   const expiresAt = new Date(Date.now() + ttlMs);
 
   const fromMem = readMemory(shopId, scope, key, requestHash);
-  if (fromMem !== undefined) return fromMem as T;
+  if (fromMem) return fromMem.response as T;
 
   const existing = await loadReceipt(prisma, shopId, scope, key);
   if (existing && receiptStillValid(existing)) {
@@ -311,10 +311,17 @@ export async function withClientIdempotency<T>(
       return parsed;
     }
     if (existing.status === 'PENDING') {
-      const replay = await waitForCompleted(prisma, shopId, scope, key, requestHash);
-      if (replay !== undefined) {
-        writeMemory(shopId, scope, key, replay, requestHash, ttlMs);
-        return replay as T;
+      const replay = await waitForCompleted(
+        prisma,
+        shopId,
+        scope,
+        key,
+        requestHash,
+      );
+      if (replay) {
+        const parsed = parseStoredResponse(replay.responseJson) as T;
+        writeMemory(shopId, scope, key, parsed, replay.requestHash, ttlMs);
+        return parsed;
       }
       throw idempotencyConflict(
         'Idempotency-Key request is already in progress',
@@ -325,9 +332,11 @@ export async function withClientIdempotency<T>(
 
   // Expired or missing — claim with PENDING (unique).
   if (existing && !receiptStillValid(existing)) {
-    await prisma.idempotencyReceipt.delete({
-      where: { shopId_scope_key: { shopId, scope, key } },
-    }).catch(() => undefined);
+    await prisma.idempotencyReceipt
+      .delete({
+        where: { shopId_scope_key: { shopId, scope, key } },
+      })
+      .catch(() => undefined);
   }
 
   try {
@@ -351,10 +360,17 @@ export async function withClientIdempotency<T>(
       writeMemory(shopId, scope, key, parsed, raced.requestHash, ttlMs);
       return parsed;
     }
-    const replay = await waitForCompleted(prisma, shopId, scope, key, requestHash);
-    if (replay !== undefined) {
-      writeMemory(shopId, scope, key, replay, requestHash, ttlMs);
-      return replay as T;
+    const replay = await waitForCompleted(
+      prisma,
+      shopId,
+      scope,
+      key,
+      requestHash,
+    );
+    if (replay) {
+      const parsed = parseStoredResponse(replay.responseJson) as T;
+      writeMemory(shopId, scope, key, parsed, replay.requestHash, ttlMs);
+      return parsed;
     }
     throw idempotencyConflict(
       'Idempotency-Key request is already in progress',
@@ -392,14 +408,14 @@ async function waitForCompleted(
   requestHash: string | null | undefined,
   attempts = 8,
   delayMs = 25,
-): Promise<unknown | undefined> {
+): Promise<ReceiptRow | undefined> {
   for (let i = 0; i < attempts; i++) {
     await sleep(delayMs);
     const row = await loadReceipt(prisma, shopId, scope, key);
     if (!row || !receiptStillValid(row)) return undefined;
     if (row.status === 'COMPLETED') {
       assertRequestHashMatch(row.requestHash, requestHash);
-      return parseStoredResponse(row.responseJson);
+      return row;
     }
   }
   return undefined;
