@@ -7,6 +7,10 @@ function normalizeApiBase(baseUrl) {
   return trimmed.endsWith('/api/v1') ? trimmed : `${trimmed}/api/v1`;
 }
 
+function errorMessage(error) {
+  return String(error?.message ?? error ?? 'Unknown cloud transport error').slice(0, 500);
+}
+
 export class CloudClient {
   constructor({ baseUrl, store, privateKeyPem, publicKeyPem, fetchImpl = fetch }) {
     this.baseUrl = normalizeApiBase(baseUrl);
@@ -18,10 +22,55 @@ export class CloudClient {
 
   get registeredDeviceId() { return this.store.getMeta('cloudDeviceId'); }
 
+  markCloudReachable() {
+    const now = new Date().toISOString();
+    this.store.setMeta('cloudConnectivityState', 'ONLINE');
+    this.store.setMeta('cloudLastSuccessAt', now);
+    this.store.setMeta('cloudLastError', '');
+  }
+
+  markCloudUnreachable(error) {
+    const now = new Date().toISOString();
+    this.store.setMeta('cloudConnectivityState', 'OFFLINE');
+    this.store.setMeta('cloudLastFailureAt', now);
+    this.store.setMeta('cloudLastError', errorMessage(error));
+  }
+
+  connectivityStatus() {
+    if (!this.registeredDeviceId) {
+      return {
+        state: 'UNREGISTERED',
+        lastSuccessAt: null,
+        lastFailureAt: null,
+        lastError: null,
+      };
+    }
+    const lastError = this.store.getMeta('cloudLastError');
+    return {
+      state: this.store.getMeta('cloudConnectivityState') ?? 'UNKNOWN',
+      lastSuccessAt: this.store.getMeta('cloudLastSuccessAt'),
+      lastFailureAt: this.store.getMeta('cloudLastFailureAt'),
+      lastError: lastError || null,
+    };
+  }
+
+  async fetchWithHealth(url, options) {
+    try {
+      const response = await this.fetch(url, options);
+      // Any HTTP response proves WAN/cloud reachability. Domain-level 4xx/5xx
+      // responses are handled by the caller without falsely reporting outage.
+      this.markCloudReachable();
+      return response;
+    } catch (error) {
+      this.markCloudUnreachable(error);
+      throw error;
+    }
+  }
+
   async register(provisioningToken, version, hostname) {
     if (!this.baseUrl) throw new Error('EDGE_CLOUD_URL is not configured');
     const body = { provisioningToken, publicKeyPem: this.publicKeyPem, version, hostname };
-    const response = await this.fetch(`${this.baseUrl}/edge-hub/register`, {
+    const response = await this.fetchWithHealth(`${this.baseUrl}/edge-hub/register`, {
       method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(body),
     });
     const data = await response.json().catch(() => ({}));
@@ -37,7 +86,7 @@ export class CloudClient {
     const timestamp = new Date().toISOString();
     const nonce = randomUUID();
     const signature = signCloudRequest(this.privateKeyPem, 'POST', path, body, timestamp, nonce);
-    return this.fetch(`${this.baseUrl}${path}`, {
+    return this.fetchWithHealth(`${this.baseUrl}${path}`, {
       method: 'POST',
       headers: {
         'content-type': 'application/json',
