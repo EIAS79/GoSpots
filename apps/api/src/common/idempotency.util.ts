@@ -1,10 +1,9 @@
 import { createHash } from 'crypto';
-import {
-  BadRequestException,
-  ConflictException,
-} from '@nestjs/common';
+import { BadRequestException } from '@nestjs/common';
 import { Prisma } from '@prisma/client';
 import type { PrismaClient } from '@prisma/client';
+import { ApiDomainErrorCode } from './api-error.codes';
+import { apiConflictException } from './api-error.util';
 
 /** Default receipt TTL (24h). */
 export const IDEMPOTENCY_DEFAULT_TTL_MS = 24 * 60 * 60 * 1000;
@@ -137,10 +136,42 @@ function normalizeKey(raw: string | undefined | null): string | null {
   return key;
 }
 
-/** Stable SHA-256 hex of a JSON-serializable request body (or string). */
+function canonicalizeJson(value: unknown): unknown {
+  if (value === null || typeof value !== 'object') return value;
+  if (value instanceof Date) return value.toJSON();
+  if (Array.isArray(value)) return value.map((item) => canonicalizeJson(item));
+
+  const maybeSerializable = value as { toJSON?: () => unknown };
+  if (typeof maybeSerializable.toJSON === 'function') {
+    return canonicalizeJson(maybeSerializable.toJSON());
+  }
+
+  const source = value as Record<string, unknown>;
+  const canonical: Record<string, unknown> = {};
+  for (const key of Object.keys(source).sort()) {
+    const item = source[key];
+    if (
+      item === undefined ||
+      typeof item === 'function' ||
+      typeof item === 'symbol'
+    ) {
+      continue;
+    }
+    canonical[key] = canonicalizeJson(item);
+  }
+  return canonical;
+}
+
+/**
+ * Stable SHA-256 hex of a JSON-serializable request body (or raw string).
+ * Object keys are recursively sorted so semantically identical JSON requests
+ * cannot produce different receipt hashes merely because property order changed.
+ */
 export function hashIdempotencyRequest(body: unknown): string {
   const payload =
-    typeof body === 'string' ? body : JSON.stringify(body ?? null);
+    typeof body === 'string'
+      ? body
+      : JSON.stringify(canonicalizeJson(body ?? null));
   return createHash('sha256').update(payload).digest('hex');
 }
 
@@ -153,13 +184,24 @@ function parseStoredResponse(responseJson: string | null): unknown {
   }
 }
 
+function idempotencyConflict(
+  message: string,
+  details?: Record<string, unknown>,
+) {
+  return apiConflictException(
+    ApiDomainErrorCode.IDEMPOTENCY_CONFLICT,
+    message,
+    details,
+  );
+}
+
 function assertRequestHashMatch(
   stored: string | null,
   incoming: string | null | undefined,
 ): void {
   if (!stored || !incoming) return;
   if (stored !== incoming) {
-    throw new ConflictException(
+    throw idempotencyConflict(
       'Idempotency-Key reused with a different request payload',
     );
   }
@@ -274,8 +316,9 @@ export async function withClientIdempotency<T>(
         writeMemory(shopId, scope, key, replay, requestHash, ttlMs);
         return replay as T;
       }
-      throw new ConflictException(
+      throw idempotencyConflict(
         'Idempotency-Key request is already in progress',
+        { scope },
       );
     }
   }
@@ -313,8 +356,9 @@ export async function withClientIdempotency<T>(
       writeMemory(shopId, scope, key, replay, requestHash, ttlMs);
       return replay as T;
     }
-    throw new ConflictException(
+    throw idempotencyConflict(
       'Idempotency-Key request is already in progress',
+      { scope },
     );
   }
 
