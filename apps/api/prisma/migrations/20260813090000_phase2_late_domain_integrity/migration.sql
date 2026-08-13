@@ -53,14 +53,14 @@ ALTER TABLE "AiInsight" ADD CONSTRAINT "AiInsight_shop_fk"
 ALTER TABLE "AiInsightFeedback" ADD CONSTRAINT "AiInsightFeedback_shop_fk"
   FOREIGN KEY ("shopId") REFERENCES "Shop"("id") ON DELETE CASCADE NOT VALID;
 
--- Ticket/access lineage. Optional history parents use SET NULL where the schema
--- already permits null; financial/credential parents are RESTRICTed.
+-- Ticket/access lineage. History-bearing parent rows use RESTRICT so a delete
+-- cannot erase or detach already-issued financial/access evidence.
 ALTER TABLE "Ticket" ADD CONSTRAINT "Ticket_product_same_shop_fk"
   FOREIGN KEY ("shopId", "productId") REFERENCES "TicketProduct"("shopId", "id") ON DELETE RESTRICT NOT VALID;
 ALTER TABLE "Ticket" ADD CONSTRAINT "Ticket_order_same_shop_fk"
-  FOREIGN KEY ("shopId", "orderId") REFERENCES "TicketOrder"("shopId", "id") ON DELETE SET NULL NOT VALID;
+  FOREIGN KEY ("shopId", "orderId") REFERENCES "TicketOrder"("shopId", "id") ON DELETE RESTRICT NOT VALID;
 ALTER TABLE "TicketScan" ADD CONSTRAINT "TicketScan_ticket_same_shop_fk"
-  FOREIGN KEY ("shopId", "ticketId") REFERENCES "Ticket"("shopId", "id") ON DELETE SET NULL NOT VALID;
+  FOREIGN KEY ("shopId", "ticketId") REFERENCES "Ticket"("shopId", "id") ON DELETE RESTRICT NOT VALID;
 ALTER TABLE "RfidCredential" ADD CONSTRAINT "RfidCredential_wallet_same_shop_fk"
   FOREIGN KEY ("shopId", "walletId") REFERENCES "RfidWallet"("shopId", "id") ON DELETE RESTRICT NOT VALID;
 ALTER TABLE "RfidWalletEntry" ADD CONSTRAINT "RfidWalletEntry_wallet_same_shop_fk"
@@ -68,14 +68,14 @@ ALTER TABLE "RfidWalletEntry" ADD CONSTRAINT "RfidWalletEntry_wallet_same_shop_f
 ALTER TABLE "RfidWalletEntry" ADD CONSTRAINT "RfidWalletEntry_reversal_same_shop_fk"
   FOREIGN KEY ("shopId", "reversalOfId") REFERENCES "RfidWalletEntry"("shopId", "id") ON DELETE RESTRICT NOT VALID;
 ALTER TABLE "RfidTap" ADD CONSTRAINT "RfidTap_credential_same_shop_fk"
-  FOREIGN KEY ("shopId", "credentialId") REFERENCES "RfidCredential"("shopId", "id") ON DELETE SET NULL NOT VALID;
+  FOREIGN KEY ("shopId", "credentialId") REFERENCES "RfidCredential"("shopId", "id") ON DELETE RESTRICT NOT VALID;
 ALTER TABLE "RfidTap" ADD CONSTRAINT "RfidTap_wallet_same_shop_fk"
-  FOREIGN KEY ("shopId", "walletId") REFERENCES "RfidWallet"("shopId", "id") ON DELETE SET NULL NOT VALID;
+  FOREIGN KEY ("shopId", "walletId") REFERENCES "RfidWallet"("shopId", "id") ON DELETE RESTRICT NOT VALID;
 
--- Automation lineage. Rule deletion may preserve execution history; execution
--- deletion owns its steps/dead-letter record.
+-- Automation lineage. Execution history keeps its rule; execution deletion owns
+-- only its internal steps/dead-letter record.
 ALTER TABLE "AutomationExecution" ADD CONSTRAINT "AutomationExecution_rule_same_shop_fk"
-  FOREIGN KEY ("shopId", "ruleId") REFERENCES "AutomationRule"("shopId", "id") ON DELETE SET NULL NOT VALID;
+  FOREIGN KEY ("shopId", "ruleId") REFERENCES "AutomationRule"("shopId", "id") ON DELETE RESTRICT NOT VALID;
 ALTER TABLE "AutomationExecutionStep" ADD CONSTRAINT "AutomationStep_execution_same_shop_fk"
   FOREIGN KEY ("shopId", "executionId") REFERENCES "AutomationExecution"("shopId", "id") ON DELETE CASCADE NOT VALID;
 ALTER TABLE "AutomationDeadLetter" ADD CONSTRAINT "AutomationDead_execution_same_shop_fk"
