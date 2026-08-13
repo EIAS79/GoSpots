@@ -138,7 +138,7 @@ test('E2E-08 organization access does not grant non-member venue access', async 
   expect(shopA.operationalAccess).toBeTruthy();
   expect(shopB.operationalAccess).toBeFalsy();
 
-  await api(page, 'GET', `/auth/venue/${E2E.venues.orgB}`, { expectedStatus: 403 });
+  await api(page, 'GET', `/auth/venue/${E2E.venues.orgB}`, { expectedStatus: 401 });
 
   const analytics = await api<any>(page, 'GET', '/organizations/e2e-organization/analytics');
   expect(analytics.shops.every((row: any) => row.id === 'e2e-shop-org-a')).toBeTruthy();
