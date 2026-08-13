@@ -41,7 +41,6 @@ async function main() {
   const rows = await prisma.$queryRaw<ConstraintRow[]>`
     SELECT conname, contype, convalidated
     FROM pg_constraint
-    WHERE conname = ANY(${REQUIRED_CONSTRAINTS as unknown as string[]}::text[])
   `;
   const byName = new Map(rows.map((row) => [row.conname, row]));
   const missing = REQUIRED_CONSTRAINTS.filter((name) => !byName.has(name));
@@ -51,7 +50,8 @@ async function main() {
     );
   }
 
-  const unexpectedType = rows.filter(
+  const requiredRows = REQUIRED_CONSTRAINTS.map((name) => byName.get(name)!);
+  const unexpectedType = requiredRows.filter(
     (row) => row.contype !== 'f' && row.contype !== 'c',
   );
   if (unexpectedType.length) {
@@ -63,7 +63,7 @@ async function main() {
   }
 
   console.log(
-    `Phase 2 database integrity assertions passed (${rows.length} constraints).`,
+    `Phase 2 database integrity assertions passed (${requiredRows.length} constraints).`,
   );
 }
 
