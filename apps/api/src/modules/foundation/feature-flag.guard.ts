@@ -1,0 +1,42 @@
+import { CanActivate, ExecutionContext, Injectable } from '@nestjs/common';
+import { Reflector } from '@nestjs/core';
+import { ApiDomainErrorCode } from '../../common/api-error.codes';
+import { apiForbiddenException } from '../../common/api-error.util';
+import type { JwtAccessPayload } from '../auth/auth.types';
+import { FeatureFlagService, type FeatureKey } from './feature-flag.service';
+import { REQUIRED_FEATURE_KEY } from './require-feature.decorator';
+
+@Injectable()
+export class FeatureFlagGuard implements CanActivate {
+  constructor(
+    private readonly reflector: Reflector,
+    private readonly featureFlags: FeatureFlagService,
+  ) {}
+
+  async canActivate(ctx: ExecutionContext): Promise<boolean> {
+    const feature = this.reflector.getAllAndOverride<FeatureKey>(
+      REQUIRED_FEATURE_KEY,
+      [ctx.getHandler(), ctx.getClass()],
+    );
+    if (!feature) return true;
+
+    const request = ctx.switchToHttp().getRequest();
+    const user = request.user as JwtAccessPayload | undefined;
+    if (!user?.shopId) {
+      throw apiForbiddenException(
+        ApiDomainErrorCode.VENUE_ACCESS_DENIED,
+        'No venue context.',
+      );
+    }
+
+    if (!(await this.featureFlags.isFeatureEnabled(user.shopId, feature))) {
+      throw apiForbiddenException(
+        ApiDomainErrorCode.FEATURE_DISABLED,
+        'Feature is disabled for this venue.',
+        { feature },
+      );
+    }
+
+    return true;
+  }
+}
