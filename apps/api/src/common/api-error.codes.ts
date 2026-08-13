@@ -85,7 +85,7 @@ const STATUS_TO_CODE: Partial<Record<number, ApiErrorCodeValue>> = {
  * Known 4xx use ApiErrorCode; 5xx → INTERNAL; others → `HTTP_<status>`.
  */
 export function errorCodeForHttpStatus(status: number): string {
-  if (status === HttpStatus.INTERNAL_SERVER_ERROR || status >= 500) {
+  if (status >= 500) {
     return ApiErrorCode.INTERNAL;
   }
   return STATUS_TO_CODE[status] ?? `HTTP_${status}`;
