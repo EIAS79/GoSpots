@@ -90,7 +90,7 @@ test('@smoke E2E-01 gaming cashier golden path', async ({ page }) => {
     data: { fiscalDeviceId: device.id },
     idempotencyKey: `${document.id}-fiscalize`,
   });
-  expect(fiscal.status).toBe('SUCCEEDED');
+  expect(fiscal.state).toBe('SUCCEEDED');
 
   const settled = await api<{ checks: Array<any> }>(page, 'GET', '/guest-checks?status=SETTLED');
   expect(settled.checks.some((row) => row.id === check.id)).toBeTruthy();
