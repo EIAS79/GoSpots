@@ -6,6 +6,11 @@ function invariant(condition: unknown, message: string): asserts condition {
   if (!condition) throw new Error(`Browser E2E database assertion failed: ${message}`);
 }
 
+function ledgerDualWriteEnabled() {
+  const value = process.env.LEDGER_DUAL_WRITE?.trim().toLowerCase();
+  return value === '1' || value === 'true' || value === 'on' || value === 'yes';
+}
+
 async function assertClosedCheck(label: string) {
   const check = await prisma.guestCheck.findFirst({
     where: { label },
@@ -42,7 +47,11 @@ async function main() {
   const ledgerRows = await prisma.ledgerEntry.findMany({
     where: { shopId: gaming.check.shopId, sourceId: { in: sourceIds } },
   });
-  invariant(ledgerRows.length >= 2, 'gaming financial sources were not represented in LedgerEntry');
+  if (ledgerDualWriteEnabled()) {
+    invariant(ledgerRows.length >= 2, 'enabled ledger dual-write did not represent gaming financial sources');
+  } else {
+    invariant(ledgerRows.length === 0, 'ledger rows were written while LEDGER_DUAL_WRITE is disabled');
+  }
 
   await assertClosedCheck('E2E Restaurant Golden');
   const restaurantTicket = await prisma.prepTicket.findFirst({
