@@ -55,7 +55,7 @@ export async function withPgAdvisoryXactLock<T>(
   return prisma.$transaction(
     async (tx) => {
       const rows = await tx.$queryRaw<Array<{ acquired: boolean }>>`
-        SELECT pg_try_advisory_xact_lock(${key1}, ${key2}) AS acquired
+        SELECT pg_try_advisory_xact_lock(CAST(${key1} AS integer), CAST(${key2} AS integer)) AS acquired
       `;
       if (!rows[0]?.acquired) {
         return { acquired: false as const };
