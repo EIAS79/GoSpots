@@ -5,12 +5,15 @@ import type { JwtAccessPayload } from '../auth/auth.service';
 import { CurrentUser } from '../auth/decorators/current-user.decorator';
 import { RequirePermissions } from '../auth/decorators/roles.decorator';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
+import { FeatureFlagGuard } from '../foundation/feature-flag.guard';
+import { RequireFeature } from '../foundation/require-feature.decorator';
 import { AiInsightsService } from './ai-insights.service';
 import { AiInsightFeedbackDto, RunAiInsightsDto } from './dto/ai-insights.dto';
 
 @ApiTags('ai-insights')
 @Controller('ai-insights')
-@UseGuards(JwtAuthGuard)
+@UseGuards(JwtAuthGuard, FeatureFlagGuard)
+@RequireFeature('ai_insights')
 @RequirePermissions(PERMISSIONS.AI_INSIGHTS_READ)
 export class AiInsightsController {
   constructor(private readonly insights: AiInsightsService) {}
