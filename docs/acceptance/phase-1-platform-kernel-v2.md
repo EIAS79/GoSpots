@@ -2,7 +2,26 @@
 
 Source: `GoSpots_Master_Product_and_Engineering_Execution_Plan_v2.md`, Phase 1 — Platform Kernel: Tenancy, Auth, Permissions and Integrity.
 
-Status: `IN_PROGRESS` until exact-head CI, merge, deployment and production validation complete.
+Status: `SOFTWARE_DONE / BLOCKED_EXTERNAL`.
+
+Software acceptance evidence:
+
+- Phase PR: `#41`, merged with expected head `1d68e0c23009d1df90ae7337965c2d2962778ab6`;
+- merged code revision: `7fcc453755e954e2b68227c342a557cdea885d84`;
+- exact-head PR CI: run `31777894821` (#501), all six jobs passed;
+- post-merge main CI: run `31778559570` (#502), all six jobs passed;
+- standalone product boundary and Edge production-validation workflows passed on both the PR head and merged main revision;
+- Vercel production deployment `dpl_8vuQZ5YTHbBhFtXqH4NX4e6WYNE2` is `READY`, targets the merged revision and owns the production aliases;
+- production homepage and login routes return HTTP 200;
+- production `/api/v1/live` and `/api/v1/ready` return HTTP 200 through the canonical proxy, with `database: up`;
+- Vercel reported no runtime-error clusters after deployment.
+
+External/admin evidence still required before `ACCEPTED`:
+
+1. In the Render dashboard for `gospots-api`, verify the active deployment revision is `7fcc453755e954e2b68227c342a557cdea885d84` and its build log shows `prisma migrate deploy` completed with `20260814090000_phase1_platform_kernel_v2` applied. The execution browser reached the Render sign-in page and had no authenticated session.
+2. With an authorized production owner account, smoke the affected Settings, Staff and Audit screens: load settings including `version` and `businessDayStartMinutes`, save once, confirm a stale save returns `VERSION_CONFLICT`, verify specialized role selection, and confirm audit delete is unavailable/rejected. No production account credentials were available to this execution.
+
+These are deployment/provider-access and production-account evidence gates. No executable repository or application work remains open.
 
 ## Requirement reconciliation
 
@@ -37,7 +56,7 @@ Migration: `20260814090000_phase1_platform_kernel_v2`
 
 `prisma/phase1-kernel-assert.ts` is the clean/upgrade database contract assertion and runs in both migration CI jobs.
 
-## Test evidence required before acceptance
+## Test evidence
 
 - API unit/property tests, including 500 generated allocation/split conservation cases;
 - auth, permission, tenant, idempotency, event and business-day/DST tests;
@@ -45,8 +64,9 @@ Migration: `20260814090000_phase1_platform_kernel_v2`
 - representative historical-data upgrade plus preservation and Phase 1 assertions;
 - web checks/typecheck/build and permanent browser E2E smoke;
 - Edge test/build regression;
-- exact-head CI for the Phase 1 PR and post-merge `main`;
-- deployment revision match, health, affected settings/staff/audit smoke and runtime-log check.
+- exact-head CI for the Phase 1 PR and post-merge `main` — complete;
+- Vercel production revision, public health and runtime-log checks — complete;
+- Render API revision/migration-log match and authenticated settings/staff/audit smoke — external/admin pending as recorded above.
 
 ## Gate P1
 
