@@ -1,102 +1,55 @@
-# Chunks 21–23 Acceptance — Enterprise Ecosystem
+# Chunks 21–23 Historical Acceptance — Enterprise Ecosystem
 
-This document records the repository acceptance boundary for Chunks 21–23. The pull request must remain **draft and unmerged** until the exact final head passes CI and review cleanup.
+This document preserves implementation evidence from the earlier chunk program. The current product contract is the Master Product & Engineering Execution Plan v2 and its Phase 0 standalone rule.
 
-## Shared release rules
+## Shared integrity rules preserved
 
-- Migrations are additive/expand-only and must deploy cleanly against an empty PostgreSQL database with `prisma migrate deploy`, `migrate status`, and `prisma validate`.
-- Existing Shop tenant isolation remains authoritative. New tenant-owned integration and hardware tables use FORCE RLS with the existing tenant policy helper.
-- Organization-wide reads are permitted only after verified `OrganizationMembership` checks; the service temporarily enters the existing verified RLS bypass for cross-shop reads and restores tenant mode in `finally`.
-- `organizations_v1` and `integrations_v1` remain rollout flags rather than silently becoming production defaults. Hardware continues to use the existing `device_registry` gate.
-- Secrets are never returned after initial issuance unless the API explicitly creates a one-time secret/token response. API credentials are stored hash-only; connector and webhook secrets are encrypted at rest.
-- Durable work uses idempotency/dedupe keys and explicit retry/dead-letter or retry-budget semantics.
-- Exact-head CI is the repository acceptance gate: API tests/build, migration dry-run, web tests/typecheck/build, and Edge tests/build must all succeed.
-
----
+- Tenant-owned integration and hardware data remains Shop-scoped and protected by the existing tenant/RLS mechanisms.
+- Organization-wide reads require verified organization membership and explicit venue scope.
+- `organizations_v1` and `integrations_v1` remain server-authoritative rollout controls.
+- API credentials remain hash-only; connector/webhook secrets remain encrypted at rest.
+- Durable work retains idempotency/dedupe keys, correlation IDs, bounded retries and dead-letter semantics.
+- Exact-head CI remains required for changes to these domains.
 
 ## Chunk 21 — Organization / multi-location
 
-### Implemented
+Existing repository work includes Organization, OrganizationMembership and OrganizationShop models; role/scope enforcement; organization-level venue linking; cross-location ledger analytics; operator UI; and tenant/security tests. This work remains useful input to the new Phase 13 acceptance audit.
 
-- `Organization`, `OrganizationMembership`, and `OrganizationShop` domain models and migration.
-- Organization roles: OWNER, ADMIN, ANALYST, OPERATOR.
-- Access modes: ALL_SHOPS and EXPLICIT.
-- Create organization from an owned venue.
-- Link another venue only when the actor directly owns that target venue.
-- Organization venue metadata, shared-catalog inheritance/override foundation, and audited mutation paths.
-- Owner-protected organization membership changes, including prevention of removing the final owner.
-- Cross-location ledger analytics with explicit-access filtering and no aggregation across unlike currencies.
-- Organization list exposes the private `dashboardKey` as `venuePath` when available rather than leaking/relying on the public slug for operational navigation.
-- Operator UI under `/dashboard/[venuePath]/organization`, discoverable from Settings.
-- Unit/security coverage for unauthorized group analytics, EXPLICIT shop filtering, private dashboard path selection, and audit recording.
+## Chunk 22 — Provider-neutral integration platform
 
-### Acceptance evidence
+### Product boundary
 
-- A non-member cannot read organization analytics.
-- EXPLICIT organization users only receive analytics for venues where they also hold direct operational membership.
-- Group reads do not permanently weaken the current Shop RLS session.
-- Organization mutation roles are enforced server-side; UI availability is not treated as authorization.
+GoSpots is a standalone venue operating system. Core checkout, invoicing, payments, guest checks, timed sessions, restaurant operations, billiards operations, reservations, inventory, reporting and venue continuity must not require another POS product.
 
----
+The integrations subsystem is an optional extension boundary for independently justified external capabilities. A connector may exchange data or invoke a provider, but it may not become the source of truth for GoSpots core domains or a mandatory dependency for venue operation.
 
-## Chunk 22 — Integration platform + GoPOS boundary
+### Existing provider-neutral platform
 
-### Implemented
+- connector installation model and registry;
+- encrypted connector secrets and health/error state;
+- durable integration jobs with tenant binding, idempotency keys, retries, dead-letter state, correlation IDs and atomic claims;
+- stale-processing lease recovery;
+- integration mappings and external-reference foundation;
+- hash-only scoped API credentials;
+- versioned integration API;
+- signed inbound webhooks with replay protection and payload-hash conflict detection;
+- signed outbound webhooks with stable event IDs, retry/backoff and delivery history;
+- webhook target validation;
+- deterministic demo connector for platform testing;
+- operator UI for installation, credentials, webhook and queue administration.
 
-- Connector installation model with provider registry and capabilities.
-- Encrypted connector secrets and health state/error tracking.
-- Durable integration jobs with tenant binding, idempotency keys, retries, dead-letter status, correlation IDs, and atomic worker claims.
-- Stale PROCESSING job lease recovery so a worker crash does not strand a job indefinitely.
-- Integration mappings and external-reference foundation.
-- Hash-only scoped API credentials.
-- Versioned scoped integration API under `/api/v1/integrations/v1/...`.
-- Signed inbound connector webhooks with timestamp replay window, HMAC validation, event-ID replay detection, and payload-hash conflict rejection.
-- Signed outbound webhooks with stable event IDs, retry/backoff, and dead-letter behavior. Delivery is intentionally at-least-once; receivers must deduplicate by the supplied event ID.
-- Webhook URL baseline blocks non-HTTPS and literal localhost/private/link-local destinations before persistence/delivery.
-- Demo connector for deterministic platform testing.
-- GoPOS connector boundary that **fails closed** until licensed official API documentation and credentials are supplied. No private GoPOS endpoint or payload contract is guessed.
-- Operator UI under `/dashboard/[venuePath]/integrations`, discoverable from Settings, covering installations, health checks, one-time scoped API credentials, signed webhook creation, queue visibility, and retry.
-- Tests cover atomic queue claims, loser-worker behavior, tenant-bound installation enqueueing, private webhook target rejection, stale lease recovery, and the fail-closed GoPOS boundary.
+The standalone baseline registers only connectors intentionally included in the product. No external POS integration is a release prerequisite.
 
-### External verification still required
+### Future provider rule
 
-The repository does **not** claim a live GoPOS roundtrip. GoPOS execution remains locked by design until licensed official API access is available and the real adapter can be implemented and reviewed against those official materials.
-
----
+A future provider-specific adapter may be added only for an explicit product/customer requirement. It must use official supported contracts, remain fail-closed until configured, preserve tenant isolation and idempotency, and pass its own outage/retry/reconciliation acceptance. It remains optional to GoSpots core operation.
 
 ## Chunk 23 — Hardware / printing / customer display / barcode
 
-### Implemented
+Existing repository work includes durable print jobs, printer routes, signed Edge claims, retry/lease recovery, TCP ESC/POS transport, customer display binding, barcode aliases, operator hardware UI, and API/Edge tests.
 
-- Printer device configuration, print routes, durable print jobs, retry budgets, dedupe keys, and fiscal-semantic duplicate protection.
-- Signed Edge Hub claim → printing → completion protocol tied to the registered Edge device and Shop.
-- Atomic print claiming to prevent two Edge Hubs from winning the same queued job.
-- Stale CLAIMED/PRINTING lease recovery; expired work is requeued while budget remains and failed when the retry budget is exhausted.
-- Edge Hub cloud print worker integrated into the existing sync loop.
-- Edge printer adapter boundary with TCP ESC/POS support plus deterministic in-memory/test execution.
-- ESC/POS payload rendering with bounded payload size, printer initialization, optional cut, host/port validation, and fail-closed behavior for unsupported adapters.
-- Customer display binding with one-time display token and hash-only persistence, POS pairing, snapshot updates, and public token-authenticated feed.
-- Barcode alias upsert/resolve foundation.
-- Operator UI under `/dashboard/[venuePath]/hardware`, discoverable from Settings, for printers, routes, failed-job retry, customer-display binding, and barcode aliases.
-- API tests cover print claim races, retry/terminal completion semantics, unauthorized completion ownership, and lease recovery.
-- Edge tests cover ESC/POS rendering, TCP adapter handoff, unsupported-adapter failure, cloud completion success, and cloud failure reporting.
+Physical model certification remains separate operational evidence; deterministic adapters do not prove every printer, scanner, cash drawer, display or vendor-specific driver.
 
-### External verification still required
+## Supersession note
 
-Repository tests use deterministic adapters/mocks. They do **not** claim validation against every physical printer model, USB/vendor driver, cash drawer, barcode scanner, or customer-display device. The implemented live printer transport is the TCP ESC/POS foundation; vendor-specific/USB adapters require hardware-specific validation before they can be marked supported.
-
----
-
-## Final acceptance checklist
-
-Before calling the repository work complete:
-
-1. Confirm the PR is still draft, open, and unmerged.
-2. Confirm the exact final head has one completed CI run with all four jobs green:
-   - API lint · test · build
-   - API migrate dry-run (ephemeral Postgres)
-   - Web checkout + offline tests · typecheck · build
-   - Edge Hub test · build
-3. Confirm there are no unresolved PR review threads or blocking reviews.
-4. Keep live GoPOS verification and physical-hardware certification explicitly marked external/unverified until those environments are actually available.
-5. Do not merge this PR as part of the acceptance process.
+Earlier wording that made a specific external POS connector or its licensed API a completion gate is superseded by the Master Product & Engineering Execution Plan v2. Future acceptance should be recorded against Phases 0–17 rather than treating this historical chunk document as the current program source of truth.
