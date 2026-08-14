@@ -26,6 +26,11 @@ export type MenuSection = {
 
 export type MenuItem = {
   id: string;
+  kind: "PRODUCT" | "SERVICE";
+  unit: string;
+  taxCategoryKey: string | null;
+  sku: string | null;
+  barcode: string | null;
   name: string;
   description: string | null;
   imageUrl: string | null;
@@ -108,6 +113,11 @@ export function deleteTag(id: string) {
 
 export type MenuItemInput = {
   name: string;
+  kind?: "PRODUCT" | "SERVICE";
+  unit?: string;
+  taxCategoryKey?: string;
+  sku?: string;
+  barcode?: string;
   sectionId?: string;
   description?: string;
   price: number;
@@ -133,6 +143,9 @@ export function updateMenuItem(id: string, body: Partial<MenuItemInput> & {
   imageUrl2?: string | null;
   sectionId?: string | null;
   description?: string | null;
+  taxCategoryKey?: string | null;
+  sku?: string | null;
+  barcode?: string | null;
   availableFrom?: string | null;
   availableTo?: string | null;
 }) {

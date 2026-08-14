@@ -11,7 +11,16 @@ import Link from "next/link";
 import { useCallback, useEffect, useMemo, useState, type FormEvent, type ReactNode } from "react";
 import { HoursPanel, weeklyToDraft } from "@/components/hours/hours-panel";
 import { applyOnboardingTemplate } from "@/lib/apply-onboarding-template";
-import { createPlaySession } from "@/lib/finance-client";
+import {
+  finishOperationsSession,
+  startOperationsSession,
+} from "@/lib/operations-offline-client";
+import {
+  createOperationsRatePlan,
+  fetchOperationsRatePlans,
+  updateOperationsRatePlan,
+  type OperationsBillingMode,
+} from "@/lib/operations-rate-client";
 import {
   createScheduleException,
   deleteScheduleException,
@@ -21,7 +30,7 @@ import {
   type VenueSchedule,
 } from "@/lib/hours-client";
 import { listIanaTimeZones, isValidIanaTimeZone } from "@/lib/iana-timezone";
-import { SUPPORTED_CURRENCIES } from "@/lib/locale-currency";
+import { SUPPORTED_CURRENCIES, SUPPORTED_LOCALES } from "@/lib/locale-currency";
 import { coerceMoney } from "@/lib/money";
 import {
   countedDoneSteps,
@@ -37,7 +46,6 @@ import {
   ONBOARDING_TEMPLATES,
   type OnboardingTemplateId,
 } from "@/lib/onboarding-templates";
-import { isFeatureUnlocked } from "@/lib/plan";
 import {
   fetchResourceCatalog,
   updateResourceCategory,
@@ -54,37 +62,44 @@ import {
 } from "@/lib/shop-settings-client";
 import { createStaff } from "@/lib/staff-client";
 import { useCurrentMembership } from "@/lib/use-current-membership";
-import { useVenueAccess } from "@/lib/use-venue-access";
 import { useVenueHref } from "@/lib/venue-context";
 import { useVenueSettingsOptional } from "@/lib/venue-settings-context";
 import { cn } from "@/lib/cn";
+import {
+  fetchOnboardingReadiness,
+  type OnboardingReadiness,
+} from "@/lib/onboarding-readiness-client";
 
-const STEP_TITLE_KEYS = [
-  "onboarding.step.details",
-  "onboarding.step.regional",
-  "onboarding.step.hours",
-  "onboarding.step.template",
-  "onboarding.step.categories",
-  "onboarding.step.resources",
-  "onboarding.step.pricing",
-  "onboarding.step.testSession",
-  "onboarding.step.staff",
-  "onboarding.step.preview",
+const STEP_TITLES = [
+  "Venue profile",
+  "Regional settings",
+  "Hours & holidays",
+  "Floor & zones",
+  "Resources",
+  "Rate rules",
+  "Catalog",
+  "Staff",
+  "Devices",
+  "Payment & fiscal",
+  "Test operation",
+  "Readiness",
 ] as const;
 
 export function OnboardingWizard({ venuePath }: { venuePath: string }) {
   const t = useVenueSettingsOptional()?.t;
   const membership = useCurrentMembership();
-  const access = useVenueAccess();
   const overviewHref = useVenueHref("");
-  const sessionsHref = useVenueHref("/sessions");
-  const subscriptionHref = useVenueHref("/subscription");
+  const menuHref = useVenueHref("/menu");
+  const settingsHref = useVenueHref("/settings");
+  const complianceHref = useVenueHref("/compliance");
+  const operationsHref = useVenueHref("/operations");
   const shopId = membership?.shop.id ?? null;
 
   const [progress, setProgress] = useState<OnboardingProgress | null>(null);
   const [settings, setSettings] = useState<ShopSettingsResponse | null>(null);
   const [catalog, setCatalog] = useState<ResourceCatalog | null>(null);
   const [schedule, setSchedule] = useState<VenueSchedule | null>(null);
+  const [readiness, setReadiness] = useState<OnboardingReadiness | null>(null);
   const [loading, setLoading] = useState(true);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -102,14 +117,16 @@ export function OnboardingWizard({ venuePath }: { venuePath: string }) {
     try {
       const p = ensureOnboardingProgress(venuePath, shopId);
       setProgress(p);
-      const [s, c, h] = await Promise.all([
+      const [s, c, h, r] = await Promise.all([
         fetchShopSettings(),
         fetchResourceCatalog().catch(() => null),
         fetchSchedule().catch(() => null),
+        fetchOnboardingReadiness().catch(() => null),
       ]);
       setSettings(s);
       setCatalog(c);
       setSchedule(h);
+      setReadiness(r);
     } catch (e) {
       setError(
         e instanceof Error ? e.message : tr("onboarding.loadError"),
@@ -125,11 +142,6 @@ export function OnboardingWizard({ venuePath }: { venuePath: string }) {
 
   const step = progress?.currentStep ?? 0;
   const doneCount = progress ? countedDoneSteps(progress) : 0;
-  const marketingUnlocked = isFeatureUnlocked(
-    access.enabledModules,
-    "marketing",
-  );
-
   function goStep(next: number) {
     if (!progress) return;
     const patched = {
@@ -203,7 +215,7 @@ export function OnboardingWizard({ venuePath }: { venuePath: string }) {
                 {tr("onboarding.eyebrow")}
               </p>
               <h1 className="text-xl font-semibold text-white sm:text-2xl">
-                {tr(STEP_TITLE_KEYS[step])}
+                {STEP_TITLES[step]}
               </h1>
             </div>
             <p className="text-sm text-zinc-400">
@@ -222,7 +234,7 @@ export function OnboardingWizard({ venuePath }: { venuePath: string }) {
                 <button
                   key={i}
                   type="button"
-                  title={tr(STEP_TITLE_KEYS[i])}
+                  title={STEP_TITLES[i]}
                   onClick={() => goStep(i)}
                   className={cn(
                     "h-1.5 flex-1 rounded-full transition",
@@ -331,19 +343,7 @@ export function OnboardingWizard({ venuePath }: { venuePath: string }) {
             />
           ) : null}
 
-          {step === 4 && settings ? (
-            <CategoriesStep
-              settings={settings}
-              setSettings={setSettings}
-              busy={busy}
-              setBusy={setBusy}
-              setError={setError}
-              tr={tr}
-              onContinue={completeCurrent}
-            />
-          ) : null}
-
-          {step === 5 ? (
+          {step === 4 ? (
             <ResourcesStep
               catalog={catalog}
               setCatalog={setCatalog}
@@ -356,7 +356,7 @@ export function OnboardingWizard({ venuePath }: { venuePath: string }) {
             />
           ) : null}
 
-          {step === 6 ? (
+          {step === 5 ? (
             <PricingStep
               catalog={catalog}
               setCatalog={setCatalog}
@@ -368,20 +368,18 @@ export function OnboardingWizard({ venuePath }: { venuePath: string }) {
             />
           ) : null}
 
-          {step === 7 ? (
-            <TestSessionStep
-              catalog={catalog}
-              busy={busy}
-              setBusy={setBusy}
-              setError={setError}
-              setMessage={setMessage}
-              sessionsHref={sessionsHref}
-              tr={tr}
+          {step === 6 ? (
+            <SetupLinkStep
+              title="Build the product and service catalog"
+              body="Create categories and products or services with an exact price, unit, tax category, SKU or barcode. Disabled items remain in history but cannot be sold."
+              href={menuHref}
+              linkLabel="Open catalog"
+              optional
               onContinue={completeCurrent}
             />
           ) : null}
 
-          {step === 8 ? (
+          {step === 7 ? (
             <StaffStep
               busy={busy}
               setBusy={setBusy}
@@ -392,18 +390,49 @@ export function OnboardingWizard({ venuePath }: { venuePath: string }) {
             />
           ) : null}
 
-          {step === 9 && settings ? (
-            <PreviewStep
-              settings={settings}
-              setSettings={setSettings}
+          {step === 8 ? (
+            <SetupLinkStep
+              title="Register venue devices"
+              body="Register POS, Edge, KDS, printer, scanner, display, cash-drawer and terminal devices. A device must be explicitly claimed by this venue before use."
+              href={settingsHref}
+              linkLabel="Open device registry"
+              optional
+              onContinue={completeCurrent}
+            />
+          ) : null}
+
+          {step === 9 ? (
+            <div className="grid gap-3 sm:grid-cols-2">
+              <SetupLinkStep title="Payment readiness" body="Select and configure an optional provider adapter or terminal. Provider state never replaces GoSpots settlement truth." href={settingsHref} linkLabel="Payment settings" optional onContinue={completeCurrent} />
+              <SetupLinkStep title="Tax and fiscal readiness" body="Configure legal identity, tax categories and fiscal/KSeF adapters required by your jurisdiction before taking live payments." href={complianceHref} linkLabel="Compliance settings" optional onContinue={completeCurrent} />
+            </div>
+          ) : null}
+
+          {step === 10 ? (
+            <TestSessionStep
               catalog={catalog}
-              schedule={schedule}
-              marketingUnlocked={marketingUnlocked}
-              subscriptionHref={subscriptionHref}
               busy={busy}
               setBusy={setBusy}
               setError={setError}
+              setMessage={setMessage}
+              sessionsHref={operationsHref}
               tr={tr}
+              onContinue={async () => {
+                setReadiness(await fetchOnboardingReadiness());
+                completeCurrent();
+              }}
+            />
+          ) : null}
+
+          {step === 11 ? (
+            <ReadinessStep
+              readiness={readiness}
+              busy={busy}
+              onRefresh={async () => {
+                setBusy(true);
+                try { setReadiness(await fetchOnboardingReadiness()); }
+                finally { setBusy(false); }
+              }}
               onFinish={onFinish}
             />
           ) : null}
@@ -422,7 +451,7 @@ export function OnboardingWizard({ venuePath }: { venuePath: string }) {
             {tr("onboarding.back")}
           </button>
           <div className="flex flex-wrap gap-2">
-            {step > 0 && step < 9 ? (
+            {step > 0 && step < ONBOARDING_STEP_COUNT - 1 ? (
               <button
                 type="button"
                 disabled={busy}
@@ -432,7 +461,7 @@ export function OnboardingWizard({ venuePath }: { venuePath: string }) {
                 {tr("onboarding.skip")}
               </button>
             ) : null}
-            {step < 9 ? (
+            {step < ONBOARDING_STEP_COUNT - 1 ? (
               <button
                 type="button"
                 disabled={busy}
@@ -467,8 +496,11 @@ function DetailsStep({
   tr: (k: string, v?: Record<string, string | number>) => string;
   onSave: (body: {
     name: string;
+    legalName: string | null;
+    venueType: string | null;
     displayName: string | null;
     description: string | null;
+    address: string | null;
     city: string | null;
     country: string | null;
     phone: string | null;
@@ -476,8 +508,11 @@ function DetailsStep({
 }) {
   const shop = settings.shop;
   const [name, setName] = useState(shop.name);
+  const [legalName, setLegalName] = useState(shop.legalName ?? "");
+  const [venueType, setVenueType] = useState(shop.venueType ?? "mixed");
   const [displayName, setDisplayName] = useState(shop.displayName ?? "");
   const [description, setDescription] = useState(shop.description ?? "");
+  const [address, setAddress] = useState(shop.address ?? "");
   const [city, setCity] = useState(shop.city ?? "");
   const [country, setCountry] = useState(shop.country ?? "");
   const [phone, setPhone] = useState(shop.phone ?? "");
@@ -487,11 +522,14 @@ function DetailsStep({
       className="space-y-4"
       onSubmit={(e) => {
         e.preventDefault();
-        if (!name.trim()) return;
+        if (!name.trim() || !legalName.trim() || !address.trim() || !city.trim() || !country.trim()) return;
         void onSave({
           name: name.trim(),
+          legalName: legalName.trim(),
+          venueType,
           displayName: displayName.trim() || null,
           description: description.trim() || null,
+          address: address.trim(),
           city: city.trim() || null,
           country: country.trim() || null,
           phone: phone.trim() || null,
@@ -499,6 +537,20 @@ function DetailsStep({
       }}
     >
       <p className="text-sm text-zinc-400">{tr("onboarding.detailsHint")}</p>
+      <div className="grid gap-3 sm:grid-cols-2">
+        <Field label="Venue type" required>
+          <select value={venueType} onChange={(event) => setVenueType(event.target.value)} className="mt-1 w-full rounded-lg border border-white/10 bg-zinc-950 px-3 py-2.5 text-sm text-white outline-none">
+            <option value="gaming">Gaming</option>
+            <option value="dining">Restaurant / dining</option>
+            <option value="bar">Bar</option>
+            <option value="hotel_fb">Hotel food & beverage</option>
+            <option value="mixed">Mixed venue</option>
+          </select>
+        </Field>
+        <Field label="Legal business name" required>
+          <input value={legalName} onChange={(event) => setLegalName(event.target.value)} required className="mt-1 w-full rounded-lg border border-white/10 bg-zinc-950 px-3 py-2.5 text-sm text-white outline-none" />
+        </Field>
+      </div>
       <Field label={tr("onboarding.field.name")} required>
         <input
           value={name}
@@ -524,16 +576,21 @@ function DetailsStep({
         />
       </Field>
       <div className="grid gap-3 sm:grid-cols-2">
-        <Field label={tr("onboarding.field.city")}>
+        <Field label="Street address" required>
+          <input value={address} onChange={(event) => setAddress(event.target.value)} required className="mt-1 w-full rounded-lg border border-white/10 bg-zinc-950 px-3 py-2.5 text-sm text-white outline-none" />
+        </Field>
+        <Field label={tr("onboarding.field.city")} required>
           <input
             value={city}
+            required
             onChange={(e) => setCity(e.target.value)}
             className="mt-1 w-full rounded-lg border border-white/10 bg-zinc-950 px-3 py-2.5 text-sm text-white outline-none"
           />
         </Field>
-        <Field label={tr("onboarding.field.country")}>
+        <Field label={tr("onboarding.field.country")} required>
           <input
             value={country}
+            required
             onChange={(e) => setCountry(e.target.value)}
             className="mt-1 w-full rounded-lg border border-white/10 bg-zinc-950 px-3 py-2.5 text-sm text-white outline-none"
           />
@@ -565,6 +622,8 @@ function RegionalStep({
   tr: (k: string, v?: Record<string, string | number>) => string;
   onSave: (body: {
     timezone: string;
+    locale: string;
+    businessDayStartMinutes: number;
     currency?: string;
     confirm?: boolean;
   }) => Promise<void>;
@@ -572,6 +631,8 @@ function RegionalStep({
   const shop = settings.shop;
   const timezones = useMemo(() => listIanaTimeZones(), []);
   const [timezone, setTimezone] = useState(shop.timezone);
+  const [locale, setLocale] = useState(shop.locale);
+  const [businessDayStartMinutes, setBusinessDayStartMinutes] = useState(shop.businessDayStartMinutes);
   const [currency, setCurrency] = useState(shop.currency);
   const [confirmFx, setConfirmFx] = useState(false);
   const [previewNote, setPreviewNote] = useState<string | null>(null);
@@ -604,9 +665,11 @@ function RegionalStep({
     }
     const body: {
       timezone: string;
+      locale: string;
+      businessDayStartMinutes: number;
       currency?: string;
       confirm?: boolean;
-    } = { timezone };
+    } = { timezone, locale, businessDayStartMinutes };
     if (currency !== shop.currency) {
       body.currency = currency;
       body.confirm = true;
@@ -630,6 +693,16 @@ function RegionalStep({
           ))}
         </select>
       </Field>
+      <div className="grid gap-3 sm:grid-cols-2">
+        <Field label="Dashboard language">
+          <select value={locale} onChange={(event) => setLocale(event.target.value)} className="mt-1 w-full rounded-lg border border-white/10 bg-zinc-950 px-3 py-2.5 text-sm text-white outline-none">
+            {SUPPORTED_LOCALES.map((option) => <option key={option.code} value={option.code}>{option.label}</option>)}
+          </select>
+        </Field>
+        <Field label="Business day starts">
+          <input type="time" value={`${String(Math.floor(businessDayStartMinutes / 60)).padStart(2, "0")}:${String(businessDayStartMinutes % 60).padStart(2, "0")}`} onChange={(event) => { const [hour, minute] = event.target.value.split(":").map(Number); setBusinessDayStartMinutes(hour * 60 + minute); }} className="mt-1 w-full rounded-lg border border-white/10 bg-zinc-950 px-3 py-2.5 text-sm text-white outline-none" />
+        </Field>
+      </div>
       <Field label={tr("settings.currency")}>
         <select
           value={currency}
@@ -995,7 +1068,9 @@ function ResourcesStep({
     setBusy(true);
     setError(null);
     try {
-      await updateResourceUnit(id, { name });
+      const unit = units.find((candidate) => candidate.id === id);
+      if (!unit) return;
+      await updateResourceUnit(id, { name, expectedVersion: unit.version });
       await onReload();
     } catch (e) {
       setError(e instanceof Error ? e.message : tr("onboarding.saveError"));
@@ -1071,7 +1146,47 @@ function PricingStep({
     setBusy(true);
     setError(null);
     try {
-      await updateResourceCategory(categoryId, { rates });
+      const category = categories.find((candidate) => candidate.id === categoryId);
+      if (!category) return;
+      await updateResourceCategory(categoryId, {
+        rates,
+        expectedVersion: category.version,
+      });
+      const primary = rates[0];
+      if (primary) {
+        const billingMode: OperationsBillingMode = category.bookingMode === "GAME"
+          ? "PER_GAME"
+          : category.bookingMode === "PERSON"
+            ? "PER_PERSON"
+            : "HOURLY";
+        const priceMinor = Math.round(primary.price * 100);
+        const hourlyRateMinor = billingMode === "HOURLY"
+          ? Math.round((priceMinor * 60) / (primary.durationMinutes ?? 60))
+          : 0;
+        const existing = (await fetchOperationsRatePlans()).find(
+          (plan) => plan.resourceCategoryId === categoryId && plan.active,
+        );
+        const body = {
+          name: `${category.name} — ${primary.label}`,
+          billingMode,
+          hourlyRateMinor,
+          unitPriceMinor: billingMode === "HOURLY" ? hourlyRateMinor : priceMinor,
+          roundingMinutes: 1,
+          minimumMinutes: 0,
+          active: true,
+        };
+        if (existing) {
+          await updateOperationsRatePlan(existing.id, {
+            ...body,
+            expectedVersion: existing.version,
+          });
+        } else {
+          await createOperationsRatePlan({
+            ...body,
+            resourceCategoryId: categoryId,
+          });
+        }
+      }
       setCatalog(await fetchResourceCatalog());
     } catch (e) {
       setError(e instanceof Error ? e.message : tr("onboarding.saveError"));
@@ -1139,6 +1254,101 @@ function PricingStep({
   );
 }
 
+function SetupLinkStep({
+  title,
+  body,
+  href,
+  linkLabel,
+  optional,
+  onContinue,
+}: {
+  title: string;
+  body: string;
+  href: string;
+  linkLabel: string;
+  optional?: boolean;
+  onContinue: () => void;
+}) {
+  return (
+    <section className="space-y-4 rounded-xl border border-white/10 bg-zinc-950/60 p-4">
+      <div>
+        <div className="flex items-center gap-2">
+          <h2 className="font-semibold text-white">{title}</h2>
+          {optional ? <span className="rounded-full bg-white/5 px-2 py-0.5 text-[10px] uppercase tracking-wide text-zinc-500">Optional for floor readiness</span> : null}
+        </div>
+        <p className="mt-2 text-sm leading-6 text-zinc-400">{body}</p>
+      </div>
+      <div className="flex flex-wrap gap-2">
+        <Link href={href} className="rounded-lg border border-emerald-500/40 bg-emerald-500/10 px-4 py-2.5 text-sm text-emerald-100">
+          {linkLabel}
+        </Link>
+        <button type="button" onClick={onContinue} className="rounded-lg border border-white/10 px-4 py-2.5 text-sm text-zinc-300">
+          Continue
+        </button>
+      </div>
+    </section>
+  );
+}
+
+function ReadinessStep({
+  readiness,
+  busy,
+  onRefresh,
+  onFinish,
+}: {
+  readiness: OnboardingReadiness | null;
+  busy: boolean;
+  onRefresh: () => Promise<void>;
+  onFinish: () => void;
+}) {
+  return (
+    <div className="space-y-4">
+      <div className={cn(
+        "rounded-xl border p-4",
+        readiness?.operational
+          ? "border-emerald-500/30 bg-emerald-500/10"
+          : "border-amber-500/30 bg-amber-500/10",
+      )}>
+        <h2 className="font-semibold text-white">
+          {readiness?.operational ? "Operational floor is ready" : "Required setup is incomplete"}
+        </h2>
+        <p className="mt-1 text-sm text-zinc-300">
+          This result is calculated by the server from canonical venue data, not browser progress.
+        </p>
+      </div>
+      <ul className="divide-y divide-white/5 overflow-hidden rounded-xl border border-white/10">
+        {(readiness?.steps ?? []).map((item) => (
+          <li key={item.key} className="flex items-center justify-between gap-3 px-3 py-3 text-sm">
+            <div>
+              <p className="text-zinc-200">{item.label}</p>
+              {item.detail ? <p className="mt-0.5 text-xs text-zinc-500">{item.detail}</p> : null}
+            </div>
+            <span className={cn(
+              "shrink-0 rounded-full px-2 py-1 text-[10px] font-semibold",
+              item.complete
+                ? "bg-emerald-500/15 text-emerald-300"
+                : item.status === "OPTIONAL"
+                  ? "bg-sky-500/15 text-sky-300"
+                  : "bg-amber-500/15 text-amber-200",
+            )}>
+              {item.complete ? "COMPLETE" : item.status}
+            </span>
+          </li>
+        ))}
+      </ul>
+      <div className="flex flex-wrap gap-2">
+        <button type="button" disabled={busy} onClick={() => void onRefresh()} className="inline-flex items-center gap-2 rounded-lg border border-white/10 px-4 py-2.5 text-sm text-zinc-300 disabled:opacity-40">
+          {busy ? <Loader2 className="h-4 w-4 animate-spin" /> : null}
+          Refresh readiness
+        </button>
+        <button type="button" disabled={!readiness?.operational} onClick={onFinish} className="rounded-lg bg-emerald-500 px-4 py-2.5 text-sm font-semibold text-zinc-950 disabled:cursor-not-allowed disabled:opacity-35">
+          Finish setup
+        </button>
+      </div>
+    </div>
+  );
+}
+
 function TestSessionStep({
   catalog,
   busy,
@@ -1174,12 +1384,8 @@ function TestSessionStep({
     setBusy(true);
     setError(null);
     try {
-      await createPlaySession({
-        resourceId,
-        durationMinutes: 15,
-        label: "Onboarding test",
-        note: "onboardingTest",
-      });
+      const session = await startOperationsSession({ resourceId });
+      await finishOperationsSession(session.id, session.version);
       setMessage(tr("onboarding.testStarted"));
       onContinue();
     } catch (e) {

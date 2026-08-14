@@ -303,7 +303,14 @@ export class StaffApprovalsService {
       });
     }
     if (kind === StaffActionKind.RESOURCE_UNIT_UPDATE) {
+      const shopId = requireShopId(approver);
+      const resource = await this.prisma.resource.findFirst({
+        where: { id: targetId, shopId },
+        select: { version: true },
+      });
+      if (!resource) throw new NotFoundException('Resource not found.');
       return this.resources.updateResource(approver, targetId, {
+        expectedVersion: resource.version,
         ...(patch.name != null && { name: patch.name }),
         ...(patch.description !== undefined && {
           description: patch.description ?? undefined,
@@ -311,7 +318,14 @@ export class StaffApprovalsService {
         ...(patch.hourlyRate != null && { hourlyRate: patch.hourlyRate }),
       });
     }
+    const shopId = requireShopId(approver);
+    const category = await this.prisma.resourceCategory.findFirst({
+      where: { id: targetId, shopId },
+      select: { version: true },
+    });
+    if (!category) throw new NotFoundException('Resource category not found.');
     return this.resources.updateCategory(approver, targetId, {
+      expectedVersion: category.version,
       ...(patch.name != null && { name: patch.name }),
       ...(patch.description !== undefined && {
         description: patch.description ?? undefined,

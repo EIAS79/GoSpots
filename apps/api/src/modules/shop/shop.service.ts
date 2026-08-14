@@ -181,14 +181,23 @@ export class ShopService {
       id: true,
       version: true,
       name: true,
+      legalName: true,
+      branchCode: true,
       displayName: true,
       slug: true,
       description: true,
       address: true,
       city: true,
       country: true,
+      region: true,
+      postalCode: true,
       phone: true,
       email: true,
+      website: true,
+      taxId: true,
+      taxProfile: true,
+      receiptBranding: true,
+      logoUrl: true,
       coverImage: true,
       locale: true,
       timezone: true,
@@ -198,6 +207,7 @@ export class ShopService {
       advertiseOnVenuesPage: true,
       reviewsMode: true,
       floorCount: true,
+      venueType: true,
     } as const;
   }
 
@@ -317,6 +327,15 @@ export class ShopService {
           }),
           ...(dto.currency != null && { currency: nextCurrency }),
           ...(dto.name != null && { name: dto.name.trim() }),
+          ...(dto.legalName !== undefined && {
+            legalName: dto.legalName?.trim() || null,
+          }),
+          ...(dto.branchCode !== undefined && {
+            branchCode: dto.branchCode?.trim().toUpperCase() || null,
+          }),
+          ...(dto.venueType !== undefined && {
+            venueType: dto.venueType?.trim() || null,
+          }),
           ...(dto.displayName !== undefined && {
             displayName: dto.displayName?.trim() || null,
           }),
@@ -330,8 +349,31 @@ export class ShopService {
           ...(dto.country !== undefined && {
             country: dto.country?.trim() || null,
           }),
+          ...(dto.region !== undefined && {
+            region: dto.region?.trim() || null,
+          }),
+          ...(dto.postalCode !== undefined && {
+            postalCode: dto.postalCode?.trim() || null,
+          }),
           ...(dto.phone !== undefined && { phone: dto.phone?.trim() || null }),
           ...(dto.email !== undefined && { email: dto.email?.trim() || null }),
+          ...(dto.website !== undefined && {
+            website: dto.website?.trim() || null,
+          }),
+          ...(dto.taxId !== undefined && { taxId: dto.taxId?.trim() || null }),
+          ...(dto.taxProfile !== undefined && {
+            taxProfile: dto.taxProfile === null
+              ? Prisma.JsonNull
+              : (dto.taxProfile as Prisma.InputJsonValue),
+          }),
+          ...(dto.receiptBranding !== undefined && {
+            receiptBranding: dto.receiptBranding === null
+              ? Prisma.JsonNull
+              : (dto.receiptBranding as Prisma.InputJsonValue),
+          }),
+          ...(dto.logoUrl !== undefined && {
+            logoUrl: dto.logoUrl?.trim() || null,
+          }),
           ...(dto.isPublished !== undefined && { isPublished: dto.isPublished }),
           ...(dto.advertiseOnVenuesPage !== undefined && {
             advertiseOnVenuesPage: dto.advertiseOnVenuesPage,
@@ -378,6 +420,20 @@ export class ShopService {
     }
     if (dto.name != null && dto.name.trim() !== before.name) {
       changes.push(`name → ${shop.name}`);
+    }
+    if (
+      dto.legalName !== undefined ||
+      dto.branchCode !== undefined ||
+      dto.venueType !== undefined ||
+      dto.region !== undefined ||
+      dto.postalCode !== undefined ||
+      dto.website !== undefined ||
+      dto.taxId !== undefined ||
+      dto.taxProfile !== undefined ||
+      dto.receiptBranding !== undefined ||
+      dto.logoUrl !== undefined
+    ) {
+      changes.push('business profile updated');
     }
     if (
       dto.displayName !== undefined &&

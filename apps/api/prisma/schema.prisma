@@ -190,6 +190,10 @@ model Shop {
   /// SHA-256 hex of dashboardKey (hash-at-rest). Dual-write until plaintext DROP.
   dashboardKeyHash String? @unique
   name          String
+  /// Registered/legal business name used for receipts and fiscal configuration.
+  legalName     String?
+  /// Human-readable branch code. Organization-level uniqueness is enforced on OrganizationShop.
+  branchCode    String?
   /// Public marketing title (defaults to name when empty)
   displayName   String?
   description   String?
@@ -198,6 +202,13 @@ model Shop {
   address       String?
   phone         String?
   email         String?
+  region        String?
+  postalCode    String?
+  website       String?
+  taxId         String?
+  taxProfile    Json?
+  receiptBranding Json?
+  logoUrl       String?
   coverImage    String?
   /// Public venue page is live (slug URL)
   isPublished   Boolean  @default(false)
@@ -702,6 +713,11 @@ enum MealPeriod {
   LATE_NIGHT
 }
 
+enum CatalogItemKind {
+  PRODUCT
+  SERVICE
+}
+
 model MenuSection {
   id            String      @id @default(cuid())
   shopId        String
@@ -728,6 +744,11 @@ model MenuItem {
   sectionId         String?
   section           MenuSection? @relation(fields: [sectionId], references: [id], onDelete: SetNull)
   name              String
+  kind              CatalogItemKind @default(PRODUCT)
+  unit              String          @default("UNIT")
+  taxCategoryKey    String?
+  sku               String?
+  barcode           String?
   description       String?
   imageUrl          String?
   imageUrl2         String?
@@ -756,6 +777,8 @@ model MenuItem {
 
   @@index([shopId])
   @@index([shopId, sectionId])
+  @@unique([shopId, sku])
+  @@unique([shopId, barcode])
 }
 
 enum TagType {
@@ -813,6 +836,9 @@ enum ResourceType {
   CARDS
   TABLE
   DINING
+  PRIVATE_ROOM
+  EQUIPMENT
+  ATTRACTION
   OTHER
 }
 
@@ -821,6 +847,23 @@ enum ResourceStatus {
   BUSY
   RESERVED
   MAINTENANCE
+}
+
+/// Persistent operator configuration. Live state is derived from this plus sessions/reservations.
+enum ResourceConfigurationState {
+  ENABLED
+  MAINTENANCE
+  DISABLED
+  OFFLINE_DEVICE
+}
+
+enum VenueZoneType {
+  ROOM
+  RESTAURANT
+  BAR
+  PRIVATE_ROOM
+  GAMING_AREA
+  OTHER
 }
 
 /// Game / activity offering (e.g. PC lounge, bowling lanes) — staff set how many units exist.
@@ -835,6 +878,7 @@ model ResourceCategory {
   imageUrl    String?
   imageUrl2   String?
   sortOrder   Int          @default(0)
+  version     Int          @default(1)
   /// Default booking block length in minutes
   slotMinutes Int          @default(60)
   playstationGames String[]
@@ -847,6 +891,7 @@ model ResourceCategory {
   eventRequests EventRequest[]
 
   @@index([shopId])
+  @@unique([shopId, id])
 }
 
 enum ShopReviewsMode {
@@ -986,6 +1031,9 @@ model GamingSection {
   name                 String
   floor                Int              @default(1)
   isVip                Boolean          @default(false)
+  zoneType             VenueZoneType    @default(GAMING_AREA)
+  isHidden              Boolean          @default(false)
+  version               Int              @default(1)
   seatsPerRow          Int              @default(6)
   sortOrder            Int              @default(0)
   /// INDOOR | OUTDOOR — restaurant dining zones
@@ -1001,6 +1049,7 @@ model GamingSection {
 
   @@index([shopId, categoryId, sortOrder])
   @@index([shopId, floor, sortOrder])
+  @@unique([shopId, id])
 }
 
 /// A batch of same-size tables inside a dining area (e.g. four 2-tops, two 6-tops).
@@ -1048,11 +1097,20 @@ model Resource {
   tableGroupId String?
   tableGroup   DiningTableGroup? @relation(fields: [tableGroupId], references: [id], onDelete: SetNull)
   name       String
+  /// Stable venue-local operational identifier; display names are allowed to repeat.
+  code       String           @default(cuid())
   type       ResourceType     @default(OTHER)
   description String?
   imageUrl   String?
   hourlyRate Decimal          @default(0) @db.Decimal(19, 4)
   status     ResourceStatus   @default(AVAILABLE)
+  configurationState ResourceConfigurationState @default(ENABLED)
+  version    Int              @default(1)
+  layoutX   Int?
+  layoutY   Int?
+  layoutWidth Int             @default(1)
+  layoutHeight Int            @default(1)
+  layoutRotation Int          @default(0)
   /// Seat count for restaurant tables (DINING units).
   capacity   Int?
   sortOrder  Int              @default(0)
@@ -1063,6 +1121,8 @@ model Resource {
   playSessions PlaySession[]
 
   @@index([shopId])
+  @@unique([shopId, code])
+  @@unique([shopId, id])
   @@index([shopId, categoryId])
   @@index([shopId, sectionId])
 }

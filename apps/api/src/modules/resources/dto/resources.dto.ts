@@ -1,4 +1,10 @@
-import { BookingMode, ResourceStatus, ResourceType } from '@prisma/client';
+import {
+  BookingMode,
+  ResourceConfigurationState,
+  ResourceStatus,
+  ResourceType,
+  VenueZoneType,
+} from '@prisma/client';
 import {
   IsArray,
   IsBoolean,
@@ -91,6 +97,10 @@ export class CreateCategoryDto {
 }
 
 export class UpdateCategoryDto {
+  @IsInt()
+  @Min(1)
+  expectedVersion!: number;
+
   @IsOptional()
   @IsEnum(ResourceType)
   type?: ResourceType;
@@ -153,10 +163,21 @@ export class AddUnitsDto {
 }
 
 export class UpdateResourceDto {
+  @IsInt()
+  @Min(1)
+  expectedVersion!: number;
+
   @IsOptional()
   @IsString()
   @MaxLength(80)
   name?: string;
+
+  @IsOptional()
+  @IsString()
+  @Matches(/^[A-Z0-9][A-Z0-9_-]{0,31}$/i, {
+    message: 'code must use letters, numbers, underscore or hyphen.',
+  })
+  code?: string;
 
   @IsOptional()
   @IsString()
@@ -173,8 +194,36 @@ export class UpdateResourceDto {
   status?: ResourceStatus;
 
   @IsOptional()
+  @IsEnum(ResourceConfigurationState)
+  configurationState?: ResourceConfigurationState;
+
+  @IsOptional()
   @IsInt()
   sortOrder?: number;
+
+  @IsOptional()
+  @IsInt()
+  layoutX?: number | null;
+
+  @IsOptional()
+  @IsInt()
+  layoutY?: number | null;
+
+  @IsOptional()
+  @IsInt()
+  @Min(1)
+  layoutWidth?: number;
+
+  @IsOptional()
+  @IsInt()
+  @Min(1)
+  layoutHeight?: number;
+
+  @IsOptional()
+  @IsInt()
+  @Min(0)
+  @Max(359)
+  layoutRotation?: number;
 
   @IsOptional()
   @IsString()
@@ -211,6 +260,14 @@ export class CreateGamingSectionDto {
   isVip?: boolean;
 
   @IsOptional()
+  @IsEnum(VenueZoneType)
+  zoneType?: VenueZoneType;
+
+  @IsOptional()
+  @IsBoolean()
+  isHidden?: boolean;
+
+  @IsOptional()
   @IsInt()
   @Min(2)
   @Max(12)
@@ -238,6 +295,10 @@ export class CreateGamingSectionDto {
 }
 
 export class UpdateGamingSectionDto {
+  @IsInt()
+  @Min(1)
+  expectedVersion!: number;
+
   @IsOptional()
   @IsString()
   @MaxLength(80)
@@ -251,6 +312,14 @@ export class UpdateGamingSectionDto {
   @IsOptional()
   @IsBoolean()
   isVip?: boolean;
+
+  @IsOptional()
+  @IsEnum(VenueZoneType)
+  zoneType?: VenueZoneType;
+
+  @IsOptional()
+  @IsBoolean()
+  isHidden?: boolean;
 
   @IsOptional()
   @IsInt()

@@ -24,6 +24,8 @@ import { requireShopId } from '../../common/tenant';
 import { assertShopFeature } from '../../common/subscription-feature.util';
 import { prepareOfferingConfigForWrite } from '../../common/offering-config.util';
 import { serializeMoney, toMoneyNumber } from '../../common/money.util';
+import { ApiDomainErrorCode } from '../../common/api-error.codes';
+import { apiConflictException } from '../../common/api-error.util';
 import {
   buildDiningMirrorLabel,
   deleteAdvisorySeatingForDiningGroup,
@@ -73,12 +75,13 @@ export class ResourcesService {
     private readonly notifications: NotificationsService,
   ) {}
 
-  private assertWrite(actor: JwtAccessPayload) {
+  private async assertWrite(actor: JwtAccessPayload) {
     if (!actor.shopId) throw new ForbiddenException();
     const p = actor.perms ?? '';
     if (p !== '*' && !p.split(',').includes('resource.write')) {
       throw new ForbiddenException('Missing resource.write');
     }
+    await assertShopFeature(this.prisma, actor.shopId, 'resource');
   }
 
   async getCatalog(actor: JwtAccessPayload) {
@@ -167,6 +170,7 @@ export class ResourcesService {
 
         return {
           id: cat.id,
+          version: cat.version,
           type: cat.type,
           bookingMode: cat.bookingMode,
           name: cat.name,
@@ -214,9 +218,8 @@ export class ResourcesService {
   }
 
   async createCategory(actor: JwtAccessPayload, dto: CreateCategoryDto) {
-    this.assertWrite(actor);
+    await this.assertWrite(actor);
     const shopId = actor.shopId!;
-    await assertShopFeature(this.prisma, shopId, 'resource');
     if (FEATURED_GAME_TYPES.includes(dto.type) || DINING_TYPES.includes(dto.type)) {
       const existing = await this.prisma.resourceCategory.findFirst({
         where: { shopId, type: dto.type },
@@ -246,34 +249,55 @@ export class ResourcesService {
         sortOrder: dto.sortOrder ?? 0,
       },
     });
-    if (dto.rates?.length) {
-      await this.syncRates(category.id, dto.rates, shopId);
-    }
-    if (dto.unitCount && dto.unitCount > 0 && !DINING_TYPES.includes(dto.type)) {
-      const prefix =
-        dto.unitNamePrefix ?? defaultUnitNamePrefix(dto.type, dto.name);
-      await this.addUnitsInternal(
-        shopId,
-        category.id,
-        dto.type,
-        dto.unitCount,
-        prefix,
-        undefined,
-        null,
-      );
-      const section = await this.prisma.gamingSection.create({
-        data: {
+    try {
+      if (dto.rates?.length) {
+        await this.syncRates(category.id, dto.rates, shopId);
+      }
+      if (dto.unitCount && dto.unitCount > 0 && !DINING_TYPES.includes(dto.type)) {
+        const prefix =
+          dto.unitNamePrefix ?? defaultUnitNamePrefix(dto.type, dto.name);
+        await this.addUnitsInternal(
           shopId,
-          categoryId: category.id,
-          name: 'Main area',
-          floor: 1,
-          seatsPerRow: 6,
-        },
+          category.id,
+          dto.type,
+          dto.unitCount,
+          prefix,
+          undefined,
+          null,
+        );
+        const section = await this.prisma.gamingSection.create({
+          data: {
+            shopId,
+            categoryId: category.id,
+            name: 'Main area',
+            floor: 1,
+            seatsPerRow: 6,
+          },
+        });
+        await this.prisma.resource.updateMany({
+          where: { categoryId: category.id, shopId },
+          data: { sectionId: section.id },
+        });
+      }
+    } catch (error) {
+      const resourceIds = await this.prisma.resource.findMany({
+        where: { shopId, categoryId: category.id },
+        select: { id: true },
       });
-      await this.prisma.resource.updateMany({
-        where: { categoryId: category.id, shopId },
-        data: { sectionId: section.id },
+      await this.prisma.$transaction(async (tx) => {
+        await tx.operationsRatePlan.deleteMany({
+          where: {
+            shopId,
+            OR: [
+              { resourceCategoryId: category.id },
+              { resourceId: { in: resourceIds.map((resource) => resource.id) } },
+            ],
+          },
+        });
+        await tx.resource.deleteMany({ where: { shopId, categoryId: category.id } });
+        await tx.resourceCategory.deleteMany({ where: { shopId, id: category.id } });
       });
+      throw error;
     }
     await this.audit.record(actor, {
       section: 'operations',
@@ -289,12 +313,13 @@ export class ResourcesService {
     id: string,
     dto: UpdateCategoryDto,
   ) {
-    this.assertWrite(actor);
+    await this.assertWrite(actor);
     const shopId = actor.shopId!;
     const cat = await this.ensureCategory(shopId, id);
-    await this.prisma.resourceCategory.update({
-      where: { id, shopId },
+    const claimed = await this.prisma.resourceCategory.updateMany({
+      where: { id, shopId, version: dto.expectedVersion },
       data: {
+        version: { increment: 1 },
         ...(dto.type != null && { type: dto.type }),
         ...(dto.name != null && { name: dto.name }),
         ...(dto.description !== undefined && { description: dto.description }),
@@ -311,6 +336,13 @@ export class ResourcesService {
         ...(dto.sortOrder != null && { sortOrder: dto.sortOrder }),
       },
     });
+    if (claimed.count !== 1) {
+      throw apiConflictException(
+        ApiDomainErrorCode.VERSION_CONFLICT,
+        'Offering changed in another session. Reload and try again.',
+        { aggregateType: 'resource_category', aggregateId: id },
+      );
+    }
     if (dto.type != null) {
       await this.prisma.resource.updateMany({
         where: { categoryId: id, shopId },
@@ -339,10 +371,25 @@ export class ResourcesService {
   }
 
   async deleteCategory(actor: JwtAccessPayload, id: string) {
-    this.assertWrite(actor);
+    await this.assertWrite(actor);
     const cat = await this.ensureCategory(actor.shopId!, id);
-    await this.prisma.resourceCategory.delete({
-      where: { id, shopId: actor.shopId! },
+    await this.prisma.$transaction(async (tx) => {
+      const resourceIds = await tx.resource.findMany({
+        where: { shopId: actor.shopId!, categoryId: id },
+        select: { id: true },
+      });
+      await tx.operationsRatePlan.deleteMany({
+        where: {
+          shopId: actor.shopId!,
+          OR: [
+            { resourceCategoryId: id },
+            { resourceId: { in: resourceIds.map((resource) => resource.id) } },
+          ],
+        },
+      });
+      await tx.resourceCategory.delete({
+        where: { id, shopId: actor.shopId! },
+      });
     });
     await this.audit.record(actor, {
       section: 'operations',
@@ -358,7 +405,7 @@ export class ResourcesService {
     categoryId: string,
     dto: AddUnitsDto,
   ) {
-    this.assertWrite(actor);
+    await this.assertWrite(actor);
     const shopId = actor.shopId!;
     const cat = await this.ensureCategory(shopId, categoryId);
     await this.addUnitsInternal(
@@ -382,7 +429,7 @@ export class ResourcesService {
     id: string,
     dto: UpdateResourceDto,
   ) {
-    this.assertWrite(actor);
+    await this.assertWrite(actor);
     const shopId = actor.shopId!;
     const existing = await this.ensureResource(shopId, id);
     if (dto.sectionId !== undefined && dto.sectionId !== null) {
@@ -393,18 +440,44 @@ export class ResourcesService {
         );
       }
     }
-    const resource = await this.prisma.resource.update({
-      where: { id, shopId },
+    const configuredState = dto.configurationState ??
+      (dto.status === ResourceStatus.MAINTENANCE
+        ? 'MAINTENANCE'
+        : dto.status === ResourceStatus.AVAILABLE
+          ? 'ENABLED'
+          : undefined);
+    const claimed = await this.prisma.resource.updateMany({
+      where: { id, shopId, version: dto.expectedVersion },
       data: {
+        version: { increment: 1 },
         ...(dto.name != null && { name: dto.name }),
+        ...(dto.code != null && { code: dto.code.trim().toUpperCase() }),
         ...(dto.description !== undefined && { description: dto.description }),
         ...(dto.hourlyRate != null && { hourlyRate: dto.hourlyRate }),
-        ...(dto.status != null && { status: dto.status }),
+        ...(configuredState != null && {
+          configurationState: configuredState,
+          status: configuredState === 'MAINTENANCE'
+            ? ResourceStatus.MAINTENANCE
+            : ResourceStatus.AVAILABLE,
+        }),
         ...(dto.sortOrder != null && { sortOrder: dto.sortOrder }),
+        ...(dto.layoutX !== undefined && { layoutX: dto.layoutX }),
+        ...(dto.layoutY !== undefined && { layoutY: dto.layoutY }),
+        ...(dto.layoutWidth != null && { layoutWidth: dto.layoutWidth }),
+        ...(dto.layoutHeight != null && { layoutHeight: dto.layoutHeight }),
+        ...(dto.layoutRotation != null && { layoutRotation: dto.layoutRotation }),
         ...(dto.sectionId !== undefined && { sectionId: dto.sectionId }),
         ...(dto.capacity !== undefined && { capacity: dto.capacity }),
       },
     });
+    if (claimed.count !== 1) {
+      throw apiConflictException(
+        ApiDomainErrorCode.VERSION_CONFLICT,
+        'Resource changed in another session. Reload and try again.',
+        { aggregateType: 'resource', aggregateId: id },
+      );
+    }
+    const resource = await this.ensureResource(shopId, id);
     await this.audit.record(actor, {
       section: 'operations',
       action: 'resource.unit.update',
@@ -436,9 +509,14 @@ export class ResourcesService {
   }
 
   async deleteResource(actor: JwtAccessPayload, id: string) {
-    this.assertWrite(actor);
+    await this.assertWrite(actor);
     const r = await this.ensureResource(actor.shopId!, id);
-    await this.prisma.resource.delete({ where: { id, shopId: actor.shopId! } });
+    await this.prisma.$transaction(async (tx) => {
+      await tx.operationsRatePlan.deleteMany({
+        where: { shopId: actor.shopId!, resourceId: id },
+      });
+      await tx.resource.delete({ where: { id, shopId: actor.shopId! } });
+    });
     await this.audit.record(actor, {
       section: 'operations',
       action: 'resource.unit.delete',
@@ -454,7 +532,7 @@ export class ResourcesService {
     slot: '1' | '2',
     file: ResourceImageUpload,
   ) {
-    this.assertWrite(actor);
+    await this.assertWrite(actor);
     const shopId = actor.shopId!;
     const cat = await this.ensureCategory(shopId, categoryId);
     assertResourceImageFile(file);
@@ -496,12 +574,15 @@ export class ResourcesService {
     return {
       sections: sections.map((s) => ({
         id: s.id,
+        version: s.version,
         categoryId: s.categoryId,
         categoryName: s.category.name,
         categoryType: s.category.type,
         name: s.name,
         floor: s.floor,
         isVip: s.isVip,
+        zoneType: s.zoneType,
+        isHidden: s.isHidden,
         seatsPerRow: s.seatsPerRow,
         sortOrder: s.sortOrder,
         zone: s.zone,
@@ -521,16 +602,27 @@ export class ResourcesService {
           tableCount: g.resources.length,
           units: g.resources.map((r) => ({
             id: r.id,
+            version: r.version,
             name: r.name,
+            code: r.code,
             status: r.status,
+            configurationState: r.configurationState,
             sortOrder: r.sortOrder,
             capacity: r.capacity,
           })),
         })),
         units: s.resources.map((r) => ({
           id: r.id,
+          version: r.version,
           name: r.name,
+          code: r.code,
           status: r.status,
+          configurationState: r.configurationState,
+          layoutX: r.layoutX,
+          layoutY: r.layoutY,
+          layoutWidth: r.layoutWidth,
+          layoutHeight: r.layoutHeight,
+          layoutRotation: r.layoutRotation,
           sortOrder: r.sortOrder,
           capacity: r.capacity,
         })),
@@ -542,7 +634,7 @@ export class ResourcesService {
     actor: JwtAccessPayload,
     dto: CreateGamingSectionDto,
   ) {
-    this.assertWrite(actor);
+    await this.assertWrite(actor);
     const shopId = actor.shopId!;
     const cat = await this.ensureCategory(shopId, dto.categoryId);
     const maxSort = await this.prisma.gamingSection.aggregate({
@@ -558,6 +650,8 @@ export class ResourcesService {
         name: dto.name.trim(),
         floor,
         isVip: dto.isVip ?? false,
+        zoneType: dto.zoneType ?? (isDining ? 'RESTAURANT' : 'GAMING_AREA'),
+        isHidden: dto.isHidden ?? false,
         seatsPerRow: dto.seatsPerRow ?? (isDining ? 4 : 6),
         sortOrder: (maxSort._max.sortOrder ?? -1) + 1,
         ...(isDining && {
@@ -593,7 +687,7 @@ export class ResourcesService {
     id: string,
     dto: UpdateGamingSectionDto,
   ) {
-    this.assertWrite(actor);
+    await this.assertWrite(actor);
     const shopId = actor.shopId!;
     const existing = await this.prisma.gamingSection.findFirst({
       where: { id, shopId },
@@ -601,14 +695,17 @@ export class ResourcesService {
     });
     if (!existing) throw new NotFoundException('Gaming section not found.');
 
-    await this.prisma.gamingSection.update({
-      where: { id, shopId },
+    const claimed = await this.prisma.gamingSection.updateMany({
+      where: { id, shopId, version: dto.expectedVersion },
       data: {
+        version: { increment: 1 },
         ...(dto.name != null && { name: dto.name.trim() }),
         ...(dto.floor != null && {
           floor: Math.min(Math.max(dto.floor, 1), 10),
         }),
         ...(dto.isVip != null && { isVip: dto.isVip }),
+        ...(dto.zoneType != null && { zoneType: dto.zoneType }),
+        ...(dto.isHidden != null && { isHidden: dto.isHidden }),
         ...(dto.seatsPerRow != null && { seatsPerRow: dto.seatsPerRow }),
         ...(dto.sortOrder != null && { sortOrder: dto.sortOrder }),
         ...(dto.zone != null && {
@@ -622,6 +719,13 @@ export class ResourcesService {
         }),
       },
     });
+    if (claimed.count !== 1) {
+      throw apiConflictException(
+        ApiDomainErrorCode.VERSION_CONFLICT,
+        'Zone changed in another session. Reload and try again.',
+        { aggregateType: 'venue_zone', aggregateId: id },
+      );
+    }
 
     if (
       existing.category.type === 'DINING' &&
@@ -667,7 +771,7 @@ export class ResourcesService {
   }
 
   async deleteGamingSection(actor: JwtAccessPayload, id: string) {
-    this.assertWrite(actor);
+    await this.assertWrite(actor);
     const shopId = actor.shopId!;
     const section = await this.prisma.gamingSection.findFirst({
       where: { id, shopId },
@@ -711,7 +815,7 @@ export class ResourcesService {
     sectionId: string,
     file: ResourceImageUpload,
   ) {
-    this.assertWrite(actor);
+    await this.assertWrite(actor);
     const shopId = actor.shopId!;
     const section = await this.prisma.gamingSection.findFirst({
       where: { id: sectionId, shopId },
@@ -736,7 +840,7 @@ export class ResourcesService {
     actor: JwtAccessPayload,
     dto: CreateDiningTableGroupDto,
   ) {
-    this.assertWrite(actor);
+    await this.assertWrite(actor);
     const shopId = actor.shopId!;
     const section = await this.prisma.gamingSection.findFirst({
       where: { id: dto.sectionId, shopId },
@@ -800,7 +904,7 @@ export class ResourcesService {
     id: string,
     dto: UpdateDiningTableGroupDto,
   ) {
-    this.assertWrite(actor);
+    await this.assertWrite(actor);
     const shopId = actor.shopId!;
     const group = await this.prisma.diningTableGroup.findFirst({
       where: { id, shopId },
@@ -871,7 +975,7 @@ export class ResourcesService {
   }
 
   async deleteDiningTableGroup(actor: JwtAccessPayload, id: string) {
-    this.assertWrite(actor);
+    await this.assertWrite(actor);
     const shopId = actor.shopId!;
     const group = await this.prisma.diningTableGroup.findFirst({
       where: { id, shopId },
@@ -899,7 +1003,7 @@ export class ResourcesService {
       }
     }
 
-    await this.prisma.resource.deleteMany({ where: { tableGroupId: id, shopId } });
+    await this.deleteResourceRows(shopId, resources.map((resource) => resource.id));
     await deleteAdvisorySeatingForDiningGroup(this.prisma, shopId, id);
     await this.prisma.diningTableGroup.delete({ where: { id, shopId } });
     await this.audit.record(actor, {
@@ -916,7 +1020,7 @@ export class ResourcesService {
     groupId: string,
     file: ResourceImageUpload,
   ) {
-    this.assertWrite(actor);
+    await this.assertWrite(actor);
     const shopId = actor.shopId!;
     const group = await this.prisma.diningTableGroup.findFirst({
       where: { id: groupId, shopId },
@@ -999,9 +1103,7 @@ export class ResourcesService {
         );
       }
     }
-    await this.prisma.resource.deleteMany({
-      where: { id: { in: toRemove.map((r) => r.id) }, shopId },
-    });
+    await this.deleteResourceRows(shopId, toRemove.map((resource) => resource.id));
   }
 
   private async syncSectionInventory(
@@ -1052,9 +1154,7 @@ export class ResourcesService {
         );
       }
     }
-    await this.prisma.resource.deleteMany({
-      where: { id: { in: toRemove.map((r) => r.id) }, shopId },
-    });
+    await this.deleteResourceRows(shopId, toRemove.map((resource) => resource.id));
   }
 
   private async getCategory(actor: JwtAccessPayload, id: string) {
@@ -1150,9 +1250,7 @@ export class ResourcesService {
       }
     }
 
-    await this.prisma.resource.deleteMany({
-      where: { id: { in: removable.map((r) => r.id) }, shopId },
-    });
+    await this.deleteResourceRows(shopId, removable.map((resource) => resource.id));
   }
 
   private async addUnitsInternal(
@@ -1165,12 +1263,9 @@ export class ResourcesService {
     capacity?: number | null,
     tableGroupId?: string,
   ) {
-    const existing = await this.prisma.resource.count({
-      where: {
-        categoryId,
-        ...(sectionId ? { sectionId } : {}),
-        ...(tableGroupId && type !== 'DINING' ? { tableGroupId } : {}),
-      },
+    const existing = await this.prisma.resource.aggregate({
+      where: { shopId, categoryId },
+      _max: { sortOrder: true },
     });
     const defaultRate = await this.prisma.resourceRate.findFirst({
       where: { categoryId },
@@ -1182,7 +1277,7 @@ export class ResourcesService {
         : toMoneyNumber(defaultRate?.price);
 
     const rows = Array.from({ length: count }, (_, i) => {
-      const n = existing + i + 1;
+      const n = (existing._max.sortOrder ?? 0) + i + 1;
       const padded = String(n).padStart(2, '0');
       return {
         shopId,
@@ -1191,12 +1286,23 @@ export class ResourcesService {
         tableGroupId: tableGroupId ?? null,
         type,
         name: `${namePrefix} ${padded}`,
+        code: `${categoryId.toUpperCase()}-${padded}`,
         hourlyRate: hourly,
         sortOrder: n,
         ...(capacity != null && capacity > 0 ? { capacity } : {}),
       };
     });
     await this.prisma.resource.createMany({ data: rows });
+  }
+
+  private async deleteResourceRows(shopId: string, ids: string[]) {
+    if (!ids.length) return;
+    await this.prisma.$transaction(async (tx) => {
+      await tx.operationsRatePlan.deleteMany({
+        where: { shopId, resourceId: { in: ids } },
+      });
+      await tx.resource.deleteMany({ where: { shopId, id: { in: ids } } });
+    });
   }
 
   private async ensureCategory(shopId: string, id: string) {

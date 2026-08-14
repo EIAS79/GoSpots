@@ -255,6 +255,8 @@ export class AuthService {
             slug,
             ...dashboardKeyPersistFields(generateDashboardKey()),
             name: dto.shopName,
+            legalName: businessLegalName,
+            taxId: dto.businessId.trim(),
             ownerId: u.id,
             venueType: dto.venueType ?? packId,
             city: dto.city?.trim() || null,

@@ -8,6 +8,7 @@ import {
   AddOrganizationShopDto,
   CreateOrganizationDto,
   UpdateOrganizationMemberDto,
+  UpdateOrganizationSettingsDto,
   UpdateOrganizationShopDto,
 } from './dto/organization.dto';
 import { OrganizationsService } from './organizations.service';
@@ -45,6 +46,24 @@ export class OrganizationsController {
     @Body() dto: UpdateOrganizationShopDto,
   ) {
     return this.organizations.updateShop(user, organizationId, shopId, dto);
+  }
+
+  @Patch(':organizationId/settings')
+  updateSettings(
+    @CurrentUser() user: JwtAccessPayload,
+    @Param('organizationId') organizationId: string,
+    @Body() dto: UpdateOrganizationSettingsDto,
+  ) {
+    return this.organizations.updateSettings(user, organizationId, dto);
+  }
+
+  @Get(':organizationId/shops/:shopId/resolved-settings')
+  resolvedSettings(
+    @CurrentUser() user: JwtAccessPayload,
+    @Param('organizationId') organizationId: string,
+    @Param('shopId') shopId: string,
+  ) {
+    return this.organizations.resolvedShopSettings(user, organizationId, shopId);
   }
 
   @Post(':organizationId/members')

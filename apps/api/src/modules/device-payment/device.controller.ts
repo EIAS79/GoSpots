@@ -14,7 +14,7 @@ import { RequirePermissions } from '../auth/decorators/roles.decorator';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import type { JwtAccessPayload } from '../auth/auth.service';
 import { DeviceRegistryService } from './device-registry.service';
-import { CreateDeviceDto, UpdateDeviceDto } from './dto/device.dto';
+import { ClaimDeviceDto, CreateDeviceDto, UpdateDeviceDto } from './dto/device.dto';
 
 @ApiTags('devices')
 @Controller('devices')
@@ -43,6 +43,24 @@ export class DeviceController {
     @Body() dto: UpdateDeviceDto,
   ) {
     return this.devices.update(user, id, dto);
+  }
+
+  @Post(':id/claim')
+  claim(
+    @CurrentUser() user: JwtAccessPayload,
+    @Param('id') id: string,
+    @Body() dto: ClaimDeviceDto,
+  ) {
+    return this.devices.claim(user, id, dto);
+  }
+
+  @Post(':id/unclaim')
+  unclaim(
+    @CurrentUser() user: JwtAccessPayload,
+    @Param('id') id: string,
+    @Body() dto: ClaimDeviceDto,
+  ) {
+    return this.devices.unclaim(user, id, dto);
   }
 
   @Post(':id/heartbeat')

@@ -4,9 +4,14 @@ import {
   Injectable,
   NotFoundException,
 } from '@nestjs/common';
-import { Prisma, ResourceStatus } from '@prisma/client';
+import {
+  OperationsBillingMode,
+  Prisma,
+  ResourceConfigurationState,
+} from '@prisma/client';
 import { assertExpectedVersion } from '../../common/optimistic-concurrency.util';
 import { requireShopId } from '../../common/tenant';
+import { assertShopFeature } from '../../common/subscription-feature.util';
 import { PrismaService } from '../../prisma/prisma.service';
 import { AuditService } from '../audit/audit.service';
 import type { JwtAccessPayload } from '../auth/auth.service';
@@ -19,6 +24,7 @@ import {
   MoveOperationsSessionDto,
   PauseOperationsSessionDto,
   StartOperationsSessionDto,
+  UpdateOperationsRatePlanDto,
 } from './dto/operations.dto';
 
 const OPEN_SESSION_STATES = ['ACTIVE', 'PAUSED'];
@@ -33,6 +39,29 @@ type RateInput = {
   roundingMinutes: number;
   minimumMinutes: number;
   capMinor?: number | null;
+  billingMode?: OperationsBillingMode;
+  unitPriceMinor?: number;
+  fixedDurationMinutes?: number | null;
+  minimumChargeMinor?: number;
+  graceMinutes?: number;
+  participantCount?: number;
+  gameCount?: number;
+};
+
+type RatePlanValidationInput = {
+  resourceId?: string | null;
+  resourceCategoryId?: string | null;
+  startMinute?: number | null;
+  endMinute?: number | null;
+  effectiveFrom?: string | Date | null;
+  effectiveTo?: string | Date | null;
+  holidayDates?: string[] | null;
+  billingMode?: OperationsBillingMode | null;
+  unitPriceMinor?: number | null;
+  hourlyRateMinor?: number | null;
+  capMinor?: number | null;
+  minimumChargeMinor?: number | null;
+  fixedDurationMinutes?: number | null;
 };
 
 export function calculateAccruedMinor(input: RateInput): number {
@@ -41,26 +70,171 @@ export function calculateAccruedMinor(input: RateInput): number {
     Math.floor((input.endedAt.getTime() - input.startedAt.getTime()) / 1000) -
       Math.max(0, input.totalPausedSeconds),
   );
-  const rawMinutes = Math.ceil(elapsedSeconds / 60);
+  const chargeableSeconds = Math.max(
+    0,
+    elapsedSeconds - Math.max(0, input.graceMinutes ?? 0) * 60,
+  );
+  const rawMinutes = Math.ceil(chargeableSeconds / 60);
   const rounding = Math.max(1, input.roundingMinutes || 1);
   let billableMinutes = Math.max(
     Math.max(0, input.minimumMinutes),
     Math.ceil(rawMinutes / rounding) * rounding,
   );
-  if (elapsedSeconds === 0 && input.minimumMinutes === 0) billableMinutes = 0;
+  if (chargeableSeconds === 0) billableMinutes = 0;
 
-  const overtimeAfter = input.overtimeAfterMinutes ?? null;
-  const baseMinutes = overtimeAfter == null
-    ? billableMinutes
-    : Math.min(billableMinutes, Math.max(0, overtimeAfter));
-  const overtimeMinutes = overtimeAfter == null
-    ? 0
-    : Math.max(0, billableMinutes - Math.max(0, overtimeAfter));
-  const base = Math.round((baseMinutes * input.hourlyRateMinor) / 60);
-  const overtimeRate = input.overtimeRateMinor ?? input.hourlyRateMinor;
-  const overtime = Math.round((overtimeMinutes * overtimeRate) / 60);
-  const total = base + overtime;
+  const billingMode = input.billingMode ?? OperationsBillingMode.HOURLY;
+  const unitPriceMinor = Math.max(
+    0,
+    input.unitPriceMinor ?? input.hourlyRateMinor,
+  );
+  let total: number;
+  if (billingMode === OperationsBillingMode.FREE) {
+    total = 0;
+  } else if (billingMode === OperationsBillingMode.FIXED_PRICE) {
+    total = chargeableSeconds === 0 ? 0 : unitPriceMinor;
+  } else if (billingMode === OperationsBillingMode.FIXED_DURATION) {
+    const duration = Math.max(1, input.fixedDurationMinutes ?? 1);
+    total = chargeableSeconds === 0
+      ? 0
+      : Math.ceil(billableMinutes / duration) * unitPriceMinor;
+  } else if (billingMode === OperationsBillingMode.PER_PERSON) {
+    total = chargeableSeconds === 0
+      ? 0
+      : unitPriceMinor * Math.max(1, input.participantCount ?? 1);
+  } else if (billingMode === OperationsBillingMode.PER_GAME) {
+    total = chargeableSeconds === 0
+      ? 0
+      : unitPriceMinor * Math.max(1, input.gameCount ?? 1);
+  } else if (billingMode === OperationsBillingMode.PER_MINUTE) {
+    total = billableMinutes * unitPriceMinor;
+  } else {
+    const overtimeAfter = input.overtimeAfterMinutes ?? null;
+    const baseMinutes = overtimeAfter == null
+      ? billableMinutes
+      : Math.min(billableMinutes, Math.max(0, overtimeAfter));
+    const overtimeMinutes = overtimeAfter == null
+      ? 0
+      : Math.max(0, billableMinutes - Math.max(0, overtimeAfter));
+    const base = Math.round((baseMinutes * unitPriceMinor) / 60);
+    const overtimeRate = input.overtimeRateMinor ?? unitPriceMinor;
+    const overtime = Math.round((overtimeMinutes * overtimeRate) / 60);
+    total = base + overtime;
+  }
+
+  if (billingMode === OperationsBillingMode.FREE) return 0;
+  total = Math.max(total, input.minimumChargeMinor ?? 0);
   return input.capMinor == null ? total : Math.min(total, input.capMinor);
+}
+
+function majorToMinor(value: Prisma.Decimal | number | string | null): number {
+  return new Prisma.Decimal(value ?? 0)
+    .mul(100)
+    .toDecimalPlaces(0, Prisma.Decimal.ROUND_HALF_UP)
+    .toNumber();
+}
+
+type RatePlanCandidate = {
+  id: string;
+  resourceId: string | null;
+  resourceCategoryId: string | null;
+  weekdays: number[];
+  startMinute: number | null;
+  endMinute: number | null;
+  holidayDates: string[];
+  membershipHookKey: string | null;
+  membershipOnly: boolean;
+  groupPackage: boolean;
+  priority: number;
+  effectiveFrom: Date | null;
+  effectiveTo: Date | null;
+  createdAt: Date;
+};
+
+function localRateContext(now: Date, timeZone: string) {
+  const parts = new Intl.DateTimeFormat('en-CA', {
+    timeZone,
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+    hour: '2-digit',
+    minute: '2-digit',
+    hourCycle: 'h23',
+    weekday: 'short',
+  }).formatToParts(now);
+  const value = (type: Intl.DateTimeFormatPartTypes) =>
+    parts.find((part) => part.type === type)?.value ?? '';
+  const weekdays: Record<string, number> = {
+    Sun: 0,
+    Mon: 1,
+    Tue: 2,
+    Wed: 3,
+    Thu: 4,
+    Fri: 5,
+    Sat: 6,
+  };
+  const year = Number(value('year'));
+  const month = Number(value('month'));
+  const day = Number(value('day'));
+  const date = `${value('year')}-${value('month')}-${value('day')}`;
+  const previous = new Date(Date.UTC(year, month - 1, day - 1));
+  return {
+    date,
+    previousDate: previous.toISOString().slice(0, 10),
+    weekday: weekdays[value('weekday')] ?? 0,
+    minute: Number(value('hour')) * 60 + Number(value('minute')),
+  };
+}
+
+export function resolveApplicableRatePlan<T extends RatePlanCandidate>(
+  candidates: T[],
+  input: {
+    now: Date;
+    timeZone: string;
+    resourceId: string;
+    resourceCategoryId: string | null;
+    membershipKeys: string[];
+    groupActive: boolean;
+  },
+): T | null {
+  const local = localRateContext(input.now, input.timeZone);
+  return candidates
+    .filter((plan) => {
+      if (
+        plan.resourceId !== input.resourceId &&
+        plan.resourceCategoryId !== input.resourceCategoryId
+      ) return false;
+      if (plan.membershipOnly && input.membershipKeys.length === 0) return false;
+      if (
+        plan.membershipHookKey &&
+        !input.membershipKeys.includes(plan.membershipHookKey)
+      ) return false;
+      if (plan.groupPackage && !input.groupActive) return false;
+      if (plan.effectiveFrom && input.now < plan.effectiveFrom) return false;
+      if (plan.effectiveTo && input.now >= plan.effectiveTo) return false;
+      const overnight = plan.startMinute != null && plan.endMinute != null &&
+        plan.startMinute > plan.endMinute;
+      const scheduleWeekday = overnight && local.minute < plan.endMinute!
+        ? (local.weekday + 6) % 7
+        : local.weekday;
+      const scheduleDate = overnight && local.minute < plan.endMinute!
+        ? local.previousDate
+        : local.date;
+      if (plan.weekdays.length && !plan.weekdays.includes(scheduleWeekday)) return false;
+      if (plan.holidayDates.length && !plan.holidayDates.includes(scheduleDate)) return false;
+      if (plan.startMinute != null && plan.endMinute != null) {
+        if (plan.startMinute === plan.endMinute) return true;
+        const inside = overnight
+          ? local.minute >= plan.startMinute || local.minute < plan.endMinute
+          : local.minute >= plan.startMinute && local.minute < plan.endMinute;
+        if (!inside) return false;
+      }
+      return true;
+    })
+    .sort((a, b) =>
+      Number(b.resourceId === input.resourceId) - Number(a.resourceId === input.resourceId) ||
+      b.priority - a.priority ||
+      b.createdAt.getTime() - a.createdAt.getTime(),
+    )[0] ?? null;
 }
 
 @Injectable()
@@ -109,6 +283,7 @@ export class OperationsService {
 
   async floor(actor: JwtAccessPayload) {
     const shopId = requireShopId(actor);
+    await assertShopFeature(this.prisma, shopId, 'resource');
     const now = new Date();
     const [resources, sessions, maintenance, reservations] = await Promise.all([
       this.prisma.resource.findMany({
@@ -159,17 +334,23 @@ export class OperationsService {
                   : 0),
             })
           : 0;
-        const state = blocked
-          ? 'MAINTENANCE'
+        const state = resource.configurationState === ResourceConfigurationState.DISABLED
+          ? 'DISABLED'
+          : resource.configurationState === ResourceConfigurationState.OFFLINE_DEVICE
+            ? 'OFFLINE_DEVICE'
+            : resource.configurationState === ResourceConfigurationState.MAINTENANCE || blocked
+              ? 'MAINTENANCE'
           : session?.status === 'PAUSED'
             ? 'PAUSED'
             : session
-              ? 'IN_USE'
+              ? 'OCCUPIED'
               : reservation && reservation.startsAt <= now
                 ? 'RESERVED'
                 : 'AVAILABLE';
         return {
           id: resource.id,
+          code: resource.code,
+          version: resource.version,
           name: resource.name,
           type: resource.type,
           categoryId: resource.categoryId,
@@ -177,6 +358,14 @@ export class OperationsService {
           sectionId: resource.sectionId,
           sectionName: resource.section?.name ?? null,
           capacity: resource.capacity,
+          configurationState: resource.configurationState,
+          placement: {
+            x: resource.layoutX,
+            y: resource.layoutY,
+            width: resource.layoutWidth,
+            height: resource.layoutHeight,
+            rotation: resource.layoutRotation,
+          },
           state,
           session: session ? { ...session, liveAccruedMinor } : null,
           maintenance: blocked ?? null,
@@ -186,8 +375,9 @@ export class OperationsService {
     };
   }
 
-  activity(actor: JwtAccessPayload) {
+  async activity(actor: JwtAccessPayload) {
     const shopId = requireShopId(actor);
+    await assertShopFeature(this.prisma, shopId, 'resource');
     return this.prisma.resourceStateEvent.findMany({
       where: { shopId },
       orderBy: { createdAt: 'desc' },
@@ -195,28 +385,117 @@ export class OperationsService {
     });
   }
 
-  listRatePlans(actor: JwtAccessPayload) {
+  async listRatePlans(actor: JwtAccessPayload) {
+    const shopId = requireShopId(actor);
+    await assertShopFeature(this.prisma, shopId, 'resource');
     return this.prisma.operationsRatePlan.findMany({
-      where: { shopId: requireShopId(actor) },
+      where: { shopId },
       orderBy: [{ active: 'desc' }, { name: 'asc' }],
     });
   }
 
   async createRatePlan(actor: JwtAccessPayload, dto: CreateOperationsRatePlanDto) {
     const shopId = requireShopId(actor);
-    if (!dto.resourceId && !dto.resourceCategoryId) {
-      throw new BadRequestException('Rate plan must target a resource or resource category.');
-    }
+    await assertShopFeature(this.prisma, shopId, 'resource');
+    await this.validateRatePlan(shopId, dto);
+    const billingMode = dto.billingMode ?? OperationsBillingMode.HOURLY;
+    const hourlyRateMinor = dto.hourlyRateMinor ??
+      (billingMode === OperationsBillingMode.HOURLY ? dto.unitPriceMinor ?? 0 : 0);
     const plan = await this.prisma.operationsRatePlan.create({
       data: {
         shopId,
-        ...dto,
+        name: dto.name.trim(),
+        resourceId: dto.resourceId,
+        resourceCategoryId: dto.resourceCategoryId,
+        billingMode,
+        hourlyRateMinor,
+        unitPriceMinor: dto.unitPriceMinor ?? hourlyRateMinor,
+        overtimeRateMinor: dto.overtimeRateMinor,
+        overtimeAfterMinutes: dto.overtimeAfterMinutes,
         roundingMinutes: dto.roundingMinutes ?? 1,
         minimumMinutes: dto.minimumMinutes ?? 0,
+        fixedDurationMinutes: dto.fixedDurationMinutes,
+        minimumChargeMinor: dto.minimumChargeMinor ?? 0,
+        graceMinutes: dto.graceMinutes ?? 0,
+        capMinor: dto.capMinor,
+        membershipHookKey: dto.membershipHookKey,
+        membershipOnly: dto.membershipOnly ?? false,
+        happyHour: dto.happyHour ?? false,
+        groupPackage: dto.groupPackage ?? false,
+        weekdays: [...new Set(dto.weekdays ?? [])].sort(),
+        startMinute: dto.startMinute,
+        endMinute: dto.endMinute,
+        holidayDates: [...new Set(dto.holidayDates ?? [])].sort(),
+        priority: dto.priority ?? 0,
+        effectiveFrom: dto.effectiveFrom ? new Date(dto.effectiveFrom) : undefined,
+        effectiveTo: dto.effectiveTo ? new Date(dto.effectiveTo) : undefined,
         active: dto.active ?? true,
       },
     });
     await this.record(actor, 'operations.rate-plan.create', `Created rate plan ${plan.name}`, { ratePlanId: plan.id });
+    return plan;
+  }
+
+  async updateRatePlan(
+    actor: JwtAccessPayload,
+    id: string,
+    dto: UpdateOperationsRatePlanDto,
+  ) {
+    const shopId = requireShopId(actor);
+    await assertShopFeature(this.prisma, shopId, 'resource');
+    const existing = await this.prisma.operationsRatePlan.findFirst({
+      where: { id, shopId },
+    });
+    if (!existing) throw new NotFoundException('Rate plan not found.');
+    const merged = {
+      ...existing,
+      ...dto,
+      resourceId: dto.resourceId ?? existing.resourceId ?? undefined,
+      resourceCategoryId:
+        dto.resourceCategoryId ?? existing.resourceCategoryId ?? undefined,
+    };
+    await this.validateRatePlan(shopId, merged);
+    const claimed = await this.prisma.operationsRatePlan.updateMany({
+      where: { id, shopId, version: dto.expectedVersion },
+      data: {
+        version: { increment: 1 },
+        ...(dto.name != null && { name: dto.name.trim() }),
+        ...(dto.resourceId !== undefined && { resourceId: dto.resourceId }),
+        ...(dto.resourceCategoryId !== undefined && {
+          resourceCategoryId: dto.resourceCategoryId,
+        }),
+        ...(dto.billingMode != null && { billingMode: dto.billingMode }),
+        ...(dto.hourlyRateMinor != null && { hourlyRateMinor: dto.hourlyRateMinor }),
+        ...(dto.unitPriceMinor != null && { unitPriceMinor: dto.unitPriceMinor }),
+        ...(dto.overtimeRateMinor !== undefined && { overtimeRateMinor: dto.overtimeRateMinor }),
+        ...(dto.overtimeAfterMinutes !== undefined && { overtimeAfterMinutes: dto.overtimeAfterMinutes }),
+        ...(dto.roundingMinutes != null && { roundingMinutes: dto.roundingMinutes }),
+        ...(dto.minimumMinutes != null && { minimumMinutes: dto.minimumMinutes }),
+        ...(dto.fixedDurationMinutes !== undefined && { fixedDurationMinutes: dto.fixedDurationMinutes }),
+        ...(dto.minimumChargeMinor != null && { minimumChargeMinor: dto.minimumChargeMinor }),
+        ...(dto.graceMinutes != null && { graceMinutes: dto.graceMinutes }),
+        ...(dto.capMinor !== undefined && { capMinor: dto.capMinor }),
+        ...(dto.membershipHookKey !== undefined && { membershipHookKey: dto.membershipHookKey }),
+        ...(dto.membershipOnly != null && { membershipOnly: dto.membershipOnly }),
+        ...(dto.happyHour != null && { happyHour: dto.happyHour }),
+        ...(dto.groupPackage != null && { groupPackage: dto.groupPackage }),
+        ...(dto.weekdays != null && { weekdays: [...new Set(dto.weekdays)].sort() }),
+        ...(dto.startMinute !== undefined && { startMinute: dto.startMinute }),
+        ...(dto.endMinute !== undefined && { endMinute: dto.endMinute }),
+        ...(dto.holidayDates != null && { holidayDates: [...new Set(dto.holidayDates)].sort() }),
+        ...(dto.priority != null && { priority: dto.priority }),
+        ...(dto.effectiveFrom !== undefined && { effectiveFrom: new Date(dto.effectiveFrom) }),
+        ...(dto.effectiveTo !== undefined && { effectiveTo: new Date(dto.effectiveTo) }),
+        ...(dto.active != null && { active: dto.active }),
+      },
+    });
+    if (claimed.count !== 1) {
+      throw new ConflictException('Rate plan changed in another session. Reload and try again.');
+    }
+    const plan = await this.prisma.operationsRatePlan.findFirstOrThrow({
+      where: { id, shopId },
+    });
+    await this.record(actor, 'operations.rate-plan.update', `Updated rate plan ${plan.name}`, { ratePlanId: plan.id });
     return plan;
   }
 
@@ -230,6 +509,7 @@ export class OperationsService {
 
   async start(actor: JwtAccessPayload, dto: StartOperationsSessionDto) {
     const shopId = requireShopId(actor);
+    await assertShopFeature(this.prisma, shopId, 'resource');
     const now = new Date();
     const result = await this.prisma.$transaction(async (tx) => {
       await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext(${`${shopId}:${dto.resourceId}`}))`;
@@ -238,8 +518,10 @@ export class OperationsService {
         include: { category: true },
       });
       if (!resource) throw new NotFoundException('Resource not found.');
-      if (resource.status === ResourceStatus.MAINTENANCE) {
-        throw new ConflictException('Resource is in maintenance.');
+      if (resource.configurationState !== ResourceConfigurationState.ENABLED) {
+        throw new ConflictException(
+          `Resource is ${resource.configurationState.toLowerCase().replace('_', ' ')}.`,
+        );
       }
       const conflict = await tx.operationsSession.findFirst({
         where: { shopId, resourceId: resource.id, status: { in: OPEN_SESSION_STATES } },
@@ -262,30 +544,50 @@ export class OperationsService {
         }
       }
 
-      let plan = dto.ratePlanId
-        ? await tx.operationsRatePlan.findFirst({ where: { id: dto.ratePlanId, shopId, active: true } })
-        : null;
-      if (dto.ratePlanId && !plan) {
+      const membershipKeys = await this.resolveCustomerMembershipKeys(
+        tx,
+        shopId,
+        dto.guestCheckId,
+        now,
+      );
+
+      const shop = await tx.shop.findUnique({
+        where: { id: shopId },
+        select: { currency: true, timezone: true },
+      });
+      const candidates = await tx.operationsRatePlan.findMany({
+        where: {
+          shopId,
+          active: true,
+          OR: [
+            { resourceId: resource.id },
+            ...(resource.categoryId ? [{ resourceCategoryId: resource.categoryId }] : []),
+          ],
+        },
+      });
+      const eligible = dto.ratePlanId
+        ? candidates.filter((candidate) => candidate.id === dto.ratePlanId)
+        : candidates;
+      if (dto.ratePlanId && eligible.length === 0) {
         throw new NotFoundException('Selected active rate plan was not found for this venue.');
       }
-      if (plan && plan.resourceId !== resource.id && plan.resourceCategoryId !== resource.categoryId) {
-        throw new ConflictException('Selected rate plan does not apply to this resource.');
+      const plan = resolveApplicableRatePlan(eligible, {
+        now,
+        timeZone: shop?.timezone ?? 'UTC',
+        resourceId: resource.id,
+        resourceCategoryId: resource.categoryId,
+        membershipKeys,
+        groupActive: Boolean(dto.groupId),
+      });
+      if (dto.ratePlanId && !plan) {
+        throw new ConflictException('Selected rate plan is not applicable at this time.');
       }
-      if (!dto.ratePlanId) {
-        plan = await tx.operationsRatePlan.findFirst({
-          where: {
-            shopId,
-            active: true,
-            OR: [
-              { resourceId: resource.id },
-              ...(resource.categoryId ? [{ resourceCategoryId: resource.categoryId }] : []),
-            ],
-          },
-          orderBy: [{ resourceId: 'desc' }, { createdAt: 'desc' }],
-        });
-      }
-      const hourlyRateMinor = plan?.hourlyRateMinor ?? Math.max(0, Math.round(Number(resource.hourlyRate ?? 0) * 100));
-      const shop = await tx.shop.findUnique({ where: { id: shopId }, select: { currency: true } });
+      const hourlyRateMinor = plan?.hourlyRateMinor ?? Math.max(
+        0,
+        majorToMinor(resource.hourlyRate),
+      );
+      const billingMode = plan?.billingMode ?? OperationsBillingMode.HOURLY;
+      const unitPriceMinor = plan?.unitPriceMinor ?? hourlyRateMinor;
       const rateSnapshot = {
         source: plan ? 'OPERATIONS_RATE_PLAN' : 'RESOURCE_HOURLY_RATE',
         planId: plan?.id ?? null,
@@ -295,12 +597,29 @@ export class OperationsService {
         resourceType: resource.type,
         capturedAt: now.toISOString(),
         hourlyRateMinor,
+        billingMode,
+        unitPriceMinor,
+        fixedDurationMinutes: plan?.fixedDurationMinutes ?? null,
+        minimumChargeMinor: plan?.minimumChargeMinor ?? 0,
+        graceMinutes: plan?.graceMinutes ?? 0,
+        participantCount: dto.participantCount ?? 1,
+        gameCount: dto.gameCount ?? 1,
         overtimeRateMinor: plan?.overtimeRateMinor ?? null,
         overtimeAfterMinutes: plan?.overtimeAfterMinutes ?? null,
         roundingMinutes: plan?.roundingMinutes ?? 1,
         minimumMinutes: plan?.minimumMinutes ?? 0,
         capMinor: plan?.capMinor ?? null,
         membershipHookKey: plan?.membershipHookKey ?? null,
+        membershipOnly: plan?.membershipOnly ?? false,
+        membershipKeys,
+        happyHour: plan?.happyHour ?? false,
+        groupPackage: plan?.groupPackage ?? false,
+        weekdays: plan?.weekdays ?? [],
+        startMinute: plan?.startMinute ?? null,
+        endMinute: plan?.endMinute ?? null,
+        holidayDates: plan?.holidayDates ?? [],
+        priority: plan?.priority ?? 0,
+        venueTimezone: shop?.timezone ?? 'UTC',
       };
       const session = await tx.operationsSession.create({
         data: {
@@ -312,6 +631,13 @@ export class OperationsService {
           ratePlanId: plan?.id,
           startedAt: now,
           hourlyRateMinor,
+          billingMode,
+          unitPriceMinor,
+          fixedDurationMinutes: plan?.fixedDurationMinutes,
+          minimumChargeMinor: plan?.minimumChargeMinor ?? 0,
+          graceMinutes: plan?.graceMinutes ?? 0,
+          participantCount: dto.participantCount ?? 1,
+          gameCount: dto.gameCount ?? 1,
           overtimeRateMinor: plan?.overtimeRateMinor,
           overtimeAfterMinutes: plan?.overtimeAfterMinutes,
           roundingMinutes: plan?.roundingMinutes ?? 1,
@@ -383,7 +709,9 @@ export class OperationsService {
       await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext(${`${shopId}:${dto.resourceId}`}))`;
       const target = await tx.resource.findFirst({ where: { id: dto.resourceId, shopId } });
       if (!target) throw new NotFoundException('Target resource not found.');
-      if (target.status === ResourceStatus.MAINTENANCE) throw new ConflictException('Target resource is in maintenance.');
+      if (target.configurationState !== ResourceConfigurationState.ENABLED) {
+        throw new ConflictException('Target resource is not enabled.');
+      }
       const targetConflict = await tx.operationsSession.findFirst({ where: { shopId, resourceId: target.id, status: { in: OPEN_SESSION_STATES } } });
       if (targetConflict) throw new ConflictException('Target resource is already in use.');
       const blocked = await tx.resourceMaintenancePeriod.findFirst({ where: { shopId, resourceId: target.id, startsAt: { lte: new Date() }, endsAt: null } });
@@ -448,6 +776,7 @@ export class OperationsService {
 
   async startMaintenance(actor: JwtAccessPayload, dto: CreateMaintenanceDto) {
     const shopId = requireShopId(actor);
+    await assertShopFeature(this.prisma, shopId, 'resource');
     const resource = await this.prisma.resource.findFirst({ where: { id: dto.resourceId, shopId } });
     if (!resource) throw new NotFoundException('Resource not found.');
     const active = await this.prisma.operationsSession.findFirst({ where: { shopId, resourceId: dto.resourceId, status: { in: OPEN_SESSION_STATES } } });
@@ -456,7 +785,14 @@ export class OperationsService {
     if (existing) throw new ConflictException('Resource is already in maintenance.');
     const row = await this.prisma.$transaction(async (tx) => {
       const period = await tx.resourceMaintenancePeriod.create({ data: { shopId, resourceId: dto.resourceId, reason: dto.reason, actorUserId: actor.sub } });
-      await tx.resource.update({ where: { id: dto.resourceId }, data: { status: ResourceStatus.MAINTENANCE } });
+      await tx.resource.update({
+        where: { id: dto.resourceId },
+        data: {
+          status: 'MAINTENANCE',
+          configurationState: ResourceConfigurationState.MAINTENANCE,
+          version: { increment: 1 },
+        },
+      });
       await tx.resourceStateEvent.create({ data: { shopId, resourceId: dto.resourceId, fromState: 'AVAILABLE', toState: 'MAINTENANCE', reason: dto.reason, actorUserId: actor.sub } });
       return period;
     });
@@ -471,11 +807,120 @@ export class OperationsService {
     const now = new Date();
     await this.prisma.$transaction(async (tx) => {
       await tx.resourceMaintenancePeriod.update({ where: { id }, data: { endsAt: now } });
-      await tx.resource.update({ where: { id: period.resourceId }, data: { status: ResourceStatus.AVAILABLE } });
+      await tx.resource.update({
+        where: { id: period.resourceId },
+        data: {
+          status: 'AVAILABLE',
+          configurationState: ResourceConfigurationState.ENABLED,
+          version: { increment: 1 },
+        },
+      });
       await tx.resourceStateEvent.create({ data: { shopId, resourceId: period.resourceId, fromState: 'MAINTENANCE', toState: 'AVAILABLE', actorUserId: actor.sub } });
     });
     await this.record(actor, 'operations.maintenance.finish', 'Returned resource to service', { maintenanceId: id, resourceId: period.resourceId });
     return { ok: true };
+  }
+
+  private async validateRatePlan(
+    shopId: string,
+    dto: RatePlanValidationInput,
+  ) {
+    if (Boolean(dto.resourceId) === Boolean(dto.resourceCategoryId)) {
+      throw new BadRequestException(
+        'Rate plan must target exactly one resource or resource category.',
+      );
+    }
+    if ((dto.startMinute == null) !== (dto.endMinute == null)) {
+      throw new BadRequestException(
+        'Rate time window requires both startMinute and endMinute.',
+      );
+    }
+    if (
+      dto.effectiveFrom &&
+      dto.effectiveTo &&
+      new Date(dto.effectiveFrom) >= new Date(dto.effectiveTo)
+    ) {
+      throw new BadRequestException('Rate effectiveFrom must be before effectiveTo.');
+    }
+    if (
+      dto.holidayDates?.some((date) => !/^\d{4}-\d{2}-\d{2}$/.test(date))
+    ) {
+      throw new BadRequestException('Holiday dates must use YYYY-MM-DD.');
+    }
+    const mode = dto.billingMode ?? OperationsBillingMode.HOURLY;
+    const authoritativePrice = dto.unitPriceMinor ?? dto.hourlyRateMinor ?? 0;
+    if (mode !== OperationsBillingMode.FREE && authoritativePrice <= 0) {
+      throw new BadRequestException(
+        'Non-free rates require a positive authoritative unit price.',
+      );
+    }
+    if (
+      dto.capMinor != null &&
+      dto.minimumChargeMinor != null &&
+      dto.capMinor < dto.minimumChargeMinor
+    ) {
+      throw new BadRequestException('Rate cap cannot be lower than minimum charge.');
+    }
+    if (
+      mode === OperationsBillingMode.FIXED_DURATION &&
+      !dto.fixedDurationMinutes
+    ) {
+      throw new BadRequestException('Fixed-duration rates require fixedDurationMinutes.');
+    }
+    if (dto.resourceId) {
+      const resource = await this.prisma.resource.findFirst({
+        where: { id: dto.resourceId, shopId },
+        select: { id: true },
+      });
+      if (!resource) throw new NotFoundException('Rate target resource not found.');
+    }
+    if (dto.resourceCategoryId) {
+      const category = await this.prisma.resourceCategory.findFirst({
+        where: { id: dto.resourceCategoryId, shopId },
+        select: { id: true },
+      });
+      if (!category) throw new NotFoundException('Rate target category not found.');
+    }
+  }
+
+  private async resolveCustomerMembershipKeys(
+    tx: Prisma.TransactionClient,
+    shopId: string,
+    guestCheckId: string | undefined,
+    now: Date,
+  ): Promise<string[]> {
+    if (!guestCheckId) return [];
+    const guestCheck = await tx.guestCheck.findFirst({
+      where: { id: guestCheckId, shopId },
+      select: { guestEmail: true, guestPhone: true },
+    });
+    if (!guestCheck?.guestEmail && !guestCheck?.guestPhone) return [];
+    const customer = await tx.customerProfile.findFirst({
+      where: {
+        shopId,
+        OR: [
+          ...(guestCheck.guestEmail ? [{ email: guestCheck.guestEmail }] : []),
+          ...(guestCheck.guestPhone ? [{ phone: guestCheck.guestPhone }] : []),
+        ],
+      },
+      select: { id: true },
+    });
+    if (!customer) return [];
+    const membership = await tx.customerMembership.findFirst({
+      where: {
+        shopId,
+        customerId: customer.id,
+        status: 'ACTIVE',
+        OR: [{ expiresAt: null }, { expiresAt: { gt: now } }],
+      },
+      select: { tierId: true },
+    });
+    if (!membership) return [];
+    const tier = await tx.membershipTier.findFirst({
+      where: { id: membership.tierId, shopId, active: true },
+      select: { code: true },
+    });
+    return tier ? ['ACTIVE', tier.code] : [];
   }
 
   private async requireSession(shopId: string, id: string) {

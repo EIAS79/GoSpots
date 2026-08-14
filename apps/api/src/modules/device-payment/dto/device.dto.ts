@@ -4,9 +4,11 @@ import {
   IsEnum,
   IsObject,
   IsOptional,
+  IsInt,
   IsString,
   MaxLength,
   MinLength,
+  Min,
 } from 'class-validator';
 
 export class CreateDeviceDto {
@@ -35,9 +37,23 @@ export class CreateDeviceDto {
   @IsOptional()
   @IsObject()
   metadata?: Record<string, unknown>;
+
+  @IsOptional()
+  @IsString()
+  @MaxLength(120)
+  stationLabel?: string;
+
+  @IsOptional()
+  @IsString()
+  @MaxLength(80)
+  softwareVersion?: string;
 }
 
 export class UpdateDeviceDto {
+  @IsInt()
+  @Min(1)
+  expectedVersion!: number;
+
   @IsOptional()
   @IsString()
   @MinLength(1)
@@ -69,4 +85,20 @@ export class UpdateDeviceDto {
   @IsOptional()
   @IsObject()
   metadata?: Record<string, unknown>;
+
+  @IsOptional()
+  @IsString()
+  @MaxLength(120)
+  stationLabel?: string | null;
+
+  @IsOptional()
+  @IsString()
+  @MaxLength(80)
+  softwareVersion?: string | null;
+}
+
+export class ClaimDeviceDto {
+  @IsInt()
+  @Min(1)
+  expectedVersion!: number;
 }

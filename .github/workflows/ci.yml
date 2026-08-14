@@ -143,6 +143,8 @@ jobs:
         run: pnpm exec prisma validate
       - name: Phase 1 kernel schema assertions
         run: pnpm exec tsx prisma/phase1-kernel-assert.ts
+      - name: Phase 2 venue schema assertions
+        run: pnpm exec tsx prisma/phase2-venue-assert.ts
 
   api-migrate-upgrade:
     name: API migration upgrade (representative prior data)
@@ -227,6 +229,7 @@ jobs:
           pnpm --dir apps/api exec prisma generate
           pnpm --dir apps/api exec tsx prisma/upgrade-assert.ts
           pnpm --dir apps/api exec tsx prisma/phase1-kernel-assert.ts
+          pnpm --dir apps/api exec tsx prisma/phase2-venue-assert.ts
           pnpm --dir apps/api exec prisma validate
 
   web:

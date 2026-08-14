@@ -14,12 +14,20 @@ export type ResourceRate = {
 
 export type ResourceUnit = {
   id: string;
+  version: number;
   name: string;
+  code: string;
   type: ResourceType;
   description: string | null;
   imageUrl: string | null;
   hourlyRate: MoneyWire;
   status: ResourceStatus;
+  configurationState: "ENABLED" | "MAINTENANCE" | "DISABLED" | "OFFLINE_DEVICE";
+  layoutX: number | null;
+  layoutY: number | null;
+  layoutWidth: number;
+  layoutHeight: number;
+  layoutRotation: number;
   sortOrder: number;
   categoryId: string | null;
   sectionId: string | null;
@@ -34,6 +42,7 @@ export type ResourceUnit = {
 
 export type ResourceCategory = {
   id: string;
+  version: number;
   type: ResourceType;
   bookingMode: BookingMode;
   name: string;
@@ -77,7 +86,7 @@ export function createResourceCategory(body: {
 
 export function updateResourceCategory(
   id: string,
-  body: Partial<{
+  body: { expectedVersion: number } & Partial<{
     type: ResourceType;
     name: string;
     description: string | null;
@@ -111,11 +120,18 @@ export function addResourceUnits(
 
 export function updateResourceUnit(
   id: string,
-  body: Partial<{
+  body: { expectedVersion: number } & Partial<{
     name: string;
+    code: string;
     description: string | null;
     status: ResourceStatus;
+    configurationState: ResourceUnit["configurationState"];
     hourlyRate: number;
+    layoutX: number | null;
+    layoutY: number | null;
+    layoutWidth: number;
+    layoutHeight: number;
+    layoutRotation: number;
   }>,
 ) {
   return api<ResourceUnit>(`/resources/units/${id}`, {

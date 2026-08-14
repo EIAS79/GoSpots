@@ -491,6 +491,11 @@ export function ItemDialog({
   const t: MenuT = venueSettings?.t ?? ((key) => key);
   const currency = venueSettings?.currency ?? "EUR";
   const [name, setName] = useState(item?.name ?? "");
+  const [kind, setKind] = useState<"PRODUCT" | "SERVICE">(item?.kind ?? "PRODUCT");
+  const [unit, setUnit] = useState(item?.unit ?? "UNIT");
+  const [taxCategoryKey, setTaxCategoryKey] = useState(item?.taxCategoryKey ?? "");
+  const [sku, setSku] = useState(item?.sku ?? "");
+  const [barcode, setBarcode] = useState(item?.barcode ?? "");
   const [description, setDescription] = useState(item?.description ?? "");
   const [price, setPrice] = useState(String(item?.price ?? ""));
   const [sectionId, setSectionId] = useState(
@@ -582,6 +587,11 @@ export function ItemDialog({
           }
           void onSave({
             name: name.trim(),
+            kind,
+            unit: unit.trim().toUpperCase() || "UNIT",
+            taxCategoryKey: taxCategoryKey.trim() || null,
+            sku: sku.trim().toUpperCase() || null,
+            barcode: barcode.trim() || null,
             description: description.trim() || null,
             price: parseFloat(price) || 0,
             sectionId: sectionId || null,
@@ -631,6 +641,42 @@ export function ItemDialog({
             });
         }}
       >
+        <div className="grid gap-3 sm:grid-cols-2">
+          <label className="block text-xs text-zinc-500">
+            Catalog type
+            <select
+              value={kind}
+              onChange={(event) => setKind(event.target.value as "PRODUCT" | "SERVICE")}
+              className="mt-1 w-full rounded-lg border border-white/10 bg-zinc-900 px-3 py-2 text-sm text-white"
+            >
+              <option value="PRODUCT">Product</option>
+              <option value="SERVICE">Service</option>
+            </select>
+          </label>
+          <label className="block text-xs text-zinc-500">
+            Unit
+            <input
+              value={unit}
+              onChange={(event) => setUnit(event.target.value)}
+              placeholder="UNIT, HOUR, PERSON"
+              className="mt-1 w-full rounded-lg border border-white/10 bg-zinc-900 px-3 py-2 text-sm text-white"
+            />
+          </label>
+        </div>
+        <div className="grid gap-3 sm:grid-cols-3">
+          <label className="block text-xs text-zinc-500">
+            Tax category
+            <input value={taxCategoryKey} onChange={(event) => setTaxCategoryKey(event.target.value)} className="mt-1 w-full rounded-lg border border-white/10 bg-zinc-900 px-3 py-2 text-sm text-white" />
+          </label>
+          <label className="block text-xs text-zinc-500">
+            SKU
+            <input value={sku} onChange={(event) => setSku(event.target.value)} className="mt-1 w-full rounded-lg border border-white/10 bg-zinc-900 px-3 py-2 text-sm text-white" />
+          </label>
+          <label className="block text-xs text-zinc-500">
+            Barcode
+            <input value={barcode} onChange={(event) => setBarcode(event.target.value)} inputMode="numeric" className="mt-1 w-full rounded-lg border border-white/10 bg-zinc-900 px-3 py-2 text-sm text-white" />
+          </label>
+        </div>
         <label className="block text-xs text-zinc-500">
           {t("menu.name")}
           <input

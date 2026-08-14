@@ -12,14 +12,24 @@ export type ShopSettings = {
   id: string;
   version: number;
   name: string;
+  legalName: string | null;
+  branchCode: string | null;
+  venueType: string | null;
   displayName: string | null;
   slug: string;
   description: string | null;
   address: string | null;
   city: string | null;
   country: string | null;
+  region: string | null;
+  postalCode: string | null;
   phone: string | null;
   email: string | null;
+  website: string | null;
+  taxId: string | null;
+  taxProfile: Record<string, unknown> | null;
+  receiptBranding: Record<string, unknown> | null;
+  logoUrl: string | null;
   coverImage: string | null;
   locale: string;
   /** IANA timezone for venue-local calendar days (e.g. Europe/Warsaw). */
@@ -78,13 +88,23 @@ export function updateShopSettings(
     /** Required true when changing shop currency (after preview). */
     confirm: boolean;
     name: string;
+    legalName: string | null;
+    branchCode: string | null;
+    venueType: string | null;
     displayName: string | null;
     description: string | null;
     address: string | null;
     city: string | null;
     country: string | null;
+    region: string | null;
+    postalCode: string | null;
     phone: string | null;
     email: string | null;
+    website: string | null;
+    taxId: string | null;
+    taxProfile: Record<string, unknown> | null;
+    receiptBranding: Record<string, unknown> | null;
+    logoUrl: string | null;
     isPublished: boolean;
     advertiseOnVenuesPage: boolean;
     reviewsMode: ShopReviewsMode;

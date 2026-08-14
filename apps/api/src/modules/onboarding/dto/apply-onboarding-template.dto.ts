@@ -3,8 +3,7 @@ import {
   IsBoolean,
   IsIn,
   IsOptional,
-  IsString,
-  IsUUID,
+  Matches,
 } from 'class-validator';
 import type { OnboardingTemplateId } from '../onboarding-templates.util';
 
@@ -27,6 +26,6 @@ export class ApplyOnboardingTemplateDto {
   /** When re-applying / replacing, delete these category ids first (best-effort). */
   @IsOptional()
   @IsArray()
-  @IsUUID('4', { each: true })
+  @Matches(/^[a-z0-9]{20,}$/i, { each: true })
   previousCategoryIds?: string[];
 }

@@ -4,9 +4,11 @@ import { Loader2, MonitorSmartphone, Plus, Radio, RefreshCw } from "lucide-react
 import { useEffect, useState } from "react";
 import {
   createDevice,
+  claimDevice,
   fetchDevices,
   heartbeatDevice,
   updateDevice,
+  unclaimDevice,
   type DeviceType,
   type VenueDevice,
 } from "@/lib/device-client";
@@ -17,6 +19,12 @@ const TYPES: Array<{ value: DeviceType; label: string }> = [
   { value: "EDGE_HUB", label: "Edge hub" },
   { value: "PRINTER", label: "Printer" },
   { value: "KDS", label: "Kitchen display (KDS)" },
+  { value: "CUSTOMER_DISPLAY", label: "Customer display" },
+  { value: "BARCODE_SCANNER", label: "Barcode scanner" },
+  { value: "RECEIPT_PRINTER", label: "Receipt printer" },
+  { value: "KITCHEN_PRINTER", label: "Kitchen printer" },
+  { value: "CASH_DRAWER", label: "Cash drawer" },
+  { value: "ACCESS_SCANNER", label: "Access scanner" },
 ];
 
 function lastSeen(value: string | null) {
@@ -94,11 +102,30 @@ export function DeviceSettingsPanel({ canWrite = true }: { canWrite?: boolean })
     setError(null);
     try {
       await updateDevice(device.id, {
+        expectedVersion: device.version,
         status: device.status === "ACTIVE" ? "DISABLED" : "ACTIVE",
       });
       await load();
     } catch (updateError) {
       setError(errorMessage(updateError));
+    } finally {
+      setBusyId(null);
+    }
+  }
+
+  async function toggleClaim(device: VenueDevice) {
+    if (!canWrite || busyId || device.status !== "ACTIVE") return;
+    setBusyId(device.id);
+    setError(null);
+    try {
+      if (device.claimState === "CLAIMED") {
+        await unclaimDevice(device.id, device.version);
+      } else {
+        await claimDevice(device.id, device.version);
+      }
+      await load();
+    } catch (claimError) {
+      setError(errorMessage(claimError));
     } finally {
       setBusyId(null);
     }
@@ -206,7 +233,9 @@ export function DeviceSettingsPanel({ canWrite = true }: { canWrite?: boolean })
             <div key={device.id} className="grid gap-2 border-b border-white/5 px-3 py-3 last:border-b-0 md:grid-cols-[minmax(11rem,1.3fr)_9rem_minmax(8rem,1fr)_7rem_minmax(10rem,1fr)_auto] md:items-center md:gap-3">
               <div>
                 <p className="text-sm font-semibold text-zinc-100">{device.label}</p>
-                <p className="mt-0.5 text-[11px] text-zinc-600">{device.status === "ACTIVE" ? "Enabled" : "Disabled"}</p>
+                <p className="mt-0.5 text-[11px] text-zinc-600">
+                  {device.status === "ACTIVE" ? "Enabled" : "Disabled"} · {device.claimState === "CLAIMED" ? "Claimed" : "Unclaimed"}
+                </p>
               </div>
               <span className="text-xs text-zinc-400">{TYPES.find((item) => item.value === device.type)?.label ?? device.type}</span>
               <span className="truncate text-xs text-zinc-400">{device.provider ?? "—"}</span>
@@ -232,6 +261,14 @@ export function DeviceSettingsPanel({ canWrite = true }: { canWrite?: boolean })
                       className="min-h-8 rounded-lg border border-white/10 px-2 text-[11px] font-semibold text-zinc-300 hover:bg-white/[0.05] disabled:opacity-35"
                     >
                       {device.status === "ACTIVE" ? "Disable" : "Enable"}
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => void toggleClaim(device)}
+                      disabled={Boolean(busyId) || device.status !== "ACTIVE"}
+                      className="min-h-8 rounded-lg border border-white/10 px-2 text-[11px] font-semibold text-zinc-300 hover:bg-white/[0.05] disabled:opacity-35"
+                    >
+                      {device.claimState === "CLAIMED" ? "Release" : "Claim"}
                     </button>
                   </>
                 ) : null}

@@ -1,10 +1,11 @@
 import {
+  ConflictException,
   ForbiddenException,
   Injectable,
   Logger,
   NotFoundException,
 } from '@nestjs/common';
-import type { MealPeriod } from '@prisma/client';
+import type { MealPeriod, MenuItem } from '@prisma/client';
 import { PrismaService } from '../../prisma/prisma.service';
 import { presetForPeriod } from '../../common/meal-periods';
 import { requireShopId, slugifyTag } from '../../common/tenant';
@@ -50,12 +51,13 @@ export class MenuService {
     private readonly notifications: NotificationsService,
   ) {}
 
-  private assertWrite(actor: JwtAccessPayload) {
+  private async assertWrite(actor: JwtAccessPayload) {
     if (!actor.shopId) throw new ForbiddenException();
     const p = actor.perms ?? '';
     if (p !== '*' && !p.split(',').includes('menu.write')) {
       throw new ForbiddenException('Missing menu.write');
     }
+    await assertShopFeature(this.prisma, actor.shopId, 'menu');
   }
 
   async getFullMenu(actor: JwtAccessPayload) {
@@ -141,13 +143,12 @@ export class MenuService {
   }
 
   async createSection(actor: JwtAccessPayload, dto: CreateSectionDto) {
-    this.assertWrite(actor);
+    await this.assertWrite(actor);
     const shopId = actor.shopId!;
-    await assertShopFeature(this.prisma, shopId, 'menu');
     const timing = this.sectionTimingFromDto(dto);
     const section = await this.prisma.menuSection.create({
       data: {
-        shopId: actor.shopId!,
+        shopId,
         name: dto.name,
         sortOrder: dto.sortOrder ?? 0,
         ...timing,
@@ -167,7 +168,7 @@ export class MenuService {
     id: string,
     dto: UpdateSectionDto,
   ) {
-    this.assertWrite(actor);
+    await this.assertWrite(actor);
     const existing = await this.ensureSection(actor.shopId!, id);
     const timing =
       dto.mealPeriod !== undefined ||
@@ -221,7 +222,7 @@ export class MenuService {
     id: string,
     file: MenuImageUpload,
   ) {
-    this.assertWrite(actor);
+    await this.assertWrite(actor);
     const shopId = actor.shopId!;
     const section = await this.ensureSection(shopId, id);
     assertMenuImageFile(file);
@@ -238,7 +239,7 @@ export class MenuService {
   }
 
   async deleteSection(actor: JwtAccessPayload, id: string) {
-    this.assertWrite(actor);
+    await this.assertWrite(actor);
     const existing = await this.ensureSection(actor.shopId!, id);
     const oldUrl = await sectionImageUrl(this.prisma, actor.shopId!, id);
     await this.media.deleteByMediaPath(actor.shopId!, oldUrl);
@@ -253,7 +254,7 @@ export class MenuService {
   }
 
   async createTag(actor: JwtAccessPayload, dto: CreateTagDto) {
-    this.assertWrite(actor);
+    await this.assertWrite(actor);
     const shopId = actor.shopId!;
     let slug = slugifyTag(dto.name);
     const clash = await this.prisma.shopTag.findUnique({
@@ -279,7 +280,7 @@ export class MenuService {
   }
 
   async deleteTag(actor: JwtAccessPayload, id: string) {
-    this.assertWrite(actor);
+    await this.assertWrite(actor);
     const existing = await this.ensureTag(actor.shopId!, id);
     await this.prisma.shopTag.delete({ where: { id, shopId: actor.shopId! } });
     await this.audit.record(actor, {
@@ -292,28 +293,38 @@ export class MenuService {
   }
 
   async createItem(actor: JwtAccessPayload, dto: CreateMenuItemDto) {
-    this.assertWrite(actor);
+    await this.assertWrite(actor);
     const shopId = actor.shopId!;
-    await assertShopFeature(this.prisma, shopId, 'menu');
     if (dto.sectionId) await this.ensureSection(shopId, dto.sectionId);
-    const item = await this.prisma.menuItem.create({
-      data: {
-        shopId,
-        sectionId: dto.sectionId,
-        name: dto.name,
-        description: dto.description,
-        imageUrl: dto.imageUrl,
-        imageUrl2: dto.imageUrl2,
-        price: toPrismaDecimal(dto.price),
-        stock: dto.stock ?? 0,
-        trackStock: dto.trackStock ?? false,
-        isAvailable: dto.isAvailable ?? true,
-        useSectionTiming: dto.useSectionTiming ?? true,
-        availableFrom: dto.availableFrom,
-        availableTo: dto.availableTo,
-        availableDays: dto.availableDays ?? '0,1,2,3,4,5,6',
-      },
-    });
+    await this.assertCatalogIdentifiers(shopId, dto.sku, dto.barcode);
+    let item: MenuItem;
+    try {
+      item = await this.prisma.menuItem.create({
+        data: {
+          shopId,
+          sectionId: dto.sectionId,
+          name: dto.name,
+          kind: dto.kind ?? 'PRODUCT',
+          unit: dto.unit?.trim().toUpperCase() || 'UNIT',
+          taxCategoryKey: dto.taxCategoryKey?.trim() || null,
+          sku: dto.sku?.trim().toUpperCase() || null,
+          barcode: dto.barcode?.trim() || null,
+          description: dto.description,
+          imageUrl: dto.imageUrl,
+          imageUrl2: dto.imageUrl2,
+          price: toPrismaDecimal(dto.price),
+          stock: dto.stock ?? 0,
+          trackStock: dto.trackStock ?? false,
+          isAvailable: dto.isAvailable ?? true,
+          useSectionTiming: dto.useSectionTiming ?? true,
+          availableFrom: dto.availableFrom,
+          availableTo: dto.availableTo,
+          availableDays: dto.availableDays ?? '0,1,2,3,4,5,6',
+        },
+      });
+    } catch (error) {
+      this.rethrowCatalogIdentifierConflict(error);
+    }
     if (dto.tagIds?.length) {
       await this.syncTags(item.id, shopId, dto.tagIds);
     }
@@ -332,7 +343,7 @@ export class MenuService {
     await this.audit.record(actor, {
       section: 'menu',
       action: 'menu.item.create',
-      summary: `Added menu item "${item.name}" (${item.price})`,
+      summary: `Added menu item "${item.name}" (${item.price.toString()})`,
       meta: { menuItemId: item.id, price: item.price },
     });
     return this.getItem(actor, item.id);
@@ -343,32 +354,48 @@ export class MenuService {
     id: string,
     dto: UpdateMenuItemDto,
   ) {
-    this.assertWrite(actor);
+    await this.assertWrite(actor);
     const shopId = actor.shopId!;
     const before = await this.ensureItem(shopId, id);
     if (dto.sectionId) await this.ensureSection(shopId, dto.sectionId);
-    await this.prisma.menuItem.update({
-      where: { id, shopId },
-      data: {
-        ...(dto.name != null && { name: dto.name }),
-        ...(dto.sectionId !== undefined && { sectionId: dto.sectionId }),
-        ...(dto.description !== undefined && { description: dto.description }),
-        ...(dto.imageUrl !== undefined && { imageUrl: dto.imageUrl }),
-        ...(dto.imageUrl2 !== undefined && { imageUrl2: dto.imageUrl2 }),
-        ...(dto.price != null && { price: toPrismaDecimal(dto.price) }),
-        ...(dto.stock != null && { stock: dto.stock }),
-        ...(dto.trackStock != null && { trackStock: dto.trackStock }),
-        ...(dto.isAvailable != null && { isAvailable: dto.isAvailable }),
-        ...(dto.useSectionTiming != null && {
-          useSectionTiming: dto.useSectionTiming,
-        }),
-        ...(dto.availableFrom !== undefined && {
-          availableFrom: dto.availableFrom,
-        }),
-        ...(dto.availableTo !== undefined && { availableTo: dto.availableTo }),
-        ...(dto.availableDays != null && { availableDays: dto.availableDays }),
-      },
-    });
+    await this.assertCatalogIdentifiers(shopId, dto.sku, dto.barcode, id);
+    try {
+      await this.prisma.menuItem.update({
+        where: { id, shopId },
+        data: {
+          ...(dto.name != null && { name: dto.name }),
+          ...(dto.kind != null && { kind: dto.kind }),
+          ...(dto.unit != null && { unit: dto.unit.trim().toUpperCase() }),
+          ...(dto.taxCategoryKey !== undefined && {
+            taxCategoryKey: dto.taxCategoryKey?.trim() || null,
+          }),
+          ...(dto.sku !== undefined && {
+            sku: dto.sku?.trim().toUpperCase() || null,
+          }),
+          ...(dto.barcode !== undefined && {
+            barcode: dto.barcode?.trim() || null,
+          }),
+          ...(dto.sectionId !== undefined && { sectionId: dto.sectionId }),
+          ...(dto.description !== undefined && { description: dto.description }),
+          ...(dto.imageUrl !== undefined && { imageUrl: dto.imageUrl }),
+          ...(dto.imageUrl2 !== undefined && { imageUrl2: dto.imageUrl2 }),
+          ...(dto.price != null && { price: toPrismaDecimal(dto.price) }),
+          ...(dto.stock != null && { stock: dto.stock }),
+          ...(dto.trackStock != null && { trackStock: dto.trackStock }),
+          ...(dto.isAvailable != null && { isAvailable: dto.isAvailable }),
+          ...(dto.useSectionTiming != null && {
+            useSectionTiming: dto.useSectionTiming,
+          }),
+          ...(dto.availableFrom !== undefined && {
+            availableFrom: dto.availableFrom,
+          }),
+          ...(dto.availableTo !== undefined && { availableTo: dto.availableTo }),
+          ...(dto.availableDays != null && { availableDays: dto.availableDays }),
+        },
+      });
+    } catch (error) {
+      this.rethrowCatalogIdentifierConflict(error);
+    }
     if (dto.tagIds) await this.syncTags(id, shopId, dto.tagIds);
     if (dto.stock != null) {
       const { resolvedTimeZone } = await loadShopVenueTimeContext(
@@ -414,7 +441,7 @@ export class MenuService {
     slot: '1' | '2',
     file: MenuImageUpload,
   ) {
-    this.assertWrite(actor);
+    await this.assertWrite(actor);
     const shopId = actor.shopId!;
     const item = await this.ensureItem(shopId, id);
     assertMenuImageFile(file);
@@ -432,7 +459,7 @@ export class MenuService {
   }
 
   async deleteItem(actor: JwtAccessPayload, id: string) {
-    this.assertWrite(actor);
+    await this.assertWrite(actor);
     const existing = await this.ensureItem(actor.shopId!, id);
     await this.media.deleteByMediaPath(actor.shopId!, existing.imageUrl);
     await this.media.deleteByMediaPath(actor.shopId!, existing.imageUrl2);
@@ -481,6 +508,42 @@ export class MenuService {
     });
     if (!s) throw new NotFoundException('Section not found');
     return s;
+  }
+
+  private async assertCatalogIdentifiers(
+    shopId: string,
+    sku?: string | null,
+    barcode?: string | null,
+    excludeId?: string,
+  ) {
+    const normalizedSku = sku?.trim().toUpperCase() || null;
+    const normalizedBarcode = barcode?.trim() || null;
+    if (!normalizedSku && !normalizedBarcode) return;
+    const duplicate = await this.prisma.menuItem.findFirst({
+      where: {
+        shopId,
+        ...(excludeId ? { id: { not: excludeId } } : {}),
+        OR: [
+          ...(normalizedSku ? [{ sku: normalizedSku }] : []),
+          ...(normalizedBarcode ? [{ barcode: normalizedBarcode }] : []),
+        ],
+      },
+      select: { sku: true, barcode: true },
+    });
+    if (duplicate) {
+      throw new ConflictException(
+        duplicate.sku === normalizedSku
+          ? 'SKU is already used by another catalog item.'
+          : 'Barcode is already used by another catalog item.',
+      );
+    }
+  }
+
+  private rethrowCatalogIdentifierConflict(error: unknown): never {
+    if ((error as { code?: unknown })?.code === 'P2002') {
+      throw new ConflictException('SKU or barcode is already used by another catalog item.');
+    }
+    throw error;
   }
 
   private async ensureTag(shopId: string, id: string) {

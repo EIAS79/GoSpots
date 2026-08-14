@@ -2,7 +2,6 @@ import {
   IsArray,
   IsBoolean,
   IsEnum,
-  IsIn,
   IsNumber,
   IsOptional,
   IsString,
@@ -10,7 +9,7 @@ import {
   MaxLength,
   Min,
 } from 'class-validator';
-import { MealPeriod, TagType } from '@prisma/client';
+import { CatalogItemKind, MealPeriod, TagType } from '@prisma/client';
 
 const FINITE_MONEY = { allowNaN: false, allowInfinity: false } as const;
 
@@ -95,6 +94,30 @@ export class CreateMenuItemDto {
   sectionId?: string;
 
   @IsOptional()
+  @IsEnum(CatalogItemKind)
+  kind?: CatalogItemKind;
+
+  @IsOptional()
+  @IsString()
+  @MaxLength(32)
+  unit?: string;
+
+  @IsOptional()
+  @IsString()
+  @MaxLength(80)
+  taxCategoryKey?: string;
+
+  @IsOptional()
+  @IsString()
+  @MaxLength(80)
+  sku?: string;
+
+  @IsOptional()
+  @IsString()
+  @MaxLength(128)
+  barcode?: string;
+
+  @IsOptional()
   @IsString()
   @MaxLength(2000)
   description?: string;
@@ -155,6 +178,30 @@ export class UpdateMenuItemDto {
   @IsOptional()
   @IsString()
   sectionId?: string | null;
+
+  @IsOptional()
+  @IsEnum(CatalogItemKind)
+  kind?: CatalogItemKind;
+
+  @IsOptional()
+  @IsString()
+  @MaxLength(32)
+  unit?: string;
+
+  @IsOptional()
+  @IsString()
+  @MaxLength(80)
+  taxCategoryKey?: string | null;
+
+  @IsOptional()
+  @IsString()
+  @MaxLength(80)
+  sku?: string | null;
+
+  @IsOptional()
+  @IsString()
+  @MaxLength(128)
+  barcode?: string | null;
 
   @IsOptional()
   @IsString()

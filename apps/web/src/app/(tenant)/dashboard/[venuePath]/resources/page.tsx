@@ -132,6 +132,7 @@ export default function ResourcesPage() {
             try {
               if (editor.offering) {
                 await updateResourceCategory(editor.offering.id, {
+                  expectedVersion: editor.offering.version,
                   name: body.name,
                   description: body.description,
                   slotMinutes: body.slotMinutes,

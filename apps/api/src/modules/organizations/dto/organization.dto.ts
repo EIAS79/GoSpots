@@ -23,6 +23,11 @@ export class AddOrganizationShopDto {
   displayName?: string;
 
   @IsOptional()
+  @IsString()
+  @Matches(/^[A-Z0-9][A-Z0-9_-]{0,23}$/i)
+  branchCode?: string;
+
+  @IsOptional()
   @IsBoolean()
   sharedCatalogEnabled?: boolean;
 
@@ -60,6 +65,11 @@ export class UpdateOrganizationShopDto {
   displayName?: string;
 
   @IsOptional()
+  @IsString()
+  @Matches(/^[A-Z0-9][A-Z0-9_-]{0,23}$/i)
+  branchCode?: string | null;
+
+  @IsOptional()
   @IsBoolean()
   sharedCatalogEnabled?: boolean;
 
@@ -70,4 +80,9 @@ export class UpdateOrganizationShopDto {
   @IsOptional()
   @IsObject()
   overrideSettings?: Record<string, unknown>;
+}
+
+export class UpdateOrganizationSettingsDto {
+  @IsObject()
+  settings!: Record<string, unknown>;
 }

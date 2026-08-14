@@ -158,6 +158,11 @@ export function GamingLayoutEditor({
   };
 
   const handleUpdate = async (id: string) => {
+    const current = sections.find((section) => section.id === id);
+    if (!current) {
+      setError(t("gamingSetup.layout.updateError"));
+      return;
+    }
     if (!editDraft.name.trim()) {
       setError(t("gamingSetup.layout.nameRequired"));
       return;
@@ -166,6 +171,7 @@ export function GamingLayoutEditor({
     setError(null);
     try {
       const data = await updateGamingSection(id, {
+        expectedVersion: current.version,
         name: editDraft.name.trim(),
         floor: Number(editDraft.floor) || 1,
         isVip: editDraft.isVip,
