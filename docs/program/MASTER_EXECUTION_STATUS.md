@@ -9,8 +9,9 @@ This file maps the existing repository to the new Phase 0–17 program. It delib
 
 - Phase 0 starting `main`: `f61c1b2f81eedb0ff7d5e67be4a62291c361c2bc`
 - Phase 0 working branch: `phase-0-standalone-architecture-reset-v2`
+- Phase 0 pull request: #40
 - Product rule: GoSpots is standalone; generic integrations are optional extensions.
-- Database migration required by Phase 0: **no**. The Phase 0 delta is code registration/test cleanup plus architecture/program contracts.
+- Database migration required by Phase 0: **no**. The Phase 0 delta is code registration/UI/test cleanup plus architecture/program contracts.
 
 ## Repository reconciliation
 
@@ -22,12 +23,13 @@ This file maps the existing repository to the new Phase 0–17 program. It delib
 | `phase-4-external-operational-certification` | Legacy branch at old baseline | **SUPERSEDED**; no Phase 0 implementation required from it. |
 | `phase-0-standalone-architecture-reset-v2` | Current v2 Phase 0 branch | **KEEP** and complete through exact-head CI/merge/deployment. |
 
-### Open PRs inspected
+### Pull requests inspected
 
-| PR | Classification | Disposition |
+| PR | Classification | Phase 0 disposition |
 | --- | --- | --- |
-| #9 `Chunk 00: establish repository safety baseline` | Legacy draft superseded by later merged staged work/current `main` | Close as superseded; do not merge. |
-| #7 `Add hourly pricing surcharge for gaming zones` | Old, diverged pricing feature | Defer to v2 Phase 2 Rate Engine review; do not merge into Phase 0. |
+| #9 `Chunk 00: establish repository safety baseline` | Legacy draft superseded by later merged staged work/current `main` | **CLOSED UNMERGED** as superseded on 2026-08-14. |
+| #7 `Add hourly pricing surcharge for gaming zones` | Old, diverged pricing feature | **DEFERRED** to v2 Phase 2 Rate Engine review; draft preserved, not merged into Phase 0. |
+| #40 `Phase 0 v2: standalone architecture reset and baseline` | Current Phase 0 execution PR | **IN_PROGRESS** until exact-head CI/merge/deployment acceptance. |
 
 ## Existing implementation matrix
 
@@ -35,7 +37,7 @@ The `Code` column describes repository presence, not acceptance. `v2 status` is 
 
 | Phase | Domain | Code baseline | Tests / E2E baseline | Migration baseline | Production / external state | v2 status / next action |
 | --- | --- | --- | --- | --- | --- | --- |
-| 0 | Baseline + standalone reset | Current branch removes the external-POS adapter/registration and adds canonical contracts. | Existing CI covers API/web/Edge/migrations/browser; Phase 0 adds a standalone boundary regression. | No new migration needed. | Must pass exact-head CI, merge and production verification. | `IN_PROGRESS` — current phase. |
+| 0 | Baseline + standalone reset | Current branch removes the external-POS adapter/registration/UI assumption and adds canonical contracts. | Existing CI covers API/web/Edge/migrations/browser; Phase 0 adds a tracked-file standalone-boundary regression. | No new migration needed. One historical applied migration comment is intentionally immutable to avoid checksum drift. | Must pass exact-head CI, merge and production verification. | `IN_PROGRESS` — current phase. |
 | 1 | Tenancy, auth, permissions, integrity | Auth, audit, foundation/capability, money, idempotency, optimistic concurrency and event-outbox foundations exist. | Unit/security/integrity tests exist; prior Phase 2 integrity contract exists. | Foundation/integrity migrations exist. | Previously deployed as part of current `main`; must be re-audited against v2 P1. | `IN_PROGRESS` — substantial reusable code, not v2 accepted. |
 | 2 | Venue setup, floor, resources, rates, devices | Resource/catalog/device foundations exist. Legacy zone-rate PR is unmerged. | Existing resource/booking tests; v2 rate/setup acceptance not audited. | Existing resource/device migrations; old PR adds an unaccepted migration. | No v2 setup-wizard/rate-engine acceptance record. | `IN_PROGRESS` — review existing work; rework/defer PR #7 under P2 rules. |
 | 3 | Live operations, sessions, waitlist, floor | Operations/resource session engine and live/offline flows exist. | Operations tests plus gaming/mixed browser flows exist. | Operations migrations exist. | Prior production/offline validation exists, but v2 busy-floor gate not yet re-run. | `IN_PROGRESS`. |
@@ -74,7 +76,8 @@ Do not create parallel replacements for these without an explicit design reason:
 ### Known legacy/superseded items
 
 - Older chunk documents are historical evidence and do not override the v2 plan.
-- The external-POS connector assumption is removed from the standalone product baseline.
+- The external-POS connector assumption is removed from runtime, UI and current architecture documentation.
+- The applied `20260811160000_chunk22_integrations` migration is not edited merely to rewrite its historical first-line label; preserving applied migration checksum/history is intentional and does not create runtime dependency.
 - Legacy Phase 4 acceptance work is not automatically equivalent to new v2 Phase 4.
 - PR #7 pricing logic requires v2 Phase 2 review rather than direct merge from its old branch.
 
@@ -82,12 +85,12 @@ Do not create parallel replacements for these without an explicit design reason:
 
 | P0 gate item | Current state on this branch |
 | --- | --- |
-| Standalone product rule documented | Implemented; final CI/merge pending. |
-| External-POS runtime dependency removed | Implemented; regression/CI proof pending. |
-| Current branch/PR state reconciled | Implemented in this record; stale PR actions still to complete. |
+| Standalone product rule documented | Implemented; final exact-head CI/merge pending. |
+| External-POS runtime dependency removed | Implemented; repository-wide boundary regression added. |
+| Current branch/PR state reconciled | Implemented: #9 closed superseded; #7 deferred; mixed legacy branch classified. |
 | Canonical product/domain/offline/financial/integration contracts | Implemented on this branch. |
 | Current implementation matrix | This document. |
-| Exact-head CI green | Pending until PR exact-head run. |
+| Exact-head CI green | Pending final exact-head run after all Phase 0 fixes. |
 | Phase 0 accepted | Not yet; requires merge/deployment/production verification per execution prompt. |
 
 ## Rule for advancing phases
