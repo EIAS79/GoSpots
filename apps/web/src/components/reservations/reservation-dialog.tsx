@@ -37,6 +37,7 @@ import {
 import { ApiError, resolveApiErrorDisplay } from "@/lib/api";
 import type { Reservation, ReservationStatus } from "@/lib/reservations-client";
 import type { ResourceCatalog } from "@/lib/resources-client";
+import { applyZoneHourlyAddon } from "@/lib/zone-pricing";
 import { RESOURCE_TYPE_LABELS } from "@/lib/resource-types";
 import { useVenueSettingsOptional } from "@/lib/venue-settings-context";
 
@@ -287,6 +288,16 @@ export function ReservationDialog({
     estimatedDurationMinutes,
     effectiveSlotMinutes,
   ]);
+
+  const estimatedPriceWithZoneAddon = useMemo(
+    () =>
+      applyZoneHourlyAddon(
+        estimatedPrice,
+        selected?.section?.hourlyPriceAddon,
+        estimatedDurationMinutes,
+      ),
+    [estimatedPrice, selected?.section?.hourlyPriceAddon, estimatedDurationMinutes],
+  );
 
   const overlapHint = useMemo(() => {
     if (!resourceId || !date || !startTime) return null;
@@ -594,10 +605,10 @@ export function ReservationDialog({
               </p>
             )}
 
-            {estimatedPrice != null ? (
+            {estimatedPriceWithZoneAddon != null ? (
               <p className="rounded-lg border border-emerald-400/20 bg-emerald-500/5 px-3 py-2 text-xs text-emerald-200">
                 {t("reservationDialog.estimatedCharge", {
-                  amount: formatMoney(estimatedPrice),
+                  amount: formatMoney(estimatedPriceWithZoneAddon),
                 })}
                 <span className="mt-0.5 block text-[10px] text-emerald-200/70">
                   {t("reservationDialog.priceFromSetup", {

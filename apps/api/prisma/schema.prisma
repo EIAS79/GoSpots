@@ -954,6 +954,7 @@ model GamingSection {
   name                 String
   floor                Int              @default(1)
   isVip                Boolean          @default(false)
+  hourlyPriceAddon     Decimal          @default(0) @db.Decimal(19, 4)
   seatsPerRow          Int              @default(6)
   sortOrder            Int              @default(0)
   /// INDOOR | OUTDOOR — restaurant dining zones

@@ -31,6 +31,7 @@ type SectionDraft = {
   name: string;
   floor: string;
   isVip: boolean;
+  hourlyPriceAddon: string;
   seatsPerRow: string;
   seatCount: string;
   defaultTableCapacity: string;
@@ -40,6 +41,7 @@ const EMPTY_DRAFT: SectionDraft = {
   name: "",
   floor: "1",
   isVip: false,
+  hourlyPriceAddon: "0",
   seatsPerRow: "6",
   seatCount: "6",
   defaultTableCapacity: "4",
@@ -113,6 +115,7 @@ export function GamingLayoutEditor({
       name: section.name,
       floor: String(section.floor),
       isVip: section.isVip,
+      hourlyPriceAddon: String(section.hourlyPriceAddon ?? 0),
       seatsPerRow: String(section.seatsPerRow),
       seatCount: String(section.seatCount),
       defaultTableCapacity: "4",
@@ -132,6 +135,9 @@ export function GamingLayoutEditor({
         name: addDraft.name.trim(),
         floor: Number(addDraft.floor) || 1,
         isVip: addDraft.isVip,
+        ...(!isDining && {
+          hourlyPriceAddon: Math.max(0, Number(addDraft.hourlyPriceAddon) || 0),
+        }),
         seatsPerRow: Number(addDraft.seatsPerRow) || 6,
         seatCount: Number(addDraft.seatCount) || 0,
         ...(isDining
@@ -169,6 +175,9 @@ export function GamingLayoutEditor({
         name: editDraft.name.trim(),
         floor: Number(editDraft.floor) || 1,
         isVip: editDraft.isVip,
+        ...(!isDining && {
+          hourlyPriceAddon: Math.max(0, Number(editDraft.hourlyPriceAddon) || 0),
+        }),
         seatsPerRow: Number(editDraft.seatsPerRow) || 6,
         seatCount: Number(editDraft.seatCount) || 0,
       });
@@ -343,6 +352,9 @@ export function GamingLayoutEditor({
                             draft={editDraft}
                             unitLabels={offering.unitLabels}
                             showTableCapacity={isDining}
+                            showHourlyPriceAddon={!isDining}
+                            currency={vs?.currency ?? "EUR"}
+                            locale={vs?.locale ?? "en"}
                             onChange={setEditDraft}
                             onCancel={() => setEditingId(null)}
                             onSubmit={() => void handleUpdate(section.id)}
@@ -443,6 +455,9 @@ export function GamingLayoutEditor({
                       draft={addDraft}
                       unitLabels={offering.unitLabels}
                       showTableCapacity={isDining}
+                      showHourlyPriceAddon={!isDining}
+                      currency={vs?.currency ?? "EUR"}
+                      locale={vs?.locale ?? "en"}
                       onChange={setAddDraft}
                       onCancel={() => setShowAdd(false)}
                       onSubmit={() => void handleAdd()}
@@ -476,6 +491,9 @@ function SectionForm({
   draft,
   unitLabels,
   showTableCapacity,
+  showHourlyPriceAddon,
+  currency,
+  locale,
   onChange,
   onCancel,
   onSubmit,
@@ -486,6 +504,9 @@ function SectionForm({
   draft: SectionDraft;
   unitLabels: GamingOffering["unitLabels"];
   showTableCapacity?: boolean;
+  showHourlyPriceAddon?: boolean;
+  currency: string;
+  locale: string;
   onChange: (d: SectionDraft) => void;
   onCancel: () => void;
   onSubmit: () => void;
@@ -500,6 +521,11 @@ function SectionForm({
         ? t("gamingSetup.layout.perRowLanes")
         : t("gamingSetup.layout.perRowSeats");
   const countLabel = unitLabels.createCountLabel;
+  const polish = locale.toLowerCase().startsWith("pl");
+  const addonLabel = polish ? "Dopłata za godzinę" : "Hourly zone add-on";
+  const addonHint = polish
+    ? "Dodawana do podstawowej stawki za każdą godzinę w tej strefie."
+    : "Added on top of the base gaming rate for each hour in this zone.";
 
   return (
     <div className="space-y-3">
@@ -574,6 +600,27 @@ function SectionForm({
           />
           <span className="mt-1 block text-[10px] text-zinc-600">
             {t("gamingSetup.layout.tableCapacityHint")}
+          </span>
+        </label>
+      ) : null}
+      {showHourlyPriceAddon ? (
+        <label className="block">
+          <span className="text-[10px] uppercase tracking-wide text-zinc-500">
+            {addonLabel} ({currency})
+          </span>
+          <input
+            type="number"
+            min={0}
+            step="0.01"
+            inputMode="decimal"
+            value={draft.hourlyPriceAddon}
+            onChange={(e) =>
+              onChange({ ...draft, hourlyPriceAddon: e.target.value })
+            }
+            className="mt-1 w-full rounded-lg border border-white/10 bg-zinc-950 px-3 py-2 text-sm text-white"
+          />
+          <span className="mt-1 block text-[10px] text-zinc-600">
+            {addonHint}
           </span>
         </label>
       ) : null}

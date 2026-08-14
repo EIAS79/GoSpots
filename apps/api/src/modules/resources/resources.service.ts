@@ -188,6 +188,7 @@ export class ResourcesService {
             name: s.name,
             floor: s.floor,
             isVip: s.isVip,
+            hourlyPriceAddon: serializeMoney(s.hourlyPriceAddon),
             seatsPerRow: s.seatsPerRow,
             sortOrder: s.sortOrder,
             seatCount: cat.resources.filter((r) => r.sectionId === s.id).length,
@@ -502,6 +503,7 @@ export class ResourcesService {
         name: s.name,
         floor: s.floor,
         isVip: s.isVip,
+        hourlyPriceAddon: serializeMoney(s.hourlyPriceAddon),
         seatsPerRow: s.seatsPerRow,
         sortOrder: s.sortOrder,
         zone: s.zone,
@@ -558,6 +560,7 @@ export class ResourcesService {
         name: dto.name.trim(),
         floor,
         isVip: dto.isVip ?? false,
+        hourlyPriceAddon: isDining ? 0 : (dto.hourlyPriceAddon ?? 0),
         seatsPerRow: dto.seatsPerRow ?? (isDining ? 4 : 6),
         sortOrder: (maxSort._max.sortOrder ?? -1) + 1,
         ...(isDining && {
@@ -609,6 +612,10 @@ export class ResourcesService {
           floor: Math.min(Math.max(dto.floor, 1), 10),
         }),
         ...(dto.isVip != null && { isVip: dto.isVip }),
+        ...(existing.category.type !== 'DINING' &&
+          dto.hourlyPriceAddon != null && {
+            hourlyPriceAddon: dto.hourlyPriceAddon,
+          }),
         ...(dto.seatsPerRow != null && { seatsPerRow: dto.seatsPerRow }),
         ...(dto.sortOrder != null && { sortOrder: dto.sortOrder }),
         ...(dto.zone != null && {

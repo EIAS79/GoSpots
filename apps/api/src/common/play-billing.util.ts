@@ -33,6 +33,27 @@ export function applyBillingDiscount(
   return applyDiscountPercent(baseAmount, discountPercent);
 }
 
+/** Add a zone surcharge once per booked unit, pro-rated by billed duration. */
+export function applyHourlyZoneAddon(
+  result: PlayBillingComputeResult,
+  hourlyPriceAddon: number,
+): PlayBillingComputeResult {
+  const rate = Number.isFinite(hourlyPriceAddon)
+    ? Math.max(0, hourlyPriceAddon)
+    : 0;
+  if (rate <= 0) return result;
+
+  const addonAmount = roundMoney(rate * (result.durationMinutes / 60));
+  if (addonAmount <= 0) return result;
+
+  return {
+    ...result,
+    amount: roundMoney(result.amount + addonAmount),
+    rateLabel: `${result.rateLabel} + zone add-on`,
+    breakdown: `${result.breakdown} · zone +${rate.toFixed(2)}/h`,
+  };
+}
+
 /**
  * Price from Gaming setup: category rates pro-rated by actual duration
  * (e.g. 60 min @ $30 → 30 min = $15), picking the cheapest applicable rate.

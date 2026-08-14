@@ -3,6 +3,7 @@ import type { BookingMode } from "./resources-client";
 import type { BookingUnitKind } from "./booking-unit-kind";
 import type { UnitFloorStatus } from "./booking-floor-status";
 import type { ResourceStatus, ResourceType } from "./resource-types";
+import type { MoneyWire } from "./money";
 
 export type ReservationStatus =
   | "PENDING"
@@ -74,6 +75,7 @@ export type ScheduleUnit = {
     name: string;
     floor: number;
     isVip: boolean;
+    hourlyPriceAddon: MoneyWire;
     seatsPerRow: number;
     zone?: string | null;
   } | null;
@@ -85,6 +87,7 @@ export type ScheduleCategorySection = {
   name: string;
   floor: number;
   isVip: boolean;
+  hourlyPriceAddon: MoneyWire;
   seatsPerRow: number;
   sortOrder: number;
   /** INDOOR | OUTDOOR when set (dining areas). */

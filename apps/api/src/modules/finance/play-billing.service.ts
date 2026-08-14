@@ -27,6 +27,7 @@ import {
 } from '../../common/money.util';
 import {
   applyBillingDiscount,
+  applyHourlyZoneAddon,
   classifyPlayBillingRow,
   classifyWalkInBillingRow,
   computePlayBillingAmount,
@@ -106,6 +107,7 @@ export class PlayBillingService {
         name: string;
         type: string;
         hourlyRate: MoneyInput;
+        section: { hourlyPriceAddon: MoneyInput } | null;
         category: {
           id: string;
           name: string;
@@ -174,7 +176,7 @@ export class PlayBillingService {
             row.notes,
           )
         : null;
-    const computed = bowlingMode
+    const baseComputed = bowlingMode
       ? computeBowlingBillingAmount(
           bowlingMode,
           row.notes,
@@ -191,6 +193,10 @@ export class PlayBillingService {
           useElapsed: inProgress,
           now,
         });
+    const computed = applyHourlyZoneAddon(
+      baseComputed,
+      toMoneyNumber(row.resource.section?.hourlyPriceAddon ?? 0),
+    );
     const discountPercent = row.billingDiscountPercent ?? 0;
     const rateAmount = computed.amount;
     const baseAmount =
@@ -501,6 +507,7 @@ export class PlayBillingService {
     return {
       resource: {
         include: {
+          section: { select: { hourlyPriceAddon: true } },
           category: {
             include: { rates: { orderBy: { sortOrder: 'asc' as const } } },
           },
@@ -843,6 +850,7 @@ export class PlayBillingService {
     return {
       resource: {
         include: {
+          section: { select: { hourlyPriceAddon: true } },
           category: { include: { rates: { orderBy: { sortOrder: 'asc' } } } },
         },
       },

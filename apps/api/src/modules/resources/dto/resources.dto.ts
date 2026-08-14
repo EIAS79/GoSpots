@@ -211,6 +211,11 @@ export class CreateGamingSectionDto {
   isVip?: boolean;
 
   @IsOptional()
+  @IsNumber(FINITE_MONEY)
+  @Min(0)
+  hourlyPriceAddon?: number;
+
+  @IsOptional()
   @IsInt()
   @Min(2)
   @Max(12)
@@ -251,6 +256,11 @@ export class UpdateGamingSectionDto {
   @IsOptional()
   @IsBoolean()
   isVip?: boolean;
+
+  @IsOptional()
+  @IsNumber(FINITE_MONEY)
+  @Min(0)
+  hourlyPriceAddon?: number;
 
   @IsOptional()
   @IsInt()
