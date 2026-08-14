@@ -55,7 +55,7 @@ export class AutomationService {
     if (!actions.length) throw new BadRequestException('At least one automation action is required.');
     if (actions.length > 20) throw new BadRequestException('Automation rules are limited to 20 actions.');
     return actions.map((raw, index) => {
-      const type = String(raw.type ?? '').toUpperCase();
+      const type = typeof raw.type === 'string' ? raw.type.toUpperCase() : '';
       if (type === 'NOOP') return { type: 'NOOP' };
       if (type === 'AUDIT') {
         return {

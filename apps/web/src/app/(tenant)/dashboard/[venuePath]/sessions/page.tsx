@@ -291,6 +291,7 @@ export default function ReservationsPage() {
       unitId: item.resourceId ?? undefined,
       booking: {
         id: item.id,
+        version: item.version,
         resourceId: item.resourceId ?? undefined,
         guestName: item.guestName,
         guestEmail: item.guestEmail,
