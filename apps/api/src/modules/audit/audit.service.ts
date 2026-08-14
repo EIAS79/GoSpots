@@ -209,22 +209,26 @@ export class AuditService {
     return [header.join(','), ...lines].join('\n');
   }
 
-  remove(actor: JwtAccessPayload, id: string): never {
+  remove(actor: JwtAccessPayload, id: string): Promise<never> {
     void actor;
     void id;
-    throw new MethodNotAllowedException(
-      'Audit evidence is immutable and cannot be deleted.',
+    return Promise.reject(
+      new MethodNotAllowedException(
+        'Audit evidence is immutable and cannot be deleted.',
+      ),
     );
   }
 
   removeMany(
     actor: JwtAccessPayload,
     input: { ids?: string[]; allMatching?: boolean } & AuditQuery,
-  ): never {
+  ): Promise<never> {
     void actor;
     void input;
-    throw new MethodNotAllowedException(
-      'Audit evidence is immutable and cannot be deleted.',
+    return Promise.reject(
+      new MethodNotAllowedException(
+        'Audit evidence is immutable and cannot be deleted.',
+      ),
     );
   }
 
