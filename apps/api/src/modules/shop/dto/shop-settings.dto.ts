@@ -56,7 +56,7 @@ export class UpdateShopSettingsDto {
    * Preview first via `POST /shop/currency/preview`; apply only with confirm.
    */
   @IsOptional()
-  @Transform(({ value }) => {
+  @Transform(({ value }: { value: unknown }) => {
     if (value === true || value === 'true' || value === 1 || value === '1') {
       return true;
     }
@@ -109,7 +109,7 @@ export class UpdateShopSettingsDto {
   email?: string | null;
 
   @IsOptional()
-  @Transform(({ value }) => {
+  @Transform(({ value }: { value: unknown }) => {
     if (value === true || value === 'true' || value === 1 || value === '1') {
       return true;
     }
@@ -122,7 +122,7 @@ export class UpdateShopSettingsDto {
   isPublished?: boolean;
 
   @IsOptional()
-  @Transform(({ value }) => {
+  @Transform(({ value }: { value: unknown }) => {
     if (value === true || value === 'true' || value === 1 || value === '1') {
       return true;
     }

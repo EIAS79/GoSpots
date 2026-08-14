@@ -2732,6 +2732,8 @@ const pl: DictTree = {
     sessions: "Rezerwacje",
     orders: "Zamówienia menu",
     guestChecks: "Kasa",
+    myShift: "Moja zmiana",
+    shiftReports: "Raporty zmianowe",
     playBilling: "Rozliczenia gier",
     finance: "Finanse",
     staff: "Konta pracowników",
@@ -2869,8 +2871,66 @@ const pl: DictTree = {
     billingTitle: "Płatności",
     billingBody:
       "Płatności przez dostawców (Stripe, Mollie) — checkout w wielu walutach. Pakiet + dodatki: {price}/mies.",
+    billingDualBody:
+      "Wybierz Stripe lub Mollie oraz odnowienie automatyczne lub ręczne. Pakiet i dodatki kosztują łącznie {price}/mies. Nastąpi przekierowanie do bezpiecznej strony płatności dostawcy.",
+    billingProvidersNotPortable:
+      "Metod płatności nie można przenosić między Stripe i Mollie. Zmiana dostawcy wymaga ponownej konfiguracji płatności.",
     billingManageHint:
       "Metoda płatności, faktury lub anulowanie w portalu rozliczeniowym. Zmiany pakietu zapisane tutaj obowiązują od następnego okresu.",
+    billingManageDualHint:
+      "Aktywne przez {provider} · {mode}. Poniżej możesz zmienić metodę płatności, wstrzymać lub anulować subskrypcję albo zmienić dostawcę.",
+    billingProviderLabel: "Dostawca płatności",
+    billingStatusTitle: "Rozliczenie subskrypcji",
+    billingStatusLabel: "Status",
+    providerStripe: "Stripe",
+    providerMollie: "Mollie",
+    providerDefault: "domyślny",
+    renewalModeLabel: "Odnowienie",
+    renewalAutomatic: "Automatyczne",
+    renewalManual: "Ręczne",
+    renewalAutomaticHint:
+      "Karta lub upoważnienie zostaną obciążone w każdym okresie. Możesz anulować w dowolnej chwili.",
+    renewalManualHint:
+      "Po zakończeniu okresu opłać kolejny miesiąc przyciskiem Zapłać teraz. Spóźniona płatność wstrzyma dostęp.",
+    autoRenewConsent:
+      "Zgadzam się na automatyczne opłaty za odnowienie tej subskrypcji do czasu jej anulowania.",
+    billingAutoRenewRequired:
+      "Potwierdź zgodę na automatyczne odnowienie, aby kontynuować.",
+    updatePaymentMethod: "Zmień metodę płatności",
+    openStripePortal: "Portal klienta Stripe",
+    payNow: "Zapłać teraz",
+    pauseSubscription: "Wstrzymaj",
+    resumeSubscription: "Wznów",
+    cancelSubscription: "Anuluj",
+    switchProvider: "Zmień na {provider}",
+    cancelConfirmTitle: "Anulować subskrypcję?",
+    cancelConfirmDesc:
+      "Rozliczenia zakończą się wraz z bieżącym okresem. Dostęp pozostanie aktywny do tego czasu.",
+    cancelConfirmAction: "Anuluj z końcem okresu",
+    pauseConfirmTitle: "Wstrzymać subskrypcję?",
+    pauseConfirmDesc:
+      "Dostęp zostanie wstrzymany u dostawcy. Możesz go później wznowić na tej stronie.",
+    pauseConfirmAction: "Wstrzymaj",
+    switchConfirmTitle: "Zmienić dostawcę na {provider}?",
+    switchConfirmDesc:
+      "Metody płatności nie przechodzą między dostawcami. Dokończysz nową płatność u drugiego dostawcy.",
+    switchConfirmAction: "Zmień dostawcę",
+    confirmingPayment: "Potwierdzanie płatności…",
+    paymentConfirmFailed:
+      "Płatność nie została potwierdzona. Możesz ponowić płatność.",
+    paymentConfirmTimeout:
+      "Nadal czekamy na dostawcę płatności. Odśwież za chwilę — status zostanie zaktualizowany przez webhook.",
+    graceTitle: "Zaległa płatność — okres karencji",
+    graceBody:
+      "Zaktualizuj metodę płatności przed {ends}, aby nie utracić dostępu.",
+    periodStart: "Początek okresu",
+    periodEnd: "Koniec okresu",
+    nextAmount: "Następna kwota",
+    paymentMethodLabel: "Metoda płatności",
+    paymentMethodNone: "Brak zapisanej metody płatności",
+    paymentMethodCard: "{brand} ···· {last4}",
+    paymentMethodBank: "{bank}",
+    paymentMethodOnFile: "Zapisana metoda płatności",
     billingNotConfigured:
       "Checkout nie jest gotowy na API. Na usłudze API w Render ustaw LEMON_SQUEEZY_API_KEY, LEMON_SQUEEZY_STORE_ID i LEMON_SQUEEZY_VARIANT_ID, potem zrób redeploy. (Webhook secret jest osobno.)",
     billingMissingKeys:

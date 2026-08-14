@@ -209,16 +209,18 @@ export class AuditService {
     return [header.join(','), ...lines].join('\n');
   }
 
-  async remove(_actor: JwtAccessPayload, _id: string) {
+  remove(actor: JwtAccessPayload, id: string): never {
+    void actor;
+    void id;
     throw new MethodNotAllowedException(
       'Audit evidence is immutable and cannot be deleted.',
     );
   }
 
-  async removeMany(
+  removeMany(
     actor: JwtAccessPayload,
     input: { ids?: string[]; allMatching?: boolean } & AuditQuery,
-  ) {
+  ): never {
     void actor;
     void input;
     throw new MethodNotAllowedException(

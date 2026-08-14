@@ -20,7 +20,6 @@ import {
 import { isValidIanaTimeZone } from '../../common/venue-timezone.util';
 import { ApiDomainErrorCode } from '../../common/api-error.codes';
 import { apiConflictException } from '../../common/api-error.util';
-import { resolveEnabledModules } from '../../common/subscription-tier';
 import {
   slugifyVenueCategory,
   venueCategoryPreset,
@@ -554,15 +553,15 @@ export class ShopService {
       let to: string | null = null;
       let rate: number | null =
         typeof meta.rate === 'number' ? meta.rate : null;
-      let ratesAt: string | null =
+      const ratesAt: string | null =
         typeof meta.ratesAt === 'string' ? meta.ratesAt : null;
-      let menuItems: number | null =
+      const menuItems: number | null =
         typeof meta.menuItems === 'number' ? meta.menuItems : null;
-      let resourceRates: number | null =
+      const resourceRates: number | null =
         typeof meta.resourceRates === 'number' ? meta.resourceRates : null;
-      let resources: number | null =
+      const resources: number | null =
         typeof meta.resources === 'number' ? meta.resources : null;
-      let offerings: number | null =
+      const offerings: number | null =
         typeof meta.offerings === 'number' ? meta.offerings : null;
 
       if (row.action === 'venue.currency.change') {
@@ -1071,7 +1070,11 @@ export class ShopService {
     return {
       items: items.map(({ _count, id, ...row }) => {
         const raw = exceptionsByShop.get(id) ?? [];
-        const scheduleExceptions = raw.map(({ shopId: _s, ...ex }) => ex);
+        const scheduleExceptions = raw.map((exception) => {
+          const { shopId, ...rest } = exception;
+          void shopId;
+          return rest;
+        });
         return {
           ...row,
           id,
@@ -1152,6 +1155,7 @@ export class ShopService {
     const entitlements = getVenueEntitlements(shop.subscription);
     const hasGuestChat = hasFeature(entitlements, 'messaging');
     const { subscription: _subscription, ...shopPublic } = shop;
+    void _subscription;
 
     const today = new Date().toISOString().slice(0, 10);
 

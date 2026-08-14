@@ -319,7 +319,6 @@ export async function withClientIdempotency<T>(
         scope,
         key,
         requestHash,
-        correlationId,
       );
       if (replay) {
         const parsed = parseStoredResponse(replay.responseJson) as T;
