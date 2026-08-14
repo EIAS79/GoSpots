@@ -1,4 +1,4 @@
-import { Body, Controller, Headers, Post, UseGuards } from '@nestjs/common';
+import { Body, Controller, Get, Headers, Post, UseGuards } from '@nestjs/common';
 import { ApiOkResponse, ApiTags } from '@nestjs/swagger';
 import { ApiStaffErrorResponses } from '../../common/dto/api-error-responses.decorator';
 import {
@@ -25,6 +25,12 @@ export class OnboardingController {
     private readonly onboarding: OnboardingService,
     private readonly prisma: PrismaService,
   ) {}
+
+  @Get('readiness')
+  @RequirePermissions(PERMISSIONS.RESOURCE_READ)
+  readiness(@CurrentUser() user: JwtAccessPayload) {
+    return this.onboarding.readiness(user);
+  }
 
   @Post('apply-template')
   @RequirePermissions(PERMISSIONS.RESOURCE_WRITE)

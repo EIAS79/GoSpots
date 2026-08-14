@@ -4,8 +4,11 @@ import type { SeatingZone } from "./seating-zone";
 
 export type GamingSectionUnit = {
   id: string;
+  version: number;
   name: string;
+  code: string;
   status: string;
+  configurationState: string;
   sortOrder: number;
   capacity?: number | null;
 };
@@ -25,12 +28,15 @@ export type DiningTableGroupDetail = {
 
 export type GamingSectionDetail = {
   id: string;
+  version: number;
   categoryId: string;
   categoryName: string;
   categoryType: ResourceType;
   name: string;
   floor: number;
   isVip: boolean;
+  zoneType: "ROOM" | "RESTAURANT" | "BAR" | "PRIVATE_ROOM" | "GAMING_AREA" | "OTHER";
+  isHidden: boolean;
   seatsPerRow: number;
   sortOrder: number;
   seatCount: number;
@@ -77,6 +83,7 @@ export function createGamingSection(body: {
 export function updateGamingSection(
   id: string,
   body: {
+    expectedVersion: number;
     name?: string;
     floor?: number;
     isVip?: boolean;

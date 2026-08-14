@@ -2,20 +2,46 @@
 // Scalar tenant/resource references are intentional: this file extends the existing
 // Resource/Reservation/GuestCheck domain without forcing inverse-relation churn.
 
+enum OperationsBillingMode {
+  HOURLY
+  PER_MINUTE
+  FIXED_PRICE
+  FIXED_DURATION
+  PER_PERSON
+  PER_GAME
+  FREE
+}
+
 model OperationsRatePlan {
   id                   String   @id @default(cuid())
   shopId               String
   resourceId           String?
   resourceCategoryId   String?
   name                 String
+  billingMode          OperationsBillingMode @default(HOURLY)
   hourlyRateMinor      Int
+  unitPriceMinor       Int      @default(0)
   overtimeRateMinor    Int?
   overtimeAfterMinutes Int?
   roundingMinutes      Int      @default(1)
   minimumMinutes       Int      @default(0)
+  fixedDurationMinutes Int?
+  minimumChargeMinor   Int      @default(0)
+  graceMinutes         Int      @default(0)
   capMinor             Int?
   membershipHookKey    String?
+  membershipOnly       Boolean  @default(false)
+  happyHour            Boolean  @default(false)
+  groupPackage         Boolean  @default(false)
+  weekdays             Int[]    @default([])
+  startMinute          Int?
+  endMinute            Int?
+  holidayDates         String[] @default([])
+  priority             Int      @default(0)
+  effectiveFrom        DateTime?
+  effectiveTo          DateTime?
   active               Boolean  @default(true)
+  version              Int      @default(1)
   createdAt            DateTime @default(now())
   updatedAt            DateTime @updatedAt
 
@@ -50,6 +76,13 @@ model OperationsSession {
   finishedAt           DateTime?
   totalPausedSeconds   Int      @default(0)
   hourlyRateMinor      Int
+  billingMode          OperationsBillingMode @default(HOURLY)
+  unitPriceMinor       Int      @default(0)
+  fixedDurationMinutes Int?
+  minimumChargeMinor   Int      @default(0)
+  graceMinutes         Int      @default(0)
+  participantCount     Int      @default(1)
+  gameCount            Int      @default(1)
   overtimeRateMinor    Int?
   overtimeAfterMinutes Int?
   roundingMinutes      Int      @default(1)

@@ -1,4 +1,4 @@
-import { Body, Controller, Delete, Get, Param, Post, UseGuards } from '@nestjs/common';
+import { Body, Controller, Delete, Get, Param, Patch, Post, UseGuards } from '@nestjs/common';
 import { ApiTags } from '@nestjs/swagger';
 import { PERMISSIONS } from '../../common/permissions';
 import type { JwtAccessPayload } from '../auth/auth.service';
@@ -14,6 +14,7 @@ import {
   MoveOperationsSessionDto,
   PauseOperationsSessionDto,
   StartOperationsSessionDto,
+  UpdateOperationsRatePlanDto,
 } from './dto/operations.dto';
 import { OperationsService } from './operations.service';
 
@@ -34,6 +35,13 @@ export class OperationsController {
 
   @Post('rate-plans') @RequirePermissions(PERMISSIONS.RESOURCE_WRITE)
   createRate(@CurrentUser() user: JwtAccessPayload, @Body() dto: CreateOperationsRatePlanDto) { return this.operations.createRatePlan(user, dto); }
+
+  @Patch('rate-plans/:id') @RequirePermissions(PERMISSIONS.RESOURCE_WRITE)
+  updateRate(
+    @CurrentUser() user: JwtAccessPayload,
+    @Param('id') id: string,
+    @Body() dto: UpdateOperationsRatePlanDto,
+  ) { return this.operations.updateRatePlan(user, id, dto); }
 
   @Post('session-groups') @RequirePermissions(PERMISSIONS.RESOURCE_WRITE)
   createGroup(@CurrentUser() user: JwtAccessPayload, @Body() dto: CreateSessionGroupDto) { return this.operations.createGroup(user, dto); }

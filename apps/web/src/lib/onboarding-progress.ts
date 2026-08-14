@@ -1,6 +1,6 @@
 import { toPublicVenuePath } from "./venue-dashboard";
 
-export const ONBOARDING_STEP_COUNT = 10;
+export const ONBOARDING_STEP_COUNT = 12;
 
 export type OnboardingProgress = {
   version: 1;

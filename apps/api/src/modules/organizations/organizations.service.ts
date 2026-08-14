@@ -25,6 +25,7 @@ import {
   AddOrganizationShopDto,
   CreateOrganizationDto,
   UpdateOrganizationMemberDto,
+  UpdateOrganizationSettingsDto,
   UpdateOrganizationShopDto,
 } from './dto/organization.dto';
 
@@ -32,6 +33,36 @@ const ORG_ADMIN_ROLES = new Set<OrganizationRole>([
   OrganizationRole.OWNER,
   OrganizationRole.ADMIN,
 ]);
+
+export function resolveOrganizationSettings(
+  ...layers: Array<Record<string, unknown> | null | undefined>
+): Record<string, unknown> {
+  const merge = (
+    target: Record<string, unknown>,
+    source: Record<string, unknown>,
+  ): Record<string, unknown> => {
+    const out = { ...target };
+    for (const [key, value] of Object.entries(source)) {
+      const current = out[key];
+      if (
+        value && typeof value === 'object' && !Array.isArray(value) &&
+        current && typeof current === 'object' && !Array.isArray(current)
+      ) {
+        out[key] = merge(
+          current as Record<string, unknown>,
+          value as Record<string, unknown>,
+        );
+      } else {
+        out[key] = value;
+      }
+    }
+    return out;
+  };
+  return layers.reduce(
+    (resolved, layer) => layer ? merge(resolved, layer) : resolved,
+    {} as Record<string, unknown>,
+  );
+}
 
 @Injectable()
 export class OrganizationsService {
@@ -164,6 +195,7 @@ export class OrganizationsService {
               venuePath: shop?.dashboardKey ?? shop?.slug ?? null,
               currency: shop?.currency ?? null,
               timezone: shop?.timezone ?? null,
+              branchCode: orgShop.branchCode ?? null,
               sharedCatalogEnabled: orgShop.sharedCatalogEnabled,
               inheritedSettings: orgShop.inheritedSettings ?? null,
               overrideSettings: orgShop.overrideSettings ?? null,
@@ -248,6 +280,7 @@ export class OrganizationsService {
           organizationId,
           shopId: dto.shopId,
           displayName: dto.displayName?.trim() || null,
+          branchCode: dto.branchCode?.trim().toUpperCase() || null,
           sharedCatalogEnabled: dto.sharedCatalogEnabled ?? false,
           overrideSettings: dto.overrideSettings as Prisma.InputJsonValue | undefined,
         },
@@ -261,7 +294,7 @@ export class OrganizationsService {
       return row;
     } catch (error) {
       if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === 'P2002') {
-        throw new ConflictException('Venue is already linked to an organization');
+        throw new ConflictException('Venue is already linked or the branch code is already in use');
       }
       throw error;
     }
@@ -280,20 +313,28 @@ export class OrganizationsService {
       throw new NotFoundException('Organization venue not found');
     }
     const updated = await this.prisma.organizationShop.update({
-      where: { shopId },
-      data: {
-        ...(dto.displayName !== undefined ? { displayName: dto.displayName.trim() || null } : {}),
-        ...(dto.sharedCatalogEnabled !== undefined
-          ? { sharedCatalogEnabled: dto.sharedCatalogEnabled }
-          : {}),
-        ...(dto.inheritedSettings !== undefined
-          ? { inheritedSettings: dto.inheritedSettings as Prisma.InputJsonValue }
-          : {}),
-        ...(dto.overrideSettings !== undefined
-          ? { overrideSettings: dto.overrideSettings as Prisma.InputJsonValue }
-          : {}),
-      },
-    });
+        where: { shopId },
+        data: {
+          ...(dto.displayName !== undefined ? { displayName: dto.displayName.trim() || null } : {}),
+          ...(dto.branchCode !== undefined
+            ? { branchCode: dto.branchCode?.trim().toUpperCase() || null }
+            : {}),
+          ...(dto.sharedCatalogEnabled !== undefined
+            ? { sharedCatalogEnabled: dto.sharedCatalogEnabled }
+            : {}),
+          ...(dto.inheritedSettings !== undefined
+            ? { inheritedSettings: dto.inheritedSettings as Prisma.InputJsonValue }
+            : {}),
+          ...(dto.overrideSettings !== undefined
+            ? { overrideSettings: dto.overrideSettings as Prisma.InputJsonValue }
+            : {}),
+        },
+      }).catch((error: unknown) => {
+        if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === 'P2002') {
+          throw new ConflictException('Branch code is already in use in this organization');
+        }
+        throw error;
+      });
     await this.audit.record(actor, {
       section: 'venue',
       action: 'organization.shop_updated',
@@ -305,6 +346,54 @@ export class OrganizationsService {
       },
     });
     return updated;
+  }
+
+  async updateSettings(
+    actor: JwtAccessPayload,
+    organizationId: string,
+    dto: UpdateOrganizationSettingsDto,
+  ) {
+    await this.requireFeature(actor);
+    await this.requireOrgAdmin(actor, organizationId);
+    const organization = await this.prisma.organization.update({
+      where: { id: organizationId },
+      data: { settings: dto.settings as Prisma.InputJsonValue },
+    });
+    await this.audit.record(actor, {
+      section: 'venue',
+      action: 'organization.settings_updated',
+      summary: 'Updated organization venue defaults',
+      meta: { organizationId },
+    });
+    return organization;
+  }
+
+  async resolvedShopSettings(
+    actor: JwtAccessPayload,
+    organizationId: string,
+    shopId: string,
+  ) {
+    await this.requireFeature(actor);
+    const accessible = await this.accessibleShopIds(actor, organizationId);
+    if (!accessible.has(shopId)) throw new ForbiddenException('Organization venue access denied');
+    const row = await this.prisma.organizationShop.findFirst({
+      where: { organizationId, shopId },
+      include: { organization: { select: { settings: true } } },
+    });
+    if (!row) throw new NotFoundException('Organization venue not found');
+    return {
+      organizationId,
+      shopId,
+      branchCode: row.branchCode,
+      defaults: row.organization.settings ?? null,
+      inherited: row.inheritedSettings ?? null,
+      overrides: row.overrideSettings ?? null,
+      resolved: resolveOrganizationSettings(
+        row.organization.settings as Record<string, unknown> | null,
+        row.inheritedSettings as Record<string, unknown> | null,
+        row.overrideSettings as Record<string, unknown> | null,
+      ),
+    };
   }
 
   async addMember(actor: JwtAccessPayload, organizationId: string, dto: AddOrganizationMemberDto) {

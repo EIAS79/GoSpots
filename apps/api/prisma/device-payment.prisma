@@ -6,11 +6,20 @@ enum DeviceType {
   KDS
   CUSTOMER_DISPLAY
   BARCODE_SCANNER
+  RECEIPT_PRINTER
+  KITCHEN_PRINTER
+  CASH_DRAWER
+  ACCESS_SCANNER
 }
 
 enum DeviceStatus {
   ACTIVE
   DISABLED
+}
+
+enum DeviceClaimState {
+  UNCLAIMED
+  CLAIMED
 }
 
 enum PaymentOperationState {
@@ -49,6 +58,12 @@ model Device {
   type       DeviceType
   provider   String?
   status     DeviceStatus @default(ACTIVE)
+  claimState DeviceClaimState @default(UNCLAIMED)
+  stationLabel String?
+  softwareVersion String?
+  claimedAt DateTime?
+  claimedById String?
+  version Int @default(1)
   metadata   Json?
   lastSeenAt DateTime?
   createdAt  DateTime     @default(now())

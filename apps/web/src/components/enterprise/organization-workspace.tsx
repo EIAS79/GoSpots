@@ -9,6 +9,7 @@ type OrganizationShop = {
   venuePath: string | null;
   currency: string | null;
   timezone: string | null;
+  branchCode: string | null;
   sharedCatalogEnabled: boolean;
   operationalAccess: boolean;
   operationalRole: string | null;
@@ -42,6 +43,7 @@ export function OrganizationWorkspace() {
   const [name, setName] = useState("");
   const [slug, setSlug] = useState("");
   const [shopId, setShopId] = useState("");
+  const [branchCode, setBranchCode] = useState("");
   const [memberEmail, setMemberEmail] = useState("");
   const [memberRole, setMemberRole] = useState("ANALYST");
   const [accessMode, setAccessMode] = useState("EXPLICIT");
@@ -97,8 +99,12 @@ export function OrganizationWorkspace() {
     if (!selected || !shopId.trim()) return;
     setBusy(true);
     try {
-      await api.post(`/organizations/${selected.id}/shops`, { shopId: shopId.trim() });
+      await api.post(`/organizations/${selected.id}/shops`, {
+        shopId: shopId.trim(),
+        branchCode: branchCode.trim().toUpperCase() || undefined,
+      });
       setShopId("");
+      setBranchCode("");
       await load();
       setMessage("Venue linked to organization.");
     } catch (error) {
@@ -156,13 +162,15 @@ export function OrganizationWorkspace() {
                 <div key={shop.id} className="rounded-lg border border-white/10 bg-zinc-950/40 p-3">
                   <div className="font-medium text-zinc-100">{shop.name}</div>
                   <div className="mt-1 text-xs text-zinc-500">{shop.currency ?? "—"} · {shop.timezone ?? "—"}</div>
+                  <div className="mt-1 font-mono text-xs text-zinc-500">Branch: {shop.branchCode ?? "not set"}</div>
                   <div className="mt-2 text-xs text-zinc-400">Operational access: {shop.operationalAccess ? shop.operationalRole ?? "yes" : "no"}</div>
                   <div className="text-xs text-zinc-400">Shared catalog: {shop.sharedCatalogEnabled ? "enabled" : "disabled"}</div>
                 </div>
               ))}
             </div>
-            <form onSubmit={linkShop} className="mt-4 flex flex-wrap gap-2">
+            <form onSubmit={linkShop} className="mt-4 grid gap-2 md:grid-cols-[1fr_12rem_auto]">
               <input className={input + " max-w-md"} value={shopId} onChange={(e) => setShopId(e.target.value)} placeholder="Owned venue ID to link" />
+              <input className={input} value={branchCode} onChange={(e) => setBranchCode(e.target.value)} placeholder="Branch code" />
               <button className={button} disabled={busy}>Link venue</button>
             </form>
           </>

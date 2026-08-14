@@ -4,8 +4,10 @@ import {
   IsIn,
   IsInt,
   IsNumber,
+  IsObject,
   IsOptional,
   IsString,
+  Matches,
   Max,
   MaxLength,
   Min,
@@ -74,6 +76,23 @@ export class UpdateShopSettingsDto {
 
   @IsOptional()
   @IsString()
+  @MaxLength(160)
+  legalName?: string | null;
+
+  @IsOptional()
+  @IsString()
+  @Matches(/^[A-Z0-9][A-Z0-9_-]{0,23}$/i, {
+    message: 'branchCode must use letters, numbers, underscore or hyphen.',
+  })
+  branchCode?: string | null;
+
+  @IsOptional()
+  @IsString()
+  @IsIn(['gaming', 'dining', 'bar', 'hotel_fb', 'mixed'])
+  venueType?: string | null;
+
+  @IsOptional()
+  @IsString()
   @MaxLength(120)
   displayName?: string | null;
 
@@ -99,6 +118,16 @@ export class UpdateShopSettingsDto {
 
   @IsOptional()
   @IsString()
+  @MaxLength(80)
+  region?: string | null;
+
+  @IsOptional()
+  @IsString()
+  @MaxLength(24)
+  postalCode?: string | null;
+
+  @IsOptional()
+  @IsString()
   @MaxLength(40)
   phone?: string | null;
 
@@ -106,6 +135,29 @@ export class UpdateShopSettingsDto {
   @IsString()
   @MaxLength(120)
   email?: string | null;
+
+  @IsOptional()
+  @IsString()
+  @MaxLength(240)
+  website?: string | null;
+
+  @IsOptional()
+  @IsString()
+  @MaxLength(80)
+  taxId?: string | null;
+
+  @IsOptional()
+  @IsObject()
+  taxProfile?: Record<string, unknown> | null;
+
+  @IsOptional()
+  @IsObject()
+  receiptBranding?: Record<string, unknown> | null;
+
+  @IsOptional()
+  @IsString()
+  @MaxLength(2048)
+  logoUrl?: string | null;
 
   @IsOptional()
   @Transform(({ value }: { value: unknown }) => {

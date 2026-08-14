@@ -1,6 +1,20 @@
 import { ForbiddenException } from '@nestjs/common';
 import { OrganizationRole, ShopRole } from '@prisma/client';
-import { OrganizationsService } from './organizations.service';
+import { OrganizationsService, resolveOrganizationSettings } from './organizations.service';
+
+describe('organization location settings inheritance', () => {
+  it('applies organization defaults, inherited branch values, then explicit overrides', () => {
+    expect(resolveOrganizationSettings(
+      { receipt: { footer: 'Group', copies: 1 }, currency: 'PLN' },
+      { receipt: { copies: 2 }, timezone: 'Europe/Warsaw' },
+      { receipt: { footer: 'Branch' } },
+    )).toEqual({
+      receipt: { footer: 'Branch', copies: 2 },
+      currency: 'PLN',
+      timezone: 'Europe/Warsaw',
+    });
+  });
+});
 
 describe('OrganizationsService security', () => {
   const actor = {

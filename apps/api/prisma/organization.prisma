@@ -47,6 +47,7 @@ model OrganizationShop {
   organization          Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
   shopId                String       @unique
   displayName           String?
+  branchCode            String?
   sortOrder             Int          @default(0)
   sharedCatalogEnabled  Boolean      @default(false)
   inheritedSettings     Json?
@@ -55,5 +56,6 @@ model OrganizationShop {
   updatedAt             DateTime     @updatedAt
 
   @@unique([organizationId, shopId])
+  @@unique([organizationId, branchCode])
   @@index([organizationId, sortOrder])
 }

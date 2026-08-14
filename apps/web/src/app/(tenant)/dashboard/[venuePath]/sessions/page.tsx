@@ -782,7 +782,14 @@ export default function ReservationsPage() {
                         }}
                         onToggleNotWorking={async (unitId, notWorking) => {
                           try {
+                            const unitVersion = catalog.categories
+                              .flatMap((category) => category.resources)
+                              .find((unit) => unit.id === unitId)?.version;
+                            if (!unitVersion) {
+                              throw new Error("Resource changed. Reload and try again.");
+                            }
                             await updateResourceUnit(unitId, {
+                              expectedVersion: unitVersion,
                               status: notWorking ? "MAINTENANCE" : "AVAILABLE",
                             });
                             await load();

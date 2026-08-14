@@ -5,7 +5,13 @@ export type DeviceType =
   | "PAYMENT_TERMINAL"
   | "EDGE_HUB"
   | "PRINTER"
-  | "KDS";
+  | "KDS"
+  | "CUSTOMER_DISPLAY"
+  | "BARCODE_SCANNER"
+  | "RECEIPT_PRINTER"
+  | "KITCHEN_PRINTER"
+  | "CASH_DRAWER"
+  | "ACCESS_SCANNER";
 
 export type DeviceStatus = "ACTIVE" | "DISABLED";
 
@@ -15,6 +21,12 @@ export type VenueDevice = {
   type: DeviceType;
   provider: string | null;
   status: DeviceStatus;
+  claimState: "UNCLAIMED" | "CLAIMED";
+  stationLabel: string | null;
+  softwareVersion: string | null;
+  claimedAt: string | null;
+  claimedById: string | null;
+  version: number;
   online: boolean;
   lastSeenAt: string | null;
   metadata: Record<string, unknown> | null;
@@ -38,6 +50,8 @@ export function createDevice(body: {
   type: DeviceType;
   provider?: string;
   externalTerminalId?: string;
+  stationLabel?: string;
+  softwareVersion?: string;
 }) {
   return api<VenueDevice>("/devices", {
     method: "POST",
@@ -47,7 +61,7 @@ export function createDevice(body: {
 
 export function updateDevice(
   id: string,
-  body: Partial<{
+  body: { expectedVersion: number } & Partial<{
     label: string;
     status: DeviceStatus;
     provider: string;
@@ -58,6 +72,20 @@ export function updateDevice(
   return api<VenueDevice>(`/devices/${id}`, {
     method: "PATCH",
     body: JSON.stringify(body),
+  });
+}
+
+export function claimDevice(id: string, expectedVersion: number) {
+  return api<VenueDevice>(`/devices/${id}/claim`, {
+    method: "POST",
+    body: JSON.stringify({ expectedVersion }),
+  });
+}
+
+export function unclaimDevice(id: string, expectedVersion: number) {
+  return api<VenueDevice>(`/devices/${id}/unclaim`, {
+    method: "POST",
+    body: JSON.stringify({ expectedVersion }),
   });
 }
 

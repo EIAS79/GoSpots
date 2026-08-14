@@ -111,7 +111,7 @@ export async function startOperationsSession(body: {
   await storeFloor({
     generatedAt: now,
     resources: floor.resources.map((row) =>
-      row.id === resource.id ? { ...row, state: "IN_USE", session } : row,
+      row.id === resource.id ? { ...row, state: "OCCUPIED", session } : row,
     ),
   });
   return session;

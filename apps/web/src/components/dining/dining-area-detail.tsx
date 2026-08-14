@@ -123,6 +123,7 @@ export function DiningAreaDetail({
     setError(null);
     try {
       const data = await updateGamingSection(section.id, {
+        expectedVersion: section.version,
         name: areaName.trim(),
         floor: Number(areaFloor) || 1,
         zone: areaZone,

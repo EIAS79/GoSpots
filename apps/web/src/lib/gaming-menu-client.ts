@@ -15,6 +15,7 @@ export type GamingRate = {
 
 export type GamingOffering = {
   id: string;
+  version: number;
   type: ResourceType;
   bookingMode: BookingMode;
   name: string;
