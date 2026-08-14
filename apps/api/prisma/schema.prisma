@@ -618,6 +618,7 @@ model DomainEventOutbox {
   @@index([shopId, status, nextAttemptAt, occurredAt])
   @@index([aggregateType, aggregateId, occurredAt])
   @@index([status, occurredAt])
+  @@unique([shopId, id])
 }
 
 /// Durable per-consumer completion receipt. A consumer/event pair may complete once.
