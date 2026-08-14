@@ -182,7 +182,7 @@ export class GuestCheckMergeService {
             guestCheckId: source.id,
             id: { in: movedReservationIds },
           },
-          data: { guestCheckId: destination.id },
+          data: { guestCheckId: destination.id, version: { increment: 1 } },
         });
       }
 
@@ -359,7 +359,7 @@ export class GuestCheckMergeService {
             guestCheckId: source.id,
             id: { in: reservationIds },
           },
-          data: { guestCheckId: destination.id },
+          data: { guestCheckId: destination.id, version: { increment: 1 } },
         });
       }
 

@@ -203,6 +203,7 @@ describe('GrowthCapacityService public booking flow', () => {
         startsAt: new Date(start),
         endsAt: new Date(end),
         partySize: 2,
+        version: { increment: 1 },
       },
     });
     expect(tx.reservationBookingEvidence.upsert).toHaveBeenCalledWith(

@@ -139,6 +139,7 @@ model RfidCredential {
   label     String?
   status    RfidCredentialStatus @default(ACTIVE)
   lastTapAt DateTime?
+  version   Int                  @default(1)
   createdAt DateTime             @default(now())
   updatedAt DateTime             @updatedAt
 

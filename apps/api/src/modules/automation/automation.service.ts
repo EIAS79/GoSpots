@@ -9,6 +9,7 @@ import { Interval } from '@nestjs/schedule';
 import type { Prisma } from '@prisma/client';
 import type { JwtAccessPayload } from '../auth/auth.service';
 import { PrismaService } from '../../prisma/prisma.service';
+import { assertExpectedVersion } from '../../common/optimistic-concurrency.util';
 import { safeJsonParse, sha256, stableJson } from '../../common/platform-security.util';
 import { withTenantRls } from '../../common/tenant-rls.util';
 import { evaluateAutomationCondition, type AutomationCondition } from './automation-evaluator';
@@ -54,7 +55,7 @@ export class AutomationService {
     if (!actions.length) throw new BadRequestException('At least one automation action is required.');
     if (actions.length > 20) throw new BadRequestException('Automation rules are limited to 20 actions.');
     return actions.map((raw, index) => {
-      const type = String(raw.type ?? '').toUpperCase();
+      const type = typeof raw.type === 'string' ? raw.type.toUpperCase() : '';
       if (type === 'NOOP') return { type: 'NOOP' };
       if (type === 'AUDIT') {
         return {
@@ -125,6 +126,10 @@ export class AutomationService {
     const shopId = this.shopId(actor);
     const rule = await this.prisma.automationRule.findFirst({ where: { id, shopId } });
     if (!rule) throw new NotFoundException('Automation rule not found.');
+    assertExpectedVersion(rule.version, dto.expectedVersion, {
+      aggregateType: 'automation_rule',
+      aggregateId: id,
+    });
     const actions = dto.actions ? this.validateActions(dto.actions) : undefined;
     const nextRunAt = dto.nextRunAt === undefined
       ? undefined
@@ -134,8 +139,8 @@ export class AutomationService {
     if (nextRunAt instanceof Date && Number.isNaN(nextRunAt.getTime())) {
       throw new BadRequestException('nextRunAt is invalid.');
     }
-    return this.prisma.automationRule.update({
-      where: { id: rule.id },
+    const claimed = await this.prisma.automationRule.updateMany({
+      where: { id: rule.id, shopId, version: dto.expectedVersion },
       data: {
         name: dto.name?.trim(),
         enabled: dto.enabled,
@@ -145,6 +150,20 @@ export class AutomationService {
         nextRunAt,
         version: { increment: 1 },
       },
+    });
+    if (claimed.count !== 1) {
+      const current = await this.prisma.automationRule.findFirst({
+        where: { id: rule.id, shopId },
+        select: { version: true },
+      });
+      assertExpectedVersion(
+        current?.version ?? dto.expectedVersion + 1,
+        dto.expectedVersion,
+        { aggregateType: 'automation_rule', aggregateId: id },
+      );
+    }
+    return this.prisma.automationRule.findFirstOrThrow({
+      where: { id: rule.id, shopId },
     });
   }
 
@@ -292,7 +311,7 @@ export class AutomationService {
     });
     await this.prisma.automationRule.update({
       where: { id: rule.id },
-      data: { lastTriggeredAt: new Date() },
+      data: { lastTriggeredAt: new Date(), version: { increment: 1 } },
     });
     return completed;
   }
@@ -423,7 +442,7 @@ export class AutomationService {
             const intervalMinutes = Math.max(1, Math.min(cfg.intervalMinutes ?? 60, 43_200));
             await this.prisma.automationRule.update({
               where: { id: rule.id },
-              data: { nextRunAt: new Date(Date.now() + intervalMinutes * 60_000) },
+              data: { nextRunAt: new Date(Date.now() + intervalMinutes * 60_000), version: { increment: 1 } },
             });
           } catch (error) {
             this.logger.error(`Scheduled automation ${rule.id} failed: ${error instanceof Error ? error.message : 'unknown error'}`);

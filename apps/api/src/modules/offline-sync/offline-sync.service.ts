@@ -544,7 +544,7 @@ export class OfflineSyncService {
       data: { shopId, resourceId, sessionId: session.id, fromState: 'AVAILABLE', toState: 'IN_USE', reason: 'OFFLINE_REPLAY', actorUserId: actorId, createdAt: startedAt },
     });
     if (reservationId) {
-      await tx.reservation.updateMany({ where: { id: reservationId, shopId }, data: { status: 'CHECKED_IN' } });
+      await tx.reservation.updateMany({ where: { id: reservationId, shopId }, data: { status: 'CHECKED_IN', version: { increment: 1 } } });
     }
     await this.recordOfflineAudit(tx, shopId, createdById, 'offline.session.start', 'Replayed offline resource session start', { sessionId: session.id, resourceId, operationId: dto.operationId });
     return { entityId: session.id, version: session.version, status: session.status };

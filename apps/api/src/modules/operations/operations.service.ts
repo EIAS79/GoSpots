@@ -5,6 +5,7 @@ import {
   NotFoundException,
 } from '@nestjs/common';
 import { Prisma, ResourceStatus } from '@prisma/client';
+import { assertExpectedVersion } from '../../common/optimistic-concurrency.util';
 import { requireShopId } from '../../common/tenant';
 import { PrismaService } from '../../prisma/prisma.service';
 import { AuditService } from '../audit/audit.service';
@@ -14,6 +15,7 @@ import {
   CreateMaintenanceDto,
   CreateOperationsRatePlanDto,
   CreateSessionGroupDto,
+  ExpectedOperationsSessionVersionDto,
   MoveOperationsSessionDto,
   PauseOperationsSessionDto,
   StartOperationsSessionDto,
@@ -67,6 +69,43 @@ export class OperationsService {
     private readonly prisma: PrismaService,
     private readonly audit: AuditService,
   ) {}
+
+  private async mutateSessionVersioned(
+    tx: Prisma.TransactionClient,
+    session: { id: string; shopId: string; version: number },
+    expectedVersion: number,
+    data: Prisma.OperationsSessionUpdateManyMutationInput,
+  ) {
+    assertExpectedVersion(session.version, expectedVersion, {
+      aggregateType: 'operations_session',
+      aggregateId: session.id,
+    });
+    const claimed = await tx.operationsSession.updateMany({
+      where: {
+        id: session.id,
+        shopId: session.shopId,
+        version: expectedVersion,
+      },
+      data: { ...data, version: { increment: 1 } },
+    });
+    if (claimed.count !== 1) {
+      const current = await tx.operationsSession.findFirst({
+        where: { id: session.id, shopId: session.shopId },
+        select: { version: true },
+      });
+      assertExpectedVersion(
+        current?.version ?? expectedVersion + 1,
+        expectedVersion,
+        {
+          aggregateType: 'operations_session',
+          aggregateId: session.id,
+        },
+      );
+    }
+    return tx.operationsSession.findFirstOrThrow({
+      where: { id: session.id, shopId: session.shopId },
+    });
+  }
 
   async floor(actor: JwtAccessPayload) {
     const shopId = requireShopId(actor);
@@ -286,7 +325,7 @@ export class OperationsService {
       await tx.sessionResourceLink.create({ data: { shopId, sessionId: session.id, resourceId: resource.id, actorUserId: actor.sub } });
       await tx.resourceStateEvent.create({ data: { shopId, resourceId: resource.id, sessionId: session.id, fromState: 'AVAILABLE', toState: 'IN_USE', actorUserId: actor.sub } });
       if (dto.reservationId) {
-        await tx.reservation.updateMany({ where: { id: dto.reservationId, shopId }, data: { status: 'CHECKED_IN' } });
+        await tx.reservation.updateMany({ where: { id: dto.reservationId, shopId }, data: { status: 'CHECKED_IN', version: { increment: 1 } } });
       }
       return session;
     });
@@ -301,7 +340,12 @@ export class OperationsService {
     const now = new Date();
     const updated = await this.prisma.$transaction(async (tx) => {
       await tx.operationsSessionPause.create({ data: { shopId, sessionId: id, reason: dto.reason, startedAt: now, actorUserId: actor.sub } });
-      const row = await tx.operationsSession.update({ where: { id }, data: { status: 'PAUSED', pausedAt: now, version: { increment: 1 } } });
+      const row = await this.mutateSessionVersioned(
+        tx,
+        session,
+        dto.expectedVersion,
+        { status: 'PAUSED', pausedAt: now },
+      );
       await tx.resourceStateEvent.create({ data: { shopId, resourceId: row.resourceId, sessionId: id, fromState: 'IN_USE', toState: 'PAUSED', reason: dto.reason, actorUserId: actor.sub } });
       return row;
     });
@@ -309,7 +353,7 @@ export class OperationsService {
     return updated;
   }
 
-  async resume(actor: JwtAccessPayload, id: string) {
+  async resume(actor: JwtAccessPayload, id: string, dto: ExpectedOperationsSessionVersionDto) {
     const shopId = requireShopId(actor);
     const session = await this.requireSession(shopId, id);
     if (session.status !== 'PAUSED' || !session.pausedAt) throw new ConflictException('Only a paused session can be resumed.');
@@ -317,7 +361,12 @@ export class OperationsService {
     const pauseSeconds = Math.max(0, Math.floor((now.getTime() - session.pausedAt.getTime()) / 1000));
     const updated = await this.prisma.$transaction(async (tx) => {
       await tx.operationsSessionPause.updateMany({ where: { shopId, sessionId: id, endedAt: null }, data: { endedAt: now } });
-      const row = await tx.operationsSession.update({ where: { id }, data: { status: 'ACTIVE', pausedAt: null, totalPausedSeconds: { increment: pauseSeconds }, version: { increment: 1 } } });
+      const row = await this.mutateSessionVersioned(
+        tx,
+        session,
+        dto.expectedVersion,
+        { status: 'ACTIVE', pausedAt: null, totalPausedSeconds: { increment: pauseSeconds } },
+      );
       await tx.resourceStateEvent.create({ data: { shopId, resourceId: row.resourceId, sessionId: id, fromState: 'PAUSED', toState: 'IN_USE', actorUserId: actor.sub } });
       return row;
     });
@@ -342,7 +391,12 @@ export class OperationsService {
       const now = new Date();
       await tx.sessionResourceLink.updateMany({ where: { shopId, sessionId: id, unlinkedAt: null }, data: { unlinkedAt: now } });
       await tx.sessionResourceLink.create({ data: { shopId, sessionId: id, resourceId: target.id, linkedAt: now, actorUserId: actor.sub } });
-      const row = await tx.operationsSession.update({ where: { id }, data: { resourceId: target.id, version: { increment: 1 } } });
+      const row = await this.mutateSessionVersioned(
+        tx,
+        session,
+        dto.expectedVersion,
+        { resourceId: target.id },
+      );
       await tx.resourceStateEvent.createMany({ data: [
         { shopId, resourceId: session.resourceId, sessionId: id, fromState: session.status === 'PAUSED' ? 'PAUSED' : 'IN_USE', toState: 'AVAILABLE', reason: 'MOVE', actorUserId: actor.sub },
         { shopId, resourceId: target.id, sessionId: id, fromState: 'AVAILABLE', toState: session.status === 'PAUSED' ? 'PAUSED' : 'IN_USE', reason: 'MOVE', actorUserId: actor.sub },
@@ -353,7 +407,7 @@ export class OperationsService {
     return updated;
   }
 
-  async finish(actor: JwtAccessPayload, id: string) {
+  async finish(actor: JwtAccessPayload, id: string, dto: ExpectedOperationsSessionVersionDto) {
     const shopId = requireShopId(actor);
     const session = await this.requireSession(shopId, id);
     if (!OPEN_SESSION_STATES.includes(session.status)) throw new ConflictException('Session is already finished.');
@@ -366,7 +420,12 @@ export class OperationsService {
     const updated = await this.prisma.$transaction(async (tx) => {
       if (openPauseSeconds) await tx.operationsSessionPause.updateMany({ where: { shopId, sessionId: id, endedAt: null }, data: { endedAt: now } });
       await tx.sessionResourceLink.updateMany({ where: { shopId, sessionId: id, unlinkedAt: null }, data: { unlinkedAt: now } });
-      const row = await tx.operationsSession.update({ where: { id }, data: { status: 'FINISHED', finishedAt: now, pausedAt: null, totalPausedSeconds, accruedMinor, version: { increment: 1 } } });
+      const row = await this.mutateSessionVersioned(
+        tx,
+        session,
+        dto.expectedVersion,
+        { status: 'FINISHED', finishedAt: now, pausedAt: null, totalPausedSeconds, accruedMinor },
+      );
       await tx.resourceStateEvent.create({ data: { shopId, resourceId: row.resourceId, sessionId: id, fromState: session.status === 'PAUSED' ? 'PAUSED' : 'IN_USE', toState: 'AVAILABLE', actorUserId: actor.sub, metadata: { accruedMinor, currency: row.currency } } });
       return row;
     });
@@ -376,9 +435,13 @@ export class OperationsService {
 
   async attachGuestCheck(actor: JwtAccessPayload, id: string, dto: AttachGuestCheckDto) {
     const shopId = requireShopId(actor);
-    await this.requireSession(shopId, id);
+    const session = await this.requireSession(shopId, id);
     await this.requireGuestCheck(shopId, dto.guestCheckId);
-    const row = await this.prisma.operationsSession.update({ where: { id }, data: { guestCheckId: dto.guestCheckId, version: { increment: 1 } } });
+    const row = await this.prisma.$transaction((tx) =>
+      this.mutateSessionVersioned(tx, session, dto.expectedVersion, {
+        guestCheckId: dto.guestCheckId,
+      }),
+    );
     await this.record(actor, 'operations.session.attach-check', 'Attached guest check to resource session', { sessionId: id, guestCheckId: dto.guestCheckId });
     return row;
   }

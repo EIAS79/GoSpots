@@ -1,4 +1,5 @@
-import { IsArray, IsBoolean, IsIn, IsObject, IsOptional, IsString, MaxLength } from 'class-validator';
+import { Type } from 'class-transformer';
+import { IsArray, IsBoolean, IsIn, IsInt, IsObject, IsOptional, IsString, MaxLength, Min } from 'class-validator';
 
 export class CreateAutomationRuleDto {
   @IsString() @MaxLength(120) name!: string;
@@ -11,6 +12,7 @@ export class CreateAutomationRuleDto {
 }
 
 export class UpdateAutomationRuleDto {
+  @Type(() => Number) @IsInt() @Min(1) expectedVersion!: number;
   @IsOptional() @IsString() @MaxLength(120) name?: string;
   @IsOptional() @IsBoolean() enabled?: boolean;
   @IsOptional() @IsObject() triggerConfig?: Record<string, unknown>;

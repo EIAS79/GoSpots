@@ -16,6 +16,10 @@ import { SKIP_CSRF_KEY } from '../decorators/skip-csrf.decorator';
 
 /** Public auth routes that still mutate cookie sessions and need CSRF. */
 const PUBLIC_COOKIE_MUTATIONS = [
+  '/auth/register',
+  '/auth/staff/activate',
+  '/auth/login',
+  '/auth/mfa/verify',
   '/auth/refresh',
   '/auth/logout',
 ] as const;
@@ -45,14 +49,18 @@ export class CsrfGuard implements CanActivate {
       ctx.getHandler(),
       ctx.getClass(),
     ]);
-    if (isPublic && !this.isPublicCookieMutation(req)) {
+    const publicCookieMutation = isPublic && this.isPublicCookieMutation(req);
+    if (isPublic && !publicCookieMutation) {
       // Guest/public APIs ignore session cookies; don't block when a dashboard
       // session cookie is also present on the same origin.
       return true;
     }
 
     const cookies = req.cookies as Record<string, unknown> | undefined;
-    if (!hasSessionCookies(cookies)) return true;
+    // Cookie-issuing public auth endpoints must validate the bootstrap token
+    // even before a session exists. Otherwise an attacker can force a browser
+    // to adopt the attacker's authenticated session (login CSRF).
+    if (!publicCookieMutation && !hasSessionCookies(cookies)) return true;
 
     const cookieToken =
       typeof cookies?.[CSRF_COOKIE] === 'string'

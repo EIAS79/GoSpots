@@ -480,10 +480,7 @@ export class PlayBillingService {
    * portable where clause. These predicates are therefore supersets and
    * `mergePlayBillingItems` performs the authoritative classification.
    */
-  private walkInPlayBillingTabWhere(
-    tab: PlayBillingListTab,
-    _now: Date,
-  ): Prisma.PlaySessionWhereInput {
+  private walkInPlayBillingTabWhere(tab: PlayBillingListTab): Prisma.PlaySessionWhereInput {
     switch (tab) {
       case 'in_progress':
       case 'awaiting_payment':
@@ -565,7 +562,7 @@ export class PlayBillingService {
     const walkInWhere: Prisma.PlaySessionWhereInput = {
       AND: [
         this.walkInPlayBillingBaseWhere(shopId, dateRange),
-        this.walkInPlayBillingTabWhere(tab, now),
+        this.walkInPlayBillingTabWhere(tab),
       ],
     };
 
@@ -794,6 +791,7 @@ export class PlayBillingService {
           billingDiscountPercent: discountPercent,
           billingPaymentMethod: dto.paymentMethod ?? 'CASH',
           ...(sessionStillActive ? {} : { status: 'COMPLETED' }),
+          version: { increment: 1 },
         },
       });
       if (claimed.count !== 1) {
@@ -991,7 +989,7 @@ export class PlayBillingService {
 
     const updated = await this.prisma.reservation.update({
       where: { id: reservationId, shopId },
-      data,
+      data: { ...data, version: { increment: 1 } },
       include: this.playBillingInclude(),
     });
 
@@ -1035,6 +1033,7 @@ export class PlayBillingService {
         status: reason,
         billedAt: null,
         billedAmount: null,
+        version: { increment: 1 },
       },
       include: this.playBillingInclude(),
     });

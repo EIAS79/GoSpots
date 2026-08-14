@@ -33,6 +33,7 @@ export function walkInToScheduleBooking(session: PlaySession) {
   const endsAt = walkInEffectiveEnd(session);
   return {
     id: `walkin:${session.id}`,
+    version: 1,
     guestName: session.label?.trim() || 'Walk-in',
     guestEmail: null as string | null,
     guestPhone: null as string | null,

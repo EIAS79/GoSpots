@@ -131,6 +131,7 @@ export class ReservationRemindersService {
         data: {
           status: ReservationStatus.NO_SHOW,
           ...guestTokenRevokeFields(revokeAt),
+          version: { increment: 1 },
         },
       });
 
@@ -354,7 +355,7 @@ export class ReservationRemindersService {
 
         },
 
-        data: { status: ReservationStatus.COMPLETED },
+        data: { status: ReservationStatus.COMPLETED, version: { increment: 1 } },
 
       });
 
@@ -436,4 +437,3 @@ export class ReservationRemindersService {
 
 
 export { ReservationStatus };
-

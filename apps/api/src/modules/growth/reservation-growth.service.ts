@@ -266,7 +266,7 @@ export class ReservationGrowthService {
     }
     const updated = await this.prisma.reservation.update({
       where: { id },
-      data: { status: dto.outcome },
+      data: { status: dto.outcome, version: { increment: 1 } },
     });
     const after = await this.depositSummary(actor, id);
     await this.record(actor, 'reservation.outcome', 'Applied reservation outcome policy', {

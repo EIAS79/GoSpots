@@ -231,7 +231,7 @@ export class ShopService {
       select: this.shopProfileSelect(),
     });
     if (!before) throw new NotFoundException();
-    if (dto.expectedVersion != null && dto.expectedVersion !== before.version) {
+    if (dto.expectedVersion !== before.version) {
       throw apiConflictException(
         ApiDomainErrorCode.VERSION_CONFLICT,
         'Venue settings changed in another session. Reload and try again.',
@@ -306,7 +306,7 @@ export class ShopService {
       shop = await this.prisma.shop.update({
         where: {
           id: shopId,
-          version: dto.expectedVersion ?? before.version,
+          version: dto.expectedVersion,
         },
         data: {
           version: { increment: 1 },

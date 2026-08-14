@@ -1,4 +1,5 @@
 import { AutomationService } from './automation.service';
+import { ConflictException } from '@nestjs/common';
 import { evaluateAutomationCondition } from './automation-evaluator';
 
 const actor = {
@@ -39,6 +40,28 @@ describe('automation condition evaluator', () => {
 });
 
 describe('AutomationService', () => {
+  it('rejects a stale automation rule update', async () => {
+    const prisma = {
+      automationRule: {
+        findFirst: jest.fn().mockResolvedValue({
+          id: 'rule-1',
+          shopId: 'shop-1',
+          version: 3,
+        }),
+        updateMany: jest.fn(),
+      },
+    } as any;
+    const service = new AutomationService(prisma);
+
+    await expect(
+      service.updateRule(actor, 'rule-1', {
+        expectedVersion: 2,
+        enabled: false,
+      }),
+    ).rejects.toBeInstanceOf(ConflictException);
+    expect(prisma.automationRule.updateMany).not.toHaveBeenCalled();
+  });
+
   it('turns a concurrent unique-key collision into an idempotent replay', async () => {
     const replay = { id: 'execution-1', shopId: 'shop-1', dedupeKey: 'same-key', status: 'QUEUED' };
     const findUnique = jest.fn()

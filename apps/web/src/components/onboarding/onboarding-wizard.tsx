@@ -261,7 +261,10 @@ export function OnboardingWizard({ venuePath }: { venuePath: string }) {
                 setBusy(true);
                 setError(null);
                 try {
-                  const next = await updateShopSettings(body);
+                  const next = await updateShopSettings({
+                    ...body,
+                    expectedVersion: settings.shop.version,
+                  });
                   setSettings(next);
                   completeCurrent();
                 } catch (e) {
@@ -284,7 +287,10 @@ export function OnboardingWizard({ venuePath }: { venuePath: string }) {
                 setBusy(true);
                 setError(null);
                 try {
-                  const next = await updateShopSettings(body);
+                  const next = await updateShopSettings({
+                    ...body,
+                    expectedVersion: settings.shop.version,
+                  });
                   setSettings(next);
                   completeCurrent();
                 } catch (e) {
@@ -1339,6 +1345,7 @@ function PreviewStep({
     try {
       const next = await updateShopSettings({
         isPublished: !shop.isPublished,
+        expectedVersion: shop.version,
       });
       setSettings(next);
     } catch (e) {

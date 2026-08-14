@@ -141,6 +141,7 @@ model Stocktake {
   status      String   @default("OPEN")
   countedById String
   postedAt    DateTime?
+  version     Int      @default(1)
   createdAt   DateTime @default(now())
   @@index([shopId,locationId,status,createdAt])
 }

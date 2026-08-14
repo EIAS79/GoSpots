@@ -11,6 +11,7 @@ import { randomBytes } from 'node:crypto';
 import type { JwtAccessPayload } from '../auth/auth.service';
 import { PrismaService } from '../../prisma/prisma.service';
 import { hmacOpaque, sha256 } from '../../common/platform-security.util';
+import { assertExpectedVersion } from '../../common/optimistic-concurrency.util';
 import type {
   BindRfidCredentialDto,
   CreateRfidWalletDto,
@@ -305,11 +306,71 @@ export class TicketingService {
     const wallet = await this.prisma.rfidWallet.findFirst({ where: { id: dto.walletId, shopId, active: true } });
     if (!wallet) throw new NotFoundException('RFID wallet not found.');
     const uidHash = this.opaque(dto.uid);
-    const credential = await this.prisma.rfidCredential.upsert({
+    const existing = await this.prisma.rfidCredential.findUnique({
       where: { shopId_uidHash: { shopId, uidHash } },
-      create: { shopId, uidHash, walletId: wallet.id, label: dto.label?.trim() || null },
-      update: { walletId: wallet.id, label: dto.label?.trim() || null, status: 'ACTIVE' },
     });
+    let credential;
+    if (existing) {
+      if (dto.expectedVersion == null) {
+        throw new BadRequestException(
+          'expectedVersion is required when rebinding an RFID credential.',
+        );
+      }
+      assertExpectedVersion(existing.version, dto.expectedVersion, {
+        aggregateType: 'rfid_credential',
+        aggregateId: existing.id,
+      });
+      const claimed = await this.prisma.rfidCredential.updateMany({
+        where: {
+          id: existing.id,
+          shopId,
+          version: dto.expectedVersion,
+        },
+        data: {
+          walletId: wallet.id,
+          label: dto.label?.trim() || null,
+          status: 'ACTIVE',
+          version: { increment: 1 },
+        },
+      });
+      if (claimed.count !== 1) {
+        const current = await this.prisma.rfidCredential.findFirst({
+          where: { id: existing.id, shopId },
+          select: { version: true },
+        });
+        assertExpectedVersion(
+          current?.version ?? dto.expectedVersion + 1,
+          dto.expectedVersion,
+          { aggregateType: 'rfid_credential', aggregateId: existing.id },
+        );
+      }
+      credential = await this.prisma.rfidCredential.findFirstOrThrow({
+        where: { id: existing.id, shopId },
+      });
+    } else {
+      if (dto.expectedVersion != null) {
+        throw new BadRequestException(
+          'expectedVersion must be omitted for a new RFID credential.',
+        );
+      }
+      try {
+        credential = await this.prisma.rfidCredential.create({
+          data: {
+            shopId,
+            uidHash,
+            walletId: wallet.id,
+            label: dto.label?.trim() || null,
+          },
+        });
+      } catch (error) {
+        if (isUniqueConstraintError(error)) {
+          throw new ConflictException(
+            'RFID credential was bound concurrently; refresh and retry.',
+          );
+        }
+        throw error;
+      }
+    }
     await this.audit(shopId, actor, 'ticketing.rfid.bind', 'Bound RFID credential', {
       credentialId: credential.id,
       walletId: wallet.id,
@@ -510,7 +571,7 @@ export class TicketingService {
             deviceId: dto.deviceId ?? null,
           },
         });
-        await tx.rfidCredential.update({ where: { id: credential.id }, data: { lastTapAt: new Date() } });
+        await tx.rfidCredential.update({ where: { id: credential.id }, data: { lastTapAt: new Date(), version: { increment: 1 } } });
         return { tap, replayed: false, wallet: walletResult };
       });
     } catch (error) {

@@ -96,9 +96,14 @@ export class AuthVenueService {
         email: true,
         coverImage: true,
         locale: true,
+        timezone: true,
+        businessDayStartMinutes: true,
         currency: true,
         isPublished: true,
+        advertiseOnVenuesPage: true,
+        reviewsMode: true,
         floorCount: true,
+        version: true,
       },
     });
     if (!shopProfile) {

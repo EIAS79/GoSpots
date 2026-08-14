@@ -17,6 +17,7 @@ import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import type { JwtAccessPayload } from '../auth/auth.service';
 import {
   CreateReservationDto,
+  DeleteReservationDto,
   ReservationQueryDto,
   ScheduleQueryDto,
   UpdateReservationDto,
@@ -68,7 +69,7 @@ export class ReservationsController {
 
   @Delete(':id')
   @RequirePermissions(PERMISSIONS.RESERVATION_WRITE)
-  delete(@CurrentUser() user: JwtAccessPayload, @Param('id') id: string) {
-    return this.reservations.delete(user, id);
+  delete(@CurrentUser() user: JwtAccessPayload, @Param('id') id: string, @Body() dto: DeleteReservationDto) {
+    return this.reservations.delete(user, id, dto);
   }
 }

@@ -430,6 +430,7 @@ export class GrowthCapacityService {
           startsAt,
           endsAt,
           partySize: dto.partySize ?? current.partySize,
+          version: { increment: 1 },
         },
       });
       await tx.reservationBookingEvidence.upsert({
@@ -474,6 +475,7 @@ export class GrowthCapacityService {
         data: {
           status: ReservationStatus.CANCELED,
           ...guestTokenRevokeFields(now),
+          version: { increment: 1 },
         },
       }),
       this.prisma.reservationBookingEvidence.upsert({
@@ -514,7 +516,7 @@ export class GrowthCapacityService {
     return this.prisma.$transaction(async (tx) => {
       const reservation = await tx.reservation.update({
         where: { id: row.id },
-        data: { status: ReservationStatus.CHECKED_IN },
+        data: { status: ReservationStatus.CHECKED_IN, version: { increment: 1 } },
       });
       await tx.reservationBookingEvidence.upsert({
         where: { reservationId: row.id },

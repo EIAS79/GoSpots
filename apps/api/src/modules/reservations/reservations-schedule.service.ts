@@ -361,6 +361,7 @@ export class ReservationsScheduleService {
                 const isWalkIn = b.id.startsWith('walkin:');
                 return {
                   id: b.id,
+                  version: b.version,
                   guestName: options?.sanitizeGuests
                     ? isWalkIn
                       ? 'In use'
@@ -402,6 +403,7 @@ export class ReservationsScheduleService {
     const agenda = reservations
       .map((b) => ({
         id: b.id,
+        version: b.version,
         guestName: options?.sanitizeGuests ? 'Reserved' : b.guestName,
         guestEmail: options?.sanitizeGuests ? null : b.guestEmail,
         guestPhone: options?.sanitizeGuests ? null : b.guestPhone,
