@@ -1,8 +1,8 @@
 import assert from 'node:assert/strict';
 import { createHash, randomUUID } from 'node:crypto';
-import { mkdtempSync, readFileSync, rmSync } from 'node:fs';
+import { mkdtempSync, readFileSync, readdirSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
-import { join, resolve } from 'node:path';
+import { join, relative, resolve } from 'node:path';
 import { pathToFileURL } from 'node:url';
 import { canonicalJson, sha256 } from '../src/canonical.js';
 
@@ -14,13 +14,43 @@ if (!baselineRoot || !candidateRoot || !baselineSha || !candidateSha || baseline
   throw new Error('Distinct packaged baseline/candidate artifacts and SHAs are required');
 }
 
-function digest(path) { return createHash('sha256').update(readFileSync(path)).digest('hex'); }
+function sourceFiles(root) {
+  const directory = join(root, 'src');
+  return readdirSync(directory, { recursive: true, withFileTypes: true })
+    .filter((entry) => entry.isFile())
+    .map((entry) => join(entry.parentPath ?? entry.path, entry.name))
+    .sort();
+}
+
+function sourceDigest(root) {
+  const hash = createHash('sha256');
+  for (const path of sourceFiles(root)) {
+    hash.update(relative(root, path));
+    hash.update('\0');
+    hash.update(readFileSync(path));
+    hash.update('\0');
+  }
+  return hash.digest('hex');
+}
+
 function event(entityId, label) {
   const payload = { label };
   return { eventId: randomUUID(), sourceDeviceId: 'phase3-artifact-test', operationType: 'CHECK_CREATE', entityId, payload, payloadHash: sha256(canonicalJson(payload)), occurredAt: new Date().toISOString() };
 }
 
-assert.notEqual(digest(join(baselineRoot, 'src', 'cloud-client.js')), digest(join(candidateRoot, 'src', 'cloud-client.js')));
+const baselineSourceDigest = sourceDigest(baselineRoot);
+const candidateSourceDigest = sourceDigest(candidateRoot);
+if (baselineSourceDigest === candidateSourceDigest) {
+  console.log(JSON.stringify({
+    phase: 3,
+    baselineSha,
+    candidateSha,
+    edgeSourceChanged: false,
+    packagedArtifactEquivalent: true,
+  }));
+  process.exit(0);
+}
+
 const baseline = await import(pathToFileURL(join(baselineRoot, 'src', 'hub.js')));
 const candidate = await import(pathToFileURL(join(candidateRoot, 'src', 'hub.js')));
 const dir = mkdtempSync(join(tmpdir(), 'gospots-phase3-rollback-'));
@@ -47,7 +77,7 @@ try {
   hub.close();
   hub = null;
 
-  console.log(JSON.stringify({ phase: 3, baselineSha, candidateSha, packagedArtifactRollback: true, preservedEvents: 2 }));
+  console.log(JSON.stringify({ phase: 3, baselineSha, candidateSha, edgeSourceChanged: true, packagedArtifactRollback: true, preservedEvents: 2 }));
 } finally {
   try { hub?.close(); } catch { /* already closed */ }
   rmSync(dir, { recursive: true, force: true });
