@@ -15,11 +15,16 @@ if (!baselineRoot || !candidateRoot || !baselineSha || !candidateSha || baseline
 }
 
 function sourceFiles(root) {
-  const directory = join(root, 'src');
-  return readdirSync(directory, { recursive: true, withFileTypes: true })
-    .filter((entry) => entry.isFile())
-    .map((entry) => join(entry.parentPath ?? entry.path, entry.name))
-    .sort();
+  const files = [];
+  function walk(directory) {
+    for (const entry of readdirSync(directory, { withFileTypes: true })) {
+      const path = join(directory, entry.name);
+      if (entry.isDirectory()) walk(path);
+      else if (entry.isFile()) files.push(path);
+    }
+  }
+  walk(join(root, 'src'));
+  return files.sort();
 }
 
 function sourceDigest(root) {
