@@ -1,0 +1,70 @@
+import { PrismaClient } from '@prisma/client';
+
+const prisma = new PrismaClient();
+
+async function main() {
+  const columns = await prisma.$queryRaw<Array<{ table_name: string; column_name: string }>>`
+    SELECT table_name, column_name
+    FROM information_schema.columns
+    WHERE table_schema = 'public'
+      AND (table_name, column_name) IN (
+        ('Shop', 'businessDayStartMinutes'),
+        ('Shop', 'version'),
+        ('IdempotencyReceipt', 'correlationId'),
+        ('DomainEventOutbox', 'correlationId'),
+        ('DomainEventOutbox', 'nextAttemptAt'),
+        ('AuditLog', 'correlationId'),
+        ('AuditLog', 'sourceDevice'),
+        ('AuditLog', 'previousState'),
+        ('AuditLog', 'newState')
+      )
+  `;
+  if (columns.length !== 9) throw new Error(`Phase 1 kernel columns missing: found ${columns.length}/9`);
+
+  const roles = await prisma.$queryRaw<Array<{ enumlabel: string }>>`
+    SELECT enumlabel
+    FROM pg_enum
+    JOIN pg_type ON pg_type.oid = pg_enum.enumtypid
+    WHERE pg_type.typname = 'ShopRole'
+  `;
+  const roleSet = new Set(roles.map((row) => row.enumlabel));
+  for (const role of ['OWNER', 'MANAGER', 'SUPERVISOR', 'CASHIER', 'SERVER', 'KITCHEN', 'INVENTORY', 'VIEWER']) {
+    if (!roleSet.has(role)) throw new Error(`Missing ShopRole ${role}`);
+  }
+
+  const constraints = await prisma.$queryRaw<Array<{ conname: string }>>`
+    SELECT conname FROM pg_constraint
+    WHERE conname IN (
+      'Shop_businessDayStartMinutes_check',
+      'Shop_version_check',
+      'IdempotencyReceipt_shopId_fkey',
+      'DomainEventConsumerReceipt_shopId_fkey',
+      'DomainEventConsumerReceipt_shopId_eventId_fkey'
+    )
+  `;
+  if (constraints.length !== 5) {
+    throw new Error(`Phase 1 kernel constraints missing: found ${constraints.length}/5`);
+  }
+
+  const triggers = await prisma.$queryRaw<Array<{ tgname: string }>>`
+    SELECT tgname FROM pg_trigger
+    WHERE tgname = 'AuditLog_reject_delete' AND NOT tgisinternal
+  `;
+  if (triggers.length !== 1) throw new Error('Immutable AuditLog trigger missing');
+
+  const badBusinessDays = await prisma.$queryRaw<Array<{ count: bigint }>>`
+    SELECT COUNT(*)::bigint AS count FROM "Shop"
+    WHERE "businessDayStartMinutes" < 0 OR "businessDayStartMinutes" >= 1440
+  `;
+  if (Number(badBusinessDays[0]?.count ?? 0) !== 0) {
+    throw new Error('Invalid business-day values survived migration');
+  }
+}
+
+main()
+  .then(() => prisma.$disconnect())
+  .catch(async (error) => {
+    console.error(error);
+    await prisma.$disconnect();
+    process.exit(1);
+  });

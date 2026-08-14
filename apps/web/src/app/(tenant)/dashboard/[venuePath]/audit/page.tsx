@@ -275,10 +275,6 @@ export default function AuditPage() {
   const canViewAudit =
     membership?.role === "OWNER" ||
     hasPermission(membership?.permissions ?? "", "audit.read");
-  const isOwner = membership?.role === "OWNER";
-  const isSuperAdmin =
-    state.status === "authed" && state.user.systemRole === "SUPER_ADMIN";
-
   const [from, setFrom] = useState(daysAgoIso(30));
   const [to, setTo] = useState(todayIso());
   const [section, setSection] = useState("all");
@@ -323,7 +319,7 @@ export default function AuditPage() {
     void load();
   }, [load]);
 
-  const canDelete = (data?.canDelete ?? false) || isOwner || isSuperAdmin;
+  const canDelete = data?.canDelete ?? false;
 
   const toggleSelect = (id: string) => {
     setSelected((prev) => {

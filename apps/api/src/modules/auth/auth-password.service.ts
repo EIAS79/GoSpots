@@ -161,7 +161,7 @@ export class AuthPasswordService {
         memberships: {
           where: {
             isActive: true,
-            role: { in: [ShopRole.STAFF, ShopRole.MANAGER] },
+            role: { not: ShopRole.OWNER },
           },
           include: {
             shop: {

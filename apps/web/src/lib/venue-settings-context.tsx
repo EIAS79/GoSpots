@@ -73,6 +73,8 @@ export function VenueSettingsProvider({
         advertiseOnVenuesPage: initial.advertiseOnVenuesPage ?? true,
         reviewsMode: initial.reviewsMode ?? "ENABLED",
         floorCount: initial.floorCount ?? 1,
+        version: initial.version ?? 1,
+        businessDayStartMinutes: initial.businessDayStartMinutes ?? 0,
       }
     : null,
   );

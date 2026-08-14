@@ -927,7 +927,7 @@ export class AuthService {
       const usedSeats = await tx.membership.count({
         where: {
           shopId: found.shopId,
-          role: { in: [ShopRole.STAFF, ShopRole.MANAGER] },
+          role: { not: ShopRole.OWNER },
           isActive: true,
           user: { accountType: UserAccountType.VENUE_STAFF },
         },

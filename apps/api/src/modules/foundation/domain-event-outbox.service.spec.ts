@@ -30,10 +30,12 @@ describe('DomainEventOutboxService', () => {
           shopId: 'shop-a',
           aggregateId: 'check_1',
           eventType: 'guest-check.updated',
-          payload: {
+          correlationId: expect.any(String),
+          payload: expect.objectContaining({
             version: 2,
             eventSchemaVersion: CURRENT_DOMAIN_EVENT_SCHEMA_VERSION,
-          },
+            correlationId: expect.any(String),
+          }),
         }),
         select: { id: true },
       }),

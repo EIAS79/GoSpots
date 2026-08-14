@@ -1,7 +1,6 @@
 import {
   IsArray,
   IsBoolean,
-  IsEnum,
   IsIn,
   IsOptional,
   IsString,
@@ -10,6 +9,17 @@ import {
   MaxLength,
 } from 'class-validator';
 import { ShopRole } from '@prisma/client';
+
+const ASSIGNABLE_STAFF_ROLES: ShopRole[] = [
+  ShopRole.STAFF,
+  ShopRole.MANAGER,
+  ShopRole.SUPERVISOR,
+  ShopRole.CASHIER,
+  ShopRole.SERVER,
+  ShopRole.KITCHEN,
+  ShopRole.INVENTORY,
+  ShopRole.VIEWER,
+];
 
 export class CreateStaffDto {
   @IsString()
@@ -25,7 +35,7 @@ export class CreateStaffDto {
   name?: string;
 
   @IsOptional()
-  @IsIn([ShopRole.STAFF, ShopRole.MANAGER])
+  @IsIn(ASSIGNABLE_STAFF_ROLES)
   role?: ShopRole;
 
   @IsOptional()
@@ -41,7 +51,7 @@ export class UpdateStaffDto {
   name?: string;
 
   @IsOptional()
-  @IsIn([ShopRole.STAFF, ShopRole.MANAGER])
+  @IsIn(ASSIGNABLE_STAFF_ROLES)
   role?: ShopRole;
 
   @IsOptional()

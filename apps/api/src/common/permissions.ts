@@ -3,22 +3,62 @@
  * `*` is a wildcard that grants every permission (Owner default).
  */
 export const PERMISSIONS = {
+  VENUE_READ: 'venue.read',
+  VENUE_WRITE: 'venue.write',
   SHOP_MANAGE: 'shop.manage',
   MENU_READ: 'menu.read',
   MENU_WRITE: 'menu.write',
   RESOURCE_READ: 'resource.read',
   RESOURCE_WRITE: 'resource.write',
+  SESSION_READ: 'session.read',
+  SESSION_WRITE: 'session.write',
+  SESSION_CANCEL: 'session.cancel',
+  ORDER_READ: 'order.read',
+  ORDER_WRITE: 'order.write',
+  ORDER_VOID_AFTER_SEND: 'order.void_after_send',
   RESERVATION_READ: 'reservation.read',
   RESERVATION_WRITE: 'reservation.write',
   TRANSACTION_READ: 'transaction.read',
   TRANSACTION_WRITE: 'transaction.write',
   CHECKOUT_READ: 'checkout.read',
   CHECKOUT_WRITE: 'checkout.write',
+  CHECKOUT_REOPEN: 'checkout.reopen',
+  PAYMENT_READ: 'payment.read',
+  PAYMENT_WRITE: 'payment.write',
+  REFUND_READ: 'refund.read',
+  REFUND_EXECUTE: 'refund.execute',
   CASH_OPEN: 'cash.open',
   CASH_MOVEMENT: 'cash.movement',
   CASH_CLOSE: 'cash.close',
   CASH_VIEW_EXPECTED: 'cash.view_expected',
   CASH_APPROVE_VARIANCE: 'cash.approve_variance',
+  CASH_PAID_OUT: 'cash.paid_out',
+  DAY_REOPEN: 'day.reopen',
+  PRICE_OVERRIDE: 'price.override',
+  DISCOUNT_MANUAL: 'discount.manual',
+  COMP_APPLY: 'comp.apply',
+  INVOICE_READ: 'invoice.read',
+  INVOICE_WRITE: 'invoice.write',
+  FISCAL_READ: 'fiscal.read',
+  FISCAL_WRITE: 'fiscal.write',
+  FISCAL_RETRY: 'fiscal.retry',
+  FISCAL_OVERRIDE: 'fiscal.override',
+  INVENTORY_READ: 'inventory.read',
+  INVENTORY_WRITE: 'inventory.write',
+  INVENTORY_CORRECTION: 'inventory.correction',
+  CUSTOMER_READ: 'customer.read',
+  CUSTOMER_WRITE: 'customer.write',
+  MEMBERSHIP_READ: 'membership.read',
+  MEMBERSHIP_WRITE: 'membership.write',
+  MEMBERSHIP_BALANCE_CORRECTION: 'membership.balance_correction',
+  TICKET_READ: 'ticket.read',
+  TICKET_WRITE: 'ticket.write',
+  REPORT_READ: 'report.read',
+  INTEGRATION_READ: 'integration.read',
+  INTEGRATION_WRITE: 'integration.write',
+  SETTINGS_READ: 'settings.read',
+  SETTINGS_WRITE: 'settings.write',
+  ADMIN_ACCESS: 'admin.access',
   GALLERY_READ: 'gallery.read',
   GALLERY_WRITE: 'gallery.write',
   STAFF_READ: 'staff.read',
@@ -42,6 +82,97 @@ export const PERMISSIONS = {
 
 export type PermissionKey = (typeof PERMISSIONS)[keyof typeof PERMISSIONS];
 
+export const HIGH_RISK_PERMISSIONS = [
+  PERMISSIONS.PRICE_OVERRIDE,
+  PERMISSIONS.DISCOUNT_MANUAL,
+  PERMISSIONS.COMP_APPLY,
+  PERMISSIONS.ORDER_VOID_AFTER_SEND,
+  PERMISSIONS.REFUND_EXECUTE,
+  PERMISSIONS.CASH_PAID_OUT,
+  PERMISSIONS.CHECKOUT_REOPEN,
+  PERMISSIONS.DAY_REOPEN,
+  PERMISSIONS.INVENTORY_CORRECTION,
+  PERMISSIONS.MEMBERSHIP_BALANCE_CORRECTION,
+  PERMISSIONS.FISCAL_RETRY,
+  PERMISSIONS.FISCAL_OVERRIDE,
+] as const satisfies readonly PermissionKey[];
+
+export const VENUE_STAFF_ROLES = [
+  'MANAGER',
+  'STAFF',
+  'SUPERVISOR',
+  'CASHIER',
+  'SERVER',
+  'KITCHEN',
+  'INVENTORY',
+  'VIEWER',
+] as const;
+
+export type VenueStaffRole = (typeof VENUE_STAFF_ROLES)[number];
+
+/** Machine-readable role templates. Persisted permission rows remain authoritative. */
+export const ROLE_PERMISSION_TEMPLATES: Record<VenueStaffRole, readonly PermissionKey[]> = {
+  MANAGER: [], // resolved from MANAGER_CORE_PERMISSIONS below
+  STAFF: [],
+  SUPERVISOR: [
+    PERMISSIONS.VENUE_READ,
+    PERMISSIONS.RESOURCE_READ,
+    PERMISSIONS.RESOURCE_WRITE,
+    PERMISSIONS.SESSION_READ,
+    PERMISSIONS.SESSION_WRITE,
+    PERMISSIONS.ORDER_READ,
+    PERMISSIONS.ORDER_WRITE,
+    PERMISSIONS.CHECKOUT_READ,
+    PERMISSIONS.CHECKOUT_WRITE,
+    PERMISSIONS.PAYMENT_READ,
+    PERMISSIONS.PAYMENT_WRITE,
+    PERMISSIONS.RESERVATION_READ,
+    PERMISSIONS.RESERVATION_WRITE,
+    PERMISSIONS.CASH_OPEN,
+    PERMISSIONS.CASH_CLOSE,
+    PERMISSIONS.REPORT_READ,
+    PERMISSIONS.STAFF_READ,
+  ],
+  CASHIER: [
+    PERMISSIONS.VENUE_READ,
+    PERMISSIONS.RESOURCE_READ,
+    PERMISSIONS.SESSION_READ,
+    PERMISSIONS.SESSION_WRITE,
+    PERMISSIONS.ORDER_READ,
+    PERMISSIONS.ORDER_WRITE,
+    PERMISSIONS.CHECKOUT_READ,
+    PERMISSIONS.CHECKOUT_WRITE,
+    PERMISSIONS.PAYMENT_READ,
+    PERMISSIONS.PAYMENT_WRITE,
+    PERMISSIONS.CASH_OPEN,
+    PERMISSIONS.CASH_CLOSE,
+  ],
+  SERVER: [
+    PERMISSIONS.VENUE_READ,
+    PERMISSIONS.RESOURCE_READ,
+    PERMISSIONS.SESSION_READ,
+    PERMISSIONS.ORDER_READ,
+    PERMISSIONS.ORDER_WRITE,
+    PERMISSIONS.CHECKOUT_READ,
+    PERMISSIONS.RESERVATION_READ,
+  ],
+  KITCHEN: [PERMISSIONS.VENUE_READ, PERMISSIONS.ORDER_READ, PERMISSIONS.ORDER_WRITE],
+  INVENTORY: [
+    PERMISSIONS.VENUE_READ,
+    PERMISSIONS.INVENTORY_READ,
+    PERMISSIONS.INVENTORY_WRITE,
+    PERMISSIONS.MENU_READ,
+  ],
+  VIEWER: [
+    PERMISSIONS.VENUE_READ,
+    PERMISSIONS.RESOURCE_READ,
+    PERMISSIONS.SESSION_READ,
+    PERMISSIONS.ORDER_READ,
+    PERMISSIONS.RESERVATION_READ,
+    PERMISSIONS.REPORT_READ,
+  ],
+};
+
 /**
  * Core manager access: every dashboard permission except audit, venue
  * settings, and subscription. Those last two are optional owner grants.
@@ -59,6 +190,15 @@ export const MANAGER_OPTIONAL_PERMISSIONS: PermissionKey[] = [
   PERMISSIONS.SHOP_MANAGE,
   PERMISSIONS.SUBSCRIPTION_MANAGE,
 ];
+
+export function resolveRoleDefaultPermissions(role: string): PermissionKey[] {
+  if (role === 'OWNER') return [];
+  if (role === 'MANAGER') return [...MANAGER_CORE_PERMISSIONS];
+  if (role in ROLE_PERMISSION_TEMPLATES) {
+    return [...ROLE_PERMISSION_TEMPLATES[role as VenueStaffRole]];
+  }
+  return [];
+}
 
 /** Build manager CSV from optional extras. Never includes audit.read. */
 export function resolveManagerPermissions(extras?: string[]): string {

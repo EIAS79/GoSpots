@@ -22,6 +22,11 @@ const CURRENCY_CODES = SUPPORTED_CURRENCIES.map((c) => c.code);
 
 export class UpdateShopSettingsDto {
   @IsOptional()
+  @IsInt()
+  @Min(1)
+  expectedVersion?: number;
+
+  @IsOptional()
   @IsString()
   @IsIn([...LOCALE_CODES])
   locale?: string;
@@ -36,6 +41,12 @@ export class UpdateShopSettingsDto {
   timezone?: string;
 
   @IsOptional()
+  @IsInt()
+  @Min(0)
+  @Max(1439)
+  businessDayStartMinutes?: number;
+
+  @IsOptional()
   @IsString()
   @IsIn([...CURRENCY_CODES])
   currency?: string;
@@ -45,7 +56,7 @@ export class UpdateShopSettingsDto {
    * Preview first via `POST /shop/currency/preview`; apply only with confirm.
    */
   @IsOptional()
-  @Transform(({ value }) => {
+  @Transform(({ value }: { value: unknown }) => {
     if (value === true || value === 'true' || value === 1 || value === '1') {
       return true;
     }
@@ -98,7 +109,7 @@ export class UpdateShopSettingsDto {
   email?: string | null;
 
   @IsOptional()
-  @Transform(({ value }) => {
+  @Transform(({ value }: { value: unknown }) => {
     if (value === true || value === 'true' || value === 1 || value === '1') {
       return true;
     }
@@ -111,7 +122,7 @@ export class UpdateShopSettingsDto {
   isPublished?: boolean;
 
   @IsOptional()
-  @Transform(({ value }) => {
+  @Transform(({ value }: { value: unknown }) => {
     if (value === true || value === 'true' || value === 1 || value === '1') {
       return true;
     }

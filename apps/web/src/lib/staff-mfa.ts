@@ -7,5 +7,5 @@ export function isStaffMfaOptInEnabled(): boolean {
 }
 
 export function isStaffMfaEligibleRole(role: ShopRole | undefined): boolean {
-  return role === "MANAGER" || role === "OWNER";
+  return role === "MANAGER" || role === "SUPERVISOR" || role === "OWNER";
 }

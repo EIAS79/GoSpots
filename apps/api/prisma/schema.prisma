@@ -209,6 +209,10 @@ model Shop {
   locale        String   @default("en")
   /// IANA timezone for venue-local calendar days (stock reset, day buckets). Default UTC.
   timezone      String   @default("UTC")
+  /// Minutes after local midnight at which the venue business day rolls over.
+  businessDayStartMinutes Int @default(0)
+  /// Optimistic concurrency token for venue configuration.
+  version       Int      @default(1)
   /// ISO 4217 — prices, reports, marketing browse
   currency      String   @default("EUR")
   /// Dining / lounge floors tracked in reservations (1 = single level)
@@ -268,6 +272,8 @@ model Shop {
   billingNotificationDeliveries BillingNotificationDelivery[]
   featureFlags ShopFeatureFlag[]
   domainEventOutbox DomainEventOutbox[]
+  domainEventConsumerReceipts DomainEventConsumerReceipt[]
+  idempotencyReceipts IdempotencyReceipt[]
   checkSettlements CheckSettlement[]
   chargeSnapshots ChargeSnapshot[]
   checkoutPayments Payment[]
@@ -526,9 +532,11 @@ model BillingOperation {
 model IdempotencyReceipt {
   id           String    @id @default(cuid())
   shopId       String
+  shop         Shop      @relation(fields: [shopId], references: [id], onDelete: Cascade)
   scope        String
   key          String
   requestHash  String?
+  correlationId String?
   status       String    @default("PENDING")
   responseJson String?
   createdAt    DateTime  @default(now())
@@ -584,18 +592,36 @@ model DomainEventOutbox {
   aggregateType String
   aggregateId   String
   eventType     String
+  correlationId String?
   payload       Json
   occurredAt    DateTime @default(now())
+  nextAttemptAt DateTime @default(now())
   status        String   @default("PENDING")
   attemptCount  Int      @default(0)
   lastError     String?
   processedAt   DateTime?
   createdAt     DateTime @default(now())
   updatedAt     DateTime @updatedAt
+  consumerReceipts DomainEventConsumerReceipt[]
 
-  @@index([shopId, status, occurredAt])
+  @@index([shopId, status, nextAttemptAt, occurredAt])
   @@index([aggregateType, aggregateId, occurredAt])
   @@index([status, occurredAt])
+  @@unique([shopId, id])
+}
+
+/// Durable per-consumer completion receipt. A consumer/event pair may complete once.
+model DomainEventConsumerReceipt {
+  id           String   @id @default(cuid())
+  shopId       String
+  shop         Shop     @relation(fields: [shopId], references: [id], onDelete: Cascade)
+  eventId      String
+  event        DomainEventOutbox @relation(fields: [shopId, eventId], references: [shopId, id], onDelete: Cascade)
+  consumerName String
+  completedAt  DateTime @default(now())
+
+  @@unique([eventId, consumerName])
+  @@index([shopId, consumerName, completedAt])
 }
 
 // ─────────────────────────────────────────────────────────────────
@@ -606,6 +632,12 @@ enum ShopRole {
   OWNER    // = client admin: full shop control
   MANAGER  // owner-granted near-full access
   STAFF    // worker; only what owner grants via permissions[]
+  SUPERVISOR
+  CASHIER
+  SERVER
+  KITCHEN
+  INVENTORY
+  VIEWER
 }
 
 // Permission keys live in MembershipPermission rows (`*` = full access).
@@ -1665,10 +1697,16 @@ model AuditLog {
   actorEmail String?
   meta       String?  // JSON
   ipAddress  String?
+  correlationId String?
+  sourceDevice String?
+  reason       String?
+  previousState Json?
+  newState      Json?
   createdAt  DateTime @default(now())
 
   @@index([shopId, createdAt])
   @@index([shopId, section, createdAt])
+  @@index([shopId, correlationId])
 }
 
 // ─────────────────────────────────────────────────────────────────

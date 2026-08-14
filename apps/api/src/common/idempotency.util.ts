@@ -1,4 +1,4 @@
-import { createHash } from 'crypto';
+import { createHash, randomUUID } from 'crypto';
 import { BadRequestException } from '@nestjs/common';
 import { Prisma } from '@prisma/client';
 import type { PrismaClient } from '@prisma/client';
@@ -105,6 +105,7 @@ export type IdempotencyOptions = {
   key: string | undefined | null;
   /** Optional request fingerprint; mismatch with stored hash → 409. */
   requestHash?: string | null;
+  correlationId?: string | null;
   ttlMs?: number;
   /**
    * Phase 3 — when true, missing/blank key → 400 instead of passthrough.
@@ -298,6 +299,7 @@ export async function withClientIdempotency<T>(
   const requestHash = options.requestHash ?? null;
   const ttlMs = options.ttlMs ?? IDEMPOTENCY_DEFAULT_TTL_MS;
   const expiresAt = new Date(Date.now() + ttlMs);
+  const correlationId = options.correlationId?.trim() || randomUUID();
 
   const fromMem = readMemory(shopId, scope, key, requestHash);
   if (fromMem) return fromMem.response as T;
@@ -346,6 +348,7 @@ export async function withClientIdempotency<T>(
         scope,
         key,
         requestHash,
+        correlationId,
         status: 'PENDING',
         responseJson: null,
         expiresAt,

@@ -8,9 +8,11 @@ import {
 import { ShopRole } from '@prisma/client';
 import {
   PERMISSIONS,
+  assertKnownPermissions,
   parsePermissions,
   permissionsToEffectiveCsv,
   resolveManagerPermissions,
+  resolveRoleDefaultPermissions,
   resolvePermissionSet,
   syncMembershipPermissionRows,
 } from '../../common/permissions';
@@ -87,7 +89,7 @@ export class StaffService {
     return this.prisma.membership.count({
       where: {
         shopId,
-        role: { in: [ShopRole.STAFF, ShopRole.MANAGER] },
+        role: { not: ShopRole.OWNER },
         isActive: true,
         user: { accountType: 'VENUE_STAFF' },
       },
@@ -95,12 +97,21 @@ export class StaffService {
   }
 
   private permissionsToCsv(role: ShopRole, perms?: string[]): string {
-    if (role === ShopRole.MANAGER) {
-      return resolveManagerPermissions(perms);
+    let validated: string[];
+    try {
+      validated = assertKnownPermissions(perms ?? []);
+    } catch (error) {
+      throw new BadRequestException(
+        error instanceof Error ? error.message : 'Invalid permission.',
+      );
     }
-    if (!perms?.length) return '';
+    if (role === ShopRole.MANAGER) {
+      return resolveManagerPermissions(validated);
+    }
+    const requested = validated.length ? validated : resolveRoleDefaultPermissions(role);
+    if (!requested.length) return '';
     const allowed = new Set(STAFF_ASSIGNABLE_PERMISSIONS);
-    return perms.filter((p) => allowed.has(p as (typeof STAFF_ASSIGNABLE_PERMISSIONS)[number])).join(',');
+    return requested.filter((p) => allowed.has(p as (typeof STAFF_ASSIGNABLE_PERMISSIONS)[number])).join(',');
   }
 
   async list(actor: JwtAccessPayload) {
@@ -113,7 +124,7 @@ export class StaffService {
     const rows = await this.prisma.membership.findMany({
       where: {
         shopId,
-        role: { in: [ShopRole.STAFF, ShopRole.MANAGER] },
+        role: { not: ShopRole.OWNER },
         user: { accountType: 'VENUE_STAFF' },
       },
       include: {
@@ -200,8 +211,7 @@ export class StaffService {
       );
     }
 
-    const role =
-      dto.role === ShopRole.MANAGER ? ShopRole.MANAGER : ShopRole.STAFF;
+    const role = dto.role ?? ShopRole.STAFF;
 
     const inviteRaw = generateStaffInviteToken();
     const inviteTokenHash = hashToken(inviteRaw);
@@ -399,12 +409,7 @@ export class StaffService {
       permissionRows: membership.permissionRows,
     });
 
-    const nextRole =
-      dto.role != null
-        ? dto.role === ShopRole.MANAGER
-          ? ShopRole.MANAGER
-          : ShopRole.STAFF
-        : membership.role;
+    const nextRole = dto.role ?? membership.role;
 
     const roleChanged = dto.role != null && nextRole !== membership.role;
     let nextPermsInput =
@@ -460,6 +465,17 @@ export class StaffService {
       section: 'team',
       action: 'staff.update',
       summary: `Updated employee ${updated.user.email}`,
+      previousState: {
+        role: membership.role,
+        isActive: membership.isActive,
+        permissions: permissionsToEffectiveCsv({ permissionRows: membership.permissionRows }),
+      },
+      newState: {
+        role: updated.role,
+        isActive: updated.isActive,
+        permissions:
+          nextPermsCsv ?? permissionsToEffectiveCsv({ permissionRows: membership.permissionRows }),
+      },
       meta: {
         membershipId,
         role: updated.role,

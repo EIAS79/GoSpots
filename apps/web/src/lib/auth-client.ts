@@ -2,7 +2,16 @@ import { trackEvent } from "./analytics";
 import { api } from "./api";
 
 export type SystemRole = "USER" | "SUPER_ADMIN";
-export type ShopRole = "OWNER" | "MANAGER" | "STAFF";
+export type ShopRole =
+  | "OWNER"
+  | "MANAGER"
+  | "STAFF"
+  | "SUPERVISOR"
+  | "CASHIER"
+  | "SERVER"
+  | "KITCHEN"
+  | "INVENTORY"
+  | "VIEWER";
 export type SubscriptionTier =
   | "FREE"
   | "STARTER"

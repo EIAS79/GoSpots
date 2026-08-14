@@ -1,6 +1,7 @@
 import type { ShopSettings } from "./shop-settings-client";
 
 export type ShopProfileDraft = {
+  version: number;
   name: string;
   displayName: string;
   description: string;
@@ -12,12 +13,14 @@ export type ShopProfileDraft = {
   isPublished: boolean;
   locale: string;
   timezone: string;
+  businessDayStartMinutes: number;
   currency: string;
   floorCount: number;
 };
 
 export function shopToProfileDraft(shop: ShopSettings): ShopProfileDraft {
   return {
+    version: shop.version ?? 1,
     name: shop.name ?? "",
     displayName: shop.displayName ?? "",
     description: shop.description ?? "",
@@ -29,6 +32,7 @@ export function shopToProfileDraft(shop: ShopSettings): ShopProfileDraft {
     isPublished: shop.isPublished ?? false,
     locale: shop.locale ?? "en",
     timezone: shop.timezone?.trim() || "UTC",
+    businessDayStartMinutes: shop.businessDayStartMinutes ?? 0,
     currency: shop.currency ?? "EUR",
     floorCount: shop.floorCount ?? 1,
   };
@@ -50,6 +54,7 @@ export function profileDraftMatches(
     shop.isPublished === draft.isPublished &&
     shop.locale === draft.locale &&
     (shop.timezone?.trim() || "UTC") === draft.timezone.trim() &&
+    (shop.businessDayStartMinutes ?? 0) === draft.businessDayStartMinutes &&
     shop.currency === draft.currency &&
     (shop.floorCount ?? 1) === draft.floorCount
   );
@@ -57,6 +62,7 @@ export function profileDraftMatches(
 
 export function profileDraftToPayload(draft: ShopProfileDraft) {
   return {
+    expectedVersion: draft.version,
     name: draft.name.trim(),
     displayName: draft.displayName.trim() || null,
     description: draft.description.trim() || null,
@@ -68,6 +74,7 @@ export function profileDraftToPayload(draft: ShopProfileDraft) {
     isPublished: draft.isPublished,
     locale: draft.locale,
     timezone: draft.timezone.trim(),
+    businessDayStartMinutes: draft.businessDayStartMinutes,
     currency: draft.currency,
     floorCount: draft.floorCount,
   };

@@ -8,6 +8,7 @@ import {
 } from './domain-event-outbox.service';
 
 export const DOMAIN_EVENT_MAX_ATTEMPTS = 10;
+export const DOMAIN_EVENT_RETRY_BASE_MS = 1_000;
 
 export type DomainEventHandler = (event: DomainEventOutbox) => Promise<void>;
 
@@ -39,6 +40,7 @@ export class DomainEventConsumerService {
         SELECT "id"
         FROM "DomainEventOutbox"
         WHERE "status" IN ('PENDING', 'FAILED')
+          AND "nextAttemptAt" <= CURRENT_TIMESTAMP
         ORDER BY "occurredAt" ASC, "id" ASC
         FOR UPDATE SKIP LOCKED
         LIMIT ${bounded}
@@ -60,6 +62,7 @@ export class DomainEventConsumerService {
   async processClaimed(
     event: DomainEventOutbox,
     handler: DomainEventHandler,
+    consumerName = 'default',
   ): Promise<DomainEventConsumeResult> {
     const version = readDomainEventSchemaVersion(event.payload);
     if (!isSupportedDomainEventSchemaVersion(event.payload)) {
@@ -73,15 +76,32 @@ export class DomainEventConsumerService {
       return { outcome: 'dead', id: event.id, error };
     }
 
-    try {
-      await handler(event);
+    const completed = await this.prisma.domainEventConsumerReceipt.findUnique({
+      where: { eventId_consumerName: { eventId: event.id, consumerName } },
+      select: { id: true },
+    });
+    if (completed) {
       await this.prisma.domainEventOutbox.update({
         where: { id: event.id },
-        data: {
-          status: 'PROCESSED',
-          lastError: null,
-          processedAt: new Date(),
-        },
+        data: { status: 'PROCESSED', lastError: null, processedAt: new Date() },
+      });
+      return { outcome: 'processed', id: event.id };
+    }
+
+    try {
+      await handler(event);
+      await this.prisma.$transaction(async (tx) => {
+        await tx.domainEventConsumerReceipt.create({
+          data: { shopId: event.shopId, eventId: event.id, consumerName },
+        });
+        await tx.domainEventOutbox.update({
+          where: { id: event.id },
+          data: {
+            status: 'PROCESSED',
+            lastError: null,
+            processedAt: new Date(),
+          },
+        });
       });
       return { outcome: 'processed', id: event.id };
     } catch (cause) {
@@ -92,6 +112,12 @@ export class DomainEventConsumerService {
         data: {
           status: dead ? 'DEAD' : 'FAILED',
           lastError: error,
+          ...(!dead && {
+            nextAttemptAt: new Date(
+              Date.now() +
+                DOMAIN_EVENT_RETRY_BASE_MS * 2 ** Math.max(0, event.attemptCount - 1),
+            ),
+          }),
         },
       });
       return {
@@ -100,5 +126,19 @@ export class DomainEventConsumerService {
         error,
       };
     }
+  }
+
+
+  async replay(eventId: string): Promise<void> {
+    await this.prisma.domainEventOutbox.update({
+      where: { id: eventId },
+      data: {
+        status: 'PENDING',
+        attemptCount: 0,
+        lastError: null,
+        processedAt: null,
+        nextAttemptAt: new Date(),
+      },
+    });
   }
 }

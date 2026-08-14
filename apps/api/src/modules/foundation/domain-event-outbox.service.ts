@@ -1,5 +1,6 @@
 import { BadRequestException, Injectable } from '@nestjs/common';
 import { Prisma } from '@prisma/client';
+import { randomUUID } from 'crypto';
 
 export const CURRENT_DOMAIN_EVENT_SCHEMA_VERSION = 1;
 
@@ -9,6 +10,7 @@ export type DomainEventInput = {
   aggregateId: string;
   eventType: string;
   payload: Prisma.InputJsonValue;
+  correlationId?: string;
   eventSchemaVersion?: number;
   occurredAt?: Date;
 };
@@ -84,13 +86,28 @@ export class DomainEventOutboxService {
       );
     }
 
+    const payloadCorrelationId =
+      typeof event.payload === 'object' && event.payload !== null && !Array.isArray(event.payload)
+        ? (event.payload as Prisma.InputJsonObject).correlationId
+        : undefined;
+    const correlationId =
+      event.correlationId?.trim() ||
+      (typeof payloadCorrelationId === 'string' ? payloadCorrelationId.trim() : '') ||
+      randomUUID();
+
     return tx.domainEventOutbox.create({
       data: {
         shopId: event.shopId,
         aggregateType: event.aggregateType,
         aggregateId: event.aggregateId,
         eventType: event.eventType,
-        payload: versionedPayload(event.payload, eventSchemaVersion),
+        correlationId,
+        payload: versionedPayload(
+          typeof event.payload === 'object' && event.payload !== null && !Array.isArray(event.payload)
+            ? { ...(event.payload as Prisma.InputJsonObject), correlationId }
+            : event.payload,
+          eventSchemaVersion,
+        ),
         occurredAt: event.occurredAt,
       },
       select: { id: true },

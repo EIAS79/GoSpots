@@ -7,6 +7,7 @@ import { ShopRole, UserAccountType } from '@prisma/client';
 export const STAFF_MFA_PHASE1_ELIGIBLE_ROLES: readonly ShopRole[] = [
   ShopRole.OWNER,
   ShopRole.MANAGER,
+  ShopRole.SUPERVISOR,
 ] as const;
 
 /** Env gate for staff MFA rollout (default off until Phase 1 lane ships). */
