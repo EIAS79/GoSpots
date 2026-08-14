@@ -39,7 +39,13 @@ This document records the repository acceptance boundary for Chunks 21–23. The
 
 ---
 
-## Chunk 22 — Integration platform + GoPOS boundary
+## Chunk 22 — Provider-neutral integration platform
+
+### Product boundary
+
+GoSpots is a standalone venue/POS application. Core checkout, invoicing, payments, guest checks, resource/session timing, restaurant operations, billiards operations, reservations, inventory, reporting, and venue workflows must not require another POS product.
+
+The integrations subsystem is an optional extension boundary for explicitly justified external services. Optional connectors must never become the source of truth for core GoSpots domains and must not introduce a mandatory network dependency into the standalone baseline or future offline/Edge operation.
 
 ### Implemented
 
@@ -53,14 +59,14 @@ This document records the repository acceptance boundary for Chunks 21–23. The
 - Signed inbound connector webhooks with timestamp replay window, HMAC validation, event-ID replay detection, and payload-hash conflict rejection.
 - Signed outbound webhooks with stable event IDs, retry/backoff, and dead-letter behavior. Delivery is intentionally at-least-once; receivers must deduplicate by the supplied event ID.
 - Webhook URL baseline blocks non-HTTPS and literal localhost/private/link-local destinations before persistence/delivery.
-- Demo connector for deterministic platform testing.
-- GoPOS connector boundary that **fails closed** until licensed official API documentation and credentials are supplied. No private GoPOS endpoint or payload contract is guessed.
+- Deterministic demo connector for platform testing.
+- Provider-neutral connector registry: no third-party POS adapter is registered in the standalone baseline.
 - Operator UI under `/dashboard/[venuePath]/integrations`, discoverable from Settings, covering installations, health checks, one-time scoped API credentials, signed webhook creation, queue visibility, and retry.
-- Tests cover atomic queue claims, loser-worker behavior, tenant-bound installation enqueueing, private webhook target rejection, stale lease recovery, and the fail-closed GoPOS boundary.
+- Provider-neutral tests cover connector registry behavior, durable queue claiming, loser-worker behavior, tenant-bound installation enqueueing, and stale lease recovery.
 
-### External verification still required
+### Future provider rule
 
-The repository does **not** claim a live GoPOS roundtrip. GoPOS execution remains locked by design until licensed official API access is available and the real adapter can be implemented and reviewed against those official materials.
+A future provider-specific adapter may be added only when there is an explicit product requirement. It must use official API documentation and credentials, remain disabled/fail-closed until reviewed, preserve tenant isolation and idempotency, and pass its own outage/retry/reconciliation/live-environment acceptance gate. Adding such an adapter is optional integration work, not a prerequisite for standalone GoSpots.
 
 ---
 
@@ -98,5 +104,6 @@ Before calling the repository work complete:
    - Web checkout + offline tests · typecheck · build
    - Edge Hub test · build
 3. Confirm there are no unresolved PR review threads or blocking reviews.
-4. Keep live GoPOS verification and physical-hardware certification explicitly marked external/unverified until those environments are actually available.
-5. Do not merge this PR as part of the acceptance process.
+4. Confirm the standalone baseline has no external POS requirement; any future provider-specific adapter remains separately gated until its real supported environment exists.
+5. Keep physical-hardware certification explicitly marked external/unverified until those environments are actually available.
+6. Do not merge this PR as part of the acceptance process.
