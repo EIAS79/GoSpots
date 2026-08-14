@@ -48,6 +48,22 @@ type RateInput = {
   gameCount?: number;
 };
 
+type RatePlanValidationInput = {
+  resourceId?: string | null;
+  resourceCategoryId?: string | null;
+  startMinute?: number | null;
+  endMinute?: number | null;
+  effectiveFrom?: string | Date | null;
+  effectiveTo?: string | Date | null;
+  holidayDates?: string[] | null;
+  billingMode?: OperationsBillingMode | null;
+  unitPriceMinor?: number | null;
+  hourlyRateMinor?: number | null;
+  capMinor?: number | null;
+  minimumChargeMinor?: number | null;
+  fixedDurationMinutes?: number | null;
+};
+
 export function calculateAccruedMinor(input: RateInput): number {
   const elapsedSeconds = Math.max(
     0,
@@ -807,12 +823,7 @@ export class OperationsService {
 
   private async validateRatePlan(
     shopId: string,
-    dto: Partial<Omit<CreateOperationsRatePlanDto, 'effectiveFrom' | 'effectiveTo'>> & {
-      resourceId?: string | null;
-      resourceCategoryId?: string | null;
-      effectiveFrom?: string | Date | null;
-      effectiveTo?: string | Date | null;
-    },
+    dto: RatePlanValidationInput,
   ) {
     if (Boolean(dto.resourceId) === Boolean(dto.resourceCategoryId)) {
       throw new BadRequestException(

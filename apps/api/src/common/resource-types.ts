@@ -17,6 +17,9 @@ export const RESOURCE_TYPE_LABELS: Record<ResourceType, string> = {
   CARDS: 'Card games',
   TABLE: 'Table / lounge',
   DINING: 'Restaurant dining',
+  PRIVATE_ROOM: 'Private room',
+  EQUIPMENT: 'Rentable equipment',
+  ATTRACTION: 'Attraction',
   OTHER: 'Other',
 };
 

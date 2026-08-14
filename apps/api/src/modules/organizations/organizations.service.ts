@@ -58,10 +58,11 @@ export function resolveOrganizationSettings(
     }
     return out;
   };
-  return layers.reduce(
-    (resolved, layer) => layer ? merge(resolved, layer) : resolved,
-    {} as Record<string, unknown>,
-  );
+  let resolved: Record<string, unknown> = {};
+  for (const layer of layers) {
+    if (layer) resolved = merge(resolved, layer);
+  }
+  return resolved;
 }
 
 @Injectable()

@@ -118,7 +118,7 @@ export class DeviceRegistryService {
     });
     if (!created) throw new NotFoundException('Device not found after creation');
     await this.audit.record(actor, {
-      section: 'devices',
+      section: 'venue',
       action: 'device.create',
       summary: `Registered device "${created.label}"`,
       meta: { deviceId: created.id, type: created.type },
@@ -186,7 +186,7 @@ export class DeviceRegistryService {
     });
     if (!updated) throw new NotFoundException('Device not found after update');
     await this.audit.record(actor, {
-      section: 'devices',
+      section: 'venue',
       action: 'device.update',
       summary: `Updated device "${updated.label}"`,
       meta: { deviceId: updated.id },
@@ -225,7 +225,7 @@ export class DeviceRegistryService {
     });
     if (!device) throw new NotFoundException('Device not found after claim');
     await this.audit.record(actor, {
-      section: 'devices',
+      section: 'venue',
       action: 'device.claim',
       summary: `Claimed device "${device.label}"`,
       meta: { deviceId: id },
@@ -261,7 +261,7 @@ export class DeviceRegistryService {
     });
     if (!device) throw new NotFoundException('Device not found after release');
     await this.audit.record(actor, {
-      section: 'devices',
+      section: 'venue',
       action: 'device.unclaim',
       summary: `Released device "${device.label}"`,
       meta: { deviceId: id },
