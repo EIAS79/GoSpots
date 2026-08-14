@@ -1,0 +1,25 @@
+name: Standalone product boundary
+
+on:
+  push:
+    branches: [main, master]
+  pull_request:
+
+concurrency:
+  group: standalone-boundary-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  standalone-boundary:
+    name: No removed external-POS dependency
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+      - name: Verify standalone boundary
+        run: node scripts/assert-standalone-boundary.mjs
