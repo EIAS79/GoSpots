@@ -3,7 +3,6 @@ import {
   IsBoolean,
   IsIn,
   IsOptional,
-  IsString,
   Matches,
 } from 'class-validator';
 import type { OnboardingTemplateId } from '../onboarding-templates.util';

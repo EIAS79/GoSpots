@@ -15,6 +15,7 @@ import { normalizePaymentProvider } from './connectors/payment-connector.registr
 import { ClaimDeviceDto, CreateDeviceDto, UpdateDeviceDto } from './dto/device.dto';
 
 const ONLINE_WINDOW_MS = 90 * 1000;
+type DeviceRegistryRecord = Prisma.DeviceGetPayload<{ include: { terminal: true } }>;
 
 @Injectable()
 export class DeviceRegistryService {
@@ -30,7 +31,7 @@ export class DeviceRegistryService {
     }
   }
 
-  private serialize(device: any) {
+  private serialize(device: DeviceRegistryRecord) {
     const lastSeenAt: Date | null = device.lastSeenAt ?? null;
     const online =
       device.status === DeviceStatus.ACTIVE &&

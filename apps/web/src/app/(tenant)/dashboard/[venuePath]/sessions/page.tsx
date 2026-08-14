@@ -782,7 +782,7 @@ export default function ReservationsPage() {
                         }}
                         onToggleNotWorking={async (unitId, notWorking) => {
                           try {
-                            const unitVersion = catalog.categories
+                            const unitVersion = catalog?.categories
                               .flatMap((category) => category.resources)
                               .find((unit) => unit.id === unitId)?.version;
                             if (!unitVersion) {

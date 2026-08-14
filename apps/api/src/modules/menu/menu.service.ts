@@ -148,7 +148,7 @@ export class MenuService {
     const timing = this.sectionTimingFromDto(dto);
     const section = await this.prisma.menuSection.create({
       data: {
-        shopId: actor.shopId!,
+        shopId,
         name: dto.name,
         sortOrder: dto.sortOrder ?? 0,
         ...timing,
@@ -343,7 +343,7 @@ export class MenuService {
     await this.audit.record(actor, {
       section: 'menu',
       action: 'menu.item.create',
-      summary: `Added menu item "${item.name}" (${item.price})`,
+      summary: `Added menu item "${item.name}" (${item.price.toString()})`,
       meta: { menuItemId: item.id, price: item.price },
     });
     return this.getItem(actor, item.id);
