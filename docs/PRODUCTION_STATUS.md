@@ -1,33 +1,27 @@
 # Production status (operator summary)
 
-**As of:** 2026-07-22
+**As of:** 2026-08-14
 
-## Live blocker — API suspended
+## Current production state
 
-Probe of `https://gospots-api.onrender.com` returns **503** with header:
+- Render service: `GoSpots` (`srv-d87i0m67r5hc73fl1fpg`), active and live.
+- Render deployment: `dep-d9vd103bc2fs73catemg`.
+- Vercel production deployment: `dpl_2vBFuVFbxpPpVDbJcTeHuZ2KTzBi`, `READY`.
+- Deployed main: `33246c762543712e420def14a583ce9b80403571`.
+- Neon production branch: `br-lucky-wave-aln8lhk8`.
+- API `/live` and `/ready`: HTTP 200 through Render and `www.gospots.eu`; database reports `up`.
+- Latest migration: `20260814130000_phase1_kernel_acceptance_hardening`, applied without rollback.
+- Immediate Vercel runtime-error query: no error clusters.
+- Render startup review: build successful, migration command completed, Nest application started, service live.
 
-```text
-x-render-routing: suspend-by-user
-```
+## Verified platform-kernel smoke
 
-The Render web service was **suspended by the account owner**. Until it is resumed, `/live`, `/ready`, login, book, and Vercel `/api/v1` proxy all fail.
-
-### Resume (operator — required)
-
-1. Open [dashboard.render.com](https://dashboard.render.com) → service **`gospots-api`**
-2. Click **Resume** / **Unsuspend**
-3. Wait for deploy healthy (free tier cold start can take ~1 min)
-4. Confirm:
-   - `GET https://gospots-api.onrender.com/api/v1/live` → **200**
-   - `GET https://gospots-api.onrender.com/api/v1/ready` → **200**, `database: up`
-5. Confirm Vercel `API_PROXY_TARGET=https://gospots-api.onrender.com` (no trailing slash), then retest `https://www.gospots.eu/api/v1/ready`
-
-## Where we are
-
-- **Neon migrate:** applied (through `20260721120000_*`)
-- **Host env:** set on Render + Vercel (CORS / cookies / CSRF / JWT / Lemon / Resend)
-- **Custom domains:** `www.gospots.eu` / `www.gospots.pl` on Vercel
-- **render.yaml:** `CSRF_PROTECTION=true`, cookies Secure/lax, `healthCheckPath: /api/v1/ready`
+- pre-session login without CSRF rejected;
+- authenticated login, venue binding and `/auth/me` passed;
+- settings read/save passed and stale save returned `VERSION_CONFLICT`;
+- immutable audit read/delete contract passed;
+- specialized KITCHEN role and canonical permission template passed;
+- production constraints are validated, all 2,281 Reservation rows were preserved, and invalid-version/orphan counts are zero.
 
 ## Flags (keep off until smoke)
 
@@ -40,11 +34,11 @@ The Render web service was **suspended by the account owner**. Until it is resum
 | `IDEMPOTENCY_REQUIRE_MONEY_KEYS` | true in prod example |
 | `CAPTCHA_PROVIDER` | off |
 
-## Manual smoke checklist
+## Ongoing smoke checklist
 
-Run **after** API resume:
+Run after future production deployments:
 
-- [ ] **Health** — `/api/v1/live` OK; `/api/v1/ready` → `database: up` (Render + via `www.gospots.eu`)
+- [x] **Health** — `/api/v1/live` OK; `/api/v1/ready` → `database: up` (Render + via `www.gospots.eu`)
 - [ ] **Owner** — login, create venue, dashboard, staff, resources/types, reservations, menu, orders, settings
 - [ ] **Guest** — `/venues`, `/venue/[slug]`, book + status link, menu/order
 - [ ] **CORS / CSRF** — credentialed session from `https://www.gospots.eu`
