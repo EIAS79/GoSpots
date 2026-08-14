@@ -123,7 +123,7 @@ export function IntegrationsWorkspace() {
       {message ? <div className="rounded-md border border-white/10 bg-white/[0.03] px-3 py-2 text-sm text-zinc-300">{message}</div> : null}
       <section className="rounded-xl border border-white/10 bg-white/[0.025] p-4">
         <h2 className="text-sm font-semibold text-zinc-100">Connector installations</h2>
-        <p className="mt-1 text-xs text-zinc-500">GoPOS remains fail-closed until licensed official API documentation and credentials are configured.</p>
+        <p className="mt-1 text-xs text-zinc-500">Only provider adapters explicitly installed and supported by GoSpots appear here. Core venue operation does not depend on an integration.</p>
         <form onSubmit={install} className="mt-4 grid gap-3 lg:grid-cols-2">
           <select className={input} value={provider} onChange={(e) => setProvider(e.target.value)}>{providers.map((item) => <option key={item.provider}>{item.provider}</option>)}</select>
           <input className={input} value={name} onChange={(e) => setName(e.target.value)} placeholder="Installation name" required />
