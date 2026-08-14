@@ -15,8 +15,10 @@ function event(
     aggregateType: 'guest_check',
     aggregateId: 'check-1',
     eventType: 'guest-check.updated',
+    correlationId: 'corr-1',
     payload: payload as never,
     occurredAt: new Date('2026-08-13T00:00:00Z'),
+    nextAttemptAt: new Date('2026-08-13T00:00:00Z'),
     status: 'PROCESSING',
     attemptCount: 1,
     lastError: null,
@@ -30,12 +32,21 @@ function event(
 describe('DomainEventConsumerService', () => {
   function setup() {
     const update = jest.fn().mockResolvedValue({});
+    const receiptCreate = jest.fn().mockResolvedValue({ id: 'receipt-1' });
     const prisma = {
       domainEventOutbox: { update },
+      domainEventConsumerReceipt: { findUnique: jest.fn().mockResolvedValue(null) },
+      $transaction: jest.fn(async (fn: (tx: unknown) => unknown) =>
+        fn({
+          domainEventOutbox: { update },
+          domainEventConsumerReceipt: { create: receiptCreate },
+        }),
+      ),
     } as unknown as PrismaService;
     return {
       service: new DomainEventConsumerService(prisma),
       update,
+      prisma,
     };
   }
 
@@ -86,10 +97,12 @@ describe('DomainEventConsumerService', () => {
       id: 'event-1',
       error: 'temporary failure',
     });
-    expect(update).toHaveBeenCalledWith({
-      where: { id: 'event-1' },
-      data: { status: 'FAILED', lastError: 'temporary failure' },
-    });
+    expect(update).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: { id: 'event-1' },
+        data: expect.objectContaining({ status: 'FAILED', lastError: 'temporary failure' }),
+      }),
+    );
   });
 
   it('dead-letters repeated handler failures at the attempt ceiling', async () => {
@@ -109,5 +122,15 @@ describe('DomainEventConsumerService', () => {
       id: 'event-1',
       error: 'permanent failure',
     });
+  });
+
+  it('does not invoke a consumer twice after a durable receipt exists', async () => {
+    const { service, prisma } = setup();
+    (prisma.domainEventConsumerReceipt.findUnique as jest.Mock).mockResolvedValue({ id: 'receipt-1' });
+    const handler = jest.fn();
+    await expect(
+      service.processClaimed(event({ eventSchemaVersion: 1 }), handler, 'reports'),
+    ).resolves.toMatchObject({ outcome: 'processed' });
+    expect(handler).not.toHaveBeenCalled();
   });
 });

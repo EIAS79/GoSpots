@@ -22,6 +22,11 @@ const CURRENCY_CODES = SUPPORTED_CURRENCIES.map((c) => c.code);
 
 export class UpdateShopSettingsDto {
   @IsOptional()
+  @IsInt()
+  @Min(1)
+  expectedVersion?: number;
+
+  @IsOptional()
   @IsString()
   @IsIn([...LOCALE_CODES])
   locale?: string;
@@ -34,6 +39,12 @@ export class UpdateShopSettingsDto {
   @IsString()
   @MaxLength(64)
   timezone?: string;
+
+  @IsOptional()
+  @IsInt()
+  @Min(0)
+  @Max(1439)
+  businessDayStartMinutes?: number;
 
   @IsOptional()
   @IsString()

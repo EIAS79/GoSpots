@@ -60,6 +60,16 @@ import { useVenueSettings } from "@/lib/venue-settings-context";
 
 type SaveState = "idle" | "pending" | "saving" | "saved";
 
+function businessDayTime(minutes: number): string {
+  const safe = Number.isInteger(minutes) && minutes >= 0 && minutes < 1440 ? minutes : 0;
+  return `${String(Math.floor(safe / 60)).padStart(2, "0")}:${String(safe % 60).padStart(2, "0")}`;
+}
+
+function businessDayMinutes(value: string): number {
+  const [hours = "0", minutes = "0"] = value.split(":");
+  return Number(hours) * 60 + Number(minutes);
+}
+
 function eraseEntityTypeLabel(
   t: (key: string, vars?: Record<string, string | number>) => string,
   entityType: GdprEraseEntityType,
@@ -849,6 +859,16 @@ export function ShopSettingsPanel({ canWrite = true }: { canWrite?: boolean }) {
                   </option>
                 ))}
               </select>
+            </label>
+            <label className="block text-xs text-zinc-500">
+              Business day starts
+              <input
+                type="time"
+                value={businessDayTime(draft.businessDayStartMinutes)}
+                onChange={(e) => patch({ businessDayStartMinutes: businessDayMinutes(e.target.value) })}
+                disabled={fieldDisabled}
+                className="mt-1 w-full rounded-lg border border-white/10 bg-zinc-950 px-3 py-2.5 text-sm text-white"
+              />
             </label>
             {currencyPreviewLoading ? (
               <p className="flex items-center gap-2 text-xs text-zinc-500 sm:col-span-2 lg:col-span-1 lg:pt-6">

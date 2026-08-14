@@ -10,6 +10,7 @@ export type ShopReviewsMode = "ENABLED" | "DISABLED" | "HIDDEN";
 
 export type ShopSettings = {
   id: string;
+  version: number;
   name: string;
   displayName: string | null;
   slug: string;
@@ -23,6 +24,7 @@ export type ShopSettings = {
   locale: string;
   /** IANA timezone for venue-local calendar days (e.g. Europe/Warsaw). */
   timezone: string;
+  businessDayStartMinutes: number;
   currency: string;
   isPublished: boolean;
   advertiseOnVenuesPage: boolean;
@@ -69,8 +71,10 @@ export function fetchShopSettings() {
 
 export function updateShopSettings(
   body: Partial<{
+    expectedVersion: number;
     locale: string;
     timezone: string;
+    businessDayStartMinutes: number;
     currency: string;
     /** Required true when changing shop currency (after preview). */
     confirm: boolean;

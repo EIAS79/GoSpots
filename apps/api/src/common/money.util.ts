@@ -91,6 +91,141 @@ export function addCanonicalMoney(...values: Money[]): Money {
   };
 }
 
+export function assertSameMoneyCurrency(...values: Money[]): string {
+  if (!values.length) throw new TypeError('At least one money value is required');
+  const currency = normalizeMoneyCurrency(values[0].currency);
+  if (values.some((value) => normalizeMoneyCurrency(value.currency) !== currency)) {
+    throw new TypeError('Money currency mismatch');
+  }
+  return currency;
+}
+
+export function subtractCanonicalMoney(minuend: Money, subtrahend: Money): Money {
+  return {
+    currency: assertSameMoneyCurrency(minuend, subtrahend),
+    amount: minuend.amount.sub(subtrahend.amount),
+  };
+}
+
+export function percentageMoneyDecimal(
+  base: MoneyInput,
+  percentage: MoneyInput,
+  decimals = 2,
+): Prisma.Decimal {
+  const pct = toPrismaDecimal(percentage);
+  if (pct.isNegative()) throw new RangeError('Percentage cannot be negative');
+  return roundMoneyDecimal(toPrismaDecimal(base).mul(pct).div(100), decimals);
+}
+
+export function discountMoneyDecimal(
+  base: MoneyInput,
+  percentage: MoneyInput,
+  decimals = 2,
+): Prisma.Decimal {
+  const pct = toPrismaDecimal(percentage);
+  if (pct.isNegative() || pct.greaterThan(100)) {
+    throw new RangeError('Discount percentage must be between 0 and 100');
+  }
+  return roundMoneyDecimal(
+    toPrismaDecimal(base).sub(toPrismaDecimal(base).mul(pct).div(100)),
+    decimals,
+  );
+}
+
+/** Tax portion contained in a tax-inclusive gross amount. */
+export function taxFromGrossDecimal(
+  gross: MoneyInput,
+  taxPercentage: MoneyInput,
+  decimals = 2,
+): Prisma.Decimal {
+  const rate = toPrismaDecimal(taxPercentage);
+  if (rate.isNegative()) throw new RangeError('Tax percentage cannot be negative');
+  const grossDecimal = toPrismaDecimal(gross);
+  return roundMoneyDecimal(
+    grossDecimal.sub(grossDecimal.div(new Prisma.Decimal(1).add(rate.div(100)))),
+    decimals,
+  );
+}
+
+function moneyMinorUnits(value: MoneyInput, decimals: number): bigint {
+  const rounded = roundMoneyDecimal(value, decimals);
+  return BigInt(rounded.mul(new Prisma.Decimal(10).pow(decimals)).toFixed(0));
+}
+
+function minorUnitsToMoney(value: bigint, decimals: number): Prisma.Decimal {
+  return new Prisma.Decimal(value.toString()).div(new Prisma.Decimal(10).pow(decimals));
+}
+
+/** Equal deterministic allocation with residual minor units assigned by index. */
+export function allocateMoneyDecimal(
+  total: MoneyInput,
+  count: number,
+  decimals = 2,
+): Prisma.Decimal[] {
+  if (!Number.isInteger(count) || count <= 0) {
+    throw new RangeError('Allocation count must be a positive integer');
+  }
+  const totalMinor = moneyMinorUnits(total, decimals);
+  const divisor = BigInt(count);
+  const base = totalMinor / divisor;
+  let residual = totalMinor - base * divisor;
+  return Array.from({ length: count }, () => {
+    const step = residual > 0n ? 1n : residual < 0n ? -1n : 0n;
+    residual -= step;
+    return minorUnitsToMoney(base + step, decimals);
+  });
+}
+
+/** Weighted split with largest-remainder residual allocation and stable index tie-breaks. */
+export function splitMoneyByWeightsDecimal(
+  total: MoneyInput,
+  weights: MoneyInput[],
+  decimals = 2,
+): Prisma.Decimal[] {
+  if (!weights.length) throw new RangeError('At least one split weight is required');
+  const normalized = weights.map((weight) => toPrismaDecimal(weight));
+  if (normalized.some((weight) => weight.isNegative())) {
+    throw new RangeError('Split weights cannot be negative');
+  }
+  const weightTotal = sumMoneyDecimal(...normalized);
+  if (weightTotal.isZero()) throw new RangeError('Split weights must include a positive value');
+
+  const signedMinor = moneyMinorUnits(total, decimals);
+  const negative = signedMinor < 0n;
+  const absoluteMinor = negative ? -signedMinor : signedMinor;
+  const provisional = normalized.map((weight, index) => {
+    const raw = new Prisma.Decimal(absoluteMinor.toString()).mul(weight).div(weightTotal);
+    const units = BigInt(raw.floor().toFixed(0));
+    return { index, units, fraction: raw.sub(units.toString()) };
+  });
+  let residual = absoluteMinor - provisional.reduce((sum, item) => sum + item.units, 0n);
+  const residualOrder = [...provisional].sort(
+    (a, b) => b.fraction.comparedTo(a.fraction) || a.index - b.index,
+  );
+  for (const item of residualOrder) {
+    if (residual === 0n) break;
+    provisional[item.index].units += 1n;
+    residual -= 1n;
+  }
+  return provisional.map((item) =>
+    minorUnitsToMoney(negative ? -item.units : item.units, decimals),
+  );
+}
+
+export function formatCanonicalMoney(
+  money: Money,
+  locale = 'en',
+  decimals = 2,
+): string {
+  const currency = normalizeMoneyCurrency(money.currency);
+  return new Intl.NumberFormat(locale, {
+    style: 'currency',
+    currency,
+    minimumFractionDigits: decimals,
+    maximumFractionDigits: decimals,
+  }).format(Number(roundMoneyDecimal(money.amount, decimals).toFixed(decimals)));
+}
+
 /**
  * Decimal | number | string | null/undefined → finite number.
  * Legacy/display boundary helper. Do not use for authoritative calculations.

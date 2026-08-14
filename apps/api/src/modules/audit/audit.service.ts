@@ -1,7 +1,7 @@
 import {
   ForbiddenException,
   Injectable,
-  NotFoundException,
+  MethodNotAllowedException,
 } from '@nestjs/common';
 import { Prisma } from '@prisma/client';
 import type { AuditSection } from '../../common/audit.constants';
@@ -41,6 +41,11 @@ export class AuditService {
       summary: string;
       meta?: Record<string, unknown>;
       ipAddress?: string;
+      correlationId?: string;
+      sourceDevice?: string;
+      reason?: string;
+      previousState?: Prisma.InputJsonValue;
+      newState?: Prisma.InputJsonValue;
     },
   ) {
     const shopId = actor.shopId;
@@ -63,6 +68,11 @@ export class AuditService {
         actorName: user?.name ?? null,
         actorEmail: actor.email ?? user?.email ?? null,
         ipAddress: input.ipAddress?.slice(0, 64) ?? null,
+        correlationId: input.correlationId?.slice(0, 128) ?? null,
+        sourceDevice: input.sourceDevice?.slice(0, 200) ?? null,
+        reason: input.reason?.slice(0, 1000) ?? null,
+        ...(input.previousState !== undefined && { previousState: input.previousState }),
+        ...(input.newState !== undefined && { newState: input.newState }),
       },
     });
   }
@@ -153,8 +163,7 @@ export class AuditService {
       total,
       take,
       skip,
-      canDelete:
-        actor.shopRole === 'OWNER' || actor.sysRole === 'SUPER_ADMIN',
+      canDelete: false,
     };
   }
 
@@ -200,56 +209,21 @@ export class AuditService {
     return [header.join(','), ...lines].join('\n');
   }
 
-  private assertOwnerDelete(actor: JwtAccessPayload) {
-    if (actor.shopRole === 'OWNER' || actor.sysRole === 'SUPER_ADMIN') return;
-    throw new ForbiddenException(
-      'Only the venue owner can delete audit records.',
+  async remove(_actor: JwtAccessPayload, _id: string) {
+    throw new MethodNotAllowedException(
+      'Audit evidence is immutable and cannot be deleted.',
     );
-  }
-
-  async remove(actor: JwtAccessPayload, id: string) {
-    this.assertOwnerDelete(actor);
-    const shopId = await resolveVenueShopId(this.prisma, actor);
-    const row = await this.prisma.auditLog.findFirst({
-      where: { id, shopId },
-    });
-    if (!row) throw new NotFoundException('Audit entry not found.');
-    await this.prisma.auditLog.delete({ where: { id, shopId } });
-    return { ok: true };
   }
 
   async removeMany(
     actor: JwtAccessPayload,
     input: { ids?: string[]; allMatching?: boolean } & AuditQuery,
   ) {
-    this.assertOwnerDelete(actor);
-    const shopId = await resolveVenueShopId(this.prisma, actor, input.venuePath);
-
-    let where: Prisma.AuditLogWhereInput;
-    if (input.ids?.length) {
-      where = { shopId, id: { in: input.ids } };
-    } else if (input.allMatching) {
-      where = this.buildWhere(shopId, input);
-    } else {
-      return { deleted: 0 };
-    }
-
-    const result = await this.prisma.auditLog.deleteMany({ where });
-
-    if (result.count > 0) {
-      await this.record(actor, {
-        section: 'system',
-        action: 'audit.delete',
-        summary: `Deleted ${result.count} audit entr${result.count === 1 ? 'y' : 'ies'}`,
-        meta: {
-          deleted: result.count,
-          ids: input.ids?.slice(0, 50),
-          allMatching: input.allMatching ?? false,
-        },
-      });
-    }
-
-    return { deleted: result.count };
+    void actor;
+    void input;
+    throw new MethodNotAllowedException(
+      'Audit evidence is immutable and cannot be deleted.',
+    );
   }
 
   private serialize(row: {

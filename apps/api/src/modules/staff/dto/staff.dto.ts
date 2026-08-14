@@ -11,6 +11,17 @@ import {
 } from 'class-validator';
 import { ShopRole } from '@prisma/client';
 
+const ASSIGNABLE_STAFF_ROLES: ShopRole[] = [
+  ShopRole.STAFF,
+  ShopRole.MANAGER,
+  ShopRole.SUPERVISOR,
+  ShopRole.CASHIER,
+  ShopRole.SERVER,
+  ShopRole.KITCHEN,
+  ShopRole.INVENTORY,
+  ShopRole.VIEWER,
+];
+
 export class CreateStaffDto {
   @IsString()
   @Length(3, 32)
@@ -25,7 +36,7 @@ export class CreateStaffDto {
   name?: string;
 
   @IsOptional()
-  @IsIn([ShopRole.STAFF, ShopRole.MANAGER])
+  @IsIn(ASSIGNABLE_STAFF_ROLES)
   role?: ShopRole;
 
   @IsOptional()
@@ -41,7 +52,7 @@ export class UpdateStaffDto {
   name?: string;
 
   @IsOptional()
-  @IsIn([ShopRole.STAFF, ShopRole.MANAGER])
+  @IsIn(ASSIGNABLE_STAFF_ROLES)
   role?: ShopRole;
 
   @IsOptional()

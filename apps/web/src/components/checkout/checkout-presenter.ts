@@ -1,8 +1,9 @@
 import type { CheckoutChargeLine } from "@/lib/checkout-client";
 import type { GuestCheck } from "@/lib/guest-check-client";
+import type { ShopRole } from "@/lib/auth-client";
 
 export type CheckoutGroupKey = "PLAY" | "FOOD_DRINK" | "BOOKING" | "OTHER";
-export type CheckoutRole = "OWNER" | "MANAGER" | "STAFF" | undefined;
+export type CheckoutRole = ShopRole | undefined;
 
 export type CheckoutIssueKind =
   | "offline"

@@ -35,6 +35,16 @@ import { useVenueSettingsOptional } from "@/lib/venue-settings-context";
 import Link from "next/link";
 
 type PageTab = "accounts" | "access";
+const STAFF_ROLE_OPTIONS: Array<{ value: Exclude<ShopRole, "OWNER">; label: string }> = [
+  { value: "STAFF", label: "Custom staff" },
+  { value: "MANAGER", label: "Manager" },
+  { value: "SUPERVISOR", label: "Supervisor" },
+  { value: "CASHIER", label: "Cashier" },
+  { value: "SERVER", label: "Server" },
+  { value: "KITCHEN", label: "Kitchen" },
+  { value: "INVENTORY", label: "Inventory" },
+  { value: "VIEWER", label: "Viewer" },
+];
 type TeamT = (
   key: string,
   vars?: Record<string, string | number>,
@@ -127,7 +137,9 @@ function EmployeeAccountsContent() {
         permissions:
           createRole === "MANAGER"
             ? buildManagerPerms(createMgrExtras)
-            : selectedPerms,
+            : createRole === "STAFF"
+              ? selectedPerms
+              : undefined,
       });
       setUsername("");
       setName("");
@@ -152,7 +164,7 @@ function EmployeeAccountsContent() {
   function openEdit(member: StaffMember) {
     setEditing(member);
     setEditName(member.name ?? "");
-    setEditRole(member.role === "MANAGER" ? "MANAGER" : "STAFF");
+    setEditRole(member.role === "OWNER" ? "STAFF" : member.role);
     setEditPerms(permsFromCsv(member.permissions));
     setEditMgrExtras(managerExtrasFromPerms(permsFromCsv(member.permissions)));
     setEditActive(member.isActive);
@@ -191,7 +203,7 @@ function EmployeeAccountsContent() {
     setAccessMemberId(member.membershipId);
     const perms = permsFromCsv(member.permissions);
     setAccessPerms(perms);
-    setAccessRole(member.role === "MANAGER" ? "MANAGER" : "STAFF");
+    setAccessRole(member.role === "OWNER" ? "STAFF" : member.role);
     setAccessMgrExtras(managerExtrasFromPerms(perms));
     setPageTab("access");
   }
@@ -310,7 +322,7 @@ function EmployeeAccountsContent() {
                 if (member) {
                   const perms = permsFromCsv(member.permissions);
                   setAccessPerms(perms);
-                  setAccessRole(member.role === "MANAGER" ? "MANAGER" : "STAFF");
+                  setAccessRole(member.role === "OWNER" ? "STAFF" : member.role);
                   setAccessMgrExtras(managerExtrasFromPerms(perms));
                 }
               }}
@@ -337,8 +349,9 @@ function EmployeeAccountsContent() {
                     }
                     className="mt-1 w-full rounded-lg border border-white/10 bg-zinc-950 px-3 py-2 text-sm text-white sm:w-48"
                   >
-                    <option value="STAFF">{t("team.roleStaff")}</option>
-                    <option value="MANAGER">{t("team.roleManager")}</option>
+                    {STAFF_ROLE_OPTIONS.map((role) => (
+                      <option key={role.value} value={role.value}>{role.label}</option>
+                    ))}
                   </select>
                 </label>
                 <p className="text-[11px] text-zinc-600">
@@ -557,8 +570,9 @@ function EmployeeAccountsContent() {
                       }
                       className="mt-1 w-full rounded-lg border border-white/10 bg-zinc-900 px-3 py-2 text-sm text-white outline-none focus:border-emerald-400/40"
                     >
-                      <option value="STAFF">{t("team.roleStaff")}</option>
-                      <option value="MANAGER">{t("team.roleManager")}</option>
+                      {STAFF_ROLE_OPTIONS.map((role) => (
+                        <option key={role.value} value={role.value}>{role.label}</option>
+                      ))}
                     </select>
                   </label>
                 </section>
@@ -849,10 +863,9 @@ function EmployeeAccountsContent() {
                         }
                         className="mt-1 w-full rounded-lg border border-white/10 bg-zinc-900 px-3 py-2 text-sm text-white outline-none focus:border-emerald-400/40"
                       >
-                        <option value="STAFF">{t("team.roleStaff")}</option>
-                        <option value="MANAGER">
-                          {t("team.roleManagerShort")}
-                        </option>
+                        {STAFF_ROLE_OPTIONS.map((role) => (
+                          <option key={role.value} value={role.value}>{role.label}</option>
+                        ))}
                       </select>
                     </label>
                   </div>
