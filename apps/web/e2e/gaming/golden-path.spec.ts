@@ -23,16 +23,18 @@ test('@smoke E2E-01 gaming cashier golden path', async ({ page }) => {
     },
   });
   const originalRateSnapshot = operationsSession.rateSnapshot;
-  await api(page, 'POST', `/operations/sessions/${operationsSession.id}/pause`, {
-    data: { reason: 'E2E pause' },
+  const paused = await api<any>(page, 'POST', `/operations/sessions/${operationsSession.id}/pause`, {
+    data: { reason: 'E2E pause', expectedVersion: operationsSession.version },
   });
-  await api(page, 'POST', `/operations/sessions/${operationsSession.id}/resume`, { data: {} });
+  const resumed = await api<any>(page, 'POST', `/operations/sessions/${operationsSession.id}/resume`, {
+    data: { expectedVersion: paused.version },
+  });
   const moved = await api<any>(page, 'POST', `/operations/sessions/${operationsSession.id}/move`, {
-    data: { resourceId: 'e2e-resource-gaming-2' },
+    data: { resourceId: 'e2e-resource-gaming-2', expectedVersion: resumed.version },
   });
   expect(moved.rateSnapshot).toEqual(originalRateSnapshot);
   const finished = await api<any>(page, 'POST', `/operations/sessions/${operationsSession.id}/finish`, {
-    data: {},
+    data: { expectedVersion: moved.version },
   });
   expect(finished.status).toBe('FINISHED');
   expect(finished.accruedMinor).toBeGreaterThanOrEqual(0);

@@ -5,8 +5,9 @@ import {
   NotFoundException,
 } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
-import { ReservationStatus, ResourceStatus } from '@prisma/client';
+import { Prisma, ReservationStatus, ResourceStatus } from '@prisma/client';
 import { PrismaService } from '../../prisma/prisma.service';
+import { assertExpectedVersion } from '../../common/optimistic-concurrency.util';
 import { requireShopId } from '../../common/tenant';
 import { assertShopFeature } from '../../common/subscription-feature.util';
 import { AuditService } from '../audit/audit.service';
@@ -17,6 +18,7 @@ import { withResourceBookingLock } from '../../common/booking-lock.util';
 import { assertWithinOpeningHours } from '../../common/opening-hours.util';
 import {
   CreateReservationDto,
+  DeleteReservationDto,
   ReservationQueryDto,
   UpdateReservationDto,
 } from './dto/reservations.dto';
@@ -324,6 +326,10 @@ export class ReservationsStaffService {
     }
     await assertShopFeature(this.prisma, shopId, 'reservation');
     const existing = await this.ensureReservation(shopId, id);
+    assertExpectedVersion(existing.version, dto.expectedVersion, {
+      aggregateType: 'reservation',
+      aggregateId: id,
+    });
     const existingResource = existing.resourceId
       ? await this.prisma.resource.findFirst({
           where: { id: existing.resourceId, shopId },
@@ -436,6 +442,27 @@ export class ReservationsStaffService {
         ? guestTokenRevokeFields()
         : {}),
     };
+    const updateVersioned = async (db: Prisma.TransactionClient) => {
+      const claimed = await db.reservation.updateMany({
+        where: { id, shopId, version: dto.expectedVersion },
+        data: { ...updateData, version: { increment: 1 } },
+      });
+      if (claimed.count !== 1) {
+        const current = await db.reservation.findFirst({
+          where: { id, shopId },
+          select: { version: true },
+        });
+        assertExpectedVersion(
+          current?.version ?? dto.expectedVersion + 1,
+          dto.expectedVersion,
+          { aggregateType: 'reservation', aggregateId: id },
+        );
+      }
+      return db.reservation.findFirstOrThrow({
+        where: { id, shopId },
+        include: { resource: { include: { category: true } } },
+      });
+    };
     const row = resourceId
       ? await withResourceBookingLock(this.prisma, resourceId, async (tx) => {
           await assertBookingSlotFree(
@@ -446,17 +473,9 @@ export class ReservationsStaffService {
             endsAt,
             id,
           );
-          return tx.reservation.update({
-            where: { id, shopId },
-            data: updateData,
-            include: { resource: { include: { category: true } } },
-          });
+          return updateVersioned(tx);
         })
-      : await this.prisma.reservation.update({
-          where: { id, shopId },
-          data: updateData,
-          include: { resource: { include: { category: true } } },
-        });
+      : await this.prisma.$transaction((tx) => updateVersioned(tx));
     if (
       dto.billedAmount !== undefined &&
       row.billedAmount != null &&
@@ -615,7 +634,7 @@ export class ReservationsStaffService {
     return row;
   }
 
-  async delete(actor: JwtAccessPayload, id: string) {
+  async delete(actor: JwtAccessPayload, id: string, dto: DeleteReservationDto) {
     this.assertWrite(actor);
     const shopId = actor.shopId!;
     await assertShopFeature(this.prisma, shopId, 'reservation');
@@ -624,6 +643,10 @@ export class ReservationsStaffService {
       include: { resource: { include: { category: true } } },
     });
     if (!existing) throw new NotFoundException('Reservation not found');
+    assertExpectedVersion(existing.version, dto.expectedVersion, {
+      aggregateType: 'reservation',
+      aggregateId: id,
+    });
 
     const unitLabel = existing.resource?.name ?? 'unassigned unit';
     const window = this.formatWindow(existing.startsAt, existing.endsAt);
@@ -664,7 +687,20 @@ export class ReservationsStaffService {
       }
     }
 
-    await this.prisma.reservation.delete({ where: { id, shopId } });
+    const deleted = await this.prisma.reservation.deleteMany({
+      where: { id, shopId, version: dto.expectedVersion },
+    });
+    if (deleted.count !== 1) {
+      const current = await this.prisma.reservation.findFirst({
+        where: { id, shopId },
+        select: { version: true },
+      });
+      assertExpectedVersion(
+        current?.version ?? dto.expectedVersion + 1,
+        dto.expectedVersion,
+        { aggregateType: 'reservation', aggregateId: id },
+      );
+    }
 
     await this.logBooking(
       actor,

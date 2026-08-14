@@ -583,6 +583,7 @@ export default function ReservationsPage() {
                           setSaving(true);
                           try {
                             await updateReservation(item.id, {
+                              expectedVersion: item.version,
                               status: "CANCELED",
                               staffAlert: item.staffAlert,
                             });
@@ -601,6 +602,7 @@ export default function ReservationsPage() {
                           setSaving(true);
                           try {
                             await updateReservation(item.id, {
+                              expectedVersion: item.version,
                               status: "CHECKED_IN",
                               staffAlert: item.staffAlert,
                             });
@@ -629,6 +631,7 @@ export default function ReservationsPage() {
                           setSaving(true);
                           try {
                             await updateReservation(item.id, {
+                              expectedVersion: item.version,
                               status: "COMPLETED",
                               endsAt: new Date().toISOString(),
                               staffAlert: item.staffAlert,
@@ -661,7 +664,7 @@ export default function ReservationsPage() {
                           }
                           setSaving(true);
                           try {
-                            await deleteReservation(item.id);
+                            await deleteReservation(item.id, item.version);
                             await load();
                           } catch (e) {
                             setError(
@@ -732,6 +735,7 @@ export default function ReservationsPage() {
                           setSaving(true);
                           try {
                             await updateReservation(booking.id, {
+                              expectedVersion: booking.version,
                               status: "CHECKED_IN",
                               staffAlert: booking.staffAlert,
                             });
@@ -759,6 +763,7 @@ export default function ReservationsPage() {
                           setSaving(true);
                           try {
                             await updateReservation(booking.id, {
+                              expectedVersion: booking.version,
                               status: "COMPLETED",
                               endsAt: new Date().toISOString(),
                               staffAlert: booking.staffAlert,
@@ -812,7 +817,10 @@ export default function ReservationsPage() {
             setSaving(true);
             try {
               if (dialog.booking) {
-                await updateReservation(dialog.booking.id, body);
+                await updateReservation(dialog.booking.id, {
+                  ...body,
+                  expectedVersion: dialog.booking.version,
+                });
               } else {
                 await createReservation(body);
               }
@@ -834,6 +842,7 @@ export default function ReservationsPage() {
                   setSaving(true);
                   try {
                     await updateReservation(dialog.booking!.id, {
+                      expectedVersion: dialog.booking!.version,
                       status: "CANCELED",
                       staffAlert: dialog.booking!.staffAlert,
                     });
@@ -855,7 +864,10 @@ export default function ReservationsPage() {
                   }
                   setSaving(true);
                   try {
-                    await deleteReservation(dialog.booking!.id);
+                    await deleteReservation(
+                      dialog.booking!.id,
+                      dialog.booking!.version,
+                    );
                     setDialog(null);
                     await load();
                   } finally {

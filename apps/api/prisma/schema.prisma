@@ -1115,6 +1115,7 @@ model Reservation {
   guestTokenHash String?             @unique
   guestTokenExpiresAt DateTime?
   guestTokenRevokedAt DateTime?
+  version     Int      @default(1)
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
 

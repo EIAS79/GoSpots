@@ -10,6 +10,7 @@ import {
   CreateMaintenanceDto,
   CreateOperationsRatePlanDto,
   CreateSessionGroupDto,
+  ExpectedOperationsSessionVersionDto,
   MoveOperationsSessionDto,
   PauseOperationsSessionDto,
   StartOperationsSessionDto,
@@ -44,13 +45,13 @@ export class OperationsController {
   pause(@CurrentUser() user: JwtAccessPayload, @Param('id') id: string, @Body() dto: PauseOperationsSessionDto) { return this.operations.pause(user, id, dto); }
 
   @Post('sessions/:id/resume') @RequirePermissions(PERMISSIONS.RESOURCE_WRITE)
-  resume(@CurrentUser() user: JwtAccessPayload, @Param('id') id: string) { return this.operations.resume(user, id); }
+  resume(@CurrentUser() user: JwtAccessPayload, @Param('id') id: string, @Body() dto: ExpectedOperationsSessionVersionDto) { return this.operations.resume(user, id, dto); }
 
   @Post('sessions/:id/move') @RequirePermissions(PERMISSIONS.RESOURCE_WRITE)
   move(@CurrentUser() user: JwtAccessPayload, @Param('id') id: string, @Body() dto: MoveOperationsSessionDto) { return this.operations.move(user, id, dto); }
 
   @Post('sessions/:id/finish') @RequirePermissions(PERMISSIONS.RESOURCE_WRITE)
-  finish(@CurrentUser() user: JwtAccessPayload, @Param('id') id: string) { return this.operations.finish(user, id); }
+  finish(@CurrentUser() user: JwtAccessPayload, @Param('id') id: string, @Body() dto: ExpectedOperationsSessionVersionDto) { return this.operations.finish(user, id, dto); }
 
   @Post('sessions/:id/guest-check') @RequirePermissions(PERMISSIONS.RESOURCE_WRITE)
   attach(@CurrentUser() user: JwtAccessPayload, @Param('id') id: string, @Body() dto: AttachGuestCheckDto) { return this.operations.attachGuestCheck(user, id, dto); }

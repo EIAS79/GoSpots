@@ -33,6 +33,7 @@ test('@smoke Phase 3 Offline Lite shows a cloud conflict for review', async ({ p
   const secondContext = await browser.newContext({ baseURL: process.env.E2E_BASE_URL ?? 'http://127.0.0.1:3000' });
   const second = await secondContext.newPage();
   let cloudSessionId: string | null = null;
+  let cloudSessionVersion: number | null = null;
   try {
     await loginOwner(second);
     await bindVenue(second, E2E.venues.offline);
@@ -40,6 +41,7 @@ test('@smoke Phase 3 Offline Lite shows a cloud conflict for review', async ({ p
       data: { resourceId: 'e2e-resource-offline-1' },
     });
     cloudSessionId = cloudSession.id;
+    cloudSessionVersion = cloudSession.version;
 
     await context.setOffline(false);
     await page.evaluate(() => window.dispatchEvent(new Event('online')));
@@ -52,7 +54,7 @@ test('@smoke Phase 3 Offline Lite shows a cloud conflict for review', async ({ p
     await page.getByRole('button', { name: 'Discard local operation' }).click();
     await expect(page.getByText('No offline work needs review.')).toBeVisible();
   } finally {
-    if (cloudSessionId) await api(second, 'POST', `/operations/sessions/${cloudSessionId}/finish`, { data: {} });
+    if (cloudSessionId && cloudSessionVersion) await api(second, 'POST', `/operations/sessions/${cloudSessionId}/finish`, { data: { expectedVersion: cloudSessionVersion } });
     await secondContext.close();
     await context.setOffline(false);
   }

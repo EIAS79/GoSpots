@@ -70,8 +70,7 @@ export function fetchShopSettings() {
 }
 
 export function updateShopSettings(
-  body: Partial<{
-    expectedVersion: number;
+  body: { expectedVersion: number } & Partial<{
     locale: string;
     timezone: string;
     businessDayStartMinutes: number;

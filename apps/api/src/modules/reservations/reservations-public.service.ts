@@ -511,7 +511,7 @@ export class ReservationsPublicService {
       if (guestTokenNeedsRevoke(row)) {
         await this.prisma.reservation.update({
           where: { id: row.id, shopId: shop.id },
-          data: guestTokenRevokeFields(),
+          data: { ...guestTokenRevokeFields(), version: { increment: 1 } },
         });
       }
       return { ok: true, message: 'This booking was already canceled.' };
@@ -547,6 +547,7 @@ export class ReservationsPublicService {
         status: ReservationStatus.CANCELED,
         endsAt: canceledAt,
         ...guestTokenRevokeFields(canceledAt),
+        version: { increment: 1 },
       },
       include: { resource: { include: { category: true } } },
     });

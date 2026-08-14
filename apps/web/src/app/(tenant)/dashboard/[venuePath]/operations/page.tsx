@@ -60,11 +60,13 @@ export default function OperationsPage() {
 
   async function command(key:string,path:string,body?:unknown,method="POST"){
     if(typeof navigator!=="undefined"&&!navigator.onLine){setError("This action is online-only in Offline Lite. Start/end sessions and simple order additions remain available locally.");return;}
-    setBusy(key);setError("");try{await api(path,{method,body:body===undefined?undefined:JSON.stringify(body)});await refresh();}catch(e){setError(e instanceof Error?e.message:"Operation failed.");}finally{setBusy(null);}
+    const session=floor.resources.find(row=>row.id===key)?.session;
+    const payload=path.includes("/operations/sessions/")&&session?{...(body&&typeof body==="object"?body:{}),expectedVersion:session.version}:body;
+    setBusy(key);setError("");try{await api(path,{method,body:payload===undefined?undefined:JSON.stringify(payload)});await refresh();}catch(e){setError(e instanceof Error?e.message:"Operation failed.");}finally{setBusy(null);}
   }
 
   async function startSession(resourceId:string){setBusy(resourceId);setError("");try{await startOperationsSession({resourceId});await refresh();}catch(e){setError(e instanceof Error?e.message:"Session start failed.");}finally{setBusy(null);}}
-  async function finishSession(resourceId:string,sessionId:string){setBusy(resourceId);setError("");try{await finishOperationsSession(sessionId);await refresh();}catch(e){setError(e instanceof Error?e.message:"Session finish failed.");}finally{setBusy(null);}}
+  async function finishSession(resourceId:string,sessionId:string){setBusy(resourceId);setError("");try{const version=floor.resources.find(row=>row.id===resourceId)?.session?.version;if(!version)throw new Error("Session changed; refresh the floor and retry.");await finishOperationsSession(sessionId,version);await refresh();}catch(e){setError(e instanceof Error?e.message:"Session finish failed.");}finally{setBusy(null);}}
   async function addSimpleOrder(resourceId:string,sessionId:string,guestCheckId?:string|null){
     if(!selectedItemId){setError("No offline-safe simple menu item is available. Items requiring modifiers must be entered while online.");return;}
     setBusy(`order:${resourceId}`);setError("");

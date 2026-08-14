@@ -381,7 +381,7 @@ export class GuestCheckService {
       });
       await tx.reservation.updateMany({
         where: { guestCheckId: id, shopId },
-        data: { guestCheckId: null },
+        data: { guestCheckId: null, version: { increment: 1 } },
       });
       const claimed = await tx.guestCheck.updateMany({
         where: { id, shopId, status: 'OPEN' },
@@ -561,7 +561,7 @@ export class GuestCheckService {
       }
       await this.prisma.reservation.updateMany({
         where: { id: reservation.id, shopId },
-        data: { guestCheckId: id },
+        data: { guestCheckId: id, version: { increment: 1 } },
       });
     }
 
@@ -611,7 +611,7 @@ export class GuestCheckService {
     if (dto.reservationId) {
       const result = await this.prisma.reservation.updateMany({
         where: { id: dto.reservationId, shopId, guestCheckId: id },
-        data: { guestCheckId: null },
+        data: { guestCheckId: null, version: { increment: 1 } },
       });
       if (result.count === 0) {
         throw new NotFoundException('Reservation not attached to this check');

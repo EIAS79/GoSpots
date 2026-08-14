@@ -6,6 +6,7 @@ import type { JwtAccessPayload } from '../auth/auth.service';
 import { NotificationsService } from '../notifications/notifications.service';
 import {
   CreateReservationDto,
+  DeleteReservationDto,
   ReservationQueryDto,
   ScheduleQueryDto,
   UpdateReservationDto,
@@ -103,7 +104,7 @@ export class ReservationsService {
   }
 
   /** @see ReservationsStaffService.delete */
-  async delete(actor: JwtAccessPayload, id: string) {
-    return this.staffSvc.delete(actor, id);
+  async delete(actor: JwtAccessPayload, id: string, dto: DeleteReservationDto) {
+    return this.staffSvc.delete(actor, id, dto);
   }
 }

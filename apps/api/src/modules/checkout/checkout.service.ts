@@ -590,6 +590,7 @@ export class CheckoutService {
             billedAmount: amount,
             billedAt: completedAt,
             billingPaymentMethod: paymentMethod,
+            version: { increment: 1 },
           },
         });
         if (claimed.count !== 1) continue;

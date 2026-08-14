@@ -117,10 +117,14 @@ export async function startOperationsSession(body: {
   return session;
 }
 
-export async function finishOperationsSession(sessionId: string) {
+export async function finishOperationsSession(
+  sessionId: string,
+  expectedVersion: number,
+) {
   if (!offlineNow()) {
     return api<OperationsSessionView>(`/operations/sessions/${sessionId}/finish`, {
       method: "POST",
+      body: JSON.stringify({ expectedVersion }),
     });
   }
   requireOfflineLite();

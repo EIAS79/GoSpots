@@ -1,4 +1,5 @@
-import { calculateAccruedMinor } from './operations.service';
+import { ConflictException } from '@nestjs/common';
+import { calculateAccruedMinor, OperationsService } from './operations.service';
 
 describe('Resource Engine 2.0 billing snapshot math', () => {
   const startedAt = new Date('2026-08-11T10:00:00.000Z');
@@ -37,5 +38,42 @@ describe('Resource Engine 2.0 billing snapshot math', () => {
       roundingMinutes: 1,
       minimumMinutes: 0,
     })).toBe(9000);
+  });
+});
+
+describe('OperationsService optimistic concurrency', () => {
+  it('rejects a stale session command before applying the versioned update', async () => {
+    const session = {
+      id: 'session-1',
+      shopId: 'shop-1',
+      resourceId: 'resource-1',
+      status: 'ACTIVE',
+      version: 2,
+    };
+    const tx = {
+      operationsSessionPause: { create: jest.fn() },
+      operationsSession: {
+        updateMany: jest.fn(),
+        findFirst: jest.fn(),
+        findFirstOrThrow: jest.fn(),
+      },
+      resourceStateEvent: { create: jest.fn() },
+    };
+    const prisma = {
+      operationsSession: { findFirst: jest.fn().mockResolvedValue(session) },
+      $transaction: jest.fn((callback: (client: typeof tx) => unknown) => callback(tx)),
+    };
+    const service = new OperationsService(prisma as never, {
+      record: jest.fn(),
+    } as never);
+
+    await expect(
+      service.pause(
+        { sub: 'user-1', shopId: 'shop-1' } as never,
+        session.id,
+        { reason: 'stale command', expectedVersion: 1 },
+      ),
+    ).rejects.toBeInstanceOf(ConflictException);
+    expect(tx.operationsSession.updateMany).not.toHaveBeenCalled();
   });
 });

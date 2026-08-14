@@ -65,6 +65,29 @@ describe('DomainEventConsumerService', () => {
     );
   });
 
+  it('reclaims due work through the bounded processing lease', async () => {
+    const findMany = jest.fn().mockResolvedValue([
+      event({ eventSchemaVersion: 1 }),
+    ]);
+    const updateMany = jest.fn().mockResolvedValue({ count: 1 });
+    const query = jest.fn().mockResolvedValue([{ id: 'event-1' }]);
+    const prisma = {
+      $transaction: jest.fn((callback: (tx: unknown) => unknown) =>
+        callback({
+          $queryRaw: query,
+          domainEventOutbox: { updateMany, findMany },
+        }),
+      ),
+    } as unknown as PrismaService;
+    const service = new DomainEventConsumerService(prisma);
+
+    await expect(service.claimPending()).resolves.toHaveLength(1);
+    expect(updateMany).toHaveBeenCalledWith({
+      where: { id: { in: ['event-1'] } },
+      data: { status: 'PROCESSING', attemptCount: { increment: 1 } },
+    });
+  });
+
   it('dead-letters an unknown future event version before the handler runs', async () => {
     const { service, update } = setup();
     const handler = jest.fn();

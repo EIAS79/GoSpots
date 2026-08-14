@@ -339,7 +339,7 @@ export function ShopSettingsPanel({ canWrite = true }: { canWrite?: boolean }) {
     setSaveState("saving");
     setError(null);
     try {
-      await updateShopSettings({ isPublished });
+      await updateShopSettings({ isPublished, expectedVersion: shop.version });
       await refresh();
       setSaveState("saved");
       window.setTimeout(() => {
@@ -363,7 +363,7 @@ export function ShopSettingsPanel({ canWrite = true }: { canWrite?: boolean }) {
     setSaveState("saving");
     setError(null);
     try {
-      await updateShopSettings({ advertiseOnVenuesPage });
+      await updateShopSettings({ advertiseOnVenuesPage, expectedVersion: shop.version });
       await refresh();
       setSaveState("saved");
       window.setTimeout(() => {
@@ -384,7 +384,7 @@ export function ShopSettingsPanel({ canWrite = true }: { canWrite?: boolean }) {
     setSaveState("saving");
     setError(null);
     try {
-      await updateShopSettings({ reviewsMode });
+      await updateShopSettings({ reviewsMode, expectedVersion: shop.version });
       await refresh();
       setSaveState("saved");
       window.setTimeout(() => {

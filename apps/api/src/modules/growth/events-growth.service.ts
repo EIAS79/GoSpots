@@ -599,7 +599,7 @@ export class EventsGrowthService {
       if (reservationIds.length > 0) {
         await tx.reservation.updateMany({
           where: { shopId, id: { in: reservationIds } },
-          data: { guestCheckId },
+          data: { guestCheckId, version: { increment: 1 } },
         });
       }
       await this.appendLifecycleTx(tx, {

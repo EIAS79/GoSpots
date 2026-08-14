@@ -870,6 +870,7 @@ export class GdprService {
           guestPhone: null,
           notes: null,
           ...tokenRevoke,
+          version: { increment: 1 },
         },
       });
       return [
@@ -1003,6 +1004,7 @@ export class GdprService {
           guestPhone: null,
           notes: null,
           ...tokenRevoke,
+          version: { increment: 1 },
         },
       });
     }
@@ -1089,6 +1091,7 @@ export class GdprService {
         guestPhone: null,
         notes: null,
         ...tokenRevoke,
+        version: { increment: 1 },
       },
     });
 

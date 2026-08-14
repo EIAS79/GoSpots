@@ -131,10 +131,14 @@ export function VenueSettingsProvider({
 
   const updatePreferences = useCallback(
     async (prefs: Partial<ShopPreferences>) => {
-      const data = await updateShopSettings(prefs);
+      if (!shop) throw new Error("Venue settings are not loaded.");
+      const data = await updateShopSettings({
+        ...prefs,
+        expectedVersion: shop.version,
+      });
       setShop(data.shop);
     },
-    [],
+    [shop],
   );
 
   const formatMoney = useCallback(

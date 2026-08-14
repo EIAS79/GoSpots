@@ -21,10 +21,9 @@ const LOCALE_CODES = SUPPORTED_LOCALES.map((l) => l.code);
 const CURRENCY_CODES = SUPPORTED_CURRENCIES.map((c) => c.code);
 
 export class UpdateShopSettingsDto {
-  @IsOptional()
   @IsInt()
   @Min(1)
-  expectedVersion?: number;
+  expectedVersion!: number;
 
   @IsOptional()
   @IsString()

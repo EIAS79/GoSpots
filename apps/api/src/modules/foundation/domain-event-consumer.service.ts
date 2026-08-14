@@ -9,6 +9,7 @@ import {
 
 export const DOMAIN_EVENT_MAX_ATTEMPTS = 10;
 export const DOMAIN_EVENT_RETRY_BASE_MS = 1_000;
+export const DOMAIN_EVENT_PROCESSING_LEASE_MINUTES = 5;
 
 export type DomainEventHandler = (event: DomainEventOutbox) => Promise<void>;
 
@@ -39,8 +40,13 @@ export class DomainEventConsumerService {
       const rows = await tx.$queryRaw<Array<{ id: string }>>(Prisma.sql`
         SELECT "id"
         FROM "DomainEventOutbox"
-        WHERE "status" IN ('PENDING', 'FAILED')
+        WHERE (
+          "status" IN ('PENDING', 'FAILED')
           AND "nextAttemptAt" <= CURRENT_TIMESTAMP
+        ) OR (
+          "status" = 'PROCESSING'
+          AND "updatedAt" <= CURRENT_TIMESTAMP - (${DOMAIN_EVENT_PROCESSING_LEASE_MINUTES} * INTERVAL '1 minute')
+        )
         ORDER BY "occurredAt" ASC, "id" ASC
         FOR UPDATE SKIP LOCKED
         LIMIT ${bounded}

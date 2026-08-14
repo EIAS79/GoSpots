@@ -50,6 +50,7 @@ export class BindRfidCredentialDto {
   @IsString() @MaxLength(512) uid!: string;
   @IsString() walletId!: string;
   @IsOptional() @IsString() @MaxLength(120) label?: string;
+  @IsOptional() @Type(() => Number) @IsInt() @Min(1) expectedVersion?: number;
 }
 
 export class RfidWalletMutationDto {

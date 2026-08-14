@@ -46,6 +46,36 @@ describe('TicketingService', () => {
     expect(data.currency).toBe('EUR');
   });
 
+  it('rejects a stale RFID credential rebind', async () => {
+    const prisma = {
+      rfidWallet: {
+        findFirst: jest.fn().mockResolvedValue({
+          id: 'wallet-1',
+          shopId: 'shop-1',
+          active: true,
+        }),
+      },
+      rfidCredential: {
+        findUnique: jest.fn().mockResolvedValue({
+          id: 'credential-1',
+          shopId: 'shop-1',
+          version: 4,
+        }),
+        updateMany: jest.fn(),
+      },
+    } as any;
+    const service = new TicketingService(prisma, secretConfig);
+
+    await expect(
+      service.bindCredential(actor, {
+        uid: 'rfid-1',
+        walletId: 'wallet-1',
+        expectedVersion: 3,
+      }),
+    ).rejects.toBeInstanceOf(ConflictException);
+    expect(prisma.rfidCredential.updateMany).not.toHaveBeenCalled();
+  });
+
   it('rejects a spend that would make the RFID wallet negative', async () => {
     const tx = {
       rfidWalletEntry: { findUnique: jest.fn().mockResolvedValue(null) },

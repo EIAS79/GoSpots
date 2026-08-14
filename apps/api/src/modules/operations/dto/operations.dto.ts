@@ -30,15 +30,19 @@ export class StartOperationsSessionDto {
   @IsOptional() @IsString() reservationId?: string;
 }
 
-export class PauseOperationsSessionDto {
+export class ExpectedOperationsSessionVersionDto {
+  @Type(() => Number) @IsInt() @Min(1) expectedVersion!: number;
+}
+
+export class PauseOperationsSessionDto extends ExpectedOperationsSessionVersionDto {
   @IsOptional() @IsString() reason?: string;
 }
 
-export class MoveOperationsSessionDto {
+export class MoveOperationsSessionDto extends ExpectedOperationsSessionVersionDto {
   @IsString() resourceId!: string;
 }
 
-export class AttachGuestCheckDto {
+export class AttachGuestCheckDto extends ExpectedOperationsSessionVersionDto {
   @IsString() guestCheckId!: string;
 }
 

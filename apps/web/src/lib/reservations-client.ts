@@ -14,6 +14,7 @@ export type ReservationStatus =
 
 export type Reservation = {
   id: string;
+  version: number;
   resourceId: string | null;
   guestName: string;
   guestEmail: string | null;
@@ -34,6 +35,7 @@ export type Reservation = {
 
 export type ScheduleBooking = {
   id: string;
+  version: number;
   guestName: string;
   guestEmail: string | null;
   guestPhone: string | null;
@@ -163,7 +165,7 @@ export function createReservation(body: {
 
 export function updateReservation(
   id: string,
-  body: Partial<{
+  body: { expectedVersion: number } & Partial<{
     resourceId: string | null;
     guestName: string;
     guestEmail: string | null;
@@ -182,6 +184,9 @@ export function updateReservation(
   });
 }
 
-export function deleteReservation(id: string) {
-  return api(`/reservations/${id}`, { method: "DELETE" });
+export function deleteReservation(id: string, expectedVersion: number) {
+  return api(`/reservations/${id}`, {
+    method: "DELETE",
+    body: JSON.stringify({ expectedVersion }),
+  });
 }

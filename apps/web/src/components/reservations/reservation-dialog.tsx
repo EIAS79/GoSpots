@@ -710,6 +710,7 @@ export function ReservationDialog({
 /** Minimal shape for editing from the day schedule board. */
 export type ScheduleBookingLike = {
   id: string;
+  version: number;
   resourceId?: string;
   guestName: string;
   guestEmail?: string | null;

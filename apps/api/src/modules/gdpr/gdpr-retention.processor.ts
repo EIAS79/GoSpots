@@ -98,6 +98,7 @@ export class GdprRetentionProcessor {
         guestPhone: null,
         notes: null,
         ...tokenRevoke,
+        version: { increment: 1 },
       },
     });
 

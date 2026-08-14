@@ -93,6 +93,10 @@ export class CreateReservationDto {
 }
 
 export class UpdateReservationDto {
+  @IsInt()
+  @Min(1)
+  expectedVersion!: number;
+
   @IsOptional()
   @IsString()
   resourceId?: string | null;
@@ -142,4 +146,10 @@ export class UpdateReservationDto {
   @IsOptional()
   @IsBoolean()
   staffAlert?: boolean;
+}
+
+export class DeleteReservationDto {
+  @IsInt()
+  @Min(1)
+  expectedVersion!: number;
 }
