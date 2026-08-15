@@ -9,6 +9,7 @@ import { SettlementStateService } from './settlement-state.service';
 import { PaymentAllocationService } from './payment-allocation.service';
 import { CheckoutPaymentService } from './checkout-payment.service';
 import { GuestCheckMergeService } from './guest-check-merge.service';
+import { CommercialMergeService } from './commercial-merge.service';
 import { CommercialSettlementService } from './commercial-settlement.service';
 import { CommercialCoreService } from './commercial-core.service';
 
@@ -22,6 +23,7 @@ import { CommercialCoreService } from './commercial-core.service';
     PaymentAllocationService,
     CheckoutPaymentService,
     GuestCheckMergeService,
+    CommercialMergeService,
     CommercialSettlementService,
     CommercialCoreService,
   ],
@@ -32,6 +34,7 @@ import { CommercialCoreService } from './commercial-core.service';
     PaymentAllocationService,
     CheckoutPaymentService,
     GuestCheckMergeService,
+    CommercialMergeService,
     CommercialSettlementService,
     CommercialCoreService,
   ],
