@@ -391,7 +391,7 @@ export default function OperationsPage() {
           expectedVersion: policy.version,
           pauseBillingMode: policy.pauseBillingMode,
           managerOnlyPause: policy.managerOnlyPause,
-          ...(policy.maxPauseMinutes ? { maxPauseMinutes: policy.maxPauseMinutes } : {}),
+          maxPauseMinutes: policy.maxPauseMinutes ?? null,
           moveRatePolicy: policy.moveRatePolicy,
           fixedSessionAutoExtend: policy.fixedSessionAutoExtend,
           fixedSessionWarningMinutes: policy.fixedSessionWarningMinutes,

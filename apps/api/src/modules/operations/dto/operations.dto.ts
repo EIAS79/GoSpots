@@ -110,7 +110,7 @@ export class UpdateOperationsPolicyDto {
   @Type(() => Number) @IsInt() @Min(0) expectedVersion!: number;
   @IsOptional() @IsEnum(OperationsPauseBillingMode) pauseBillingMode?: OperationsPauseBillingMode;
   @IsOptional() @IsBoolean() managerOnlyPause?: boolean;
-  @IsOptional() @Type(() => Number) @IsInt() @Min(1) @Max(1440) maxPauseMinutes?: number;
+  @IsOptional() @Type(() => Number) @IsInt() @Min(1) @Max(1440) maxPauseMinutes?: number | null;
   @IsOptional() @IsEnum(OperationsMoveRatePolicy) moveRatePolicy?: OperationsMoveRatePolicy;
   @IsOptional() @IsBoolean() fixedSessionAutoExtend?: boolean;
   @IsOptional() @IsArray() @ArrayMaxSize(8) @IsInt({ each: true }) @Min(1, { each: true }) @Max(1440, { each: true }) fixedSessionWarningMinutes?: number[];
