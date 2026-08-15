@@ -1,0 +1,85 @@
+name: Edge hard-outage validation
+
+on:
+  push:
+    branches: [main, master]
+  pull_request:
+
+concurrency:
+  group: edge-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  edge-hard-outage:
+    name: Edge hard outage · recovery · packaged rollback
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Checkout with baseline history
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 2
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+      - name: Edge syntax and unit acceptance
+        working-directory: apps/edge
+        run: |
+          set -euo pipefail
+          node --check src/canonical.js
+          node --check src/crypto.js
+          node --check src/store.js
+          node --check src/cloud-client.js
+          node --check src/maintenance.js
+          node --check src/printer.js
+          node --check src/hub.js
+          node --check src/server.js
+          node --test test/*.test.js
+      - name: Prove WAN-disabled Edge operation
+        working-directory: apps/edge
+        shell: bash
+        run: |
+          set -euo pipefail
+          command -v iptables >/dev/null
+          cleanup() { sudo iptables -D OUTPUT ! -o lo -j REJECT 2>/dev/null || true; }
+          trap cleanup EXIT
+          sudo iptables -I OUTPUT 1 ! -o lo -j REJECT
+          node --input-type=module -e "try { await fetch('https://example.com', { signal: AbortSignal.timeout(2000) }); process.exit(1); } catch { console.log('WAN egress is blocked as required'); }"
+          node --test test/phase3-outage.test.js
+      - name: Package baseline and candidate Edge artifacts
+        shell: bash
+        env:
+          EVENT_BASE_SHA: ${{ github.event.pull_request.base.sha || github.event.before }}
+        run: |
+          set -euo pipefail
+          base="$EVENT_BASE_SHA"
+          if [ -z "$base" ] || [ "$base" = "0000000000000000000000000000000000000000" ]; then
+            base="HEAD^"
+          fi
+          git fetch origin "$base" --depth=1 || true
+          mkdir -p /tmp/edge-baseline-src /tmp/edge-baseline-tgz /tmp/edge-baseline /tmp/edge-candidate-tgz /tmp/edge-candidate
+          git archive "$base" apps/edge | tar -x -C /tmp/edge-baseline-src
+          (cd /tmp/edge-baseline-src/apps/edge && npm pack --pack-destination /tmp/edge-baseline-tgz >/tmp/edge-baseline-pack.txt)
+          (cd apps/edge && npm pack --pack-destination /tmp/edge-candidate-tgz >/tmp/edge-candidate-pack.txt)
+          tar -xzf "/tmp/edge-baseline-tgz/$(cat /tmp/edge-baseline-pack.txt | tail -n1)" -C /tmp/edge-baseline
+          tar -xzf "/tmp/edge-candidate-tgz/$(cat /tmp/edge-candidate-pack.txt | tail -n1)" -C /tmp/edge-candidate
+          echo "EDGE_BASE_SHA=$base" >> "$GITHUB_ENV"
+      - name: Demonstrate packaged executable rollback
+        working-directory: apps/edge
+        env:
+          PHASE3_BASELINE_EDGE: /tmp/edge-baseline/package
+          PHASE3_CANDIDATE_EDGE: /tmp/edge-candidate/package
+          PHASE3_BASELINE_SHA: ${{ env.EDGE_BASE_SHA }}
+          PHASE3_CANDIDATE_SHA: ${{ github.sha }}
+        run: node test/phase3-artifact-rollback.mjs
+      - name: Upload Edge artifact evidence
+        if: ${{ always() }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: edge-validation-${{ github.run_id }}
+          if-no-files-found: ignore
+          retention-days: 30
+          path: |
+            /tmp/edge-baseline-pack.txt
+            /tmp/edge-candidate-pack.txt
