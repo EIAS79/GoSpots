@@ -20,9 +20,9 @@ This record intentionally does not claim Phase 3 accepted until exact-head CI, m
 | Groups/participants | existing SessionGroup plus participant count and per-person rate support retained | grouped-session smoke pending |
 | Waitlist | canonical `ReservationWaitlistEntry` plus `OperationsWaitlistExtension`; canonical `ResourceType` validation; create/notify/seat/skip/cancel/expire and optimistic seat claim | stale-seat test passed; production drill pending |
 | Maintenance/downtime | maintenance reason, expected return, notes, session-start guard and state history | clean migration passed; production API smoke pending |
-| Live floor card | resource state, timer, usage amount, reservation, customer/member, live GuestCheck operational amount derived from its still-open canonical VenueOrders, open-order amount/count, alerts and quick actions; existing Visits view preserved | final exact-head web CI pending |
+| Live floor card | resource state, timer, usage amount, reservation, customer/member, live GuestCheck operational amount derived from its still-open canonical VenueOrders, open-order amount/count, alerts and quick actions; existing Visits view and established Finish action preserved | final exact-head browser/web CI pending |
 | Shift handover | active/paused sessions, open checks, pending orders, upcoming reservations, unresolved payments, devices, cash and fiscal issues | production API/UI smoke pending |
-| Offline classification | existing Offline Lite keeps cached floor and queueable session start/end/simple orders; Phase 3 high-conflict commands remain online-only | final exact-head web/offline CI pending |
+| Offline classification | existing Offline Lite keeps cached floor and queueable session start/end/simple orders; Phase 3 high-conflict commands remain online-only | permanent browser E2E regression corrected; final exact-head CI pending |
 | Migration safety | additive/backfilled migration, pause-reason backfill, immutable historical rate-segment backfill and Phase 3 integrity assertion | clean migration, representative upgrade and Phase 3 integrity assertions passed |
 | Legacy Edge validation | old mislabeled Phase 3 Edge workflow preserved as `edge-validation.yml`; Phase 3 workflow now validates current master-plan live operations | final exact-head Edge CI pending |
 
@@ -34,7 +34,7 @@ This record intentionally does not claim Phase 3 accepted until exact-head CI, m
 - resource move: service guards and immutable `OperationsSessionRateSegment`; production move/reprice drill;
 - rate boundary crossing: explicit fixed-duration overage test;
 - overnight session: six-hour/overnight projection test;
-- refresh/reconnect: existing `operations-offline-client` cache/reconnect behavior plus web checks;
+- refresh/reconnect: existing `operations-offline-client` cache/reconnect behavior plus permanent browser E2E checks;
 - stale version conflict: existing `operations.service.spec.ts` optimistic concurrency plus waitlist stale claim test;
 - waitlist seat conflict: optimistic extension version and `SEATING` claim test;
 - maintenance guard: existing operations service disabled/maintenance start guards plus production smoke.
@@ -43,13 +43,14 @@ This record intentionally does not claim Phase 3 accepted until exact-head CI, m
 
 Gate P3 requires a billiard/gaming venue to run a simulated several-hour busy floor without timing ambiguity, duplicate occupancy or manual calculation.
 
-Repository evidence includes a deterministic six-hour busy-floor simulation test. Dedicated Phase 3 workflow run `31879715527` passed clean migration, schema/integrity assertions, 29 focused operations tests and the production API build on repaired head `f1ee324c840532470ef85b5a7db381f5044a01a9` before final completeness hardening. A later frozen-head run `31879991672` again passed migration, assertions and all 29 focused tests but correctly rejected an invalid assumption that `GuestCheck` itself stores `amountDue`; that compiler failure was fixed by deriving the live check amount from its canonical still-open `VenueOrder` children while leaving final discount/tender amount due to settlement. Final acceptance requires the new exact-head CI and an authenticated production drill covering concurrent start rejection, pause/resume, move, fixed-time extension/overage, waitlist seat conflict, maintenance guard and handover projection on the deployed merged revision.
+Repository evidence includes a deterministic six-hour busy-floor simulation test. Dedicated Phase 3 workflow run `31879715527` passed clean migration, schema/integrity assertions, 29 focused operations tests and the production API build on repaired head `f1ee324c840532470ef85b5a7db381f5044a01a9` before final completeness hardening. A later frozen-head run `31879991672` again passed migration, assertions and all 29 focused tests but correctly rejected an invalid assumption that `GuestCheck` itself stores `amountDue`; that compiler failure was fixed by deriving the live check amount from its canonical still-open `VenueOrder` children while leaving final discount/tender amount due to settlement. Exact-head root CI run `31880123084` then exposed a UI compatibility regression: Phase 3 had renamed the established session `Finish` button to `End`, breaking two permanent Offline Lite browser scenarios. The stable `Finish` operator action has been restored while the backend retains Phase 3 end semantics. Final acceptance requires the new exact-head CI and an authenticated production drill covering concurrent start rejection, pause/resume, move, fixed-time extension/overage, waitlist seat conflict, maintenance guard and handover projection on the deployed merged revision.
 
 ## Final source-to-code audit
 
 Before freezing the merge head, the implementation audit corrected every identified Phase 3 completeness/regression gap:
 
 - the pre-existing Operations `Visits` view is preserved;
+- the pre-existing `Finish` action contract is preserved for browser/offline compatibility;
 - waitlist resource-type input uses canonical `ResourceType` values instead of arbitrary strings;
 - resource cards expose a live GuestCheck operational amount from canonical open VenueOrders, without inventing a second settlement truth;
 - automatic fixed-time extensions remain server-projected during the live session and their resulting extension history is persisted/audited when the session ends;
