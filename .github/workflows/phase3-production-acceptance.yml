@@ -52,9 +52,16 @@ jobs:
           const raw = randomBytes(48).toString('base64url');
           const hash = createHash('sha256').update(raw).digest('hex');
           fs.writeFileSync('/tmp/phase3-refresh-token', raw, { mode: 0o600 });
-          console.log(`PHASE3_BOOTSTRAP_HASH=${hash}`);
+          fs.writeFileSync('/tmp/phase3-bootstrap-hash.txt', hash + '\n');
+          console.log('Generated one-time bootstrap token hash. Raw token remains runner-local.');
           NODE
-          echo "Waiting for the one-time session hash to be bound to the isolated acceptance owner."
+
+      - name: Publish bootstrap hash for production session binding
+        uses: actions/upload-artifact@v4
+        with:
+          name: phase3-bootstrap-hash-${{ github.run_id }}
+          retention-days: 1
+          path: /tmp/phase3-bootstrap-hash.txt
 
       - name: Exchange one-time refresh token for normal production auth
         shell: bash
