@@ -1,6 +1,7 @@
 // Chunk 11 — Operations Workspace + Resource Engine 2.0
-// Scalar tenant/resource references are intentional: this file extends the existing
-// Resource/Reservation/GuestCheck domain without forcing inverse-relation churn.
+// Phase 3 v2 extends this canonical operations domain for live floor control.
+// Scalar tenant/resource references are intentional: this file extends existing
+// Resource/Reservation/GuestCheck/customer domains without inverse-relation churn.
 
 enum OperationsBillingMode {
   HOURLY
@@ -10,6 +11,16 @@ enum OperationsBillingMode {
   PER_PERSON
   PER_GAME
   FREE
+}
+
+enum OperationsPauseBillingMode {
+  STOP_CHARGING
+  CONTINUE_CHARGING
+}
+
+enum OperationsMoveRatePolicy {
+  KEEP_SESSION_RATE
+  REPRICE_TARGET
 }
 
 model OperationsRatePlan {
@@ -50,6 +61,25 @@ model OperationsRatePlan {
   @@index([shopId, resourceCategoryId, active])
 }
 
+/// One canonical live-operations policy per venue. Values are snapshotted onto a
+/// session at start so later configuration changes never rewrite history.
+model OperationsVenuePolicy {
+  id                         String                     @id @default(cuid())
+  shopId                     String                     @unique
+  pauseBillingMode           OperationsPauseBillingMode @default(STOP_CHARGING)
+  managerOnlyPause           Boolean                    @default(false)
+  maxPauseMinutes            Int?
+  moveRatePolicy             OperationsMoveRatePolicy   @default(KEEP_SESSION_RATE)
+  fixedSessionAutoExtend     Boolean                    @default(false)
+  fixedSessionWarningMinutes Int[]                      @default([])
+  defaultExtensionMinutes    Int                        @default(15)
+  version                    Int                        @default(1)
+  createdAt                  DateTime                   @default(now())
+  updatedAt                  DateTime                   @updatedAt
+
+  @@index([shopId, version])
+}
+
 model SessionGroup {
   id           String   @id @default(cuid())
   shopId       String
@@ -63,56 +93,101 @@ model SessionGroup {
 }
 
 model OperationsSession {
-  id                   String   @id @default(cuid())
-  shopId               String
-  resourceId           String
-  groupId              String?
-  guestCheckId          String?
-  reservationId        String?
-  ratePlanId           String?
-  status               String   @default("ACTIVE")
-  startedAt            DateTime @default(now())
-  pausedAt             DateTime?
-  finishedAt           DateTime?
-  totalPausedSeconds   Int      @default(0)
-  hourlyRateMinor      Int
-  billingMode          OperationsBillingMode @default(HOURLY)
-  unitPriceMinor       Int      @default(0)
-  fixedDurationMinutes Int?
-  minimumChargeMinor   Int      @default(0)
-  graceMinutes         Int      @default(0)
-  participantCount     Int      @default(1)
-  gameCount            Int      @default(1)
-  overtimeRateMinor    Int?
-  overtimeAfterMinutes Int?
-  roundingMinutes      Int      @default(1)
-  minimumMinutes       Int      @default(0)
-  capMinor             Int?
-  rateSnapshot         Json
-  accruedMinor         Int      @default(0)
-  currency             String
-  version              Int      @default(1)
-  createdById          String
-  createdAt            DateTime @default(now())
-  updatedAt            DateTime @updatedAt
+  id                              String   @id @default(cuid())
+  shopId                          String
+  resourceId                      String
+  groupId                         String?
+  guestCheckId                    String?
+  reservationId                   String?
+  customerId                      String?
+  membershipId                    String?
+  packageId                       String?
+  packageSnapshot                 Json?
+  notes                           String?
+  ratePlanId                      String?
+  currentRatePlanId               String?
+  currentRateSnapshot             Json?
+  status                          String   @default("ACTIVE")
+  startedAt                       DateTime @default(now())
+  pausedAt                        DateTime?
+  finishedAt                      DateTime?
+  cancelledAt                     DateTime?
+  cancelReason                    String?
+  cancelledById                   String?
+  totalPausedSeconds              Int      @default(0)
+  billingSegmentStartedAt         DateTime @default(now())
+  billingSegmentPausedSeconds     Int      @default(0)
+  accruedBeforeCurrentSegmentMinor Int     @default(0)
+  hourlyRateMinor                 Int
+  billingMode                     OperationsBillingMode @default(HOURLY)
+  unitPriceMinor                  Int      @default(0)
+  fixedDurationMinutes            Int?
+  minimumChargeMinor              Int      @default(0)
+  graceMinutes                    Int      @default(0)
+  participantCount                Int      @default(1)
+  gameCount                       Int      @default(1)
+  overtimeRateMinor               Int?
+  overtimeAfterMinutes            Int?
+  roundingMinutes                 Int      @default(1)
+  minimumMinutes                  Int      @default(0)
+  capMinor                        Int?
+  rateSnapshot                    Json
+  accruedMinor                    Int      @default(0)
+  currency                        String
+  pauseBillingMode                OperationsPauseBillingMode @default(STOP_CHARGING)
+  managerOnlyPause                Boolean  @default(false)
+  maxPauseMinutes                 Int?
+  moveRatePolicy                  OperationsMoveRatePolicy @default(KEEP_SESSION_RATE)
+  scheduledEndAt                  DateTime?
+  autoExtend                      Boolean  @default(false)
+  warningMinutes                  Int[]    @default([])
+  extensionMinutes                Int      @default(15)
+  extensionCount                  Int      @default(0)
+  version                         Int      @default(1)
+  createdById                     String
+  createdAt                       DateTime @default(now())
+  updatedAt                       DateTime @updatedAt
 
   @@index([shopId, status, resourceId])
   @@index([shopId, groupId])
   @@index([shopId, guestCheckId])
   @@index([shopId, reservationId])
+  @@index([shopId, customerId])
+  @@index([shopId, membershipId])
 }
 
 model OperationsSessionPause {
-  id          String   @id @default(cuid())
-  shopId      String
-  sessionId   String
-  reason      String?
-  startedAt   DateTime @default(now())
-  endedAt     DateTime?
-  actorUserId String
-  createdAt   DateTime @default(now())
+  id                String   @id @default(cuid())
+  shopId            String
+  sessionId         String
+  reason            String
+  chargingContinues Boolean  @default(false)
+  policyMaxMinutes  Int?
+  startedAt         DateTime @default(now())
+  endedAt           DateTime?
+  actorUserId       String
+  createdAt         DateTime @default(now())
 
   @@index([shopId, sessionId, startedAt])
+}
+
+/// Immutable pricing-history segment. KEEP_SESSION_RATE leaves a segment open
+/// across resource moves; REPRICE_TARGET closes it and opens a new segment.
+model OperationsSessionRateSegment {
+  id           String   @id @default(cuid())
+  shopId       String
+  sessionId    String
+  resourceId   String
+  ratePlanId   String?
+  rateSnapshot Json
+  startedAt    DateTime
+  endedAt      DateTime?
+  accruedMinor Int?
+  actorUserId  String
+  createdAt    DateTime @default(now())
+
+  @@index([shopId, sessionId, startedAt])
+  @@index([shopId, resourceId, startedAt])
 }
 
 model SessionResourceLink {
@@ -129,16 +204,43 @@ model SessionResourceLink {
 }
 
 model ResourceMaintenancePeriod {
-  id          String   @id @default(cuid())
-  shopId      String
-  resourceId  String
-  reason      String
-  startsAt    DateTime @default(now())
-  endsAt      DateTime?
-  actorUserId String
-  createdAt   DateTime @default(now())
+  id               String   @id @default(cuid())
+  shopId           String
+  resourceId       String
+  reason           String
+  expectedReturnAt DateTime?
+  notes            String?
+  startsAt         DateTime @default(now())
+  endsAt           DateTime?
+  actorUserId      String
+  createdAt        DateTime @default(now())
 
   @@index([shopId, resourceId, endsAt])
+  @@index([shopId, expectedReturnAt])
+}
+
+/// Extension of the existing canonical ReservationWaitlistEntry. The base row
+/// remains the single waitlist truth; this record adds live-floor-only metadata.
+model OperationsWaitlistExtension {
+  id                    String   @id @default(cuid())
+  shopId                String
+  waitlistEntryId       String   @unique
+  requestedResourceType String?
+  estimatedWaitMinutes  Int?
+  operationsSessionId   String?
+  notifiedAt            DateTime?
+  seatedAt              DateTime?
+  skippedAt             DateTime?
+  cancelledAt           DateTime?
+  expiredAt             DateTime?
+  version               Int      @default(1)
+  createdById           String
+  updatedById           String?
+  createdAt             DateTime @default(now())
+  updatedAt             DateTime @updatedAt
+
+  @@index([shopId, version])
+  @@index([shopId, operationsSessionId])
 }
 
 model ResourceStateEvent {
