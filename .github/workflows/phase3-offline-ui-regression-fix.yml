@@ -1,0 +1,40 @@
+name: Phase 3 offline UI regression fix
+
+on:
+  push:
+    branches: [phase3-live-operations-v2]
+    paths: [.github/workflows/phase3-offline-ui-regression-fix.yml]
+
+permissions:
+  contents: write
+
+jobs:
+  patch:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: phase3-live-operations-v2
+      - name: Restore stable Finish operator action
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+          p = Path("apps/web/src/app/(tenant)/dashboard/[venuePath]/operations/page.tsx")
+          text = p.read_text()
+          old = '>End</button>'
+          count = text.count(old)
+          if count != 1:
+              raise SystemExit(f'expected exactly one session End button, found {count}')
+          p.write_text(text.replace(old, '>Finish</button>', 1))
+          PY
+          git diff --check
+          grep -n '>Finish</button>' "apps/web/src/app/(tenant)/dashboard/[venuePath]/operations/page.tsx"
+      - name: Commit fix and remove staging workflow
+        run: |
+          rm .github/workflows/phase3-offline-ui-regression-fix.yml
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add "apps/web/src/app/(tenant)/dashboard/[venuePath]/operations/page.tsx" .github/workflows/phase3-offline-ui-regression-fix.yml
+          git diff --cached --check
+          git commit -m "fix(phase3): preserve offline finish action"
+          git push origin HEAD:phase3-live-operations-v2
