@@ -17,6 +17,7 @@ import {
   OperationsBillingMode,
   OperationsMoveRatePolicy,
   OperationsPauseBillingMode,
+  ResourceType,
 } from '@prisma/client';
 import { PartialType } from '@nestjs/swagger';
 
@@ -121,7 +122,7 @@ export class CreateOperationsWaitlistDto {
   @IsOptional() @IsString() @MaxLength(50) phone?: string;
   @Type(() => Number) @IsInt() @Min(1) @Max(100) partySize!: number;
   @IsOptional() @IsString() resourceId?: string;
-  @IsOptional() @IsString() @MaxLength(80) requestedResourceType?: string;
+  @IsOptional() @IsEnum(ResourceType) requestedResourceType?: ResourceType;
   @Type(() => Number) @IsInt() @Min(1) @Max(1440) desiredDurationMinutes!: number;
   @IsOptional() @Type(() => Number) @IsInt() @Min(0) @Max(1440) estimatedWaitMinutes?: number;
   @IsOptional() @IsString() @MaxLength(1000) notes?: string;

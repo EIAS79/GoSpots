@@ -16,6 +16,7 @@ import {
   PaymentOperationState,
   Prisma,
   ResourceConfigurationState,
+  ResourceType,
   ReservationStatus,
 } from '@prisma/client';
 import { assertExpectedVersion } from '../../common/optimistic-concurrency.util';
@@ -1184,7 +1185,7 @@ export class LiveOperationsService {
   private async estimateWaitMinutes(
     shopId: string,
     resourceId: string | undefined,
-    requestedResourceType: string | undefined,
+    requestedResourceType: ResourceType | undefined,
   ) {
     const now = new Date();
     const resources = await this.prisma.resource.findMany({
@@ -1192,7 +1193,7 @@ export class LiveOperationsService {
         shopId,
         configurationState: ResourceConfigurationState.ENABLED,
         ...(resourceId ? { id: resourceId } : {}),
-        ...(requestedResourceType ? { type: requestedResourceType as never } : {}),
+        ...(requestedResourceType ? { type: requestedResourceType } : {}),
       },
       select: { id: true },
     });

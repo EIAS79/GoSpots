@@ -16,7 +16,7 @@ import {
   type OrderingCatalog,
 } from "@/lib/ordering-offline-client";
 
-const TABS = ["Floor", "Waitlist", "Reservations", "Orders", "Handover", "Activity", "Policy"] as const;
+const TABS = ["Floor", "Visits", "Waitlist", "Reservations", "Orders", "Handover", "Activity", "Policy"] as const;
 type Tab = (typeof TABS)[number];
 type Activity = { id: string; resourceId: string; fromState?: string | null; toState: string; reason?: string | null; createdAt: string };
 type WaitlistEntry = {
@@ -160,6 +160,7 @@ export default function OperationsPage() {
   }, [online, tab]);
 
   const available = useMemo(() => floor.resources.filter((row) => row.state === "AVAILABLE"), [floor.resources]);
+  const resourceTypes = useMemo(() => [...new Set(floor.resources.map((row) => row.type))].sort(), [floor.resources]);
   const simpleItems = useMemo(() => {
     if (!catalog) return [];
     const requiredGroupIds = new Set(catalog.groups.filter((group) => group.required || group.minSelect > 0).map((group) => group.id));
@@ -441,9 +442,9 @@ export default function OperationsPage() {
           </div>
         ) : null}
 
-        {tab === "Floor" || tab === "Orders" ? (
+        {tab === "Floor" || tab === "Visits" || tab === "Orders" ? (
           <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
-            {floor.resources.map((resource) => {
+            {floor.resources.filter((resource) => tab !== "Visits" || Boolean(resource.session)).map((resource) => {
               const session = resource.session;
               const groupChecked = groupSelection.includes(resource.id);
               const timer = session ? projectedTimer(session, floor.generatedAt, nowMs) : null;
@@ -492,7 +493,7 @@ export default function OperationsPage() {
               <input value={waitPhone} onChange={(e) => setWaitPhone(e.target.value)} placeholder="Phone" className="min-h-11 rounded-lg border border-zinc-700 bg-zinc-900 px-3" />
               <label className="text-xs text-zinc-400">Party<input type="number" min={1} max={100} value={waitParty} onChange={(e) => setWaitParty(Math.max(1, Number(e.target.value) || 1))} className="mt-1 min-h-9 w-full rounded-lg border border-zinc-700 bg-zinc-900 px-3" /></label>
               <label className="text-xs text-zinc-400">Minutes<input type="number" min={1} max={1440} value={waitDuration} onChange={(e) => setWaitDuration(Math.max(1, Number(e.target.value) || 1))} className="mt-1 min-h-9 w-full rounded-lg border border-zinc-700 bg-zinc-900 px-3" /></label>
-              <input value={waitType} onChange={(e) => setWaitType(e.target.value)} placeholder="Resource type" className="min-h-11 rounded-lg border border-zinc-700 bg-zinc-900 px-3" />
+              <select value={waitType} onChange={(e) => setWaitType(e.target.value)} className="min-h-11 rounded-lg border border-zinc-700 bg-zinc-900 px-3"><option value="">Any resource type</option>{resourceTypes.map((type) => <option key={type} value={type}>{type}</option>)}</select>
               <button disabled={busy !== null || !online} onClick={() => void createWaitlist()} className="min-h-11 rounded-lg bg-emerald-400 px-3 font-semibold text-zinc-950">Add to waitlist</button>
               <input value={waitNotes} onChange={(e) => setWaitNotes(e.target.value)} placeholder="Notes" className="min-h-11 rounded-lg border border-zinc-700 bg-zinc-900 px-3 md:col-span-3 xl:col-span-6" />
             </div>
