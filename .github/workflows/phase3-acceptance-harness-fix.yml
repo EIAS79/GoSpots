@@ -1,0 +1,71 @@
+name: Phase 3 acceptance harness readiness fix
+
+on:
+  push:
+    branches: [phase3-production-acceptance]
+    paths: [.github/workflows/phase3-acceptance-harness-fix.yml]
+
+permissions:
+  contents: write
+
+jobs:
+  patch:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: phase3-production-acceptance
+      - name: Poll production readiness before mutating acceptance tenant
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+          p = Path('.github/workflows/phase3-production-acceptance.yml')
+          text = p.read_text()
+          anchor = """          async function waitForPhase3Release() {
+"""
+          helper = """          async function waitForReady() {
+            for (let attempt = 1; attempt <= 30; attempt += 1) {
+              const health = await raw('/ready');
+              if (health.status === 200) {
+                passed('production API readiness', { attempt });
+                return health.data;
+              }
+              if (![502, 503, 504].includes(health.status)) {
+                throw new Error(`Unexpected production readiness status ${health.status}: ${JSON.stringify(health.data)}`);
+              }
+              await new Promise((resolve) => setTimeout(resolve, 10_000));
+            }
+            throw new Error('Production API did not become ready during the acceptance window.');
+          }
+
+          async function waitForPhase3Release() {
+"""
+          if anchor not in text:
+              raise SystemExit('waitForPhase3Release anchor not found')
+          text = text.replace(anchor, helper, 1)
+          old = """          (async () => {
+            const health = await raw('/ready');
+            assert.equal(health.status, 200, `production readiness status ${health.status}`);
+            passed('production API readiness');
+
+            const registered = await ok('/auth/register', {
+"""
+          new = """          (async () => {
+            await waitForReady();
+
+            const registered = await ok('/auth/register', {
+"""
+          if old not in text:
+              raise SystemExit('initial readiness block not found')
+          p.write_text(text.replace(old, new, 1))
+          PY
+          git diff --check
+      - name: Commit harness fix and remove patch workflow
+        run: |
+          rm .github/workflows/phase3-acceptance-harness-fix.yml
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add .github/workflows/phase3-production-acceptance.yml .github/workflows/phase3-acceptance-harness-fix.yml
+          git diff --cached --check
+          git commit -m "test(phase3): wait for production readiness before Gate P3"
+          git push origin HEAD:phase3-production-acceptance
