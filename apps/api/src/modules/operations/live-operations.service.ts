@@ -16,6 +16,7 @@ import {
   PaymentOperationState,
   Prisma,
   ResourceConfigurationState,
+  ReservationStatus,
 } from '@prisma/client';
 import { assertExpectedVersion } from '../../common/optimistic-concurrency.util';
 import { assertShopFeature } from '../../common/subscription-feature.util';
@@ -43,7 +44,11 @@ import {
 } from './operations.service';
 
 const OPEN_SESSION_STATES = ['ACTIVE', 'PAUSED'];
-const ACTIVE_RESERVATION_STATES = ['PENDING', 'CONFIRMED', 'CHECKED_IN'];
+const ACTIVE_RESERVATION_STATES: ReservationStatus[] = [
+  ReservationStatus.PENDING,
+  ReservationStatus.CONFIRMED,
+  ReservationStatus.CHECKED_IN,
+];
 const LIVE_WAITLIST_STATES = ['WAITING', 'NOTIFIED', 'SKIPPED', 'SEATING'];
 
 const DEFAULT_POLICY = {
@@ -1115,7 +1120,7 @@ export class LiveOperationsService {
           warningMinutes: session.warningMinutes,
           maxPauseMinutes: session.maxPauseMinutes,
         });
-        const sessionOrders = orders.filter(
+        const sessionOrders = (orders as Array<{ operationsSessionId: string | null; guestCheckId: string | null; totalMinor: number }>).filter(
           (order) =>
             order.operationsSessionId === session.id ||
             (session.guestCheckId && order.guestCheckId === session.guestCheckId),
