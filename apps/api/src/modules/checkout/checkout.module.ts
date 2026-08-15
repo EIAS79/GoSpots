@@ -12,6 +12,7 @@ import { GuestCheckMergeService } from './guest-check-merge.service';
 import { CommercialMergeService } from './commercial-merge.service';
 import { CommercialSettlementService } from './commercial-settlement.service';
 import { CommercialCoreService } from './commercial-core.service';
+import { CommercialDayCloseService } from './commercial-day-close.service';
 
 @Module({
   imports: [FinanceModule, CashModule],
@@ -26,6 +27,7 @@ import { CommercialCoreService } from './commercial-core.service';
     CommercialMergeService,
     CommercialSettlementService,
     CommercialCoreService,
+    CommercialDayCloseService,
   ],
   exports: [
     CheckoutService,
@@ -37,6 +39,7 @@ import { CommercialCoreService } from './commercial-core.service';
     CommercialMergeService,
     CommercialSettlementService,
     CommercialCoreService,
+    CommercialDayCloseService,
   ],
 })
 export class CheckoutModule {}
