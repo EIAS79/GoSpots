@@ -1066,7 +1066,7 @@ export class LiveOperationsService {
       .map((session) => session.membershipId)
       .filter((id): id is string => Boolean(id));
 
-    const [orders, guestChecks, customers, memberships] = await Promise.all([
+    const [orders, customers, memberships] = await Promise.all([
       sessionIds.length || guestCheckIds.length
         ? this.prisma.venueOrder.findMany({
             where: {
@@ -1089,12 +1089,6 @@ export class LiveOperationsService {
             },
           })
         : Promise.resolve([]),
-      guestCheckIds.length
-        ? this.prisma.guestCheck.findMany({
-            where: { shopId, id: { in: guestCheckIds } },
-            select: { id: true, amountDue: true, currency: true },
-          })
-        : Promise.resolve([]),
       customerIds.length
         ? this.prisma.customerProfile.findMany({
             where: { shopId, id: { in: customerIds } },
@@ -1108,7 +1102,6 @@ export class LiveOperationsService {
           })
         : Promise.resolve([]),
     ]);
-    const guestCheckMap = new Map(guestChecks.map((row) => [row.id, row]));
     const customerMap = new Map(customers.map((row) => [row.id, row]));
     const membershipMap = new Map(memberships.map((row) => [row.id, row]));
 
@@ -1178,12 +1171,11 @@ export class LiveOperationsService {
               : null,
             openOrderAmountMinor,
             openOrderCount: sessionOrders.length,
-            openCheckAmountDueMinor: session.guestCheckId
-              ? majorToMinor(guestCheckMap.get(session.guestCheckId)?.amountDue ?? null)
-              : null,
-            openCheckCurrency: session.guestCheckId
-              ? guestCheckMap.get(session.guestCheckId)?.currency ?? session.currency
-              : null,
+            // GuestCheck is the canonical visit container; its live operational amount
+            // is the sum of its still-open canonical VenueOrders. Settlement later owns
+            // discounts, tender and final amount due.
+            openCheckAmountDueMinor: session.guestCheckId ? openOrderAmountMinor : null,
+            openCheckCurrency: session.guestCheckId ? session.currency : null,
           },
         };
       }),
