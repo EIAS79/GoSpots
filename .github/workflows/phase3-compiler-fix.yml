@@ -1,0 +1,50 @@
+name: Phase 3 compiler fix
+
+on:
+  push:
+    branches: [phase3-live-operations-v2]
+    paths: [.github/workflows/phase3-compiler-fix.yml]
+
+permissions:
+  contents: write
+
+jobs:
+  fix:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: phase3-live-operations-v2
+      - name: Apply exact compiler diagnostics
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+          p = Path('apps/api/src/modules/operations/live-operations.service.ts')
+          text = p.read_text()
+          text = text.replace(
+              '  ResourceConfigurationState,\n} from \'@prisma/client\';',
+              '  ResourceConfigurationState,\n  ReservationStatus,\n} from \'@prisma/client\';',
+              1,
+          )
+          text = text.replace(
+              "const ACTIVE_RESERVATION_STATES = ['PENDING', 'CONFIRMED', 'CHECKED_IN'];",
+              'const ACTIVE_RESERVATION_STATES: ReservationStatus[] = [\\n  ReservationStatus.PENDING,\\n  ReservationStatus.CONFIRMED,\\n  ReservationStatus.CHECKED_IN,\\n];'.replace('\\n', '\n'),
+              1,
+          )
+          text = text.replace(
+              '        const sessionOrders = orders.filter(\n',
+              '        const sessionOrders = (orders as Array<{ operationsSessionId: string | null; guestCheckId: string | null; totalMinor: number }>).filter(\n',
+              1,
+          )
+          p.write_text(text)
+          PY
+          git diff --check
+          git diff -- apps/api/src/modules/operations/live-operations.service.ts
+      - name: Commit fix
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add apps/api/src/modules/operations/live-operations.service.ts
+          git diff --cached --quiet && exit 0
+          git commit -m "fix(phase3): satisfy production API types"
+          git push origin HEAD:phase3-live-operations-v2
