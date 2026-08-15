@@ -1,0 +1,119 @@
+name: Phase 3 production acceptance transport
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: phase3-production-acceptance
+  cancel-in-progress: true
+
+jobs:
+  production-gate-p3:
+    name: Authenticated production Gate P3
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    env:
+      GOSPOTS_BASE_URL: https://www.gospots.eu/api/v1
+      GOSPOTS_ACCEPTANCE_VENUE: acceptance-c6c8541bec76
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Wait for real production readiness
+        shell: bash
+        run: |
+          set -euo pipefail
+          last=''
+          for i in {1..120}; do
+            code=$(curl -sS -o /tmp/ready.json -w '%{http_code}' "$GOSPOTS_BASE_URL/ready" || true)
+            last=$(cat /tmp/ready.json 2>/dev/null || true)
+            if [ "$code" = "200" ] && node -e "const x=JSON.parse(require('fs').readFileSync('/tmp/ready.json','utf8')); process.exit(x.status==='ok'?0:1)"; then
+              echo "Production readiness is healthy."
+              cat /tmp/ready.json
+              exit 0
+            fi
+            echo "readiness attempt $i -> HTTP $code"
+            sleep 5
+          done
+          echo "Production never became ready: $last" >&2
+          exit 1
+
+      - name: Generate one-time bootstrap refresh token
+        shell: bash
+        run: |
+          set -euo pipefail
+          node <<'NODE'
+          const fs = require('fs');
+          const { randomBytes, createHash } = require('crypto');
+          const raw = randomBytes(48).toString('base64url');
+          const hash = createHash('sha256').update(raw).digest('hex');
+          fs.writeFileSync('/tmp/phase3-refresh-token', raw, { mode: 0o600 });
+          fs.writeFileSync('/tmp/phase3-bootstrap-hash.txt', hash + '\n');
+          NODE
+
+      - name: Publish bootstrap hash for production session binding
+        uses: actions/upload-artifact@v4
+        with:
+          name: phase3-bootstrap-hash-${{ github.run_id }}
+          retention-days: 1
+          path: /tmp/phase3-bootstrap-hash.txt
+
+      - name: Exchange one-time refresh token for normal production auth
+        shell: bash
+        run: |
+          set -euo pipefail
+          raw=$(cat /tmp/phase3-refresh-token)
+          csrf_code=$(curl -sS -o /tmp/csrf.json -c /tmp/phase3.cookies -w '%{http_code}' "$GOSPOTS_BASE_URL/auth/csrf" || true)
+          if [ "$csrf_code" != "200" ]; then
+            echo "CSRF bootstrap failed -> HTTP $csrf_code" >&2
+            cat /tmp/csrf.json >&2 || true
+            exit 1
+          fi
+          csrf=$(awk '$6=="csrf_token" {print $7}' /tmp/phase3.cookies | tail -n1)
+          if [ -z "$csrf" ]; then
+            echo "CSRF endpoint did not return csrf_token cookie." >&2
+            exit 1
+          fi
+          for i in {1..120}; do
+            code=$(curl -sS -o /tmp/refresh.json -c /tmp/phase3.cookies -w '%{http_code}' \
+              -X POST "$GOSPOTS_BASE_URL/auth/refresh" \
+              -H "Cookie: refresh_token=$raw; csrf_token=$csrf" \
+              -H "X-CSRF-Token: $csrf" || true)
+            if [ "$code" = "200" ]; then
+              access=$(awk '$6=="access_token" {print $7}' /tmp/phase3.cookies | tail -n1)
+              if [ -z "$access" ]; then
+                echo "Refresh succeeded but access_token cookie was not returned." >&2
+                exit 1
+              fi
+              echo "::add-mask::$access"
+              echo "PHASE3_ACCESS_TOKEN=$access" >> "$GITHUB_ENV"
+              rm -f /tmp/phase3-refresh-token
+              echo "One-time bootstrap session exchanged successfully."
+              exit 0
+            fi
+            if [ "$code" = "403" ]; then
+              echo "Refresh exchange rejected by CSRF/security policy:" >&2
+              cat /tmp/refresh.json >&2 || true
+              exit 1
+            fi
+            echo "bootstrap auth attempt $i -> HTTP $code"
+            sleep 5
+          done
+          echo "Failed to exchange one-time bootstrap session." >&2
+          cat /tmp/refresh.json >&2 || true
+          exit 1
+
+      - name: Run authenticated production Gate P3
+        run: node scripts/phase3-production-acceptance.mjs
+
+      - name: Upload acceptance evidence
+        if: ${{ always() }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: phase3-production-acceptance-${{ github.run_id }}
+          if-no-files-found: ignore
+          retention-days: 30
+          path: /tmp/phase3-production-acceptance.json
