@@ -28,7 +28,7 @@ test('@smoke P4 commercial core exposes one controlled tab and settlement flow',
   await expect(controls.getByText('Commercial core', { exact: true })).toBeVisible();
   await expect(controls.getByText('Authorized adjustment', { exact: true })).toBeVisible();
   await expect(controls.getByText('Service charge', { exact: true })).toBeVisible();
-  await expect(controls.getByText('Tip / gratuity', { exact: true })).toBeVisible();
+  await expect(controls.getByText('Gratuity', { exact: true })).toBeVisible();
 
   await controls.getByRole('combobox').first().selectOption('BAR_TAB');
   await controls.getByPlaceholder('Table / tab reference').fill('Bar tab P4');
