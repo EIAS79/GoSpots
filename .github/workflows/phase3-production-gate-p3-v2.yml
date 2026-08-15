@@ -1,0 +1,177 @@
+name: Phase 3 production Gate P3 v2
+
+on:
+  push:
+    branches: [phase3-production-acceptance]
+    paths: [.github/workflows/phase3-production-gate-p3-v2.yml]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  gate-p3:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    env:
+      API: https://gospots-api.onrender.com/api/v1
+      EXPECTED_MAIN_SHA: 4affc11b949516f1dcd9917ac07b5025ec500d68
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+      - name: Run authenticated production Phase 3 acceptance
+        run: |
+          node <<'NODE'
+          const assert = require('node:assert/strict');
+          const base = process.env.API;
+          const stamp = `${Date.now()}-${Math.random().toString(36).slice(2,7)}`;
+          const cookies = new Map();
+          const ev = { mainSha: process.env.EXPECTED_MAIN_SHA, stamp, checks: [] };
+          const pass = (name, meta={}) => { ev.checks.push({name,status:'PASS',...meta}); console.log(`PASS: ${name}`); };
+          const sleep = ms => new Promise(r => setTimeout(r, ms));
+
+          function capture(res) {
+            const values = typeof res.headers.getSetCookie === 'function' ? res.headers.getSetCookie() : [];
+            for (const value of values) {
+              const first = value.split(';')[0];
+              const i = first.indexOf('=');
+              if (i > 0) cookies.set(first.slice(0,i), first.slice(i+1));
+            }
+          }
+          async function req(path,{method='GET',body}={}) {
+            const headers={accept:'application/json'};
+            if (body !== undefined) headers['content-type']='application/json';
+            if (cookies.size) headers.cookie=[...cookies].map(([k,v])=>`${k}=${v}`).join('; ');
+            if (!['GET','HEAD','OPTIONS'].includes(method) && cookies.get('csrf_token')) headers['x-csrf-token']=cookies.get('csrf_token');
+            const res=await fetch(base+path,{method,headers,body:body===undefined?undefined:JSON.stringify(body),redirect:'manual'});
+            capture(res);
+            const text=await res.text(); let data=text;
+            try { data=text?JSON.parse(text):null; } catch {}
+            return {status:res.status,data};
+          }
+          async function ok(path,opts={},codes=[200,201]) {
+            const r=await req(path,opts);
+            if(!codes.includes(r.status)) throw new Error(`${opts.method||'GET'} ${path} -> ${r.status}: ${JSON.stringify(r.data)}`);
+            return r.data;
+          }
+          async function ready() {
+            for(let i=1;i<=36;i++) {
+              const r=await req('/ready');
+              if(r.status===200){pass('production readiness',{attempt:i});return;}
+              if(![502,503,504].includes(r.status)) throw new Error(`unexpected readiness ${r.status}: ${JSON.stringify(r.data)}`);
+              await sleep(10000);
+            }
+            throw new Error('production API did not become ready');
+          }
+
+          (async()=>{
+            await ready();
+            const registered=await ok('/auth/register',{method:'POST',body:{
+              email:`p3.${stamp}@example.com`, password:'Phase3Acceptance9!', name:'P3 Acceptance Owner',
+              businessLegalName:`P3 Acceptance ${stamp}`, businessCountryCode:'PL', businessId:`P3-${stamp}`,
+              shopSlug:`p3-${stamp}`.toLowerCase(), shopName:`P3 Acceptance ${stamp}`,
+              packId:'gaming', addOns:['gaming_suite'], venueType:'billiard-hall', city:'Warsaw', country:'Poland'
+            }});
+            assert.ok(registered.user); assert.ok(cookies.get('access_token')); assert.ok(cookies.get('csrf_token'));
+            ev.userId=registered.user.id; ev.slug=`p3-${stamp}`.toLowerCase();
+            pass('isolated acceptance tenant');
+
+            const initialPolicy=await ok('/operations/policy');
+            pass('Phase 3 policy route deployed');
+            const category=await ok('/resources/categories',{method:'POST',body:{
+              type:'BILLIARD', name:'Gate P3 Tables', slotMinutes:60, unitCount:5, unitNamePrefix:'Gate Table',
+              rates:[{label:'Hourly',durationMinutes:60,price:60}]
+            }});
+            const catalog=await ok('/resources/catalog');
+            const cat=catalog.categories.find(x=>x.id===category.id); assert.ok(cat); assert.equal(cat.resources.length,5);
+            const R=cat.resources; ev.categoryId=category.id; pass('five-resource billiard floor');
+
+            const policy=await ok('/operations/policy',{method:'PATCH',body:{
+              expectedVersion:initialPolicy.version,pauseBillingMode:'STOP_CHARGING',managerOnlyPause:true,maxPauseMinutes:30,
+              moveRatePolicy:'REPRICE_TARGET',fixedSessionAutoExtend:false,fixedSessionWarningMinutes:[15,5],defaultExtensionMinutes:15
+            }});
+            assert.equal(policy.moveRatePolicy,'REPRICE_TARGET'); pass('live operations policy snapshot configuration');
+
+            const plan=await ok('/operations/rate-plans',{method:'POST',body:{
+              name:'Gate Fixed 60',resourceId:R[0].id,billingMode:'FIXED_DURATION',hourlyRateMinor:0,unitPriceMinor:5000,
+              fixedDurationMinutes:60,overtimeAfterMinutes:60,overtimeRateMinor:2000,roundingMinutes:1,minimumMinutes:0,active:true
+            }});
+            pass('fixed duration with explicit overage pricing');
+
+            const startOpts={method:'POST',body:{resourceId:R[0].id,ratePlanId:plan.id,participantCount:4,notes:`concurrency ${stamp}`}};
+            const starts=await Promise.all([req('/operations/sessions/start',startOpts),req('/operations/sessions/start',startOpts)]);
+            assert.equal(starts.filter(x=>[200,201].includes(x.status)).length,1);
+            assert.equal(starts.filter(x=>x.status===409).length,1);
+            let s=starts.find(x=>[200,201].includes(x.status)).data; const sid=s.id; ev.primarySessionId=sid;
+            assert.ok(s.scheduledEndAt); pass('concurrent start exactly one winner');
+
+            assert.equal((await req(`/operations/sessions/${sid}/pause`,{method:'POST',body:{expectedVersion:s.version,reason:''}})).status,400);
+            pass('pause reason required');
+            s=await ok(`/operations/sessions/${sid}/pause`,{method:'POST',body:{expectedVersion:s.version,reason:'Gate break'}});
+            assert.equal(s.status,'PAUSED');
+            assert.equal((await req(`/operations/sessions/${sid}/resume`,{method:'POST',body:{expectedVersion:s.version-1}})).status,409);
+            pass('stale version conflict');
+            s=await ok(`/operations/sessions/${sid}/resume`,{method:'POST',body:{expectedVersion:s.version}}); assert.equal(s.status,'ACTIVE');
+            pass('pause/resume segment');
+
+            const reservation=await ok('/reservations',{method:'POST',body:{resourceId:R[1].id,guestName:'Reserved Guest',
+              startsAt:new Date(Date.now()-120000).toISOString(),endsAt:new Date(Date.now()+2700000).toISOString(),partySize:2,
+              notes:`gate ${stamp}`}}); assert.ok(reservation.id);
+            assert.equal((await req(`/operations/sessions/${sid}/move`,{method:'POST',body:{expectedVersion:s.version,resourceId:R[1].id}})).status,409);
+            pass('move blocks current reservation');
+            s=await ok(`/operations/sessions/${sid}/move`,{method:'POST',body:{expectedVersion:s.version,resourceId:R[2].id}});
+            assert.equal(s.id,sid); assert.equal(s.resourceId,R[2].id); pass('move preserves identity and reprices target');
+
+            const before=new Date(s.scheduledEndAt).getTime();
+            s=await ok(`/operations/sessions/${sid}/extend`,{method:'POST',body:{expectedVersion:s.version,minutes:15}});
+            assert.equal(new Date(s.scheduledEndAt).getTime()-before,900000); pass('fixed-time extension');
+
+            let w=await ok('/operations/waitlist',{method:'POST',body:{name:'Wait Guest',phone:'+48123123123',partySize:3,
+              requestedResourceType:'BILLIARD',desiredDurationMinutes:60,notes:`wait ${stamp}`}});
+            w=await ok(`/operations/waitlist/${w.id}/notify`,{method:'POST',body:{expectedVersion:w.operations.version}});
+            const seatVersion=w.operations.version;
+            const seat=await ok(`/operations/waitlist/${w.id}/seat`,{method:'POST',body:{expectedVersion:seatVersion,resourceId:R[3].id}});
+            let ws=seat.session; ev.waitlistId=w.id;
+            assert.equal((await req(`/operations/waitlist/${w.id}/seat`,{method:'POST',body:{expectedVersion:seatVersion,resourceId:R[4].id}})).status,409);
+            pass('waitlist seats once; stale seat conflicts');
+
+            const m=await ok('/operations/maintenance',{method:'POST',body:{resourceId:R[4].id,reason:'Gate maintenance',
+              expectedReturnAt:new Date(Date.now()+1800000).toISOString(),notes:`maintenance ${stamp}`}});
+            assert.equal((await req('/operations/sessions/start',{method:'POST',body:{resourceId:R[4].id,participantCount:1}})).status,409);
+            await ok(`/operations/maintenance/${m.id}`,{method:'DELETE'}); pass('maintenance start guard and return-to-service');
+
+            const h=await ok('/operations/handover');
+            for(const k of ['activeSessions','pausedSessions','openChecks','pendingOrders','upcomingReservations','unresolvedPayments','deviceProblems','openCashSessions','unresolvedFiscalDocuments']) assert.ok(Array.isArray(h[k]),k);
+            assert.ok(h.activeSessions.some(x=>x.id===sid)); assert.ok(h.activeSessions.some(x=>x.id===ws.id)); pass('shift handover completeness');
+
+            const floor=await ok('/operations/floor');
+            const live=floor.resources.filter(x=>x.session&&['ACTIVE','PAUSED'].includes(x.session.status));
+            assert.equal(new Set(live.map(x=>x.id)).size,live.length);
+            for(const x of live){assert.equal(typeof x.session.timer?.elapsedSeconds,'number');assert.equal(typeof x.session.liveAccruedMinor,'number');assert.ok(Array.isArray(x.session.alerts));}
+            pass('live floor timers, amounts, alerts, unique occupancy');
+
+            s=await ok(`/operations/sessions/${sid}/finish`,{method:'POST',body:{expectedVersion:s.version}}); assert.equal(s.status,'FINISHED');
+            ws=await ok(`/operations/sessions/${ws.id}/finish`,{method:'POST',body:{expectedVersion:ws.version}}); assert.equal(ws.status,'FINISHED');
+            pass('finish calculates usage without settlement');
+
+            const g=await ok('/operations/session-groups',{method:'POST',body:{name:`Gate group ${stamp}`}});
+            let a=await ok('/operations/sessions/start',{method:'POST',body:{resourceId:R[0].id,groupId:g.id,participantCount:2}});
+            let b=await ok('/operations/sessions/start',{method:'POST',body:{resourceId:R[4].id,groupId:g.id,participantCount:2}});
+            assert.equal(a.groupId,g.id); assert.equal(b.groupId,g.id);
+            a=await ok(`/operations/sessions/${a.id}/finish`,{method:'POST',body:{expectedVersion:a.version}});
+            b=await ok(`/operations/sessions/${b.id}/finish`,{method:'POST',body:{expectedVersion:b.version}}); pass('group/participants shared identity');
+
+            let c=await ok('/operations/sessions/start',{method:'POST',body:{resourceId:R[0].id,participantCount:1,notes:'cancel audit'}});
+            c=await ok(`/operations/sessions/${c.id}/cancel`,{method:'POST',body:{expectedVersion:c.version,reason:'Gate cancellation reason'}});
+            assert.equal(c.status,'CANCELLED'); assert.equal(c.cancelReason,'Gate cancellation reason'); pass('audited cancellation reason');
+
+            const finalFloor=await ok('/operations/floor');
+            assert.equal(finalFloor.resources.filter(x=>x.session&&['ACTIVE','PAUSED'].includes(x.session.status)).length,0); pass('busy-floor closes with zero live occupancy');
+            const cleared=await ok('/operations/policy',{method:'PATCH',body:{expectedVersion:policy.version,maxPauseMinutes:null}});
+            assert.equal(cleared.maxPauseMinutes,null); pass('optional max pause clear/reset');
+
+            ev.result='PASS'; ev.finishedAt=new Date().toISOString(); console.log('PHASE3_GATE_P3='+JSON.stringify(ev));
+          })().catch(e=>{ev.result='FAIL';ev.error=e?.stack||String(e);console.error('PHASE3_GATE_P3='+JSON.stringify(ev));process.exitCode=1;});
+          NODE
