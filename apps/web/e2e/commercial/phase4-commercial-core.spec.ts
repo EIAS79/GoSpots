@@ -33,7 +33,14 @@ test('@smoke P4 commercial core exposes one controlled tab and settlement flow',
   await controls.getByRole('combobox').first().selectOption('BAR_TAB');
   await controls.getByPlaceholder('Table / tab reference').fill('Bar tab P4');
   await controls.getByPlaceholder('Service area', { exact: true }).fill('Main bar');
-  await controls.getByRole('button', { name: 'Save context' }).click();
+  await Promise.all([
+    page.waitForResponse((response) =>
+      response.url().includes(`/api/v1/commercial/checks/${check.id}/profile`) &&
+      response.request().method() === 'PUT' &&
+      response.status() === 200,
+    ),
+    controls.getByRole('button', { name: 'Save context' }).click(),
+  ]);
 
   let context = await api<any>(page, 'GET', `/commercial/checks/${check.id}`);
   expect(context.profile.checkType).toBe('BAR_TAB');
@@ -44,7 +51,14 @@ test('@smoke P4 commercial core exposes one controlled tab and settlement flow',
   await adjustment.getByRole('combobox').selectOption('FIXED_DISCOUNT');
   await adjustment.locator('input[type="number"]').fill('1.00');
   await adjustment.getByPlaceholder('Required reason').fill('Phase 4 browser acceptance');
-  await adjustment.getByRole('button', { name: 'Apply adjustment' }).click();
+  await Promise.all([
+    page.waitForResponse((response) =>
+      response.url().includes(`/api/v1/commercial/checks/${check.id}/adjustments`) &&
+      response.request().method() === 'POST' &&
+      response.status() === 201,
+    ),
+    adjustment.getByRole('button', { name: 'Apply adjustment' }).click(),
+  ]);
 
   context = await api<any>(page, 'GET', `/commercial/checks/${check.id}`);
   expect(context.adjustments.filter((row: any) => row.voidedAt == null)).toHaveLength(1);
