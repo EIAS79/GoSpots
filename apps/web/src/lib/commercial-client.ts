@@ -72,7 +72,12 @@ export type CommercialCheckContext = {
   projection: CheckoutPreview | null;
 };
 
-function mutate<T>(scope: string, request: unknown, path: string, body: unknown) {
+function mutate<T>(
+  scope: string,
+  request: Record<string, unknown>,
+  path: string,
+  body: unknown,
+) {
   const actionKey = idempotencyActionKey(scope, request);
   return withIdempotentFinanceCall(actionKey, (idempotencyKey) =>
     api<T>(path, {
