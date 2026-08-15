@@ -53,7 +53,6 @@ jobs:
           const hash = createHash('sha256').update(raw).digest('hex');
           fs.writeFileSync('/tmp/phase3-refresh-token', raw, { mode: 0o600 });
           fs.writeFileSync('/tmp/phase3-bootstrap-hash.txt', hash + '\n');
-          console.log('Generated one-time bootstrap token hash. Raw token remains runner-local.');
           NODE
 
       - name: Publish bootstrap hash for production session binding
@@ -62,9 +61,6 @@ jobs:
           name: phase3-bootstrap-hash-${{ github.run_id }}
           retention-days: 1
           path: /tmp/phase3-bootstrap-hash.txt
-
-      - name: Allow acceptance session binding window
-        run: sleep 45
 
       - name: Exchange one-time refresh token for normal production auth
         shell: bash
@@ -82,25 +78,34 @@ jobs:
             echo "CSRF endpoint did not return csrf_token cookie." >&2
             exit 1
           fi
-          code=$(curl -sS -o /tmp/refresh.json -D /tmp/refresh.headers -c /tmp/phase3.cookies -w '%{http_code}' \
-            -X POST "$GOSPOTS_BASE_URL/auth/refresh" \
-            -H "Cookie: refresh_token=$raw; csrf_token=$csrf" \
-            -H "X-CSRF-Token: $csrf" || true)
-          echo "refresh exchange -> HTTP $code"
-          if [ "$code" != "200" ]; then
-            echo "Refresh exchange response:" >&2
-            cat /tmp/refresh.json >&2 || true
-            exit 1
-          fi
-          access=$(awk '$6=="access_token" {print $7}' /tmp/phase3.cookies | tail -n1)
-          if [ -z "$access" ]; then
-            echo "Refresh succeeded but access_token cookie was not returned." >&2
-            exit 1
-          fi
-          echo "::add-mask::$access"
-          echo "PHASE3_ACCESS_TOKEN=$access" >> "$GITHUB_ENV"
-          rm -f /tmp/phase3-refresh-token
-          echo "One-time bootstrap session exchanged successfully."
+          for i in {1..120}; do
+            code=$(curl -sS -o /tmp/refresh.json -c /tmp/phase3.cookies -w '%{http_code}' \
+              -X POST "$GOSPOTS_BASE_URL/auth/refresh" \
+              -H "Cookie: refresh_token=$raw; csrf_token=$csrf" \
+              -H "X-CSRF-Token: $csrf" || true)
+            if [ "$code" = "200" ]; then
+              access=$(awk '$6=="access_token" {print $7}' /tmp/phase3.cookies | tail -n1)
+              if [ -z "$access" ]; then
+                echo "Refresh succeeded but access_token cookie was not returned." >&2
+                exit 1
+              fi
+              echo "::add-mask::$access"
+              echo "PHASE3_ACCESS_TOKEN=$access" >> "$GITHUB_ENV"
+              rm -f /tmp/phase3-refresh-token
+              echo "One-time bootstrap session exchanged successfully."
+              exit 0
+            fi
+            if [ "$code" = "403" ]; then
+              echo "Refresh exchange rejected by CSRF/security policy:" >&2
+              cat /tmp/refresh.json >&2 || true
+              exit 1
+            fi
+            echo "bootstrap auth attempt $i -> HTTP $code"
+            sleep 5
+          done
+          echo "Failed to exchange one-time bootstrap session." >&2
+          cat /tmp/refresh.json >&2 || true
+          exit 1
 
       - name: Run authenticated production Gate P3
         run: node scripts/phase3-production-acceptance.mjs
