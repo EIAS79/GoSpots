@@ -67,7 +67,6 @@ async function main() {
       email: `${prefix}@gospots.invalid`,
       name: 'Phase 4 Assert',
       passwordHash: 'not-a-real-password',
-      role: 'USER',
     },
   });
   await prisma.shop.create({
@@ -75,6 +74,7 @@ async function main() {
       id: shopId,
       name: 'Phase 4 Assert Venue',
       slug: prefix,
+      dashboardKey: `${prefix}_dashboard_key`,
       ownerId: userId,
       currency: 'PLN',
       timezone: 'Europe/Warsaw',
@@ -113,7 +113,6 @@ async function main() {
       referenceType: 'VENUE_ORDER',
       referenceId: orderId,
     },
-    include: undefined,
   });
   assert(saleFacts.length === 1, 'VenueOrder did not create exactly one canonical SALE fact');
   const saleLedger = await prisma.ledgerEntry.findUnique({
