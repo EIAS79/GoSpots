@@ -14,6 +14,7 @@ import {
 } from '@prisma/client';
 import { ApiDomainErrorCode } from '../../common/api-error.codes';
 import { apiConflictException } from '../../common/api-error.util';
+import { roundMoneyDecimal } from '../../common/money.util';
 import { assertExpectedVersion } from '../../common/optimistic-concurrency.util';
 import {
   hasPermission,
@@ -56,10 +57,6 @@ export class CommercialCoreService {
     throw new ForbiddenException(`Missing ${permission}`);
   }
 
-  private has(actor: JwtAccessPayload, permission: PermissionKey) {
-    return actor.shopRole === 'OWNER' || hasPermission(actor.perms ?? '', permission);
-  }
-
   private async policy(db: Db, shopId: string) {
     return db.commercialPolicy.upsert({
       where: { shopId },
@@ -85,7 +82,14 @@ export class CommercialCoreService {
       section: 'finance',
       action: 'commercial.policy.update',
       summary: 'Updated commercial-core control limits',
-      meta: dto,
+      meta: {
+        maxManualDiscountBps: dto.maxManualDiscountBps ?? null,
+        maxCompAmountMinor: dto.maxCompAmountMinor ?? null,
+        maxPriceOverrideBps: dto.maxPriceOverrideBps ?? null,
+        allowCashShiftCloseWithOpenTabs:
+          dto.allowCashShiftCloseWithOpenTabs ?? null,
+        allowResourceTransfer: dto.allowResourceTransfer ?? null,
+      },
     });
     return row;
   }
@@ -99,13 +103,18 @@ export class CommercialCoreService {
     await tx.$queryRaw(
       Prisma.sql`SELECT "id" FROM "GuestCheck" WHERE "id"=${checkId} AND "shopId"=${shopId} FOR UPDATE`,
     );
-    const check = await tx.guestCheck.findFirst({ where: { id: checkId, shopId } });
+    const check = await tx.guestCheck.findFirst({
+      where: { id: checkId, shopId },
+    });
     if (!check) throw new NotFoundException('Guest check not found');
-    if (check.status !== 'OPEN') throw new ConflictException('Guest check is not open');
+    if (check.status !== 'OPEN') {
+      throw new ConflictException('Guest check is not open');
+    }
     assertExpectedVersion(check.version, expectedVersion, {
       aggregateType: 'guest_check',
       aggregateId: checkId,
     });
+
     if (check.currentSettlementId) {
       const paid = await tx.payment.count({
         where: {
@@ -118,11 +127,18 @@ export class CommercialCoreService {
         throw apiConflictException(
           ApiDomainErrorCode.STATE_CONFLICT,
           'Paid checkout is immutable. Use the refund/re-sale boundary.',
-          { stage: 'PAID_SETTLEMENT_IMMUTABLE', settlementId: check.currentSettlementId },
+          {
+            stage: 'PAID_SETTLEMENT_IMMUTABLE',
+            settlementId: check.currentSettlementId,
+          },
         );
       }
       await tx.checkSettlement.updateMany({
-        where: { id: check.currentSettlementId, shopId, state: { not: 'VOID' } },
+        where: {
+          id: check.currentSettlementId,
+          shopId,
+          state: { not: 'VOID' },
+        },
         data: { state: 'VOID' },
       });
     }
@@ -136,8 +152,16 @@ export class CommercialCoreService {
     expectedVersion: number,
   ) {
     const result = await tx.guestCheck.updateMany({
-      where: { id: checkId, shopId, status: 'OPEN', version: expectedVersion },
-      data: { currentSettlementId: null, version: { increment: 1 } },
+      where: {
+        id: checkId,
+        shopId,
+        status: 'OPEN',
+        version: expectedVersion,
+      },
+      data: {
+        currentSettlementId: null,
+        version: { increment: 1 },
+      },
     });
     if (result.count !== 1) {
       throw apiConflictException(
@@ -163,7 +187,9 @@ export class CommercialCoreService {
         where: { shopId, userId: dto.assignedOperatorId },
         select: { id: true },
       });
-      if (!membership) throw new NotFoundException('Assigned operator is not venue staff');
+      if (!membership) {
+        throw new NotFoundException('Assigned operator is not venue staff');
+      }
     }
     if (dto.resourceId) {
       const resource = await db.resource.findFirst({
@@ -177,10 +203,12 @@ export class CommercialCoreService {
         where: { shopId, id: dto.operationsSessionId },
         select: { id: true },
       });
-      if (!session) throw new NotFoundException('Operations session not found');
+      if (!session) {
+        throw new NotFoundException('Operations session not found');
+      }
     }
     if (dto.customerId) {
-      const customer = await db.customer.findFirst({
+      const customer = await db.customerProfile.findFirst({
         where: { shopId, id: dto.customerId },
         select: { id: true },
       });
@@ -193,29 +221,78 @@ export class CommercialCoreService {
     const shopId = requireShopId(actor);
     const check = await this.prisma.guestCheck.findFirst({
       where: { id: checkId, shopId },
-      select: { id: true, status: true, version: true, openedAt: true, settledAt: true },
+      select: {
+        id: true,
+        status: true,
+        version: true,
+        openedAt: true,
+        settledAt: true,
+      },
     });
     if (!check) throw new NotFoundException('Guest check not found');
-    const [profile, adjustments, serviceCharges, tips, transfers, reopens, projection] =
-      await Promise.all([
-        this.prisma.guestCheckCommercialProfile.findFirst({ where: { shopId, guestCheckId: checkId } }),
-        this.prisma.commercialAdjustment.findMany({ where: { shopId, guestCheckId: checkId }, orderBy: { createdAt: 'asc' } }),
-        this.prisma.guestCheckServiceCharge.findMany({ where: { shopId, guestCheckId: checkId }, orderBy: { createdAt: 'asc' } }),
-        this.prisma.guestCheckTip.findMany({ where: { shopId, guestCheckId: checkId }, orderBy: { createdAt: 'asc' } }),
-        this.prisma.guestCheckTransferEvent.findMany({ where: { shopId, guestCheckId: checkId }, orderBy: { createdAt: 'asc' } }),
-        this.prisma.guestCheckReopenEvent.findMany({ where: { shopId, guestCheckId: checkId }, orderBy: { createdAt: 'asc' } }),
-        check.status === 'OPEN'
-          ? this.settlement.preview(actor, checkId)
-          : Promise.resolve(null),
-      ]);
-    return { check, profile, adjustments, serviceCharges, tips, transfers, reopens, projection };
+
+    const [
+      profile,
+      adjustments,
+      serviceCharges,
+      tips,
+      transfers,
+      reopens,
+      projection,
+    ] = await Promise.all([
+      this.prisma.guestCheckCommercialProfile.findFirst({
+        where: { shopId, guestCheckId: checkId },
+      }),
+      this.prisma.commercialAdjustment.findMany({
+        where: { shopId, guestCheckId: checkId },
+        orderBy: { createdAt: 'asc' },
+      }),
+      this.prisma.guestCheckServiceCharge.findMany({
+        where: { shopId, guestCheckId: checkId },
+        orderBy: { createdAt: 'asc' },
+      }),
+      this.prisma.guestCheckTip.findMany({
+        where: { shopId, guestCheckId: checkId },
+        orderBy: { createdAt: 'asc' },
+      }),
+      this.prisma.guestCheckTransferEvent.findMany({
+        where: { shopId, guestCheckId: checkId },
+        orderBy: { createdAt: 'asc' },
+      }),
+      this.prisma.guestCheckReopenEvent.findMany({
+        where: { shopId, guestCheckId: checkId },
+        orderBy: { createdAt: 'asc' },
+      }),
+      check.status === 'OPEN'
+        ? this.settlement.preview(actor, checkId)
+        : Promise.resolve(null),
+    ]);
+    return {
+      check,
+      profile,
+      adjustments,
+      serviceCharges,
+      tips,
+      transfers,
+      reopens,
+      projection,
+    };
   }
 
-  async upsertProfile(actor: JwtAccessPayload, checkId: string, dto: UpsertCommercialProfileDto) {
+  async upsertProfile(
+    actor: JwtAccessPayload,
+    checkId: string,
+    dto: UpsertCommercialProfileDto,
+  ) {
     this.assertPermission(actor, PERMISSIONS.CHECKOUT_WRITE);
     const shopId = requireShopId(actor);
     const row = await this.prisma.$transaction(async (tx) => {
-      await this.lockMutableCheck(tx, shopId, checkId, dto.expectedCheckVersion);
+      await this.lockMutableCheck(
+        tx,
+        shopId,
+        checkId,
+        dto.expectedCheckVersion,
+      );
       await this.validateProfileTargets(tx, shopId, dto);
       const profile = await tx.guestCheckCommercialProfile.upsert({
         where: { guestCheckId: checkId },
@@ -241,27 +318,52 @@ export class CommercialCoreService {
           version: { increment: 1 },
         },
       });
-      await this.claimCheckMutation(tx, shopId, checkId, dto.expectedCheckVersion);
+      await this.claimCheckMutation(
+        tx,
+        shopId,
+        checkId,
+        dto.expectedCheckVersion,
+      );
       return profile;
     });
     await this.audit.record(actor, {
       section: 'finance',
       action: 'guest-check.commercial-profile.update',
       summary: 'Updated commercial tab context',
-      meta: { checkId, checkType: row.checkType, resourceId: row.resourceId, serviceArea: row.serviceArea },
+      meta: {
+        checkId,
+        checkType: row.checkType,
+        resourceId: row.resourceId,
+        serviceArea: row.serviceArea,
+      },
     });
     return row;
   }
 
-  async transfer(actor: JwtAccessPayload, checkId: string, dto: TransferGuestCheckDto) {
+  async transfer(
+    actor: JwtAccessPayload,
+    checkId: string,
+    dto: TransferGuestCheckDto,
+  ) {
     this.assertPermission(actor, PERMISSIONS.CHECKOUT_WRITE);
     const shopId = requireShopId(actor);
     const policy = await this.policy(this.prisma, shopId);
-    if (!policy.allowResourceTransfer && (dto.resourceId || dto.operationsSessionId)) {
-      throw new ForbiddenException('Resource transfer is disabled by venue commercial policy');
+    if (
+      !policy.allowResourceTransfer &&
+      (dto.resourceId || dto.operationsSessionId)
+    ) {
+      throw new ForbiddenException(
+        'Resource transfer is disabled by venue commercial policy',
+      );
     }
+
     const event = await this.prisma.$transaction(async (tx) => {
-      await this.lockMutableCheck(tx, shopId, checkId, dto.expectedCheckVersion);
+      await this.lockMutableCheck(
+        tx,
+        shopId,
+        checkId,
+        dto.expectedCheckVersion,
+      );
       await this.validateProfileTargets(tx, shopId, dto);
       const before = await tx.guestCheckCommercialProfile.upsert({
         where: { guestCheckId: checkId },
@@ -271,9 +373,11 @@ export class CommercialCoreService {
       const after = await tx.guestCheckCommercialProfile.update({
         where: { guestCheckId: checkId },
         data: {
-          assignedOperatorId: dto.assignedOperatorId ?? before.assignedOperatorId,
+          assignedOperatorId:
+            dto.assignedOperatorId ?? before.assignedOperatorId,
           resourceId: dto.resourceId ?? before.resourceId,
-          operationsSessionId: dto.operationsSessionId ?? before.operationsSessionId,
+          operationsSessionId:
+            dto.operationsSessionId ?? before.operationsSessionId,
           serviceArea: dto.serviceArea ?? before.serviceArea,
           version: { increment: 1 },
         },
@@ -294,21 +398,36 @@ export class CommercialCoreService {
           toServiceArea: after.serviceArea,
         },
       });
-      await this.claimCheckMutation(tx, shopId, checkId, dto.expectedCheckVersion);
+      await this.claimCheckMutation(
+        tx,
+        shopId,
+        checkId,
+        dto.expectedCheckVersion,
+      );
       return created;
     });
     await this.audit.record(actor, {
       section: 'finance',
       action: 'guest-check.transfer',
       summary: 'Transferred open tab context without changing charge history',
-      meta: { checkId, transferEventId: event.id, reason: dto.reason },
+      meta: {
+        checkId,
+        transferEventId: event.id,
+        reason: dto.reason,
+      },
     });
     return event;
   }
 
-  private requiredAdjustmentPermission(type: CommercialAdjustmentType): PermissionKey {
-    if (type === CommercialAdjustmentType.MANAGER_COMP) return PERMISSIONS.COMP_APPLY;
-    if (type === CommercialAdjustmentType.PRICE_OVERRIDE) return PERMISSIONS.PRICE_OVERRIDE;
+  private requiredAdjustmentPermission(
+    type: CommercialAdjustmentType,
+  ): PermissionKey {
+    if (type === CommercialAdjustmentType.MANAGER_COMP) {
+      return PERMISSIONS.COMP_APPLY;
+    }
+    if (type === CommercialAdjustmentType.PRICE_OVERRIDE) {
+      return PERMISSIONS.PRICE_OVERRIDE;
+    }
     if (
       type === CommercialAdjustmentType.PERCENTAGE_DISCOUNT ||
       type === CommercialAdjustmentType.FIXED_DISCOUNT ||
@@ -323,41 +442,73 @@ export class CommercialCoreService {
     return Number(roundMoneyDecimal(total.mul(100), 0).toString());
   }
 
-  async applyAdjustment(actor: JwtAccessPayload, checkId: string, dto: ApplyCommercialAdjustmentDto) {
-    this.assertPermission(actor, this.requiredAdjustmentPermission(dto.type));
+  async applyAdjustment(
+    actor: JwtAccessPayload,
+    checkId: string,
+    dto: ApplyCommercialAdjustmentDto,
+  ) {
+    this.assertPermission(
+      actor,
+      this.requiredAdjustmentPermission(dto.type),
+    );
     const shopId = requireShopId(actor);
     const created = await this.prisma.$transaction(async (tx) => {
-      await this.lockMutableCheck(tx, shopId, checkId, dto.expectedCheckVersion);
+      await this.lockMutableCheck(
+        tx,
+        shopId,
+        checkId,
+        dto.expectedCheckVersion,
+      );
       const policy = await this.policy(tx, shopId);
-      const before = (await this.settlement.buildProjection(tx, shopId, checkId)).projection;
+      const before = (
+        await this.settlement.buildProjection(tx, shopId, checkId)
+      ).projection;
       const scope = dto.scope ?? CommercialAdjustmentScope.CHECK;
       const source = dto.source ?? CommercialAdjustmentSource.MANUAL;
 
       if (dto.type === CommercialAdjustmentType.PERCENTAGE_DISCOUNT) {
-        if (!dto.percentageBps) throw new BadRequestException('Percentage discount requires percentageBps');
+        if (!dto.percentageBps) {
+          throw new BadRequestException(
+            'Percentage discount requires percentageBps',
+          );
+        }
         if (dto.percentageBps > policy.maxManualDiscountBps) {
           throw new ForbiddenException('Discount exceeds venue maximum');
         }
       } else if (dto.type === CommercialAdjustmentType.PRICE_OVERRIDE) {
-        if (scope !== CommercialAdjustmentScope.LINE || dto.amountMinor == null) {
-          throw new BadRequestException('Price override requires LINE scope and target amountMinor');
+        if (
+          scope !== CommercialAdjustmentScope.LINE ||
+          dto.amountMinor == null
+        ) {
+          throw new BadRequestException(
+            'Price override requires LINE scope and target amountMinor',
+          );
         }
         const targets = before.lines.filter(
           (line) =>
-            (!dto.targetSourceType || line.sourceType === dto.targetSourceType) &&
+            (!dto.targetSourceType ||
+              line.sourceType === dto.targetSourceType) &&
             (!dto.targetSourceId || line.sourceId === dto.targetSourceId) &&
-            (!dto.targetLineReference || line.lineReference === dto.targetLineReference),
+            (!dto.targetLineReference ||
+              line.lineReference === dto.targetLineReference),
         );
-        if (targets.length !== 1) throw new BadRequestException('Price override must resolve to exactly one line');
+        if (targets.length !== 1) {
+          throw new BadRequestException(
+            'Price override must resolve to exactly one line',
+          );
+        }
         const oldMinor = this.projectionMinor(targets[0].finalAmount);
         const reduction = Math.max(0, oldMinor - dto.amountMinor);
-        const reductionBps = oldMinor > 0 ? Math.round((reduction * 10000) / oldMinor) : 0;
+        const reductionBps =
+          oldMinor > 0 ? Math.round((reduction * 10000) / oldMinor) : 0;
         if (reductionBps > policy.maxPriceOverrideBps) {
           throw new ForbiddenException('Price override exceeds venue maximum');
         }
       } else {
         if (dto.amountMinor == null || dto.amountMinor <= 0) {
-          throw new BadRequestException('This adjustment requires a positive amountMinor');
+          throw new BadRequestException(
+            'This adjustment requires a positive amountMinor',
+          );
         }
         if (
           dto.type === CommercialAdjustmentType.MANAGER_COMP &&
@@ -367,18 +518,33 @@ export class CommercialCoreService {
         }
       }
 
-      if (scope === CommercialAdjustmentScope.LINE && (!dto.targetSourceId || !dto.targetLineReference)) {
-        throw new BadRequestException('Line adjustment requires targetSourceId and targetLineReference');
+      if (
+        scope === CommercialAdjustmentScope.LINE &&
+        (!dto.targetSourceId || !dto.targetLineReference)
+      ) {
+        throw new BadRequestException(
+          'Line adjustment requires targetSourceId and targetLineReference',
+        );
       }
 
       if (dto.type === CommercialAdjustmentType.DEPOSIT_APPLICATION) {
-        if (dto.targetSourceType !== 'RESERVATION_DEPOSIT' || !dto.targetSourceId) {
-          throw new BadRequestException('Deposit application requires a RESERVATION_DEPOSIT source');
+        if (
+          dto.targetSourceType !== 'RESERVATION_DEPOSIT' ||
+          !dto.targetSourceId
+        ) {
+          throw new BadRequestException(
+            'Deposit application requires a RESERVATION_DEPOSIT source',
+          );
         }
-        const captured = await tx.reservationDepositCheckoutAttempt.aggregate({
-          where: { shopId, reservationId: dto.targetSourceId, status: 'SUCCEEDED' },
-          _sum: { amountMinor: true },
-        });
+        const captured =
+          await tx.reservationDepositCheckoutAttempt.aggregate({
+            where: {
+              shopId,
+              reservationId: dto.targetSourceId,
+              status: 'SUCCEEDED',
+            },
+            _sum: { amountMinor: true },
+          });
         const used = await tx.commercialAdjustment.aggregate({
           where: {
             shopId,
@@ -389,9 +555,13 @@ export class CommercialCoreService {
           },
           _sum: { amountMinor: true },
         });
-        const remaining = (captured._sum.amountMinor ?? 0) - (used._sum.amountMinor ?? 0);
+        const remaining =
+          (captured._sum.amountMinor ?? 0) -
+          (used._sum.amountMinor ?? 0);
         if ((dto.amountMinor ?? 0) > remaining) {
-          throw new ConflictException('Deposit application exceeds captured unused deposit balance');
+          throw new ConflictException(
+            'Deposit application exceeds captured unused deposit balance',
+          );
         }
       }
 
@@ -413,12 +583,19 @@ export class CommercialCoreService {
           createdById: actor.sub,
         },
       });
-      const after = (await this.settlement.buildProjection(tx, shopId, checkId)).projection;
+      const after = (
+        await this.settlement.buildProjection(tx, shopId, checkId)
+      ).projection;
       const updated = await tx.commercialAdjustment.update({
         where: { id: row.id },
         data: { afterTotalMinor: this.projectionMinor(after.total) },
       });
-      await this.claimCheckMutation(tx, shopId, checkId, dto.expectedCheckVersion);
+      await this.claimCheckMutation(
+        tx,
+        shopId,
+        checkId,
+        dto.expectedCheckVersion,
+      );
       await this.outbox.enqueue(tx, {
         shopId,
         aggregateType: 'guest_check',
@@ -440,122 +617,445 @@ export class CommercialCoreService {
       section: 'finance',
       action: 'guest-check.adjustment.apply',
       summary: `Applied ${created.type.toLowerCase().replaceAll('_', ' ')}`,
-      meta: { checkId, adjustmentId: created.id, beforeTotalMinor: created.beforeTotalMinor, afterTotalMinor: created.afterTotalMinor, reason: created.reason },
+      meta: {
+        checkId,
+        adjustmentId: created.id,
+        beforeTotalMinor: created.beforeTotalMinor,
+        afterTotalMinor: created.afterTotalMinor,
+        reason: created.reason,
+      },
     });
     return created;
   }
 
-  async voidAdjustment(actor: JwtAccessPayload, checkId: string, adjustmentId: string, dto: VoidCommercialMutationDto) {
+  async voidAdjustment(
+    actor: JwtAccessPayload,
+    checkId: string,
+    adjustmentId: string,
+    dto: VoidCommercialMutationDto,
+  ) {
     const shopId = requireShopId(actor);
-    const existing = await this.prisma.commercialAdjustment.findFirst({ where: { id: adjustmentId, shopId, guestCheckId: checkId } });
+    const existing = await this.prisma.commercialAdjustment.findFirst({
+      where: { id: adjustmentId, shopId, guestCheckId: checkId },
+    });
     if (!existing) throw new NotFoundException('Adjustment not found');
-    this.assertPermission(actor, this.requiredAdjustmentPermission(existing.type));
+    this.assertPermission(
+      actor,
+      this.requiredAdjustmentPermission(existing.type),
+    );
     const row = await this.prisma.$transaction(async (tx) => {
-      await this.lockMutableCheck(tx, shopId, checkId, dto.expectedCheckVersion);
-      const updated = await tx.commercialAdjustment.update({ where: { id: adjustmentId }, data: { voidedAt: new Date(), voidedById: actor.sub, voidReason: dto.reason.trim() } });
-      await this.claimCheckMutation(tx, shopId, checkId, dto.expectedCheckVersion);
+      await this.lockMutableCheck(
+        tx,
+        shopId,
+        checkId,
+        dto.expectedCheckVersion,
+      );
+      const updated = await tx.commercialAdjustment.update({
+        where: { id: adjustmentId },
+        data: {
+          voidedAt: new Date(),
+          voidedById: actor.sub,
+          voidReason: dto.reason.trim(),
+        },
+      });
+      await this.claimCheckMutation(
+        tx,
+        shopId,
+        checkId,
+        dto.expectedCheckVersion,
+      );
       return updated;
     });
-    await this.audit.record(actor, { section: 'finance', action: 'guest-check.adjustment.void', summary: 'Voided commercial adjustment', meta: { checkId, adjustmentId, reason: dto.reason } });
+    await this.audit.record(actor, {
+      section: 'finance',
+      action: 'guest-check.adjustment.void',
+      summary: 'Voided commercial adjustment',
+      meta: { checkId, adjustmentId, reason: dto.reason },
+    });
     return row;
   }
 
-  async addServiceCharge(actor: JwtAccessPayload, checkId: string, dto: AddServiceChargeDto) {
+  async addServiceCharge(
+    actor: JwtAccessPayload,
+    checkId: string,
+    dto: AddServiceChargeDto,
+  ) {
     this.assertPermission(actor, PERMISSIONS.CHECKOUT_WRITE);
-    if (dto.mode === 'FIXED' && !dto.amountMinor) throw new BadRequestException('Fixed service charge requires amountMinor');
-    if (dto.mode === 'PERCENTAGE' && !dto.percentageBps) throw new BadRequestException('Percentage service charge requires percentageBps');
+    if (dto.mode === 'FIXED' && !dto.amountMinor) {
+      throw new BadRequestException(
+        'Fixed service charge requires amountMinor',
+      );
+    }
+    if (dto.mode === 'PERCENTAGE' && !dto.percentageBps) {
+      throw new BadRequestException(
+        'Percentage service charge requires percentageBps',
+      );
+    }
     const shopId = requireShopId(actor);
     const row = await this.prisma.$transaction(async (tx) => {
-      await this.lockMutableCheck(tx, shopId, checkId, dto.expectedCheckVersion);
-      const created = await tx.guestCheckServiceCharge.create({ data: { shopId, guestCheckId: checkId, mode: dto.mode, amountMinor: dto.amountMinor, percentageBps: dto.percentageBps, reason: dto.reason.trim(), createdById: actor.sub } });
-      await this.claimCheckMutation(tx, shopId, checkId, dto.expectedCheckVersion);
+      await this.lockMutableCheck(
+        tx,
+        shopId,
+        checkId,
+        dto.expectedCheckVersion,
+      );
+      const created = await tx.guestCheckServiceCharge.create({
+        data: {
+          shopId,
+          guestCheckId: checkId,
+          mode: dto.mode,
+          amountMinor: dto.amountMinor,
+          percentageBps: dto.percentageBps,
+          reason: dto.reason.trim(),
+          createdById: actor.sub,
+        },
+      });
+      await this.claimCheckMutation(
+        tx,
+        shopId,
+        checkId,
+        dto.expectedCheckVersion,
+      );
       return created;
     });
-    await this.audit.record(actor, { section: 'finance', action: 'guest-check.service-charge.add', summary: 'Added separate service charge', meta: { checkId, serviceChargeId: row.id, mode: row.mode } });
+    await this.audit.record(actor, {
+      section: 'finance',
+      action: 'guest-check.service-charge.add',
+      summary: 'Added separate service charge',
+      meta: {
+        checkId,
+        serviceChargeId: row.id,
+        mode: row.mode,
+      },
+    });
     return row;
   }
 
-  async voidServiceCharge(actor: JwtAccessPayload, checkId: string, id: string, dto: VoidCommercialMutationDto) {
+  async voidServiceCharge(
+    actor: JwtAccessPayload,
+    checkId: string,
+    id: string,
+    dto: VoidCommercialMutationDto,
+  ) {
     this.assertPermission(actor, PERMISSIONS.CHECKOUT_WRITE);
     const shopId = requireShopId(actor);
-    return this.prisma.$transaction(async (tx) => {
-      await this.lockMutableCheck(tx, shopId, checkId, dto.expectedCheckVersion);
-      const found = await tx.guestCheckServiceCharge.findFirst({ where: { id, shopId, guestCheckId: checkId, voidedAt: null } });
+    const row = await this.prisma.$transaction(async (tx) => {
+      await this.lockMutableCheck(
+        tx,
+        shopId,
+        checkId,
+        dto.expectedCheckVersion,
+      );
+      const found = await tx.guestCheckServiceCharge.findFirst({
+        where: { id, shopId, guestCheckId: checkId, voidedAt: null },
+      });
       if (!found) throw new NotFoundException('Service charge not found');
-      const updated = await tx.guestCheckServiceCharge.update({ where: { id }, data: { voidedAt: new Date(), voidedById: actor.sub, voidReason: dto.reason.trim() } });
-      await this.claimCheckMutation(tx, shopId, checkId, dto.expectedCheckVersion);
+      const updated = await tx.guestCheckServiceCharge.update({
+        where: { id },
+        data: {
+          voidedAt: new Date(),
+          voidedById: actor.sub,
+          voidReason: dto.reason.trim(),
+        },
+      });
+      await this.claimCheckMutation(
+        tx,
+        shopId,
+        checkId,
+        dto.expectedCheckVersion,
+      );
       return updated;
     });
-  }
-
-  async addTip(actor: JwtAccessPayload, checkId: string, dto: AddTipDto) {
-    this.assertPermission(actor, PERMISSIONS.CHECKOUT_WRITE);
-    const shopId = requireShopId(actor);
-    const row = await this.prisma.$transaction(async (tx) => {
-      await this.lockMutableCheck(tx, shopId, checkId, dto.expectedCheckVersion);
-      const created = await tx.guestCheckTip.create({ data: { shopId, guestCheckId: checkId, method: dto.method, amountMinor: dto.amountMinor, note: dto.note?.trim() || null, createdById: actor.sub } });
-      await this.claimCheckMutation(tx, shopId, checkId, dto.expectedCheckVersion);
-      return created;
+    await this.audit.record(actor, {
+      section: 'finance',
+      action: 'guest-check.service-charge.void',
+      summary: 'Voided separate service charge',
+      meta: { checkId, serviceChargeId: id, reason: dto.reason },
     });
-    await this.audit.record(actor, { section: 'finance', action: 'guest-check.tip.add', summary: 'Added separate gratuity', meta: { checkId, tipId: row.id, method: row.method, amountMinor: row.amountMinor } });
     return row;
   }
 
-  async voidTip(actor: JwtAccessPayload, checkId: string, id: string, dto: VoidCommercialMutationDto) {
+  async addTip(
+    actor: JwtAccessPayload,
+    checkId: string,
+    dto: AddTipDto,
+  ) {
     this.assertPermission(actor, PERMISSIONS.CHECKOUT_WRITE);
     const shopId = requireShopId(actor);
-    return this.prisma.$transaction(async (tx) => {
-      await this.lockMutableCheck(tx, shopId, checkId, dto.expectedCheckVersion);
-      const found = await tx.guestCheckTip.findFirst({ where: { id, shopId, guestCheckId: checkId, voidedAt: null } });
-      if (!found) throw new NotFoundException('Tip not found');
-      const updated = await tx.guestCheckTip.update({ where: { id }, data: { voidedAt: new Date(), voidedById: actor.sub, voidReason: dto.reason.trim() } });
-      await this.claimCheckMutation(tx, shopId, checkId, dto.expectedCheckVersion);
-      return updated;
+    const row = await this.prisma.$transaction(async (tx) => {
+      await this.lockMutableCheck(
+        tx,
+        shopId,
+        checkId,
+        dto.expectedCheckVersion,
+      );
+      const created = await tx.guestCheckTip.create({
+        data: {
+          shopId,
+          guestCheckId: checkId,
+          method: dto.method,
+          amountMinor: dto.amountMinor,
+          note: dto.note?.trim() || null,
+          createdById: actor.sub,
+        },
+      });
+      await this.claimCheckMutation(
+        tx,
+        shopId,
+        checkId,
+        dto.expectedCheckVersion,
+      );
+      return created;
     });
+    await this.audit.record(actor, {
+      section: 'finance',
+      action: 'guest-check.tip.add',
+      summary: 'Added separate gratuity',
+      meta: {
+        checkId,
+        tipId: row.id,
+        method: row.method,
+        amountMinor: row.amountMinor,
+      },
+    });
+    return row;
   }
 
-  async completeVenueOrder(actor: JwtAccessPayload, orderId: string, dto: CompleteVenueOrderDto) {
+  async voidTip(
+    actor: JwtAccessPayload,
+    checkId: string,
+    id: string,
+    dto: VoidCommercialMutationDto,
+  ) {
+    this.assertPermission(actor, PERMISSIONS.CHECKOUT_WRITE);
+    const shopId = requireShopId(actor);
+    const row = await this.prisma.$transaction(async (tx) => {
+      await this.lockMutableCheck(
+        tx,
+        shopId,
+        checkId,
+        dto.expectedCheckVersion,
+      );
+      const found = await tx.guestCheckTip.findFirst({
+        where: { id, shopId, guestCheckId: checkId, voidedAt: null },
+      });
+      if (!found) throw new NotFoundException('Tip not found');
+      const updated = await tx.guestCheckTip.update({
+        where: { id },
+        data: {
+          voidedAt: new Date(),
+          voidedById: actor.sub,
+          voidReason: dto.reason.trim(),
+        },
+      });
+      await this.claimCheckMutation(
+        tx,
+        shopId,
+        checkId,
+        dto.expectedCheckVersion,
+      );
+      return updated;
+    });
+    await this.audit.record(actor, {
+      section: 'finance',
+      action: 'guest-check.tip.void',
+      summary: 'Voided gratuity',
+      meta: { checkId, tipId: id, reason: dto.reason },
+    });
+    return row;
+  }
+
+  async completeVenueOrder(
+    actor: JwtAccessPayload,
+    orderId: string,
+    dto: CompleteVenueOrderDto,
+  ) {
     this.assertPermission(actor, PERMISSIONS.ORDER_WRITE);
     const shopId = requireShopId(actor);
     const order = await this.prisma.$transaction(async (tx) => {
-      await tx.$queryRaw(Prisma.sql`SELECT "id" FROM "VenueOrder" WHERE "id"=${orderId} AND "shopId"=${shopId} FOR UPDATE`);
-      const current = await tx.venueOrder.findFirst({ where: { id: orderId, shopId } });
+      await tx.$queryRaw(
+        Prisma.sql`SELECT "id" FROM "VenueOrder" WHERE "id"=${orderId} AND "shopId"=${shopId} FOR UPDATE`,
+      );
+      const current = await tx.venueOrder.findFirst({
+        where: { id: orderId, shopId },
+      });
       if (!current) throw new NotFoundException('Order not found');
       if (current.status === 'COMPLETED') return current;
-      if (current.status === 'CANCELED' || current.status === 'REFUNDED') throw new ConflictException('Terminal order cannot be completed');
-      if (current.version !== dto.expectedVersion) throw apiConflictException(ApiDomainErrorCode.VERSION_CONFLICT, 'Order changed before completion', { aggregateType: 'venue_order', aggregateId: orderId, expectedVersion: dto.expectedVersion, actualVersion: current.version });
-      return tx.venueOrder.update({ where: { id: orderId }, data: { status: 'COMPLETED', completedAt: new Date(), version: { increment: 1 } } });
+      if (
+        current.status === 'CANCELED' ||
+        current.status === 'REFUNDED'
+      ) {
+        throw new ConflictException('Terminal order cannot be completed');
+      }
+      if (current.version !== dto.expectedVersion) {
+        throw apiConflictException(
+          ApiDomainErrorCode.VERSION_CONFLICT,
+          'Order changed before completion',
+          {
+            aggregateType: 'venue_order',
+            aggregateId: orderId,
+            expectedVersion: dto.expectedVersion,
+            actualVersion: current.version,
+          },
+        );
+      }
+      return tx.venueOrder.update({
+        where: { id: orderId },
+        data: {
+          status: 'COMPLETED',
+          completedAt: new Date(),
+          version: { increment: 1 },
+        },
+      });
     });
-    await this.audit.record(actor, { section: 'operations', action: 'order.complete', summary: 'Finalized venue order for commercial settlement', meta: { orderId, guestCheckId: order.guestCheckId, totalMinor: order.totalMinor } });
+    await this.audit.record(actor, {
+      section: 'operations',
+      action: 'order.complete',
+      summary: 'Finalized venue order for commercial settlement',
+      meta: {
+        orderId,
+        guestCheckId: order.guestCheckId,
+        totalMinor: order.totalMinor,
+      },
+    });
     return order;
   }
 
-  async reopen(actor: JwtAccessPayload, checkId: string, dto: ReopenGuestCheckDto) {
+  async reopen(
+    actor: JwtAccessPayload,
+    checkId: string,
+    dto: ReopenGuestCheckDto,
+  ) {
     this.assertPermission(actor, PERMISSIONS.CHECKOUT_REOPEN);
     const shopId = requireShopId(actor);
     const result = await this.prisma.$transaction(async (tx) => {
-      await tx.$queryRaw(Prisma.sql`SELECT "id" FROM "GuestCheck" WHERE "id"=${checkId} AND "shopId"=${shopId} FOR UPDATE`);
-      const check = await tx.guestCheck.findFirst({ where: { id: checkId, shopId } });
+      await tx.$queryRaw(
+        Prisma.sql`SELECT "id" FROM "GuestCheck" WHERE "id"=${checkId} AND "shopId"=${shopId} FOR UPDATE`,
+      );
+      const check = await tx.guestCheck.findFirst({
+        where: { id: checkId, shopId },
+      });
       if (!check) throw new NotFoundException('Guest check not found');
-      if (check.status !== 'SETTLED') throw new ConflictException('Only a settled GuestCheck can be reopened');
-      assertExpectedVersion(check.version, dto.expectedCheckVersion, { aggregateType: 'guest_check', aggregateId: checkId });
-      const settlement = await tx.checkSettlement.findFirst({ where: { shopId, guestCheckId: checkId, state: 'CLOSED' }, orderBy: { updatedAt: 'desc' } });
-      const successfulPayments = settlement ? await tx.payment.count({ where: { shopId, settlementId: settlement.id, status: 'SUCCESS' } }) : 0;
-      const financialFacts = await tx.ledgerEntry.count({ where: { shopId, guestCheckId: checkId, amount: { not: new Prisma.Decimal(0) } } });
-      if (successfulPayments > 0 || financialFacts > 0) {
-        const event = await tx.guestCheckReopenEvent.create({ data: { shopId, guestCheckId: checkId, settlementId: settlement?.id ?? null, actorId: actor.sub, reason: dto.reason.trim(), disposition: CommercialReopenDisposition.REFUND_RESALE_REQUIRED } });
-        return { reopened: false as const, event, settlementId: settlement?.id ?? null };
+      if (check.status !== 'SETTLED') {
+        throw new ConflictException(
+          'Only a settled GuestCheck can be reopened',
+        );
       }
-      const event = await tx.guestCheckReopenEvent.create({ data: { shopId, guestCheckId: checkId, settlementId: settlement?.id ?? null, actorId: actor.sub, reason: dto.reason.trim(), disposition: CommercialReopenDisposition.REOPENED_UNPAID } });
-      await tx.guestCheck.update({ where: { id: checkId }, data: { status: 'OPEN', settledAt: null, paymentMethod: null, currentSettlementId: null, version: { increment: 1 } } });
-      await this.outbox.enqueue(tx, { shopId, aggregateType: 'guest_check', aggregateId: checkId, eventType: 'guest-check.reopened', payload: { schemaVersion: 1, guestCheckId: checkId, priorSettlementId: settlement?.id ?? null, reason: dto.reason.trim(), actorId: actor.sub } });
-      return { reopened: true as const, event, settlementId: settlement?.id ?? null };
+      assertExpectedVersion(check.version, dto.expectedCheckVersion, {
+        aggregateType: 'guest_check',
+        aggregateId: checkId,
+      });
+      const settlement = await tx.checkSettlement.findFirst({
+        where: { shopId, guestCheckId: checkId, state: 'CLOSED' },
+        orderBy: { updatedAt: 'desc' },
+      });
+      const successfulPayments = settlement
+        ? await tx.payment.count({
+            where: {
+              shopId,
+              settlementId: settlement.id,
+              status: 'SUCCESS',
+            },
+          })
+        : 0;
+      const financialFacts = await tx.ledgerEntry.count({
+        where: {
+          shopId,
+          guestCheckId: checkId,
+          amount: { not: new Prisma.Decimal(0) },
+        },
+      });
+      if (successfulPayments > 0 || financialFacts > 0) {
+        const event = await tx.guestCheckReopenEvent.create({
+          data: {
+            shopId,
+            guestCheckId: checkId,
+            settlementId: settlement?.id ?? null,
+            actorId: actor.sub,
+            reason: dto.reason.trim(),
+            disposition:
+              CommercialReopenDisposition.REFUND_RESALE_REQUIRED,
+          },
+        });
+        return {
+          reopened: false as const,
+          event,
+          settlementId: settlement?.id ?? null,
+        };
+      }
+
+      const event = await tx.guestCheckReopenEvent.create({
+        data: {
+          shopId,
+          guestCheckId: checkId,
+          settlementId: settlement?.id ?? null,
+          actorId: actor.sub,
+          reason: dto.reason.trim(),
+          disposition: CommercialReopenDisposition.REOPENED_UNPAID,
+        },
+      });
+      await tx.guestCheck.update({
+        where: { id: checkId },
+        data: {
+          status: 'OPEN',
+          settledAt: null,
+          paymentMethod: null,
+          currentSettlementId: null,
+          version: { increment: 1 },
+        },
+      });
+      await this.outbox.enqueue(tx, {
+        shopId,
+        aggregateType: 'guest_check',
+        aggregateId: checkId,
+        eventType: 'guest-check.reopened',
+        payload: {
+          schemaVersion: 1,
+          guestCheckId: checkId,
+          priorSettlementId: settlement?.id ?? null,
+          reason: dto.reason.trim(),
+          actorId: actor.sub,
+        },
+      });
+      return {
+        reopened: true as const,
+        event,
+        settlementId: settlement?.id ?? null,
+      };
     });
-    await this.audit.record(actor, { section: 'finance', action: result.reopened ? 'guest-check.reopen' : 'guest-check.reopen.blocked', summary: result.reopened ? 'Reopened zero-financial-impact guest check' : 'Blocked reopen at refund/re-sale boundary', meta: { checkId, settlementId: result.settlementId, reason: dto.reason } });
+
+    await this.audit.record(actor, {
+      section: 'finance',
+      action: result.reopened
+        ? 'guest-check.reopen'
+        : 'guest-check.reopen.blocked',
+      summary: result.reopened
+        ? 'Reopened zero-financial-impact guest check'
+        : 'Blocked reopen at refund/re-sale boundary',
+      meta: {
+        checkId,
+        settlementId: result.settlementId,
+        reason: dto.reason,
+      },
+    });
     if (!result.reopened) {
-      throw apiConflictException(ApiDomainErrorCode.STATE_CONFLICT, 'This settled check has financial facts. Refund/re-sale is required; destructive reopen is prohibited.', { stage: 'REFUND_RESALE_REQUIRED', guestCheckId: checkId, settlementId: result.settlementId, reopenEventId: result.event.id });
+      throw apiConflictException(
+        ApiDomainErrorCode.STATE_CONFLICT,
+        'This settled check has financial facts. Refund/re-sale is required; destructive reopen is prohibited.',
+        {
+          stage: 'REFUND_RESALE_REQUIRED',
+          guestCheckId: checkId,
+          settlementId: result.settlementId,
+          reopenEventId: result.event.id,
+        },
+      );
     }
-    return { reopened: true, checkId, priorSettlementId: result.settlementId, eventId: result.event.id };
+    return {
+      reopened: true,
+      checkId,
+      priorSettlementId: result.settlementId,
+      eventId: result.event.id,
+    };
   }
 
   async openTabGuard(actor: JwtAccessPayload) {
@@ -564,14 +1064,21 @@ export class CommercialCoreService {
     const policy = await this.policy(this.prisma, shopId);
     const openChecks = await this.prisma.guestCheck.findMany({
       where: { shopId, status: 'OPEN' },
-      select: { id: true, label: true, guestName: true, openedAt: true },
+      select: {
+        id: true,
+        label: true,
+        guestName: true,
+        openedAt: true,
+      },
       orderBy: { openedAt: 'asc' },
       take: 200,
     });
     return {
-      allowed: openChecks.length === 0 || policy.allowCashShiftCloseWithOpenTabs,
+      allowed:
+        openChecks.length === 0 || policy.allowCashShiftCloseWithOpenTabs,
       policyAllowsOpenTabs: policy.allowCashShiftCloseWithOpenTabs,
-      requiresManagerPolicyAction: openChecks.length > 0 && !policy.allowCashShiftCloseWithOpenTabs,
+      requiresManagerPolicyAction:
+        openChecks.length > 0 && !policy.allowCashShiftCloseWithOpenTabs,
       openChecks,
     };
   }
