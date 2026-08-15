@@ -12,6 +12,7 @@ import {
   IsInt,
   IsOptional,
   IsString,
+  Matches,
   Max,
   MaxLength,
   Min,
@@ -54,7 +55,6 @@ export class ApplyCommercialAdjustmentDto {
   @IsOptional() @IsString() @MaxLength(60) targetSourceType?: string;
   @IsOptional() @IsString() @MaxLength(100) targetSourceId?: string;
   @IsOptional() @IsString() @MaxLength(100) targetLineReference?: string;
-  /** Fixed discount/comp/deposit amount in minor units. PRICE_OVERRIDE means desired target line total. */
   @IsOptional() @IsInt() @Min(0) @Max(1000000000) amountMinor?: number;
   @IsOptional() @IsInt() @Min(1) @Max(10000) percentageBps?: number;
   @IsString() @MinLength(2) @MaxLength(500) reason!: string;
@@ -87,4 +87,9 @@ export class ReopenGuestCheckDto {
 
 export class CompleteVenueOrderDto {
   @IsInt() @Min(1) expectedVersion!: number;
+}
+
+export class CloseCommercialDayDto {
+  @IsString() @Matches(/^\d{4}-\d{2}-\d{2}$/) businessDate!: string;
+  @IsOptional() @IsString() @MinLength(3) @MaxLength(500) reason?: string;
 }
