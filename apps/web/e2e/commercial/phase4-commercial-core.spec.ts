@@ -32,7 +32,7 @@ test('@smoke P4 commercial core exposes one controlled tab and settlement flow',
 
   await controls.getByRole('combobox').first().selectOption('BAR_TAB');
   await controls.getByPlaceholder('Table / tab reference').fill('Bar tab P4');
-  await controls.getByPlaceholder('Service area').fill('Main bar');
+  await controls.getByPlaceholder('Service area', { exact: true }).fill('Main bar');
   await controls.getByRole('button', { name: 'Save context' }).click();
 
   let context = await api<any>(page, 'GET', `/commercial/checks/${check.id}`);
