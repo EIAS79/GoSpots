@@ -2,28 +2,67 @@ import { api, ApiError } from "./api";
 import { offlineLiteEnabled } from "./offline-entitlement";
 import { cacheOfflineValue, queueOfflineOperation, readOfflineValue } from "./offline-outbox";
 
+export type OperationsSessionTimer = {
+  elapsedSeconds: number;
+  remainingSeconds: number | null;
+  effectiveScheduledEndAt?: string | null;
+  autoExtensionCountProjected: number;
+  openPauseSeconds: number;
+  alerts: string[];
+};
+
 export type OperationsSessionView = {
   id: string;
   status: string;
   startedAt: string;
+  pausedAt?: string | null;
   finishedAt?: string | null;
+  scheduledEndAt?: string | null;
+  billingMode?: string;
+  fixedDurationMinutes?: number | null;
+  participantCount?: number;
   liveAccruedMinor: number;
   accruedMinor?: number;
   currency: string;
   guestCheckId?: string | null;
+  customerId?: string | null;
+  membershipId?: string | null;
+  notes?: string | null;
+  pauseBillingMode?: "STOP_CHARGING" | "CONTINUE_CHARGING";
+  moveRatePolicy?: "KEEP_SESSION_RATE" | "REPRICE_TARGET";
+  autoExtend?: boolean;
+  extensionMinutes?: number;
+  warningMinutes?: number[];
+  alerts?: string[];
+  timer?: OperationsSessionTimer;
+  customer?: { id: string; name?: string | null; email?: string | null; phone?: string | null } | null;
+  membership?: { id: string; tierId: string; status: string; expiresAt?: string | null } | null;
+  openOrderAmountMinor?: number;
+  openOrderCount?: number;
   version: number;
 };
 
 export type OperationsResourceView = {
   id: string;
+  code?: string;
   name: string;
   type: string;
   state: string;
   categoryName?: string | null;
   sectionName?: string | null;
   session?: OperationsSessionView | null;
-  maintenance?: { id: string; reason: string } | null;
-  nextReservation?: { id: string; startsAt: string; endsAt: string; guestName?: string | null } | null;
+  maintenance?: {
+    id: string;
+    reason: string;
+    expectedReturnAt?: string | null;
+    notes?: string | null;
+  } | null;
+  nextReservation?: {
+    id: string;
+    startsAt: string;
+    endsAt: string;
+    guestName?: string | null;
+  } | null;
 };
 
 export type OperationsFloorView = { generatedAt: string; resources: OperationsResourceView[] };
@@ -76,6 +115,12 @@ export async function startOperationsSession(body: {
   guestCheckId?: string;
   reservationId?: string;
   ratePlanId?: string;
+  customerId?: string;
+  membershipId?: string;
+  packageId?: string;
+  notes?: string;
+  participantCount?: number;
+  gameCount?: number;
 }) {
   if (!offlineNow()) {
     return api<OperationsSessionView>("/operations/sessions/start", {
@@ -97,9 +142,13 @@ export async function startOperationsSession(body: {
     id,
     status: "ACTIVE",
     startedAt: now,
+    participantCount: body.participantCount ?? 1,
     liveAccruedMinor: 0,
     currency,
     guestCheckId: body.guestCheckId ?? null,
+    customerId: body.customerId ?? null,
+    membershipId: body.membershipId ?? null,
+    notes: body.notes ?? null,
     version: 1,
   };
   await queueOfflineOperation({
