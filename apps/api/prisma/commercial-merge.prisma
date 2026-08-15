@@ -1,0 +1,20 @@
+/// Companion lineage for Phase 4 charge sources. Monetary facts remain in LedgerEntry;
+/// this record only preserves movement history across GuestChecks.
+model CommercialMergeEvent {
+  id                        String   @id @default(cuid())
+  shopId                    String
+  sourceCheckId             String
+  destinationCheckId        String
+  actorId                   String?
+  operation                 String
+  movedVenueOrderIds        Json
+  movedOperationsSessionIds Json
+  movedAdjustmentIds        Json
+  movedServiceChargeIds     Json
+  movedTipIds               Json
+  createdAt                 DateTime @default(now())
+
+  @@index([shopId, sourceCheckId, createdAt])
+  @@index([shopId, destinationCheckId, createdAt])
+  @@index([shopId, createdAt])
+}
