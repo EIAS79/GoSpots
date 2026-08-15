@@ -3,7 +3,6 @@ import {
   E2E,
   api,
   bindVenue,
-  completeLegacyOrder,
   createGuestCheckFromUi,
   loginOwner,
   settleAndSplit,
@@ -92,14 +91,21 @@ test('@smoke E2E-02 restaurant order to KDS to checkout', async ({ page }) => {
   board = await api<any>(page, 'GET', `/kitchen/board?stationId=${station.id}`);
   expect(board.tickets.some((row: any) => row.id === ticket.id)).toBeFalsy();
 
-  // Checkout V3 currently settles the canonical legacy ShopOrder source. Keep a
-  // mirrored checkout source until the legacy financial contract phase removes it.
-  await completeLegacyOrder(
-    page,
-    check.id,
-    'e2e-item-restaurant',
-    'E2E Restaurant Checkout Order',
-  );
+  const orderBeforeCompletion = await api<any>(page, 'GET', `/ordering/orders/${venueOrder.id}`);
+  const completedOrder = await api<any>(page, 'POST', `/commercial/orders/${venueOrder.id}/complete`, {
+    data: { expectedVersion: orderBeforeCompletion.version },
+    idempotencyKey: `${check.id}-venue-order-complete`,
+  });
+  expect(completedOrder.status).toBe('COMPLETED');
+
+  const preview = await api<any>(page, 'POST', `/checkout/checks/${check.id}/preview`, {
+    data: {},
+  });
+  expect(preview.billReady).toBeTruthy();
+  expect(preview.blockers).toHaveLength(0);
+  expect(Number(preview.commercial.venueOrderAmount)).toBeGreaterThan(0);
+  expect(preview.lines.some((line: any) => line.sourceType === 'VENUE_ORDER')).toBeTruthy();
+  expect(preview.lines.some((line: any) => line.sourceType === 'SHOP_ORDER')).toBeFalsy();
 
   const { state } = await settleAndSplit(page, check.id, ['MANUAL_CARD', 'OTHER']);
   expect(state.payments.map((payment: any) => payment.method)).toEqual([
