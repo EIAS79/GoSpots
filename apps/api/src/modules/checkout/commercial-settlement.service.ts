@@ -9,17 +9,17 @@ import { Prisma } from '@prisma/client';
 import { ApiDomainErrorCode } from '../../common/api-error.codes';
 import { apiConflictException } from '../../common/api-error.util';
 import { checkoutBillReadiness } from '../../common/checkout-integrity.util';
+import {
+  roundMoneyDecimal,
+  serializeMoney,
+  sumMoneyDecimal,
+} from '../../common/money.util';
 import { assertExpectedVersion } from '../../common/optimistic-concurrency.util';
 import {
   hasPermission,
   PERMISSIONS,
   type PermissionKey,
 } from '../../common/permissions';
-import {
-  roundMoneyDecimal,
-  serializeMoney,
-  sumMoneyDecimal,
-} from '../../common/money.util';
 import { requireShopId } from '../../common/tenant';
 import { PrismaService } from '../../prisma/prisma.service';
 import { AuditService } from '../audit/audit.service';
@@ -212,13 +212,16 @@ export class CommercialSettlementService {
   ) {
     if (adjustment.scope !== 'LINE') {
       return lines.filter(
-        (line) => line.sourceType !== 'SERVICE_CHARGE' && line.sourceType !== 'TIP',
+        (line) =>
+          line.sourceType !== 'SERVICE_CHARGE' && line.sourceType !== 'TIP',
       );
     }
     return lines.filter(
       (line) =>
-        (!adjustment.targetSourceType || line.sourceType === adjustment.targetSourceType) &&
-        (!adjustment.targetSourceId || line.sourceId === adjustment.targetSourceId) &&
+        (!adjustment.targetSourceType ||
+          line.sourceType === adjustment.targetSourceType) &&
+        (!adjustment.targetSourceId ||
+          line.sourceId === adjustment.targetSourceId) &&
         (!adjustment.targetLineReference ||
           line.lineReference === adjustment.targetLineReference),
     );
@@ -253,7 +256,7 @@ export class CommercialSettlementService {
   private addSyntheticLine(
     lines: CheckoutChargeLine[],
     input: {
-      sourceType: string;
+      sourceType: 'SERVICE_CHARGE' | 'TIP';
       sourceId: string;
       description: string;
       amount: Prisma.Decimal;
@@ -283,7 +286,10 @@ export class CommercialSettlementService {
     shopId: string,
     checkId: string,
     now = new Date(),
-  ): Promise<{ check: CommercialCheck; projection: CommercialCheckoutProjection }> {
+  ): Promise<{
+    check: CommercialCheck;
+    projection: CommercialCheckoutProjection;
+  }> {
     const check = await db.guestCheck.findFirst({
       where: { id: checkId, shopId },
       include: commercialCheckInclude,
@@ -319,13 +325,19 @@ export class CommercialSettlementService {
     const venueLines = venueOrderIds.length
       ? await db.venueOrderLine.findMany({
           where: { shopId, orderId: { in: venueOrderIds } },
-          orderBy: [{ orderId: 'asc' }, { createdAt: 'asc' }, { id: 'asc' }],
+          orderBy: [
+            { orderId: 'asc' },
+            { createdAt: 'asc' },
+            { id: 'asc' },
+          ],
         })
       : [];
 
     const reservationIdsOwnedByOperations = new Set(
       operationsSessions
-        .filter((row) => row.status !== 'CANCELLED' && row.status !== 'CANCELED')
+        .filter(
+          (row) => row.status !== 'CANCELLED' && row.status !== 'CANCELED',
+        )
         .map((row) => row.reservationId)
         .filter((id): id is string => Boolean(id)),
     );
@@ -347,8 +359,8 @@ export class CommercialSettlementService {
     let operationsSessionAmount = new Prisma.Decimal(0);
     const blockers: ProjectionBlocker[] = checkoutBillReadiness(check).blockers.map(
       (blocker) => ({
-        type: blocker.type,
-        id: blocker.id,
+        type: blocker.sourceType,
+        id: blocker.sourceId,
         label: blocker.label,
         status: blocker.status,
       }),
@@ -360,7 +372,8 @@ export class CommercialSettlementService {
         blockers.push({
           type: 'VENUE_ORDER',
           id: order.id,
-          label: order.guestLabel?.trim() || `Order ${order.id.slice(0, 8)}`,
+          label:
+            order.guestLabel?.trim() || `Order ${order.id.slice(0, 8)}`,
           status: order.status,
         });
       }
@@ -377,10 +390,9 @@ export class CommercialSettlementService {
           sourceType: 'VENUE_ORDER',
           sourceId: order.id,
           lineReference: item.id,
-          description:
-            item.variantNameSnapshot?.trim()
-              ? `${item.nameSnapshot} · ${item.variantNameSnapshot}`
-              : item.nameSnapshot,
+          description: item.variantNameSnapshot?.trim()
+            ? `${item.nameSnapshot} · ${item.variantNameSnapshot}`
+            : item.nameSnapshot,
           quantity: item.quantity,
           unitAmount: unit,
           grossAmount: gross,
@@ -406,7 +418,9 @@ export class CommercialSettlementService {
     }
 
     for (const session of operationsSessions) {
-      if (session.status === 'CANCELLED' || session.status === 'CANCELED') continue;
+      if (session.status === 'CANCELLED' || session.status === 'CANCELED') {
+        continue;
+      }
       if (session.status !== 'FINISHED') {
         blockers.push({
           type: 'OPERATIONS_SESSION',
@@ -462,7 +476,9 @@ export class CommercialSettlementService {
       const before = sumFinal(targets);
       if (adjustment.type === 'PRICE_OVERRIDE') {
         if (adjustment.scope !== 'LINE' || adjustment.amountMinor == null) {
-          throw new ConflictException('Price override requires one line and a target amount');
+          throw new ConflictException(
+            'Price override requires one line and a target amount',
+          );
         }
         const target = minor(adjustment.amountMinor);
         const line = targets[0];
@@ -476,15 +492,13 @@ export class CommercialSettlementService {
         continue;
       }
 
-      let requested: Prisma.Decimal;
-      if (adjustment.type === 'PERCENTAGE_DISCOUNT') {
-        requested = roundMoneyDecimal(
-          before.mul(adjustment.percentageBps ?? 0).div(10000),
-          4,
-        );
-      } else {
-        requested = minor(adjustment.amountMinor);
-      }
+      const requested =
+        adjustment.type === 'PERCENTAGE_DISCOUNT'
+          ? roundMoneyDecimal(
+              before.mul(adjustment.percentageBps ?? 0).div(10000),
+              4,
+            )
+          : minor(adjustment.amountMinor);
       const applied = this.reduceLines(targets, requested, true);
       adjustmentDelta = adjustmentDelta.sub(applied);
       discountAmount = discountAmount.add(applied);
@@ -524,7 +538,11 @@ export class CommercialSettlementService {
       (row) => row.type === 'DEPOSIT_APPLICATION',
     )) {
       const targets = lines.filter((line) => line.sourceType !== 'TIP');
-      const applied = this.reduceLines(targets, minor(adjustment.amountMinor), false);
+      const applied = this.reduceLines(
+        targets,
+        minor(adjustment.amountMinor),
+        false,
+      );
       depositAmount = depositAmount.add(applied);
     }
 
@@ -565,7 +583,9 @@ export class CommercialSettlementService {
       );
     }
     if (total.lt(0)) {
-      throw new ConflictException('Commercial adjustments cannot make a check negative');
+      throw new ConflictException(
+        'Commercial adjustments cannot make a check negative',
+      );
     }
 
     const sourceHash = createHash('sha256')
@@ -601,7 +621,10 @@ export class CommercialSettlementService {
           discountAmount: roundMoneyDecimal(discountAmount, 4),
           serviceChargeAmount: roundMoneyDecimal(serviceChargeAmount, 4),
           tipAmount: roundMoneyDecimal(tipAmount, 4),
-          operationsSessionAmount: roundMoneyDecimal(operationsSessionAmount, 4),
+          operationsSessionAmount: roundMoneyDecimal(
+            operationsSessionAmount,
+            4,
+          ),
           venueOrderAmount: roundMoneyDecimal(venueOrderAmount, 4),
         },
       },
@@ -624,9 +647,13 @@ export class CommercialSettlementService {
       blockers: row.blockers,
       commercial: {
         discountAmount: serializeMoney(row.commercial.discountAmount),
-        serviceChargeAmount: serializeMoney(row.commercial.serviceChargeAmount),
+        serviceChargeAmount: serializeMoney(
+          row.commercial.serviceChargeAmount,
+        ),
         tipAmount: serializeMoney(row.commercial.tipAmount),
-        operationsSessionAmount: serializeMoney(row.commercial.operationsSessionAmount),
+        operationsSessionAmount: serializeMoney(
+          row.commercial.operationsSessionAmount,
+        ),
         venueOrderAmount: serializeMoney(row.commercial.venueOrderAmount),
       },
       lines: row.lines.map(stableLine),
@@ -671,7 +698,11 @@ export class CommercialSettlementService {
         await tx.$queryRaw(
           Prisma.sql`SELECT "id" FROM "GuestCheck" WHERE "id"=${checkId} AND "shopId"=${shopId} FOR UPDATE`,
         );
-        const { check, projection } = await this.buildProjection(tx, shopId, checkId);
+        const { check, projection } = await this.buildProjection(
+          tx,
+          shopId,
+          checkId,
+        );
         assertExpectedVersion(check.version, dto.expectedVersion, {
           aggregateType: 'guest_check',
           aggregateId: checkId,
@@ -680,7 +711,10 @@ export class CommercialSettlementService {
           throw apiConflictException(
             ApiDomainErrorCode.STATE_CONFLICT,
             'Finalize all open orders and live sessions before taking payment.',
-            { stage: 'FINALIZE_BILL', blockers: projection.blockers },
+            {
+              stage: 'FINALIZE_BILL',
+              blockers: projection.blockers,
+            },
           );
         }
 
@@ -783,7 +817,10 @@ export class CommercialSettlementService {
       throw error;
     }
 
-    const settlement = await this.legacyCheckout.getSettlement(actor, settlementId);
+    const settlement = await this.legacyCheckout.getSettlement(
+      actor,
+      settlementId,
+    );
     await this.audit.record(actor, {
       section: 'finance',
       action: 'checkout.settlement.create.phase4',
