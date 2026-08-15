@@ -7,7 +7,11 @@ import {
 export type CheckoutChargeSourceType =
   | "SHOP_ORDER"
   | "PLAY_SESSION"
-  | "RESERVATION";
+  | "RESERVATION"
+  | "VENUE_ORDER"
+  | "OPERATIONS_SESSION"
+  | "SERVICE_CHARGE"
+  | "TIP";
 
 export type CheckoutChargeLine = {
   position: number;
@@ -35,6 +39,20 @@ export type CheckoutPreview = {
   depositAmount: string;
   total: string;
   amountDue: string;
+  billReady: boolean;
+  blockers: Array<{
+    type: string;
+    id: string;
+    label: string;
+    status: string;
+  }>;
+  commercial: {
+    discountAmount: string;
+    serviceChargeAmount: string;
+    tipAmount: string;
+    operationsSessionAmount: string;
+    venueOrderAmount: string;
+  };
   lines: CheckoutChargeLine[];
 };
 
@@ -154,6 +172,17 @@ export type CheckoutPaymentState = {
   }>;
 };
 
+export type CommercialReceipt = {
+  id: string;
+  receiptNumber: string;
+  guestCheckId: string;
+  settlementId: string;
+  currency: string;
+  totalMinor: number;
+  snapshot: unknown;
+  issuedAt: string;
+};
+
 export type CheckoutCloseResult = {
   checkId: string;
   settlementId: string;
@@ -161,10 +190,12 @@ export type CheckoutCloseResult = {
   settlementState: "CLOSED";
   total: string;
   currency: string;
+  receipt: CommercialReceipt | null;
 };
 
 export type GuestCheckMergeResult = {
   mergeEventId: string;
+  commercialMergeEventId?: string;
   sourceCheckId: string;
   destinationCheckId: string;
   sourceVersion: number;
@@ -172,6 +203,11 @@ export type GuestCheckMergeResult = {
   movedShopOrderIds: string[];
   movedPlaySessionIds: string[];
   movedReservationIds: string[];
+  movedVenueOrderIds?: string[];
+  movedOperationsSessionIds?: string[];
+  movedAdjustmentIds?: string[];
+  movedServiceChargeIds?: string[];
+  movedTipIds?: string[];
   createdAt: string;
 };
 
@@ -200,9 +236,19 @@ export function createCheckSettlement(checkId: string, expectedVersion: number) 
 }
 
 export function closeCheckoutCheck(checkId: string) {
-  return api<CheckoutCloseResult>(`/checkout/checks/${checkId}/close`, {
-    method: "POST",
-  });
+  const actionKey = idempotencyActionKey("checkout.check.close", { checkId });
+  return withIdempotentFinanceCall(actionKey, (idempotencyKey) =>
+    api<CheckoutCloseResult>(`/checkout/checks/${checkId}/close`, {
+      method: "POST",
+      headers: { "Idempotency-Key": idempotencyKey },
+    }),
+  );
+}
+
+export function fetchCommercialReceipt(settlementId: string) {
+  return api<CommercialReceipt | null>(
+    `/checkout/settlements/${settlementId}/receipt`,
+  );
 }
 
 export function fetchCheckoutPaymentState(settlementId: string) {
@@ -279,6 +325,8 @@ export function moveGuestCheckCharges(
     shopOrderIds?: string[];
     playSessionIds?: string[];
     reservationIds?: string[];
+    venueOrderIds?: string[];
+    operationsSessionIds?: string[];
   },
 ) {
   const actionKey = idempotencyActionKey("checkout.check.move-charges", {
@@ -287,6 +335,7 @@ export function moveGuestCheckCharges(
   });
   return withIdempotentFinanceCall(actionKey, (idempotencyKey) =>
     api<{
+      commercialMergeEventId: string;
       sourceCheckId: string;
       destinationCheckId: string;
       sourceVersion: number;
@@ -294,6 +343,8 @@ export function moveGuestCheckCharges(
       shopOrderIds: string[];
       playSessionIds: string[];
       reservationIds: string[];
+      venueOrderIds: string[];
+      operationsSessionIds: string[];
     }>(`/checkout/checks/${sourceCheckId}/move-charges`, {
       method: "POST",
       headers: { "Idempotency-Key": idempotencyKey },
@@ -317,6 +368,19 @@ export function fetchGuestCheckMergeHistory(checkId: string) {
       movedShopOrderIds: string[];
       movedPlaySessionIds: string[];
       movedReservationIds: string[];
+      createdAt: string;
+    }>;
+    commercialEvents: Array<{
+      id: string;
+      operation: string;
+      sourceCheckId: string;
+      destinationCheckId: string;
+      actorId: string | null;
+      movedVenueOrderIds: string[];
+      movedOperationsSessionIds: string[];
+      movedAdjustmentIds: string[];
+      movedServiceChargeIds: string[];
+      movedTipIds: string[];
       createdAt: string;
     }>;
   }>(`/checkout/checks/${checkId}/merge-history`);
