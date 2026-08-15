@@ -23,6 +23,7 @@ import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import type { JwtAccessPayload } from '../auth/auth.service';
 import { CheckoutPaymentService } from './checkout-payment.service';
 import { CheckoutService } from './checkout.service';
+import { CommercialSettlementService } from './commercial-settlement.service';
 import {
   CreateCheckoutPaymentDto,
   MergeGuestChecksDto,
@@ -46,6 +47,7 @@ type RequestWithCorrelation = {
 export class CheckoutController {
   constructor(
     private readonly checkout: CheckoutService,
+    private readonly commercial: CommercialSettlementService,
     private readonly payments: CheckoutPaymentService,
     private readonly merges: GuestCheckMergeService,
     private readonly prisma: PrismaService,
@@ -58,7 +60,7 @@ export class CheckoutController {
     @Param('checkId') checkId: string,
     @Body() dto: PreviewCheckoutDto,
   ) {
-    return this.checkout.preview(user, checkId, dto);
+    return this.commercial.preview(user, checkId, dto);
   }
 
   @Post('checks/:checkId/settlements')
@@ -81,7 +83,7 @@ export class CheckoutController {
         requestHash: hashIdempotencyRequest({ checkId, ...dto }),
       },
       () =>
-        this.checkout.createSettlement(
+        this.commercial.createSettlement(
           user,
           checkId,
           dto,
@@ -95,8 +97,20 @@ export class CheckoutController {
   closeCheck(
     @CurrentUser() user: JwtAccessPayload,
     @Param('checkId') checkId: string,
+    @Headers('idempotency-key') idempotencyKey: string | undefined,
   ) {
-    return this.checkout.closeCheck(user, checkId);
+    const shopId = requireShopId(user);
+    return withClientIdempotency(
+      this.prisma,
+      {
+        shopId,
+        scope: 'checkout.checks.close',
+        key: idempotencyKey,
+        requireKey: true,
+        requestHash: hashIdempotencyRequest({ checkId }),
+      },
+      () => this.commercial.closeCheck(user, checkId),
+    );
   }
 
   @Get('settlements/:id')
@@ -106,6 +120,15 @@ export class CheckoutController {
     @Param('id') settlementId: string,
   ) {
     return this.checkout.getSettlement(user, settlementId);
+  }
+
+  @Get('settlements/:id/receipt')
+  @RequirePermissions(PERMISSIONS.CHECKOUT_READ)
+  getCommercialReceipt(
+    @CurrentUser() user: JwtAccessPayload,
+    @Param('id') settlementId: string,
+  ) {
+    return this.commercial.getReceipt(user, settlementId);
   }
 
   @Get('settlements/:id/payment-state')
