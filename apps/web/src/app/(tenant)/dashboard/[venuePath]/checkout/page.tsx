@@ -8,6 +8,17 @@ import { useAuth } from "@/lib/use-auth";
 import { useCurrentMembership } from "@/lib/use-current-membership";
 import { useVenueSettingsOptional } from "@/lib/venue-settings-context";
 
+function hasPermission(role: string | undefined, permissions: string, key: string) {
+  if (role === "OWNER") return true;
+  const values = new Set(
+    permissions
+      .split(",")
+      .map((value) => value.trim())
+      .filter(Boolean),
+  );
+  return values.has("*") || values.has(key);
+}
+
 export default function CheckoutPage() {
   const { state } = useAuth();
   const membership = useCurrentMembership();
@@ -23,7 +34,19 @@ export default function CheckoutPage() {
     );
   }
 
-  const access = checkoutAccess(membership?.role, membership?.permissions ?? "");
+  const permissions = membership?.permissions ?? "";
+  const access = checkoutAccess(membership?.role, permissions);
+  const canDiscount = hasPermission(
+    membership?.role,
+    permissions,
+    "discount.manual",
+  );
+  const canComp = hasPermission(membership?.role, permissions, "comp.apply");
+  const canPriceOverride = hasPermission(
+    membership?.role,
+    permissions,
+    "price.override",
+  );
   const polish = locale === "pl";
 
   return (
@@ -35,10 +58,10 @@ export default function CheckoutPage() {
           : "One guest bill: build it, finalize the amount, take payment, then close the check."
       }
       capabilities={[
-        "One bill across play, orders, and booking charges",
-        "Final-bill gate before any new payment",
-        "Cash, external-terminal card, split, and other recorded payments",
-        "Authoritative close with payment and billing reconciliation",
+        "One bill across session time, orders, services and booking charges",
+        "Authorized discounts, comps, overrides, service charge and gratuity",
+        "Cash, external-terminal card, split, partial and mixed recorded payments",
+        "Immutable commercial receipt and canonical ledger reconciliation",
       ]}
       className="bg-zinc-950/30 p-2 sm:p-3 md:p-4 lg:p-4"
     >
@@ -51,19 +74,22 @@ export default function CheckoutPage() {
             {polish ? "Najważniejsza zasada: " : "The important rule: "}
           </span>
           {polish
-            ? "najpierw zakończ otwarte zamówienia i bieżące samodzielne timery gry, aby kwota była ostateczna. Dopiero potem przyjmij płatność. Po zapisaniu płatności nie pobieraj jej drugi raz — zamknięcie rachunku finalizuje tylko rozliczenie i stan operacyjny."
-            : "finalize open orders and running standalone play timers first so the amount is stable. Only then take payment. Once payment is recorded, never take it again — closing the check only finalizes billing and operational state."}
+            ? "najpierw zakończ otwarte zamówienia i aktywne sesje, aby kwota była ostateczna. Dopiero potem przyjmij płatność. Po zapisaniu płatności nie pobieraj jej drugi raz — zamknięcie rachunku finalizuje tylko rozliczenie i stan operacyjny."
+            : "finalize open orders and active sessions first so the amount is stable. Only then take payment. Once payment is recorded, never take it again — closing the check only finalizes settlement and operational state."}
         </p>
         <p className="mt-1 text-[11px] leading-4 text-zinc-600">
           {polish
-            ? "Paragon fiskalny lub faktura to osobny etap zgodności i nie zmienia statusu zapłaty."
-            : "Fiscal receipt or invoice is a separate compliance step and does not change whether the guest has paid."}
+            ? "Pokwitowanie komercyjne nie jest dokumentem fiskalnym. Paragon fiskalny lub faktura to osobny etap zgodności."
+            : "The commercial receipt is non-fiscal. Fiscal receipt or invoice is a separate compliance step."}
         </p>
       </section>
 
       <CheckoutWorkspace
         canRead={access.read}
         canWrite={access.write}
+        canDiscount={canDiscount}
+        canComp={canComp}
+        canPriceOverride={canPriceOverride}
         locale={locale}
       />
     </TenantPage>
