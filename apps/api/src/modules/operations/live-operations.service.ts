@@ -917,6 +917,20 @@ export class LiveOperationsService {
       : 0;
     const currentSegmentMinor = this.currentSegmentAmount(session, now, openStopPauseSeconds);
     const accruedMinor = session.accruedBeforeCurrentSegmentMinor + currentSegmentMinor;
+    const timingAtEnd = projectSessionTiming({
+      now,
+      startedAt: session.startedAt,
+      status: session.status,
+      pausedAt: session.pausedAt,
+      totalPausedSeconds: session.totalPausedSeconds,
+      pauseBillingMode: session.pauseBillingMode,
+      scheduledEndAt: session.scheduledEndAt,
+      autoExtend: session.autoExtend,
+      extensionMinutes: session.extensionMinutes,
+      warningMinutes: session.warningMinutes,
+      maxPauseMinutes: session.maxPauseMinutes,
+    });
+    const projectedAutoExtensions = timingAtEnd.autoExtensionCountProjected;
     const updated = await this.prisma.$transaction(async (tx) => {
       if (openPause) {
         await tx.operationsSessionPause.update({ where: { id: openPause.id }, data: { endedAt: now } });
@@ -934,6 +948,10 @@ export class LiveOperationsService {
         finishedAt: now,
         pausedAt: null,
         accruedMinor,
+        ...(projectedAutoExtensions > 0 && {
+          extensionCount: { increment: projectedAutoExtensions },
+          scheduledEndAt: timingAtEnd.effectiveScheduledEndAt,
+        }),
         ...(openStopPauseSeconds > 0 && {
           totalPausedSeconds: { increment: openStopPauseSeconds },
           billingSegmentPausedSeconds: { increment: openStopPauseSeconds },
@@ -957,6 +975,8 @@ export class LiveOperationsService {
       sessionId: id,
       accruedMinor,
       currency: session.currency,
+      autoExtensions: projectedAutoExtensions,
+      effectiveScheduledEndAt: timingAtEnd.effectiveScheduledEndAt?.toISOString() ?? null,
     });
     return updated;
   }
@@ -1046,7 +1066,7 @@ export class LiveOperationsService {
       .map((session) => session.membershipId)
       .filter((id): id is string => Boolean(id));
 
-    const [orders, customers, memberships] = await Promise.all([
+    const [orders, guestChecks, customers, memberships] = await Promise.all([
       sessionIds.length || guestCheckIds.length
         ? this.prisma.venueOrder.findMany({
             where: {
@@ -1069,6 +1089,12 @@ export class LiveOperationsService {
             },
           })
         : Promise.resolve([]),
+      guestCheckIds.length
+        ? this.prisma.guestCheck.findMany({
+            where: { shopId, id: { in: guestCheckIds } },
+            select: { id: true, amountDue: true, currency: true },
+          })
+        : Promise.resolve([]),
       customerIds.length
         ? this.prisma.customerProfile.findMany({
             where: { shopId, id: { in: customerIds } },
@@ -1082,6 +1108,7 @@ export class LiveOperationsService {
           })
         : Promise.resolve([]),
     ]);
+    const guestCheckMap = new Map(guestChecks.map((row) => [row.id, row]));
     const customerMap = new Map(customers.map((row) => [row.id, row]));
     const membershipMap = new Map(memberships.map((row) => [row.id, row]));
 
@@ -1151,6 +1178,12 @@ export class LiveOperationsService {
               : null,
             openOrderAmountMinor,
             openOrderCount: sessionOrders.length,
+            openCheckAmountDueMinor: session.guestCheckId
+              ? majorToMinor(guestCheckMap.get(session.guestCheckId)?.amountDue ?? null)
+              : null,
+            openCheckCurrency: session.guestCheckId
+              ? guestCheckMap.get(session.guestCheckId)?.currency ?? session.currency
+              : null,
           },
         };
       }),

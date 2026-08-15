@@ -461,6 +461,7 @@ export default function OperationsPage() {
                       {session.membership ? <p className="text-xs text-violet-200">Membership: {session.membership.tierId} · {session.membership.status}</p> : null}
                       {session.guestCheckId ? <p className="text-xs text-zinc-400">Check {session.guestCheckId.slice(-6)}</p> : null}
                       {(session.openOrderCount ?? 0) > 0 ? <p className="text-xs text-fuchsia-200">Open orders: {session.openOrderCount} · {money(session.openOrderAmountMinor, session.currency)}</p> : null}
+                      {session.openCheckAmountDueMinor != null ? <p className="text-xs text-emerald-200">Check due: {money(session.openCheckAmountDueMinor, session.openCheckCurrency ?? session.currency)}</p> : null}
                       {(session.alerts ?? session.timer?.alerts ?? []).length ? <div className="flex flex-wrap gap-1">{(session.alerts ?? session.timer?.alerts ?? []).map((alert) => <span key={alert} className="rounded bg-amber-500/15 px-2 py-1 text-[11px] font-semibold text-amber-200">{alert.replaceAll("_", " ")}</span>)}</div> : null}
                     </div>
                   ) : null}

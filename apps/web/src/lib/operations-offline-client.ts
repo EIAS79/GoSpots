@@ -39,6 +39,8 @@ export type OperationsSessionView = {
   membership?: { id: string; tierId: string; status: string; expiresAt?: string | null } | null;
   openOrderAmountMinor?: number;
   openOrderCount?: number;
+  openCheckAmountDueMinor?: number | null;
+  openCheckCurrency?: string | null;
   version: number;
 };
 
