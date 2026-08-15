@@ -1,7 +1,8 @@
 name: Phase 3 production acceptance transport
 
 on:
-  workflow_dispatch:
+  push:
+    branches: [phase3-prod-acceptance-readiness]
 
 permissions:
   contents: read
