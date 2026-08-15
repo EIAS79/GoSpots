@@ -137,98 +137,258 @@ test("owner and checkout operator receive the expected access", () => {
   );
 });
 
-test("checkout totals render authoritative values", () => {
-  const html = renderToStaticMarkup(<CheckoutTotals preview={preview} />);
-  assert.match(html, /123\.45/);
+test("unauthorized staff is read/write denied and payment controls stay disabled", () => {
+  assert.deepEqual(checkoutAccess("STAFF", "reservation.read"), {
+    read: false,
+    write: false,
+  });
+  const html = renderToStaticMarkup(<TenderButtons canWrite={false} />);
+  assert.match(html, /disabled/);
+  assert.match(html, /Payment unlocks only when/);
 });
 
-test("partial payment renders settlement progress", () => {
+test("payment choices make manual/external boundaries explicit", () => {
   const html = renderToStaticMarkup(
-    <SettlementStatus paymentState={partialPayment} />,
+    <TenderButtons canWrite paymentsEnabled />,
   );
-  assert.match(html, /Partially paid/);
-  assert.match(html, /83\.45/);
+  assert.match(html, /Cash/);
+  assert.match(html, /Card · external terminal/);
+  assert.match(html, /Split payment/);
+  assert.match(html, /Other received/);
+  assert.match(html, /does not charge the card itself/);
 });
 
-test("payment confirmation renders a safe explicit confirmation", () => {
+test("external-terminal card confirmation cannot be mistaken for charging a card", () => {
   const html = renderToStaticMarkup(
     <PaymentConfirmation
-      amount="83.4500"
+      method="MANUAL_CARD"
+      amount="200.0000"
       currency="PLN"
-      method="CASH"
       onConfirm={() => undefined}
       onCancel={() => undefined}
     />,
   );
   assert.match(html, /Confirm payment/);
-  assert.match(html, /83\.45/);
+  assert.match(html, /200\.00/);
+  assert.match(html, /separate card terminal or processor/i);
+  assert.match(html, /does not charge the card/i);
+  assert.match(html, /Record approved card payment/);
+  assert.match(html, /Cancel/);
 });
 
-test("tender buttons expose the supported checkout tenders", () => {
+test("cash confirmation states that the amount is posted to the cash shift", () => {
   const html = renderToStaticMarkup(
-    <TenderButtons
-      disabled={false}
-      onSelect={() => undefined}
+    <PaymentConfirmation
+      method="CASH"
+      amount="40.0000"
+      currency="PLN"
+      onConfirm={() => undefined}
+      onCancel={() => undefined}
     />,
   );
-  assert.match(html, /Cash/);
-  assert.match(html, /Manual card/);
-  assert.match(html, /Other/);
+  assert.match(html, /Confirm cash received/);
+  assert.match(html, /currently open cash shift/i);
 });
 
-test("checkout flow remains on bill finalization while blockers exist", () => {
+test("final-bill gate blocks mutable orders and running standalone play", () => {
+  const check = guestCheck();
+  check.shopOrders.push({
+    id: "order-12345678",
+    status: "OPEN",
+    total: "20.0000",
+    label: "Table 4 order",
+    reservationFee: null,
+    guestCount: 1,
+    createdAt: check.createdAt,
+    completedAt: null,
+  });
+  check.playSessions.push({
+    id: "play-standalone",
+    status: "ACTIVE",
+    amount: "40.0000",
+    reservationId: null,
+    label: "Pool table 2",
+    startedAt: check.createdAt,
+    endedAt: null,
+    completedAt: null,
+  });
+
+  const blockers = checkoutBillBlockers(check);
+  assert.equal(blockers.length, 2);
+  assert.equal(blockers[0]?.action, "orders");
+  assert.equal(blockers[1]?.action, "sessions");
+});
+
+test("ended standalone play is bill-final before its paid completion stamp", () => {
+  const check = guestCheck();
+  check.playSessions.push({
+    id: "play-ended",
+    status: "ACTIVE",
+    amount: "40.0000",
+    reservationId: null,
+    label: "Pool table 2",
+    startedAt: check.createdAt,
+    endedAt: "2026-08-12T09:00:00.000Z",
+    completedAt: null,
+  });
+
+  assert.equal(checkoutBillBlockers(check).length, 0);
+  assert.equal(checkoutOperationalBlockers(check).length, 0);
+});
+
+test("checkout close readiness blocks live orders and reservation-linked play, but not booking payment twice", () => {
+  const check = guestCheck();
+  check.shopOrders.push({
+    id: "order-12345678",
+    status: "OPEN",
+    total: "20.0000",
+    label: "Table 4 order",
+    reservationFee: null,
+    guestCount: 1,
+    createdAt: check.createdAt,
+    completedAt: null,
+  });
+  check.playSessions.push({
+    id: "play-12345678",
+    status: "ACTIVE",
+    amount: "40.0000",
+    reservationId: "reservation-1",
+    label: "Pool table 2",
+    startedAt: check.createdAt,
+    endedAt: null,
+    completedAt: null,
+  });
+  check.reservations.push({
+    id: "reservation-1",
+    guestName: "Demo guest",
+    billedAmount: null,
+    billedAt: null,
+    resourceId: "resource-1",
+    startsAt: check.createdAt,
+    endsAt: check.createdAt,
+    status: "CONFIRMED",
+  });
+
+  const blockers = checkoutOperationalBlockers(check);
+  assert.equal(blockers.length, 2);
+  assert.equal(blockers[0]?.action, "orders");
+  assert.equal(blockers[1]?.action, "sessions");
+  assert.doesNotMatch(JSON.stringify(blockers), /reservation.*paid/i);
+});
+
+test("checkout flow step always tells the operator what to do next", () => {
   assert.equal(
-    checkoutFlowStep({ ...preview, billReady: false, blockers: [{ type: "VENUE_ORDER", id: "order-1", label: "Seat 1", status: "SENT" }] }, null),
-    "FINALIZE_BILL",
+    checkoutFlowStep({
+      lineCount: 0,
+      paymentStarted: false,
+      fullyPaid: false,
+      blockerCount: 0,
+      billBlockerCount: 0,
+    }),
+    1,
+  );
+  assert.equal(
+    checkoutFlowStep({
+      lineCount: 3,
+      paymentStarted: false,
+      fullyPaid: false,
+      blockerCount: 1,
+      billBlockerCount: 1,
+    }),
+    2,
+  );
+  assert.equal(
+    checkoutFlowStep({
+      lineCount: 3,
+      paymentStarted: false,
+      fullyPaid: false,
+      blockerCount: 0,
+      billBlockerCount: 0,
+    }),
+    3,
+  );
+  assert.equal(
+    checkoutFlowStep({
+      lineCount: 3,
+      paymentStarted: true,
+      fullyPaid: true,
+      blockerCount: 0,
+      billBlockerCount: 0,
+    }),
+    4,
   );
 });
 
-test("checkout flow advances to payment only after the bill is ready", () => {
-  assert.equal(checkoutFlowStep(preview, partialPayment), "PAYMENT");
-});
-
-test("checkout access denies staff without checkout permissions", () => {
-  assert.deepEqual(checkoutAccess("STAFF", "order.read"), {
-    read: false,
-    write: false,
-  });
-});
-
-test("bill blockers are presented as operator-facing messages", () => {
-  const blockers = checkoutBillBlockers({
-    ...preview,
-    billReady: false,
-    blockers: [
-      {
-        type: "VENUE_ORDER",
-        id: "order-1",
-        label: "Seat 1",
-        status: "SENT",
-      },
-    ],
-  });
-  assert.equal(blockers.length, 1);
-  assert.match(blockers[0], /Seat 1/);
-  assert.match(blockers[0], /SENT/);
-});
-
-test("operational blockers include bill finalization state", () => {
-  const blockers = checkoutOperationalBlockers(
-    { ...preview, billReady: false, blockers: [{ type: "SHOP_ORDER", id: "order-2", label: "Bar order", status: "PENDING" }] },
-    null,
+test("technical attached-children close errors are never shown to cashiers", () => {
+  assert.equal(
+    checkoutCloseErrorMessage({
+      message: "Guest check cannot settle until attached children are closed",
+    }),
+    "Payment is complete, but a live order or play session is still open. Finish it first, then close the check.",
   );
-  assert.equal(blockers.length, 1);
-  assert.match(blockers[0], /Bar order/);
 });
 
-test("checkout errors classify state conflicts separately from unknown failures", () => {
-  assert.equal(classifyCheckoutError({ code: "STATE_CONFLICT" }), "STATE_CONFLICT");
-  assert.equal(classifyCheckoutError(new Error("boom")), "UNKNOWN");
-});
-
-test("close error message preserves actionable state-conflict guidance", () => {
+test("state conflicts use the required reload message", () => {
+  assert.equal(
+    classifyCheckoutError({ status: 409, code: "VERSION_CONFLICT" }),
+    "conflict",
+  );
+  const html = renderToStaticMarkup(<SettlementStatus issue="conflict" />);
   assert.match(
-    checkoutCloseErrorMessage({ code: "STATE_CONFLICT", message: "Still open" }),
-    /Still open/,
+    html,
+    /This check changed on another device\. Reloading latest total\./,
   );
+});
+
+test("offline checkout uses the required connection message", () => {
+  assert.equal(classifyCheckoutError({ status: 0 }), "offline");
+  const html = renderToStaticMarkup(<SettlementStatus issue="offline" />);
+  assert.match(
+    html,
+    /Checkout requires connection until Offline Checkout is enabled\./,
+  );
+});
+
+test("loading and empty charge states render explicitly", () => {
+  const loading = renderToStaticMarkup(<SettlementStatus loading />);
+  assert.match(loading, /Refreshing authoritative checkout total/);
+
+  const empty = renderToStaticMarkup(
+    <ChargeGroups lines={[]} currency="PLN" />,
+  );
+  assert.match(empty, /This check is empty/);
+  assert.match(empty, /add a menu item/i);
+  assert.match(empty, /reservation/i);
+});
+
+test("large check item counts render without a second checkout implementation", () => {
+  const lines = Array.from({ length: 120 }, (_, index) =>
+    line(
+      index,
+      index % 2 === 0 ? "SHOP_ORDER" : "PLAY_SESSION",
+      `Item ${index + 1}`,
+    ),
+  );
+  const html = renderToStaticMarkup(
+    <ChargeGroups lines={lines} currency="PLN" />,
+  );
+  assert.match(html, /Item 1/);
+  assert.match(html, /Item 120/);
+});
+
+test("amount due is rendered from the server preview without client summation", () => {
+  const html = renderToStaticMarkup(<CheckoutTotals preview={preview} />);
+  assert.match(html, /Amount due/);
+  assert.match(html, /123\.45/);
+  assert.match(html, /Check total/);
+  assert.match(html, /Live bill/);
+});
+
+test("partial payment totals use settlement progress rather than the original bill due", () => {
+  const html = renderToStaticMarkup(
+    <CheckoutTotals preview={preview} paymentState={partialPayment} />,
+  );
+  assert.match(html, /Partially paid/);
+  assert.match(html, /40\.00/);
+  assert.match(html, /83\.45/);
 });
