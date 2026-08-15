@@ -71,9 +71,21 @@ jobs:
         run: |
           set -euo pipefail
           raw=$(cat /tmp/phase3-refresh-token)
+          csrf_code=$(curl -sS -o /tmp/csrf.json -c /tmp/phase3.cookies -w '%{http_code}' "$GOSPOTS_BASE_URL/auth/csrf" || true)
+          if [ "$csrf_code" != "200" ]; then
+            echo "CSRF bootstrap failed -> HTTP $csrf_code" >&2
+            cat /tmp/csrf.json >&2 || true
+            exit 1
+          fi
+          csrf=$(awk '$6=="csrf_token" {print $7}' /tmp/phase3.cookies | tail -n1)
+          if [ -z "$csrf" ]; then
+            echo "CSRF endpoint did not return csrf_token cookie." >&2
+            exit 1
+          fi
           code=$(curl -sS -o /tmp/refresh.json -D /tmp/refresh.headers -c /tmp/phase3.cookies -w '%{http_code}' \
             -X POST "$GOSPOTS_BASE_URL/auth/refresh" \
-            -H "Cookie: refresh_token=$raw" || true)
+            -H "Cookie: refresh_token=$raw; csrf_token=$csrf" \
+            -H "X-CSRF-Token: $csrf" || true)
           echo "refresh exchange -> HTTP $code"
           if [ "$code" != "200" ]; then
             echo "Refresh exchange response:" >&2
