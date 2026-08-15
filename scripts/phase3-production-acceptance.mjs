@@ -20,7 +20,7 @@ async function request(method, path, body, auth = token) {
 }
 async function must(method, path, body, auth = token) {
   const result = await request(method, path, body, auth);
-  if (result.status < 200 || result.status >= 300) throw new Error(`${method} ${path} -> ${result.status}: ${JSON.stringify(result.body).slice(0, 800)}`);
+  if (result.status < 200 || result.status >= 300) throw new Error(`${method} ${path} -> ${result.status}: ${JSON.stringify(result.body).slice(0, 1000)}`);
   return result;
 }
 function cookie(headers, name) {
@@ -31,6 +31,34 @@ function cookie(headers, name) {
 function idOf(x) { return x?.id || x?.session?.id || x?.data?.id; }
 function versionOf(x) { return x?.version ?? x?.session?.version ?? x?.data?.version; }
 function floorRows(body) { return Array.isArray(body) ? body : body?.resources || body?.floor || []; }
+function waitRows(body) { return Array.isArray(body) ? body : body?.entries || body?.waitlist || []; }
+function waitVersion(x) { return x?.operations?.version ?? x?.extension?.version ?? x?.version; }
+function waitId(x) { return x?.id ?? x?.entry?.id ?? x?.waitlistEntry?.id; }
+function waitName(x) { return x?.guestName ?? x?.name ?? x?.entry?.guestName ?? ''; }
+
+async function cleanupPriorAcceptanceResidue() {
+  const floor = floorRows((await must('GET', '/operations/floor')).body);
+  let cancelledSessions = 0;
+  for (const row of floor) {
+    const s = row?.session;
+    if (!s || !['ACTIVE', 'PAUSED'].includes(s.status)) continue;
+    if (!String(s.notes || '').startsWith('P3-PROD-')) continue;
+    await must('POST', `/operations/sessions/${s.id}/cancel`, { expectedVersion: s.version, reason: 'Cleanup from previous Phase 3 production acceptance run' });
+    cancelledSessions += 1;
+  }
+  const waitlist = waitRows((await must('GET', '/operations/waitlist')).body);
+  let cancelledWaitlist = 0;
+  for (const entry of waitlist) {
+    if (!waitName(entry).startsWith('P3-PROD-')) continue;
+    const id = waitId(entry);
+    const version = waitVersion(entry);
+    if (!id || !Number.isInteger(version) || version < 1) continue;
+    const result = await request('POST', `/operations/waitlist/${id}/cancel`, { expectedVersion: version });
+    if (result.status >= 200 && result.status < 300) cancelledWaitlist += 1;
+    else if (result.status !== 409) throw new Error(`cleanup waitlist ${id} -> ${result.status}: ${JSON.stringify(result.body)}`);
+  }
+  ok('prior acceptance residue cleanup', { cancelledSessions, cancelledWaitlist });
+}
 
 async function main() {
   const ready = await must('GET', '/ready', undefined, null);
@@ -42,9 +70,12 @@ async function main() {
   if (!boundToken) fail('venue-scoped token bind', { response: bound.body });
   token = boundToken;
   ok('venue-scoped authentication');
+  await cleanupPriorAcceptanceResidue();
 
-  const uniqueName = `${marker} Billiards`;
-  const category = (await must('POST', '/resources/categories', { type: 'BILLIARD', name: uniqueName, description: 'Isolated Phase 3 production acceptance floor', slotMinutes: 60, unitCount: 4, unitNamePrefix: `${marker}-T`, rates: [{ label: 'Hourly', price: 60 }] })).body;
+  const category = (await must('POST', '/resources/categories', {
+    type: 'BILLIARD', name: `${marker} Billiards`, description: 'Isolated Phase 3 production acceptance floor',
+    slotMinutes: 60, unitCount: 4, unitNamePrefix: `${marker}-T`, rates: [{ label: 'Hourly', price: 60 }]
+  })).body;
   evidence.ids.categoryId = category.id;
   const catalog = (await must('GET', '/resources/catalog')).body;
   const cat = catalog.categories.find((c) => c.id === category.id);
@@ -54,10 +85,16 @@ async function main() {
   ok('acceptance floor provisioning', { resources: cat.resources.map((r) => r.id) });
 
   const policy0 = (await must('GET', '/operations/policy')).body;
-  const policy = (await must('PATCH', '/operations/policy', { expectedVersion: policy0.version, pauseBillingMode: 'STOP_CHARGING', managerOnlyPause: false, maxPauseMinutes: 30, moveRatePolicy: 'KEEP_SESSION_RATE', fixedSessionAutoExtend: false, fixedSessionWarningMinutes: [15, 5], defaultExtensionMinutes: 10 })).body;
+  const policy = (await must('PATCH', '/operations/policy', {
+    expectedVersion: policy0.version, pauseBillingMode: 'STOP_CHARGING', managerOnlyPause: false, maxPauseMinutes: 30,
+    moveRatePolicy: 'KEEP_SESSION_RATE', fixedSessionAutoExtend: false, fixedSessionWarningMinutes: [15, 5], defaultExtensionMinutes: 10
+  })).body;
   ok('venue operations policy', { version: policy.version });
 
-  const hourly = (await must('POST', '/operations/rate-plans', { name: `${marker} Hourly`, resourceCategoryId: cat.id, billingMode: 'HOURLY', hourlyRateMinor: 6000, roundingMinutes: 1, minimumMinutes: 0, priority: 500, active: true })).body;
+  const hourly = (await must('POST', '/operations/rate-plans', {
+    name: `${marker} Hourly`, resourceCategoryId: cat.id, billingMode: 'HOURLY', hourlyRateMinor: 6000,
+    roundingMinutes: 1, minimumMinutes: 0, priority: 500, active: true
+  })).body;
   evidence.ids.hourlyRatePlanId = hourly.id;
 
   const starts = await Promise.all([
@@ -71,12 +108,10 @@ async function main() {
   evidence.ids.concurrentSessionId = idOf(session);
   ok('concurrent exclusive start', { statuses: starts.map((x) => x.status) });
 
-  const floor1 = floorRows((await must('GET', '/operations/floor')).body);
-  const card1 = floor1.find((x) => x.id === r1.id);
+  const card1 = floorRows((await must('GET', '/operations/floor')).body).find((x) => x.id === r1.id);
   if (!card1?.session?.timer || typeof card1.session.timer.elapsedSeconds !== 'number') fail('server-authoritative floor timer', { card: card1 });
   await new Promise((r) => setTimeout(r, 2100));
-  const floor2 = floorRows((await must('GET', '/operations/floor')).body);
-  const card2 = floor2.find((x) => x.id === r1.id);
+  const card2 = floorRows((await must('GET', '/operations/floor')).body).find((x) => x.id === r1.id);
   const delta = card2.session.timer.elapsedSeconds - card1.session.timer.elapsedSeconds;
   if (delta < 1 || delta > 5) fail('timer accuracy / refresh projection', { before: card1.session.timer, after: card2.session.timer });
   ok('timer accuracy / refresh projection', { deltaSeconds: delta });
@@ -90,15 +125,18 @@ async function main() {
 
   const stale = await request('POST', `/operations/sessions/${idOf(session)}/move`, { expectedVersion: pausedVersion, resourceId: r2.id });
   if (stale.status !== 409) fail('stale version conflict', { status: stale.status, body: stale.body });
-  ok('stale version conflict', { status: stale.status });
+  ok('stale version conflict', { httpStatus: stale.status });
   session = (await must('POST', `/operations/sessions/${idOf(session)}/move`, { expectedVersion: versionOf(session), resourceId: r2.id })).body;
   if (session.resourceId !== r2.id || idOf(session) !== evidence.ids.concurrentSessionId) fail('resource move preserves session identity', { session });
   ok('resource move preserves identity/history');
   session = (await must('POST', `/operations/sessions/${idOf(session)}/finish`, { expectedVersion: versionOf(session) })).body;
   if (!['FINISHED', 'ENDED'].includes(session.status)) fail('finish usage without settlement', { session });
-  ok('finish usage without settlement', { status: session.status, accruedMinor: session.accruedMinor });
+  ok('finish usage without settlement', { sessionStatus: session.status, accruedMinor: session.accruedMinor });
 
-  const fixed = (await must('POST', '/operations/rate-plans', { name: `${marker} Fixed`, resourceId: r3.id, billingMode: 'FIXED_DURATION', unitPriceMinor: 3000, fixedDurationMinutes: 30, overtimeRateMinor: 6000, overtimeAfterMinutes: 30, priority: 1000, active: true })).body;
+  const fixed = (await must('POST', '/operations/rate-plans', {
+    name: `${marker} Fixed`, resourceId: r3.id, billingMode: 'FIXED_DURATION', unitPriceMinor: 3000,
+    fixedDurationMinutes: 30, overtimeRateMinor: 6000, overtimeAfterMinutes: 30, priority: 1000, active: true
+  })).body;
   let fixedSession = (await must('POST', '/operations/sessions/start', { resourceId: r3.id, ratePlanId: fixed.id, participantCount: 3, notes: marker })).body;
   let fixedCard = floorRows((await must('GET', '/operations/floor')).body).find((x) => x.id === r3.id);
   const beforeRemaining = fixedCard?.session?.timer?.remainingSeconds;
@@ -109,27 +147,36 @@ async function main() {
   if (!(afterRemaining > beforeRemaining + 500)) fail('fixed-time extension', { beforeRemaining, afterRemaining });
   ok('fixed-time countdown / extension', { beforeRemaining, afterRemaining });
 
-  const wait = (await must('POST', '/operations/waitlist', { name: `${marker} Waitlist`, partySize: 4, requestedResourceType: 'BILLIARD', desiredDurationMinutes: 45, estimatedWaitMinutes: 1, notes: marker })).body;
-  evidence.ids.waitlistId = wait.id;
+  const wait = (await must('POST', '/operations/waitlist', {
+    name: `${marker} Waitlist`, partySize: 4, requestedResourceType: 'BILLIARD', desiredDurationMinutes: 45,
+    estimatedWaitMinutes: 1, notes: marker
+  })).body;
+  const waitIdValue = waitId(wait);
+  const waitVersionValue = waitVersion(wait);
+  if (!waitIdValue || !Number.isInteger(waitVersionValue) || waitVersionValue < 1) fail('waitlist create contract', { wait });
+  evidence.ids.waitlistId = waitIdValue;
+  ok('waitlist create contract', { version: waitVersionValue });
   const seats = await Promise.all([
-    request('POST', `/operations/waitlist/${wait.id}/seat`, { expectedVersion: wait.version, resourceId: r4.id, ratePlanId: hourly.id }),
-    request('POST', `/operations/waitlist/${wait.id}/seat`, { expectedVersion: wait.version, resourceId: r4.id, ratePlanId: hourly.id })
+    request('POST', `/operations/waitlist/${waitIdValue}/seat`, { expectedVersion: waitVersionValue, resourceId: r4.id, ratePlanId: hourly.id }),
+    request('POST', `/operations/waitlist/${waitIdValue}/seat`, { expectedVersion: waitVersionValue, resourceId: r4.id, ratePlanId: hourly.id })
   ]);
   const seatWins = seats.filter((x) => x.status >= 200 && x.status < 300);
   const seatLosses = seats.filter((x) => x.status === 409);
   if (seatWins.length !== 1 || seatLosses.length !== 1) fail('waitlist seat conflict', { statuses: seats.map((x) => x.status), bodies: seats.map((x) => x.body) });
-  const seatedBody = seatWins[0].body;
-  let seatedSession = seatedBody.session || seatedBody.operationsSession || seatedBody;
-  if (!idOf(seatedSession)) { const c = floorRows((await must('GET', '/operations/floor')).body).find((x) => x.id === r4.id); seatedSession = c?.session; }
-  if (!idOf(seatedSession)) fail('waitlist seating creates session', { seatedBody });
+  let seatedSession = seatWins[0].body?.session || seatWins[0].body?.operationsSession;
+  if (!idOf(seatedSession)) seatedSession = floorRows((await must('GET', '/operations/floor')).body).find((x) => x.id === r4.id)?.session;
+  if (!idOf(seatedSession)) fail('waitlist seating creates session', { body: seatWins[0].body });
   ok('waitlist seat conflict', { statuses: seats.map((x) => x.status) });
-  seatedSession = (await must('POST', `/operations/sessions/${idOf(seatedSession)}/finish`, { expectedVersion: versionOf(seatedSession) })).body;
+  await must('POST', `/operations/sessions/${idOf(seatedSession)}/finish`, { expectedVersion: versionOf(seatedSession) });
 
-  const maintenance = (await must('POST', '/operations/maintenance', { resourceId: r4.id, reason: 'Phase 3 production maintenance guard', notes: marker, expectedReturnAt: new Date(Date.now() + 15 * 60_000).toISOString() })).body;
+  const maintenance = (await must('POST', '/operations/maintenance', {
+    resourceId: r4.id, reason: 'Phase 3 production maintenance guard', notes: marker,
+    expectedReturnAt: new Date(Date.now() + 15 * 60_000).toISOString()
+  })).body;
   evidence.ids.maintenanceId = maintenance.id;
   const blocked = await request('POST', '/operations/sessions/start', { resourceId: r4.id, ratePlanId: hourly.id, notes: marker });
   if (blocked.status !== 409) fail('maintenance start guard', { status: blocked.status, body: blocked.body });
-  ok('maintenance start guard', { status: blocked.status });
+  ok('maintenance start guard', { httpStatus: blocked.status });
   await must('DELETE', `/operations/maintenance/${maintenance.id}`);
 
   const group = (await must('POST', '/operations/session-groups', { name: `${marker} Group` })).body;
@@ -144,13 +191,13 @@ async function main() {
   if (!handover || typeof handover !== 'object') fail('shift handover projection', { handover });
   ok('shift handover projection');
 
-  fixedSession = (await must('POST', `/operations/sessions/${idOf(fixedSession)}/finish`, { expectedVersion: versionOf(fixedSession) })).body;
+  await must('POST', `/operations/sessions/${idOf(fixedSession)}/finish`, { expectedVersion: versionOf(fixedSession) });
   const finalFloor = floorRows((await must('GET', '/operations/floor')).body);
   const active = finalFloor.filter((x) => x.session && ['ACTIVE', 'PAUSED'].includes(x.session.status));
   const occupiedIds = active.map((x) => x.id);
   if (new Set(occupiedIds).size !== occupiedIds.length) fail('final exclusive occupancy invariant', { occupiedIds });
-  if (active.length !== 0) fail('acceptance floor cleanup', { active: active.map((x) => ({ resourceId: x.id, sessionId: x.session?.id })) });
-  ok('final exclusive occupancy invariant / no active residue');
+  if (active.some((x) => String(x.session?.notes || '').startsWith('P3-PROD-'))) fail('acceptance floor cleanup', { active: active.map((x) => ({ resourceId: x.id, sessionId: x.session?.id })) });
+  ok('final exclusive occupancy invariant / no active acceptance residue');
 
   evidence.completedAt = new Date().toISOString(); evidence.status = 'PASS';
   await writeFile('/tmp/phase3-production-acceptance.json', JSON.stringify(evidence, null, 2));
