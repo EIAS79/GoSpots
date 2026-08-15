@@ -1,0 +1,73 @@
+name: Phase 4 commercial-core validation
+
+on:
+  push:
+    branches: [main, master]
+  pull_request:
+
+concurrency:
+  group: phase4-commercial-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  commercial-core:
+    name: Commercial core · settlement · ledger gate
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    services:
+      postgres:
+        image: postgres:17
+        env:
+          POSTGRES_USER: ci
+          POSTGRES_PASSWORD: ci
+          POSTGRES_DB: phase4_ci
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U ci -d phase4_ci"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+    env:
+      DATABASE_URL: postgresql://ci:ci@localhost:5432/phase4_ci?schema=public
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 10.12.1
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+          cache: pnpm
+          cache-dependency-path: pnpm-lock.yaml
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+      - name: Generate Prisma client
+        working-directory: apps/api
+        run: pnpm exec prisma generate
+      - name: Apply complete migration chain to clean Postgres
+        working-directory: apps/api
+        run: |
+          set -euo pipefail
+          pnpm exec prisma migrate deploy
+          pnpm exec prisma migrate status
+          pnpm exec prisma validate
+      - name: Assert Phase 4 persisted commercial and ledger invariants
+        working-directory: apps/api
+        run: pnpm exec tsx prisma/phase4-commercial-assert.ts
+      - name: Run Phase 4 settlement and control tests
+        working-directory: apps/api
+        run: >-
+          pnpm exec jest --config jest.config.cjs --runInBand
+          src/modules/checkout/payment-allocation.service.spec.ts
+          src/modules/checkout/checkout-payment.service.spec.ts
+          src/modules/checkout/checkout.service.spec.ts
+          src/modules/checkout/guest-check-merge.service.spec.ts
+          src/modules/checkout/commercial-core.service.spec.ts
+          src/modules/checkout/commercial-day-close.service.spec.ts
+      - name: Build API with generated Phase 4 contracts
+        working-directory: apps/api
+        run: pnpm run build
