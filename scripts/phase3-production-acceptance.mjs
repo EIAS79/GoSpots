@@ -15,8 +15,7 @@ async function request(method, path, body, auth = token) {
   if (auth) headers.authorization = `Bearer ${auth}`;
   if (body !== undefined) headers['content-type'] = 'application/json';
   const res = await fetch(`${base}${path}`, { method, headers, body: body === undefined ? undefined : JSON.stringify(body), redirect: 'manual' });
-  const text = await res.text();
-  return { status: res.status, body: parseJson(text), headers: res.headers };
+  return { status: res.status, body: parseJson(await res.text()), headers: res.headers };
 }
 async function must(method, path, body, auth = token) {
   const result = await request(method, path, body, auth);
@@ -41,8 +40,7 @@ async function cleanupPriorAcceptanceResidue() {
   let cancelledSessions = 0;
   for (const row of floor) {
     const s = row?.session;
-    if (!s || !['ACTIVE', 'PAUSED'].includes(s.status)) continue;
-    if (!String(s.notes || '').startsWith('P3-PROD-')) continue;
+    if (!s || !['ACTIVE', 'PAUSED'].includes(s.status) || !String(s.notes || '').startsWith('P3-PROD-')) continue;
     await must('POST', `/operations/sessions/${s.id}/cancel`, { expectedVersion: s.version, reason: 'Cleanup from previous Phase 3 production acceptance run' });
     cancelledSessions += 1;
   }
@@ -50,14 +48,30 @@ async function cleanupPriorAcceptanceResidue() {
   let cancelledWaitlist = 0;
   for (const entry of waitlist) {
     if (!waitName(entry).startsWith('P3-PROD-')) continue;
-    const id = waitId(entry);
-    const version = waitVersion(entry);
+    const id = waitId(entry); const version = waitVersion(entry);
     if (!id || !Number.isInteger(version) || version < 1) continue;
     const result = await request('POST', `/operations/waitlist/${id}/cancel`, { expectedVersion: version });
     if (result.status >= 200 && result.status < 300) cancelledWaitlist += 1;
     else if (result.status !== 409) throw new Error(`cleanup waitlist ${id} -> ${result.status}: ${JSON.stringify(result.body)}`);
   }
   ok('prior acceptance residue cleanup', { cancelledSessions, cancelledWaitlist });
+}
+
+async function getOrCreateAcceptanceArena() {
+  let catalog = (await must('GET', '/resources/catalog')).body;
+  let cat = catalog.categories.find((c) => c.type === 'BILLIARD' && Array.isArray(c.resources) && c.resources.length >= 4);
+  if (!cat) {
+    const created = (await must('POST', '/resources/categories', {
+      type: 'BILLIARD', name: `${marker} Billiards`, description: 'Isolated Phase 3 production acceptance floor',
+      slotMinutes: 60, unitCount: 4, unitNamePrefix: 'P3-T', rates: [{ label: 'Hourly', price: 60 }]
+    })).body;
+    catalog = (await must('GET', '/resources/catalog')).body;
+    cat = catalog.categories.find((c) => c.id === created.id);
+  }
+  if (!cat || !Array.isArray(cat.resources) || cat.resources.length < 4) fail('acceptance floor provisioning', { category: cat });
+  evidence.ids.categoryId = cat.id;
+  ok('acceptance floor provisioning', { categoryId: cat.id, reused: !String(cat.name || '').startsWith(marker), resources: cat.resources.slice(0, 4).map((r) => r.id) });
+  return cat;
 }
 
 async function main() {
@@ -72,17 +86,9 @@ async function main() {
   ok('venue-scoped authentication');
   await cleanupPriorAcceptanceResidue();
 
-  const category = (await must('POST', '/resources/categories', {
-    type: 'BILLIARD', name: `${marker} Billiards`, description: 'Isolated Phase 3 production acceptance floor',
-    slotMinutes: 60, unitCount: 4, unitNamePrefix: `${marker}-T`, rates: [{ label: 'Hourly', price: 60 }]
-  })).body;
-  evidence.ids.categoryId = category.id;
-  const catalog = (await must('GET', '/resources/catalog')).body;
-  const cat = catalog.categories.find((c) => c.id === category.id);
-  if (!cat || cat.resources.length < 4) fail('acceptance floor provisioning', { category });
+  const cat = await getOrCreateAcceptanceArena();
   const [r1, r2, r3, r4] = cat.resources;
   Object.assign(evidence.ids, { r1: r1.id, r2: r2.id, r3: r3.id, r4: r4.id });
-  ok('acceptance floor provisioning', { resources: cat.resources.map((r) => r.id) });
 
   const policy0 = (await must('GET', '/operations/policy')).body;
   const policy = (await must('PATCH', '/operations/policy', {
@@ -151,8 +157,7 @@ async function main() {
     name: `${marker} Waitlist`, partySize: 4, requestedResourceType: 'BILLIARD', desiredDurationMinutes: 45,
     estimatedWaitMinutes: 1, notes: marker
   })).body;
-  const waitIdValue = waitId(wait);
-  const waitVersionValue = waitVersion(wait);
+  const waitIdValue = waitId(wait); const waitVersionValue = waitVersion(wait);
   if (!waitIdValue || !Number.isInteger(waitVersionValue) || waitVersionValue < 1) fail('waitlist create contract', { wait });
   evidence.ids.waitlistId = waitIdValue;
   ok('waitlist create contract', { version: waitVersionValue });
@@ -203,4 +208,4 @@ async function main() {
   await writeFile('/tmp/phase3-production-acceptance.json', JSON.stringify(evidence, null, 2));
   console.log('PHASE3_PRODUCTION_ACCEPTANCE=PASS');
 }
-main().catch(async (error) => { evidence.completedAt = new Date().toISOString(); evidence.status = 'FAIL'; evidence.error = { message: error?.message || String(error), status: error?.status, payload: error?.payload }; await writeFile('/tmp/phase3-production-acceptance.json', JSON.stringify(evidence, null, 2)).catch(() => {}); console.error(error); process.exit(1); });
+main().catch(async (error) => { evidence.completedAt = new Date().toISOString(); evidence.status = 'FAIL'; evidence.error = { message: error?.message || String(error) }; await writeFile('/tmp/phase3-production-acceptance.json', JSON.stringify(evidence, null, 2)).catch(() => {}); console.error(error); process.exit(1); });
