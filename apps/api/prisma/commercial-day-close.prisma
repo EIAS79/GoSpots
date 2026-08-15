@@ -1,0 +1,16 @@
+/// Commercial day-close boundary for unresolved GuestChecks. This is deliberately
+/// separate from Phase 5 CashSession and fiscal day-close ownership.
+model CommercialDayClose {
+  id               String   @id @default(cuid())
+  shopId           String
+  businessDate     String
+  openTabCount     Int      @default(0)
+  overrideUsed     Boolean  @default(false)
+  overrideReason   String?
+  closedById       String
+  closedAt         DateTime @default(now())
+  createdAt        DateTime @default(now())
+
+  @@unique([shopId, businessDate])
+  @@index([shopId, closedAt])
+}
