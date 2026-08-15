@@ -116,4 +116,14 @@ export class MoveGuestCheckChargesDto {
   @IsArray()
   @IsString({ each: true })
   reservationIds?: string[];
+
+  @IsOptional()
+  @IsArray()
+  @IsString({ each: true })
+  venueOrderIds?: string[];
+
+  @IsOptional()
+  @IsArray()
+  @IsString({ each: true })
+  operationsSessionIds?: string[];
 }
