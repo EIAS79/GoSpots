@@ -2,7 +2,7 @@
 
 Source: `GoSpots_Master_Product_and_Engineering_Execution_Plan_v2.md`, Phase 3 — Live Operations: Sessions, Timers, Moves, Waitlist and Floor Control.
 
-Status: `IMPLEMENTED_PENDING_CI_AND_PRODUCTION_ACCEPTANCE`.
+Status: `IMPLEMENTED_PENDING_FINAL_CI_AND_PRODUCTION_ACCEPTANCE`.
 
 This record intentionally does not claim Phase 3 accepted until exact-head CI, merge, production deployment, migration verification and Gate P3 production smoke are complete.
 
@@ -10,21 +10,21 @@ This record intentionally does not claim Phase 3 accepted until exact-head CI, m
 
 | Requirement | Implementation evidence | Acceptance evidence |
 | --- | --- | --- |
-| Canonical session lifecycle | `LiveOperationsService` owns ACTIVE/PAUSED → FINISHED semantic ENDED and audited CANCELLED; settlement remains downstream | Focused tests + production drill pending |
-| Exclusive live occupancy | advisory resource lock plus tenant/resource active-session conflict; Phase 3 DB assertion detects duplicates | CI + concurrent production drill pending |
-| Server-authoritative timers | API floor `generatedAt`, server timestamps and `projectSessionTiming`; UI only projects from server snapshot | timer/overnight tests pending CI |
-| Start capture | rate snapshot, operator, participants, customer, membership, reservation, package snapshot and notes | API/UI smoke pending |
-| Configurable pause | venue policy snapshots STOP/CONTINUE charging, manager-only and max-pause policy; pause reason is required and timing segments persist | unit/API smoke pending |
-| Resource move | session identity/resource-link history preserved; occupied/maintenance/reservation guards; manager reservation override; KEEP_SESSION_RATE or REPRICE_TARGET with immutable rate segments | move/reprice drill pending |
-| Fixed-time control | scheduled end, warning thresholds, optional auto-extension projection, manual extension and explicit fixed-duration overage pricing | focused tests + UI drill pending |
+| Canonical session lifecycle | `LiveOperationsService` owns ACTIVE/PAUSED → FINISHED semantic ENDED and audited CANCELLED; settlement remains downstream | Focused tests passed; production drill pending |
+| Exclusive live occupancy | advisory resource lock plus tenant/resource active-session conflict; Phase 3 DB assertion detects duplicates | Dedicated Phase 3 gate passed; production concurrency drill pending |
+| Server-authoritative timers | API floor `generatedAt`, server timestamps and `projectSessionTiming`; UI only projects from server snapshot | timer/overnight tests passed |
+| Start capture | rate snapshot, operator, participants, customer, membership, reservation, package snapshot and notes | API/UI production smoke pending |
+| Configurable pause | venue policy snapshots STOP/CONTINUE charging, manager-only and max-pause policy; pause reason is required and timing segments persist | focused tests passed; production API smoke pending |
+| Resource move | session identity/resource-link history preserved; occupied/maintenance/reservation guards; manager reservation override; KEEP_SESSION_RATE or REPRICE_TARGET with immutable rate segments | migration/history assertions passed; production move/reprice drill pending |
+| Fixed-time control | scheduled end, warning thresholds, optional auto-extension projection, manual extension and explicit fixed-duration overage pricing | focused pricing/timer tests passed; production UI drill pending |
 | Groups/participants | existing SessionGroup plus participant count and per-person rate support retained | grouped-session smoke pending |
-| Waitlist | canonical `ReservationWaitlistEntry` plus `OperationsWaitlistExtension`; create/notify/seat/skip/cancel/expire and optimistic seat claim | conflict test + production drill pending |
-| Maintenance/downtime | maintenance reason, expected return, notes, session-start guard and state history | migration/API smoke pending |
-| Live floor card | resource state, timer, usage amount, reservation, customer/member, orders/check context, alerts and quick actions | web CI/browser smoke pending |
-| Shift handover | active/paused sessions, open checks, pending orders, upcoming reservations, unresolved payments, devices, cash and fiscal issues | API/UI smoke pending |
-| Offline classification | existing Offline Lite keeps cached floor and queueable session start/end/simple orders; Phase 3 high-conflict commands remain online-only | web CI/reconnect smoke pending |
-| Migration safety | additive/backfilled migration, pause-reason backfill, immutable historical rate-segment backfill and Phase 3 integrity assertion | clean + representative upgrade CI pending |
-| Legacy Edge validation | old mislabeled Phase 3 Edge workflow preserved as `edge-validation.yml`; Phase 3 workflow now validates current master-plan live operations | CI pending |
+| Waitlist | canonical `ReservationWaitlistEntry` plus `OperationsWaitlistExtension`; canonical `ResourceType` validation; create/notify/seat/skip/cancel/expire and optimistic seat claim | stale-seat test passed; production drill pending |
+| Maintenance/downtime | maintenance reason, expected return, notes, session-start guard and state history | clean migration passed; production API smoke pending |
+| Live floor card | resource state, timer, usage amount, reservation, customer/member, orders/check context, alerts and quick actions; existing Visits view preserved | web typecheck/build passed before final hardening; final exact-head web CI pending |
+| Shift handover | active/paused sessions, open checks, pending orders, upcoming reservations, unresolved payments, devices, cash and fiscal issues | production API/UI smoke pending |
+| Offline classification | existing Offline Lite keeps cached floor and queueable session start/end/simple orders; Phase 3 high-conflict commands remain online-only | web offline tests passed before final hardening; final exact-head CI pending |
+| Migration safety | additive/backfilled migration, pause-reason backfill, immutable historical rate-segment backfill and Phase 3 integrity assertion | clean migration, representative upgrade and Phase 3 integrity assertions passed |
+| Legacy Edge validation | old mislabeled Phase 3 Edge workflow preserved as `edge-validation.yml`; Phase 3 workflow now validates current master-plan live operations | Edge compatibility passed before final hardening; final exact-head CI pending |
 
 ## Mandatory test mapping
 
@@ -43,13 +43,17 @@ This record intentionally does not claim Phase 3 accepted until exact-head CI, m
 
 Gate P3 requires a billiard/gaming venue to run a simulated several-hour busy floor without timing ambiguity, duplicate occupancy or manual calculation.
 
-Repository evidence includes a deterministic six-hour busy-floor simulation test. Final acceptance additionally requires an authenticated production drill covering concurrent start rejection, pause/resume, move, fixed-time extension/overage, waitlist seat conflict, maintenance guard and handover projection on the deployed merged revision.
+Repository evidence includes a deterministic six-hour busy-floor simulation test. Dedicated Phase 3 workflow run `31879715527` passed clean migration, schema/integrity assertions, 29 focused operations tests and the production API build on repaired head `f1ee324c840532470ef85b5a7db381f5044a01a9` before the final non-regression hardening. Final acceptance additionally requires the final exact-head CI and an authenticated production drill covering concurrent start rejection, pause/resume, move, fixed-time extension/overage, waitlist seat conflict, maintenance guard and handover projection on the deployed merged revision.
+
+## Final non-regression hardening
+
+Before freezing the merge head, the implementation audit found and corrected two avoidable regressions: the pre-existing Operations `Visits` view is preserved, and waitlist resource-type input now uses canonical `ResourceType` values instead of arbitrary strings. No temporary patch workflow remains in the branch.
 
 ## Evidence to fill after exact-head acceptance
 
-- implementation PR: pending;
-- exact PR head: pending;
-- required CI workflow run IDs/conclusions: pending;
+- implementation PR: #47;
+- final exact PR head: pending;
+- required final exact-head CI workflow run IDs/conclusions: pending;
 - merge revision: pending;
 - post-merge main CI: pending;
 - production API deployment: pending;
