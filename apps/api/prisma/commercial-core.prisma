@@ -88,25 +88,25 @@ model GuestCheckCommercialProfile {
 }
 
 model CommercialAdjustment {
-  id                String                     @id @default(cuid())
-  shopId            String
-  guestCheckId      String
-  type               CommercialAdjustmentType
-  scope              CommercialAdjustmentScope @default(CHECK)
-  targetSourceType   String?
-  targetSourceId     String?
-  targetLineReference String?
-  amountMinor        Int?
-  percentageBps      Int?
-  beforeTotalMinor   Int
-  afterTotalMinor    Int
-  reason             String
-  source             CommercialAdjustmentSource @default(MANUAL)
-  createdById        String
-  createdAt          DateTime                    @default(now())
-  voidedAt           DateTime?
-  voidedById         String?
-  voidReason         String?
+  id                  String                     @id @default(cuid())
+  shopId              String
+  guestCheckId        String
+  type                 CommercialAdjustmentType
+  scope                CommercialAdjustmentScope @default(CHECK)
+  targetSourceType     String?
+  targetSourceId       String?
+  targetLineReference  String?
+  amountMinor          Int?
+  percentageBps        Int?
+  beforeTotalMinor     Int
+  afterTotalMinor      Int
+  reason               String
+  source               CommercialAdjustmentSource @default(MANUAL)
+  createdById          String
+  createdAt            DateTime                    @default(now())
+  voidedAt             DateTime?
+  voidedById           String?
+  voidReason           String?
 
   @@index([shopId, guestCheckId, createdAt])
   @@index([shopId, guestCheckId, voidedAt])
@@ -149,20 +149,20 @@ model GuestCheckTip {
 }
 
 model GuestCheckTransferEvent {
-  id                     String   @id @default(cuid())
-  shopId                 String
-  guestCheckId           String
-  actorId                String
-  reason                 String
-  fromOperatorId         String?
-  toOperatorId           String?
-  fromResourceId         String?
-  toResourceId           String?
+  id                      String   @id @default(cuid())
+  shopId                  String
+  guestCheckId            String
+  actorId                 String
+  reason                  String
+  fromOperatorId          String?
+  toOperatorId            String?
+  fromResourceId          String?
+  toResourceId            String?
   fromOperationsSessionId String?
   toOperationsSessionId   String?
-  fromServiceArea        String?
-  toServiceArea          String?
-  createdAt              DateTime @default(now())
+  fromServiceArea         String?
+  toServiceArea           String?
+  createdAt               DateTime @default(now())
 
   @@index([shopId, guestCheckId, createdAt])
 }
@@ -182,18 +182,39 @@ model GuestCheckReopenEvent {
 }
 
 model CommercialReceipt {
-  id           String   @id @default(cuid())
-  shopId       String
-  guestCheckId String
-  settlementId String   @unique
+  id            String   @id @default(cuid())
+  shopId        String
+  guestCheckId  String
+  settlementId  String   @unique
   receiptNumber String
-  currency     String
-  totalMinor   Int
-  snapshot     Json
-  issuedAt     DateTime @default(now())
-  createdById  String
-  createdAt    DateTime @default(now())
+  currency      String
+  totalMinor    Int
+  snapshot      Json
+  issuedAt      DateTime @default(now())
+  createdById   String
+  createdAt     DateTime @default(now())
 
   @@unique([shopId, receiptNumber])
   @@index([shopId, guestCheckId, issuedAt])
+}
+
+/// Semantic classification for the existing canonical LedgerEntry. This model
+/// deliberately has no amount/currency columns, so it cannot become a second
+/// financial truth. It only says what a LedgerEntry means in the Phase 4 domain.
+model LedgerFactMetadata {
+  id            String   @id @default(cuid())
+  shopId        String
+  ledgerEntryId String   @unique
+  factType      String
+  referenceType String
+  referenceId   String
+  guestCheckId  String?
+  settlementId  String?
+  metadata      Json?
+  createdAt     DateTime @default(now())
+
+  @@unique([shopId, factType, referenceType, referenceId])
+  @@index([shopId, factType, createdAt])
+  @@index([shopId, guestCheckId, createdAt])
+  @@index([shopId, settlementId, createdAt])
 }
