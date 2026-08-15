@@ -22,10 +22,12 @@ import { RequirePermissions } from '../auth/decorators/roles.decorator';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import type { JwtAccessPayload } from '../auth/auth.service';
 import { CommercialCoreService } from './commercial-core.service';
+import { CommercialDayCloseService } from './commercial-day-close.service';
 import {
   AddServiceChargeDto,
   AddTipDto,
   ApplyCommercialAdjustmentDto,
+  CloseCommercialDayDto,
   CompleteVenueOrderDto,
   ReopenGuestCheckDto,
   TransferGuestCheckDto,
@@ -40,6 +42,7 @@ import {
 export class CommercialCoreController {
   constructor(
     private readonly commercial: CommercialCoreService,
+    private readonly dayClose: CommercialDayCloseService,
     private readonly prisma: PrismaService,
   ) {}
 
@@ -98,8 +101,12 @@ export class CommercialCoreController {
     @Body() dto: UpsertCommercialProfileDto,
     @Headers('idempotency-key') key: string | undefined,
   ) {
-    return this.mutate(user, 'commercial.check.profile', key, { checkId, ...dto }, () =>
-      this.commercial.upsertProfile(user, checkId, dto),
+    return this.mutate(
+      user,
+      'commercial.check.profile',
+      key,
+      { checkId, ...dto },
+      () => this.commercial.upsertProfile(user, checkId, dto),
     );
   }
 
@@ -111,8 +118,12 @@ export class CommercialCoreController {
     @Body() dto: TransferGuestCheckDto,
     @Headers('idempotency-key') key: string | undefined,
   ) {
-    return this.mutate(user, 'commercial.check.transfer', key, { checkId, ...dto }, () =>
-      this.commercial.transfer(user, checkId, dto),
+    return this.mutate(
+      user,
+      'commercial.check.transfer',
+      key,
+      { checkId, ...dto },
+      () => this.commercial.transfer(user, checkId, dto),
     );
   }
 
@@ -124,8 +135,12 @@ export class CommercialCoreController {
     @Body() dto: ApplyCommercialAdjustmentDto,
     @Headers('idempotency-key') key: string | undefined,
   ) {
-    return this.mutate(user, 'commercial.check.adjustment.apply', key, { checkId, ...dto }, () =>
-      this.commercial.applyAdjustment(user, checkId, dto),
+    return this.mutate(
+      user,
+      'commercial.check.adjustment.apply',
+      key,
+      { checkId, ...dto },
+      () => this.commercial.applyAdjustment(user, checkId, dto),
     );
   }
 
@@ -138,8 +153,12 @@ export class CommercialCoreController {
     @Body() dto: VoidCommercialMutationDto,
     @Headers('idempotency-key') key: string | undefined,
   ) {
-    return this.mutate(user, 'commercial.check.adjustment.void', key, { checkId, id, ...dto }, () =>
-      this.commercial.voidAdjustment(user, checkId, id, dto),
+    return this.mutate(
+      user,
+      'commercial.check.adjustment.void',
+      key,
+      { checkId, id, ...dto },
+      () => this.commercial.voidAdjustment(user, checkId, id, dto),
     );
   }
 
@@ -151,8 +170,12 @@ export class CommercialCoreController {
     @Body() dto: AddServiceChargeDto,
     @Headers('idempotency-key') key: string | undefined,
   ) {
-    return this.mutate(user, 'commercial.check.service-charge.add', key, { checkId, ...dto }, () =>
-      this.commercial.addServiceCharge(user, checkId, dto),
+    return this.mutate(
+      user,
+      'commercial.check.service-charge.add',
+      key,
+      { checkId, ...dto },
+      () => this.commercial.addServiceCharge(user, checkId, dto),
     );
   }
 
@@ -165,8 +188,12 @@ export class CommercialCoreController {
     @Body() dto: VoidCommercialMutationDto,
     @Headers('idempotency-key') key: string | undefined,
   ) {
-    return this.mutate(user, 'commercial.check.service-charge.void', key, { checkId, id, ...dto }, () =>
-      this.commercial.voidServiceCharge(user, checkId, id, dto),
+    return this.mutate(
+      user,
+      'commercial.check.service-charge.void',
+      key,
+      { checkId, id, ...dto },
+      () => this.commercial.voidServiceCharge(user, checkId, id, dto),
     );
   }
 
@@ -178,8 +205,12 @@ export class CommercialCoreController {
     @Body() dto: AddTipDto,
     @Headers('idempotency-key') key: string | undefined,
   ) {
-    return this.mutate(user, 'commercial.check.tip.add', key, { checkId, ...dto }, () =>
-      this.commercial.addTip(user, checkId, dto),
+    return this.mutate(
+      user,
+      'commercial.check.tip.add',
+      key,
+      { checkId, ...dto },
+      () => this.commercial.addTip(user, checkId, dto),
     );
   }
 
@@ -192,8 +223,12 @@ export class CommercialCoreController {
     @Body() dto: VoidCommercialMutationDto,
     @Headers('idempotency-key') key: string | undefined,
   ) {
-    return this.mutate(user, 'commercial.check.tip.void', key, { checkId, id, ...dto }, () =>
-      this.commercial.voidTip(user, checkId, id, dto),
+    return this.mutate(
+      user,
+      'commercial.check.tip.void',
+      key,
+      { checkId, id, ...dto },
+      () => this.commercial.voidTip(user, checkId, id, dto),
     );
   }
 
@@ -205,8 +240,12 @@ export class CommercialCoreController {
     @Body() dto: ReopenGuestCheckDto,
     @Headers('idempotency-key') key: string | undefined,
   ) {
-    return this.mutate(user, 'commercial.check.reopen', key, { checkId, ...dto }, () =>
-      this.commercial.reopen(user, checkId, dto),
+    return this.mutate(
+      user,
+      'commercial.check.reopen',
+      key,
+      { checkId, ...dto },
+      () => this.commercial.reopen(user, checkId, dto),
     );
   }
 
@@ -218,14 +257,30 @@ export class CommercialCoreController {
     @Body() dto: CompleteVenueOrderDto,
     @Headers('idempotency-key') key: string | undefined,
   ) {
-    return this.mutate(user, 'commercial.order.complete', key, { orderId, ...dto }, () =>
-      this.commercial.completeVenueOrder(user, orderId, dto),
+    return this.mutate(
+      user,
+      'commercial.order.complete',
+      key,
+      { orderId, ...dto },
+      () => this.commercial.completeVenueOrder(user, orderId, dto),
     );
   }
 
   @Get('day-close/open-tab-guard')
   @RequirePermissions(PERMISSIONS.CASH_CLOSE)
   openTabGuard(@CurrentUser() user: JwtAccessPayload) {
-    return this.commercial.openTabGuard(user);
+    return this.dayClose.guard(user);
+  }
+
+  @Post('day-close')
+  @RequirePermissions(PERMISSIONS.CASH_CLOSE)
+  closeCommercialDay(
+    @CurrentUser() user: JwtAccessPayload,
+    @Body() dto: CloseCommercialDayDto,
+    @Headers('idempotency-key') key: string | undefined,
+  ) {
+    return this.mutate(user, 'commercial.day-close', key, dto, () =>
+      this.dayClose.close(user, dto),
+    );
   }
 }
