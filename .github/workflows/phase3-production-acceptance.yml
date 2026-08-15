@@ -1,0 +1,421 @@
+name: Phase 3 production Gate P3 acceptance
+
+on:
+  push:
+    branches: [phase3-production-acceptance]
+    paths: [.github/workflows/phase3-production-acceptance.yml]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  production-gate-p3:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    env:
+      API_BASE: https://gospots-api.onrender.com/api/v1
+      EXPECTED_MAIN_SHA: 4affc11b949516f1dcd9917ac07b5025ec500d68
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+      - name: Execute authenticated production busy-floor drill
+        shell: bash
+        run: |
+          node <<'NODE'
+          const assert = require('node:assert/strict');
+          const base = process.env.API_BASE;
+          const marker = `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+          const slug = `p3-accept-${marker}`.toLowerCase();
+          const email = `phase3.acceptance.${marker}@example.com`;
+          const password = 'Phase3Acceptance9!';
+          const cookies = new Map();
+          const evidence = {
+            expectedMainSha: process.env.EXPECTED_MAIN_SHA,
+            apiBase: base,
+            marker,
+            slug,
+            checks: [],
+          };
+
+          function absorbCookies(res) {
+            const setCookies = typeof res.headers.getSetCookie === 'function'
+              ? res.headers.getSetCookie()
+              : (res.headers.get('set-cookie') ? [res.headers.get('set-cookie')] : []);
+            for (const raw of setCookies) {
+              if (!raw) continue;
+              const pair = raw.split(';', 1)[0];
+              const index = pair.indexOf('=');
+              if (index > 0) cookies.set(pair.slice(0, index), pair.slice(index + 1));
+            }
+          }
+
+          function cookieHeader() {
+            return [...cookies.entries()].map(([k, v]) => `${k}=${v}`).join('; ');
+          }
+
+          async function raw(path, options = {}) {
+            const method = options.method ?? 'GET';
+            const headers = { accept: 'application/json', ...(options.headers ?? {}) };
+            if (options.body !== undefined) headers['content-type'] = 'application/json';
+            if (cookies.size) headers.cookie = cookieHeader();
+            if (!['GET', 'HEAD', 'OPTIONS'].includes(method) && cookies.get('csrf_token')) {
+              headers['x-csrf-token'] = cookies.get('csrf_token');
+            }
+            const res = await fetch(`${base}${path}`, {
+              method,
+              headers,
+              body: options.body === undefined ? undefined : JSON.stringify(options.body),
+              redirect: 'manual',
+            });
+            absorbCookies(res);
+            const text = await res.text();
+            let data = null;
+            try { data = text ? JSON.parse(text) : null; } catch { data = text; }
+            return { status: res.status, data, headers: res.headers };
+          }
+
+          async function ok(path, options = {}, expected = [200, 201]) {
+            const result = await raw(path, options);
+            if (!expected.includes(result.status)) {
+              throw new Error(`${options.method ?? 'GET'} ${path}: expected ${expected.join('/')} got ${result.status}: ${JSON.stringify(result.data)}`);
+            }
+            return result.data;
+          }
+
+          function passed(name, meta = {}) {
+            evidence.checks.push({ name, status: 'PASS', ...meta });
+            console.log(`PASS: ${name}`);
+          }
+
+          async function waitForPhase3Release() {
+            for (let attempt = 1; attempt <= 30; attempt += 1) {
+              const health = await raw('/ready');
+              if (health.status === 200) {
+                const policy = await raw('/operations/policy');
+                if (policy.status === 200) {
+                  passed('production API exposes Phase 3 policy route', { attempt });
+                  return policy.data;
+                }
+                if (![404, 500, 503].includes(policy.status)) {
+                  throw new Error(`Unexpected policy readiness status ${policy.status}: ${JSON.stringify(policy.data)}`);
+                }
+              }
+              await new Promise((resolve) => setTimeout(resolve, 10_000));
+            }
+            throw new Error('Phase 3 production API release did not become available during acceptance run.');
+          }
+
+          (async () => {
+            const health = await raw('/ready');
+            assert.equal(health.status, 200, `production readiness status ${health.status}`);
+            passed('production API readiness');
+
+            const registered = await ok('/auth/register', {
+              method: 'POST',
+              body: {
+                email,
+                password,
+                name: 'Phase 3 Acceptance Owner',
+                businessLegalName: `Phase 3 Acceptance ${marker}`,
+                businessCountryCode: 'PL',
+                businessId: `P3-${marker}`.slice(0, 64),
+                shopSlug: slug,
+                shopName: `P3 Acceptance ${marker}`.slice(0, 120),
+                packId: 'gaming',
+                addOns: ['gaming_suite'],
+                venueType: 'billiard-hall',
+                city: 'Warsaw',
+                country: 'Poland',
+              },
+            });
+            assert.ok(registered.user, 'register response must contain user');
+            assert.ok(cookies.get('access_token'), 'access cookie missing');
+            assert.ok(cookies.get('csrf_token'), 'csrf cookie missing');
+            evidence.userId = registered.user.id;
+            evidence.shopId = registered.user.shopId ?? registered.user.shop?.id ?? null;
+            evidence.venuePath = registered.venuePath;
+            passed('isolated production acceptance tenant registered');
+
+            const initialPolicy = await waitForPhase3Release();
+
+            const category = await ok('/resources/categories', {
+              method: 'POST',
+              body: {
+                type: 'BILLIARD',
+                name: 'P3 Acceptance Billiards',
+                slotMinutes: 60,
+                unitCount: 5,
+                unitNamePrefix: 'P3 Table',
+                rates: [{ label: 'Hourly', durationMinutes: 60, price: 60 }],
+              },
+            });
+            assert.ok(category.id, 'category id missing');
+            const catalog = await ok('/resources/catalog');
+            const createdCategory = catalog.categories.find((row) => row.id === category.id);
+            assert.ok(createdCategory, 'created category missing from canonical catalog');
+            assert.equal(createdCategory.resources.length, 5, 'expected five resources');
+            const resources = createdCategory.resources;
+            passed('five-resource billiard floor created', { categoryId: category.id });
+
+            const policy = await ok('/operations/policy', {
+              method: 'PATCH',
+              body: {
+                expectedVersion: initialPolicy.version,
+                pauseBillingMode: 'STOP_CHARGING',
+                managerOnlyPause: true,
+                maxPauseMinutes: 30,
+                moveRatePolicy: 'REPRICE_TARGET',
+                fixedSessionAutoExtend: false,
+                fixedSessionWarningMinutes: [15, 5],
+                defaultExtensionMinutes: 15,
+              },
+            });
+            assert.equal(policy.pauseBillingMode, 'STOP_CHARGING');
+            assert.equal(policy.managerOnlyPause, true);
+            assert.equal(policy.moveRatePolicy, 'REPRICE_TARGET');
+            passed('venue live-operations policy persisted');
+
+            const fixedPlan = await ok('/operations/rate-plans', {
+              method: 'POST',
+              body: {
+                name: 'P3 Fixed 60',
+                resourceId: resources[0].id,
+                billingMode: 'FIXED_DURATION',
+                hourlyRateMinor: 0,
+                unitPriceMinor: 5000,
+                fixedDurationMinutes: 60,
+                overtimeAfterMinutes: 60,
+                overtimeRateMinor: 2000,
+                roundingMinutes: 1,
+                minimumMinutes: 0,
+                active: true,
+              },
+            });
+            assert.ok(fixedPlan.id);
+            passed('fixed-duration plan with explicit overage created');
+
+            const concurrentBody = {
+              method: 'POST',
+              body: {
+                resourceId: resources[0].id,
+                ratePlanId: fixedPlan.id,
+                participantCount: 4,
+                notes: `Gate P3 concurrent start ${marker}`,
+              },
+            };
+            const starts = await Promise.all([
+              raw('/operations/sessions/start', concurrentBody),
+              raw('/operations/sessions/start', concurrentBody),
+            ]);
+            const successfulStarts = starts.filter((row) => [200, 201].includes(row.status));
+            const rejectedStarts = starts.filter((row) => row.status === 409);
+            assert.equal(successfulStarts.length, 1, `concurrent winners=${successfulStarts.length}`);
+            assert.equal(rejectedStarts.length, 1, `concurrent conflicts=${rejectedStarts.length}`);
+            let session = successfulStarts[0].data;
+            assert.equal(session.status, 'ACTIVE');
+            assert.ok(session.scheduledEndAt, 'fixed session missing scheduled end');
+            const sessionId = session.id;
+            passed('concurrent start admits exactly one exclusive occupant', { sessionId });
+
+            const blankPause = await raw(`/operations/sessions/${sessionId}/pause`, {
+              method: 'POST',
+              body: { expectedVersion: session.version, reason: '' },
+            });
+            assert.equal(blankPause.status, 400, `blank pause reason status=${blankPause.status}`);
+            passed('pause reason is required');
+
+            session = await ok(`/operations/sessions/${sessionId}/pause`, {
+              method: 'POST',
+              body: { expectedVersion: session.version, reason: 'Acceptance break' },
+            });
+            assert.equal(session.status, 'PAUSED');
+            const staleResume = await raw(`/operations/sessions/${sessionId}/resume`, {
+              method: 'POST',
+              body: { expectedVersion: session.version - 1 },
+            });
+            assert.equal(staleResume.status, 409, `stale resume status=${staleResume.status}`);
+            passed('stale session version rejected');
+            session = await ok(`/operations/sessions/${sessionId}/resume`, {
+              method: 'POST',
+              body: { expectedVersion: session.version },
+            });
+            assert.equal(session.status, 'ACTIVE');
+            passed('pause/resume timing segment accepted');
+
+            const reservation = await ok('/reservations', {
+              method: 'POST',
+              body: {
+                resourceId: resources[1].id,
+                guestName: 'Reserved Gate Guest',
+                startsAt: new Date(Date.now() - 2 * 60_000).toISOString(),
+                endsAt: new Date(Date.now() + 45 * 60_000).toISOString(),
+                partySize: 2,
+                notes: `P3 reservation conflict ${marker}`,
+              },
+            });
+            assert.ok(reservation.id);
+            const reservedMove = await raw(`/operations/sessions/${sessionId}/move`, {
+              method: 'POST',
+              body: { expectedVersion: session.version, resourceId: resources[1].id },
+            });
+            assert.equal(reservedMove.status, 409, `reserved move status=${reservedMove.status}`);
+            passed('move into current reservation blocked');
+
+            const moved = await ok(`/operations/sessions/${sessionId}/move`, {
+              method: 'POST',
+              body: { expectedVersion: session.version, resourceId: resources[2].id },
+            });
+            assert.equal(moved.id, sessionId, 'move changed session identity');
+            assert.equal(moved.resourceId, resources[2].id);
+            session = moved;
+            passed('resource move preserves session identity and moves to free target');
+
+            const beforeEnd = new Date(session.scheduledEndAt).getTime();
+            session = await ok(`/operations/sessions/${sessionId}/extend`, {
+              method: 'POST',
+              body: { expectedVersion: session.version, minutes: 15 },
+            });
+            assert.equal(new Date(session.scheduledEndAt).getTime() - beforeEnd, 15 * 60_000);
+            passed('fixed-time session extended by configured interval');
+
+            let wait = await ok('/operations/waitlist', {
+              method: 'POST',
+              body: {
+                name: 'P3 Wait Guest',
+                phone: '+48123123123',
+                partySize: 3,
+                requestedResourceType: 'BILLIARD',
+                desiredDurationMinutes: 60,
+                notes: `Gate P3 waitlist ${marker}`,
+              },
+            });
+            assert.ok(wait.operations?.version);
+            wait = await ok(`/operations/waitlist/${wait.id}/notify`, {
+              method: 'POST',
+              body: { expectedVersion: wait.operations.version },
+            });
+            const notifiedVersion = wait.operations.version;
+            const seated = await ok(`/operations/waitlist/${wait.id}/seat`, {
+              method: 'POST',
+              body: { expectedVersion: notifiedVersion, resourceId: resources[3].id },
+            });
+            assert.equal(seated.session.resourceId, resources[3].id);
+            let waitSession = seated.session;
+            const staleSeat = await raw(`/operations/waitlist/${wait.id}/seat`, {
+              method: 'POST',
+              body: { expectedVersion: notifiedVersion, resourceId: resources[4].id },
+            });
+            assert.equal(staleSeat.status, 409, `stale waitlist seat status=${staleSeat.status}`);
+            passed('waitlist notify/seat succeeds once and stale seat conflicts');
+
+            const maintenance = await ok('/operations/maintenance', {
+              method: 'POST',
+              body: {
+                resourceId: resources[4].id,
+                reason: 'Gate P3 maintenance guard',
+                expectedReturnAt: new Date(Date.now() + 30 * 60_000).toISOString(),
+                notes: `Acceptance maintenance ${marker}`,
+              },
+            });
+            assert.ok(maintenance.id);
+            const maintenanceStart = await raw('/operations/sessions/start', {
+              method: 'POST',
+              body: { resourceId: resources[4].id, participantCount: 1 },
+            });
+            assert.equal(maintenanceStart.status, 409, `maintenance start status=${maintenanceStart.status}`);
+            await ok(`/operations/maintenance/${maintenance.id}`, { method: 'DELETE' });
+            passed('maintenance blocks session start and returns resource to service');
+
+            const handover = await ok('/operations/handover');
+            assert.ok(handover.activeSessions.some((row) => row.id === sessionId));
+            assert.ok(handover.activeSessions.some((row) => row.id === waitSession.id));
+            for (const key of ['activeSessions','pausedSessions','openChecks','pendingOrders','upcomingReservations','unresolvedPayments','deviceProblems','openCashSessions','unresolvedFiscalDocuments']) {
+              assert.ok(Array.isArray(handover[key]), `handover ${key} missing`);
+            }
+            passed('shift handover exposes all required operational categories');
+
+            const floor = await ok('/operations/floor');
+            const activeFloor = floor.resources.filter((row) => row.session && ['ACTIVE', 'PAUSED'].includes(row.session.status));
+            assert.equal(new Set(activeFloor.map((row) => row.id)).size, activeFloor.length, 'duplicate floor resource occupancy');
+            for (const row of activeFloor) {
+              assert.ok(row.session.timer, `timer missing for ${row.id}`);
+              assert.equal(typeof row.session.timer.elapsedSeconds, 'number');
+              assert.equal(typeof row.session.liveAccruedMinor, 'number');
+              assert.ok(Array.isArray(row.session.alerts));
+            }
+            passed('live floor has unique occupancy, server timer, usage and alerts');
+
+            session = await ok(`/operations/sessions/${sessionId}/finish`, {
+              method: 'POST',
+              body: { expectedVersion: session.version },
+            });
+            assert.equal(session.status, 'FINISHED');
+            assert.equal(typeof session.accruedMinor, 'number');
+            waitSession = await ok(`/operations/sessions/${waitSession.id}/finish`, {
+              method: 'POST',
+              body: { expectedVersion: waitSession.version },
+            });
+            assert.equal(waitSession.status, 'FINISHED');
+            passed('session end calculates usage without settlement mutation');
+
+            const group = await ok('/operations/session-groups', {
+              method: 'POST',
+              body: { name: `P3 Group ${marker}` },
+            });
+            let groupA = await ok('/operations/sessions/start', {
+              method: 'POST',
+              body: { resourceId: resources[0].id, groupId: group.id, participantCount: 2 },
+            });
+            let groupB = await ok('/operations/sessions/start', {
+              method: 'POST',
+              body: { resourceId: resources[4].id, groupId: group.id, participantCount: 2 },
+            });
+            assert.equal(groupA.groupId, group.id);
+            assert.equal(groupB.groupId, group.id);
+            groupA = await ok(`/operations/sessions/${groupA.id}/finish`, { method: 'POST', body: { expectedVersion: groupA.version } });
+            groupB = await ok(`/operations/sessions/${groupB.id}/finish`, { method: 'POST', body: { expectedVersion: groupB.version } });
+            assert.equal(groupA.status, 'FINISHED');
+            assert.equal(groupB.status, 'FINISHED');
+            passed('grouped participant sessions preserve shared group identity');
+
+            let cancelled = await ok('/operations/sessions/start', {
+              method: 'POST',
+              body: { resourceId: resources[0].id, participantCount: 1, notes: 'Cancellation audit test' },
+            });
+            cancelled = await ok(`/operations/sessions/${cancelled.id}/cancel`, {
+              method: 'POST',
+              body: { expectedVersion: cancelled.version, reason: 'Acceptance cancellation reason' },
+            });
+            assert.equal(cancelled.status, 'CANCELLED');
+            assert.equal(cancelled.cancelReason, 'Acceptance cancellation reason');
+            passed('session cancellation requires and persists audited reason');
+
+            const finalFloor = await ok('/operations/floor');
+            const finalLive = finalFloor.resources.filter((row) => row.session && ['ACTIVE', 'PAUSED'].includes(row.session.status));
+            assert.equal(finalLive.length, 0, `live sessions remain after drill: ${finalLive.map((row) => row.session.id).join(',')}`);
+            assert.equal(new Set(finalFloor.resources.map((row) => row.id)).size, finalFloor.resources.length);
+            passed('busy-floor drill closes with zero live occupancy');
+
+            const clearedPolicy = await ok('/operations/policy', {
+              method: 'PATCH',
+              body: {
+                expectedVersion: policy.version,
+                maxPauseMinutes: null,
+              },
+            });
+            assert.equal(clearedPolicy.maxPauseMinutes, null);
+            passed('optional maximum-pause policy can be cleared');
+
+            evidence.result = 'PASS';
+            evidence.finishedAt = new Date().toISOString();
+            console.log('PHASE3_PRODUCTION_ACCEPTANCE=' + JSON.stringify(evidence));
+          })().catch((error) => {
+            evidence.result = 'FAIL';
+            evidence.error = error?.stack ?? String(error);
+            console.error('PHASE3_PRODUCTION_ACCEPTANCE=' + JSON.stringify(evidence));
+            process.exitCode = 1;
+          });
+          NODE
