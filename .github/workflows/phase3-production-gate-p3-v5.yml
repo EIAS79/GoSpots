@@ -1,0 +1,74 @@
+name: Phase 3 production Gate P3 v5 canonical harness
+
+on:
+  push:
+    branches: [phase3-production-acceptance]
+    paths: [.github/workflows/phase3-production-gate-p3-v5.yml]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  gate-p3:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    env:
+      GOSPOTS_BASE_URL: https://www.gospots.eu/api/v1
+      EXPECTED_MAIN_SHA: 6a5e16fab8331e4710b374096549a8aaf19e37c0
+    steps:
+      - name: Checkout exact production main
+        uses: actions/checkout@v4
+        with:
+          ref: 6a5e16fab8331e4710b374096549a8aaf19e37c0
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+
+      - name: Verify production readiness and bootstrap isolated acceptance tenant
+        shell: bash
+        run: |
+          set -euo pipefail
+          code=$(curl -sS -o /tmp/ready.json -w '%{http_code}' "$GOSPOTS_BASE_URL/ready")
+          cat /tmp/ready.json
+          test "$code" = "200"
+          node -e "const x=JSON.parse(require('fs').readFileSync('/tmp/ready.json','utf8')); if(x.status!=='ok'||x.database!=='up'||x.webApp!=='ready'||x.billing!=='ready') process.exit(1)"
+
+          csrf_code=$(curl -sS -o /tmp/csrf.json -c /tmp/p3.cookies -w '%{http_code}' "$GOSPOTS_BASE_URL/auth/csrf")
+          test "$csrf_code" = "200"
+          csrf=$(awk '$6=="csrf_token" {print $7}' /tmp/p3.cookies | tail -n1)
+          test -n "$csrf"
+
+          stamp="${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}"
+          slug="p3-prod-${stamp}"
+          email="p3.prod.${stamp}@example.com"
+          payload=$(node -e "console.log(JSON.stringify({email:process.argv[1],password:'Phase3Acceptance9!',name:'P3 Production Acceptance',businessLegalName:'P3 Production Acceptance '+process.argv[2],businessCountryCode:'PL',businessId:'P3-'+process.argv[2],shopSlug:process.argv[3],shopName:'P3 Production '+process.argv[2],packId:'gaming',addOns:['gaming_suite'],venueType:'billiard-hall',city:'Warsaw',country:'Poland'}))" "$email" "$stamp" "$slug")
+          register_code=$(curl -sS -o /tmp/register.json -b /tmp/p3.cookies -c /tmp/p3.cookies -w '%{http_code}' \
+            -X POST "$GOSPOTS_BASE_URL/auth/register" \
+            -H 'Content-Type: application/json' \
+            -H "X-CSRF-Token: $csrf" \
+            --data "$payload")
+          cat /tmp/register.json
+          if [ "$register_code" != "200" ] && [ "$register_code" != "201" ]; then
+            echo "Registration failed -> HTTP $register_code" >&2
+            exit 1
+          fi
+
+          access=$(awk '$6=="access_token" {print $7}' /tmp/p3.cookies | tail -n1)
+          test -n "$access"
+          echo "::add-mask::$access"
+          echo "PHASE3_ACCESS_TOKEN=$access" >> "$GITHUB_ENV"
+          echo "GOSPOTS_ACCEPTANCE_VENUE=$slug" >> "$GITHUB_ENV"
+          echo "PASS bootstrap isolated production tenant $slug"
+
+      - name: Run merged canonical Phase 3 production Gate P3
+        run: node scripts/phase3-production-acceptance.mjs
+
+      - name: Show acceptance evidence
+        if: ${{ always() }}
+        shell: bash
+        run: |
+          if [ -f /tmp/phase3-production-acceptance.json ]; then
+            cat /tmp/phase3-production-acceptance.json
+          fi
