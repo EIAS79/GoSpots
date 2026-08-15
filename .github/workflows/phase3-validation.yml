@@ -1,4 +1,4 @@
-name: Phase 3 production validation
+name: Phase 3 live-operations validation
 
 on:
   push:
@@ -6,80 +6,61 @@ on:
   pull_request:
 
 concurrency:
-  group: phase3-${{ github.workflow }}-${{ github.ref }}
+  group: phase3-live-${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: true
 
 jobs:
-  edge-hard-outage:
-    name: Edge hard outage · recovery · packaged rollback
+  live-operations:
+    name: Live floor · migration · busy-shift gate
     runs-on: ubuntu-latest
-    timeout-minutes: 15
+    timeout-minutes: 20
+    services:
+      postgres:
+        image: postgres:17
+        env:
+          POSTGRES_USER: ci
+          POSTGRES_PASSWORD: ci
+          POSTGRES_DB: phase3_ci
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U ci -d phase3_ci"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+    env:
+      DATABASE_URL: postgresql://ci:ci@localhost:5432/phase3_ci?schema=public
     steps:
-      - name: Checkout with baseline history
+      - name: Checkout
         uses: actions/checkout@v4
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
         with:
-          fetch-depth: 2
+          version: 10.12.1
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
           node-version: '24'
-      - name: Edge syntax and unit acceptance
-        working-directory: apps/edge
+          cache: pnpm
+          cache-dependency-path: pnpm-lock.yaml
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+      - name: Generate Prisma client
+        working-directory: apps/api
+        run: pnpm exec prisma generate
+      - name: Apply complete migration chain to clean Postgres
+        working-directory: apps/api
         run: |
           set -euo pipefail
-          node --check src/canonical.js
-          node --check src/crypto.js
-          node --check src/store.js
-          node --check src/cloud-client.js
-          node --check src/maintenance.js
-          node --check src/printer.js
-          node --check src/hub.js
-          node --check src/server.js
-          node --test test/*.test.js
-      - name: Prove WAN-disabled Edge operation
-        working-directory: apps/edge
-        shell: bash
-        run: |
-          set -euo pipefail
-          command -v iptables >/dev/null
-          cleanup() { sudo iptables -D OUTPUT ! -o lo -j REJECT 2>/dev/null || true; }
-          trap cleanup EXIT
-          sudo iptables -I OUTPUT 1 ! -o lo -j REJECT
-          node --input-type=module -e "try { await fetch('https://example.com', { signal: AbortSignal.timeout(2000) }); process.exit(1); } catch { console.log('WAN egress is blocked as required'); }"
-          node --test test/phase3-outage.test.js
-      - name: Package baseline and candidate Edge artifacts
-        shell: bash
-        env:
-          EVENT_BASE_SHA: ${{ github.event.pull_request.base.sha || github.event.before }}
-        run: |
-          set -euo pipefail
-          base="$EVENT_BASE_SHA"
-          if [ -z "$base" ] || [ "$base" = "0000000000000000000000000000000000000000" ]; then
-            base="HEAD^"
-          fi
-          git fetch origin "$base" --depth=1 || true
-          mkdir -p /tmp/phase3-baseline-src /tmp/phase3-baseline-tgz /tmp/phase3-baseline /tmp/phase3-candidate-tgz /tmp/phase3-candidate
-          git archive "$base" apps/edge | tar -x -C /tmp/phase3-baseline-src
-          (cd /tmp/phase3-baseline-src/apps/edge && npm pack --pack-destination /tmp/phase3-baseline-tgz >/tmp/phase3-baseline-pack.txt)
-          (cd apps/edge && npm pack --pack-destination /tmp/phase3-candidate-tgz >/tmp/phase3-candidate-pack.txt)
-          tar -xzf "/tmp/phase3-baseline-tgz/$(cat /tmp/phase3-baseline-pack.txt | tail -n1)" -C /tmp/phase3-baseline
-          tar -xzf "/tmp/phase3-candidate-tgz/$(cat /tmp/phase3-candidate-pack.txt | tail -n1)" -C /tmp/phase3-candidate
-          echo "PHASE3_BASE_SHA=$base" >> "$GITHUB_ENV"
-      - name: Demonstrate packaged executable rollback
-        working-directory: apps/edge
-        env:
-          PHASE3_BASELINE_EDGE: /tmp/phase3-baseline/package
-          PHASE3_CANDIDATE_EDGE: /tmp/phase3-candidate/package
-          PHASE3_BASELINE_SHA: ${{ env.PHASE3_BASE_SHA }}
-          PHASE3_CANDIDATE_SHA: ${{ github.sha }}
-        run: node test/phase3-artifact-rollback.mjs
-      - name: Upload Phase 3 artifact evidence
-        if: ${{ always() }}
-        uses: actions/upload-artifact@v4
-        with:
-          name: phase3-edge-validation-${{ github.run_id }}
-          if-no-files-found: ignore
-          retention-days: 30
-          path: |
-            /tmp/phase3-baseline-pack.txt
-            /tmp/phase3-candidate-pack.txt
+          pnpm exec prisma migrate deploy
+          pnpm exec prisma migrate status
+          pnpm exec prisma validate
+      - name: Assert Phase 3 live-operations schema and integrity
+        working-directory: apps/api
+        run: pnpm exec tsx prisma/phase3-live-operations-assert.ts
+      - name: Run Phase 3 live-operations tests
+        working-directory: apps/api
+        run: pnpm exec jest --config jest.config.cjs --runInBand src/modules/operations/operations.service.spec.ts src/modules/operations/live-operations.service.spec.ts
+      - name: Build API with generated Phase 3 contracts
+        working-directory: apps/api
+        run: pnpm run build
