@@ -7,48 +7,25 @@ const runId = process.env.GITHUB_RUN_ID || String(Date.now());
 const marker = `P3-PROD-${runId}`;
 const evidence = { marker, base, venue, startedAt: new Date().toISOString(), checks: [], ids: {} };
 
-function ok(name, detail = {}) {
-  evidence.checks.push({ name, status: 'PASS', ...detail });
-  console.log(`PASS ${name}`);
-}
-function fail(name, detail = {}) {
-  evidence.checks.push({ name, status: 'FAIL', ...detail });
-  throw new Error(`${name}: ${JSON.stringify(detail)}`);
-}
-function parseJson(text) {
-  if (!text) return null;
-  try { return JSON.parse(text); } catch { return text; }
-}
-async function request(method, path, body, auth = token, expected) {
+function ok(name, detail = {}) { evidence.checks.push({ name, status: 'PASS', ...detail }); console.log(`PASS ${name}`); }
+function fail(name, detail = {}) { evidence.checks.push({ name, status: 'FAIL', ...detail }); throw new Error(`${name}: ${JSON.stringify(detail)}`); }
+function parseJson(text) { if (!text) return null; try { return JSON.parse(text); } catch { return text; } }
+async function request(method, path, body, auth = token) {
   const headers = { accept: 'application/json' };
   if (auth) headers.authorization = `Bearer ${auth}`;
   if (body !== undefined) headers['content-type'] = 'application/json';
-  const res = await fetch(`${base}${path}`, {
-    method,
-    headers,
-    body: body === undefined ? undefined : JSON.stringify(body),
-    redirect: 'manual',
-  });
+  const res = await fetch(`${base}${path}`, { method, headers, body: body === undefined ? undefined : JSON.stringify(body), redirect: 'manual' });
   const text = await res.text();
-  const payload = parseJson(text);
-  if (expected && !expected.includes(res.status)) {
-    throw Object.assign(new Error(`${method} ${path} -> ${res.status}: ${text.slice(0, 800)}`), { status: res.status, payload });
-  }
-  return { status: res.status, body: payload, headers: res.headers };
+  return { status: res.status, body: parseJson(text), headers: res.headers };
 }
 async function must(method, path, body, auth = token) {
   const result = await request(method, path, body, auth);
-  if (result.status < 200 || result.status >= 300) {
-    throw new Error(`${method} ${path} -> ${result.status}: ${JSON.stringify(result.body).slice(0, 800)}`);
-  }
+  if (result.status < 200 || result.status >= 300) throw new Error(`${method} ${path} -> ${result.status}: ${JSON.stringify(result.body).slice(0, 800)}`);
   return result;
 }
 function cookie(headers, name) {
   const values = typeof headers.getSetCookie === 'function' ? headers.getSetCookie() : [headers.get('set-cookie') || ''];
-  for (const value of values) {
-    const m = value.match(new RegExp(`(?:^|[,;]\\s*)${name}=([^;]+)`));
-    if (m) return decodeURIComponent(m[1]);
-  }
+  for (const value of values) { const m = value.match(new RegExp(`(?:^|[,;]\\s*)${name}=([^;]+)`)); if (m) return decodeURIComponent(m[1]); }
   return null;
 }
 function idOf(x) { return x?.id || x?.session?.id || x?.data?.id; }
@@ -57,9 +34,8 @@ function floorRows(body) { return Array.isArray(body) ? body : body?.resources |
 
 async function main() {
   const ready = await must('GET', '/ready', undefined, null);
-  if (ready.body?.status !== 'ready') fail('production readiness', { body: ready.body });
+  if (ready.body?.status !== 'ok') fail('production readiness', { body: ready.body });
   ok('production readiness', { body: ready.body });
-
   if (!token) fail('bootstrap access token missing');
   const bound = await must('POST', `/auth/venue/${encodeURIComponent(venue)}/session`, undefined, token);
   const boundToken = cookie(bound.headers, 'access_token');
@@ -68,10 +44,7 @@ async function main() {
   ok('venue-scoped authentication');
 
   const uniqueName = `${marker} Billiards`;
-  const category = (await must('POST', '/resources/categories', {
-    type: 'BILLIARD', name: uniqueName, description: 'Isolated Phase 3 production acceptance floor',
-    slotMinutes: 60, unitCount: 4, unitNamePrefix: `${marker}-T`, rates: [{ label: 'Hourly', price: 60 }]
-  })).body;
+  const category = (await must('POST', '/resources/categories', { type: 'BILLIARD', name: uniqueName, description: 'Isolated Phase 3 production acceptance floor', slotMinutes: 60, unitCount: 4, unitNamePrefix: `${marker}-T`, rates: [{ label: 'Hourly', price: 60 }] })).body;
   evidence.ids.categoryId = category.id;
   const catalog = (await must('GET', '/resources/catalog')).body;
   const cat = catalog.categories.find((c) => c.id === category.id);
@@ -81,18 +54,10 @@ async function main() {
   ok('acceptance floor provisioning', { resources: cat.resources.map((r) => r.id) });
 
   const policy0 = (await must('GET', '/operations/policy')).body;
-  const policy = (await must('PATCH', '/operations/policy', {
-    expectedVersion: policy0.version,
-    pauseBillingMode: 'STOP_CHARGING', managerOnlyPause: false, maxPauseMinutes: 30,
-    moveRatePolicy: 'KEEP_SESSION_RATE', fixedSessionAutoExtend: false,
-    fixedSessionWarningMinutes: [15, 5], defaultExtensionMinutes: 10
-  })).body;
+  const policy = (await must('PATCH', '/operations/policy', { expectedVersion: policy0.version, pauseBillingMode: 'STOP_CHARGING', managerOnlyPause: false, maxPauseMinutes: 30, moveRatePolicy: 'KEEP_SESSION_RATE', fixedSessionAutoExtend: false, fixedSessionWarningMinutes: [15, 5], defaultExtensionMinutes: 10 })).body;
   ok('venue operations policy', { version: policy.version });
 
-  const hourly = (await must('POST', '/operations/rate-plans', {
-    name: `${marker} Hourly`, resourceCategoryId: cat.id, billingMode: 'HOURLY',
-    hourlyRateMinor: 6000, roundingMinutes: 1, minimumMinutes: 0, priority: 500, active: true
-  })).body;
+  const hourly = (await must('POST', '/operations/rate-plans', { name: `${marker} Hourly`, resourceCategoryId: cat.id, billingMode: 'HOURLY', hourlyRateMinor: 6000, roundingMinutes: 1, minimumMinutes: 0, priority: 500, active: true })).body;
   evidence.ids.hourlyRatePlanId = hourly.id;
 
   const starts = await Promise.all([
@@ -126,20 +91,14 @@ async function main() {
   const stale = await request('POST', `/operations/sessions/${idOf(session)}/move`, { expectedVersion: pausedVersion, resourceId: r2.id });
   if (stale.status !== 409) fail('stale version conflict', { status: stale.status, body: stale.body });
   ok('stale version conflict', { status: stale.status });
-
   session = (await must('POST', `/operations/sessions/${idOf(session)}/move`, { expectedVersion: versionOf(session), resourceId: r2.id })).body;
-  if (session.resourceId !== r2.id) fail('resource move preserves session identity', { session });
-  if (idOf(session) !== evidence.ids.concurrentSessionId) fail('resource move identity', { before: evidence.ids.concurrentSessionId, after: idOf(session) });
+  if (session.resourceId !== r2.id || idOf(session) !== evidence.ids.concurrentSessionId) fail('resource move preserves session identity', { session });
   ok('resource move preserves identity/history');
   session = (await must('POST', `/operations/sessions/${idOf(session)}/finish`, { expectedVersion: versionOf(session) })).body;
   if (!['FINISHED', 'ENDED'].includes(session.status)) fail('finish usage without settlement', { session });
   ok('finish usage without settlement', { status: session.status, accruedMinor: session.accruedMinor });
 
-  const fixed = (await must('POST', '/operations/rate-plans', {
-    name: `${marker} Fixed`, resourceId: r3.id, billingMode: 'FIXED_DURATION',
-    unitPriceMinor: 3000, fixedDurationMinutes: 30, overtimeRateMinor: 6000,
-    overtimeAfterMinutes: 30, priority: 1000, active: true
-  })).body;
+  const fixed = (await must('POST', '/operations/rate-plans', { name: `${marker} Fixed`, resourceId: r3.id, billingMode: 'FIXED_DURATION', unitPriceMinor: 3000, fixedDurationMinutes: 30, overtimeRateMinor: 6000, overtimeAfterMinutes: 30, priority: 1000, active: true })).body;
   let fixedSession = (await must('POST', '/operations/sessions/start', { resourceId: r3.id, ratePlanId: fixed.id, participantCount: 3, notes: marker })).body;
   let fixedCard = floorRows((await must('GET', '/operations/floor')).body).find((x) => x.id === r3.id);
   const beforeRemaining = fixedCard?.session?.timer?.remainingSeconds;
@@ -150,10 +109,7 @@ async function main() {
   if (!(afterRemaining > beforeRemaining + 500)) fail('fixed-time extension', { beforeRemaining, afterRemaining });
   ok('fixed-time countdown / extension', { beforeRemaining, afterRemaining });
 
-  const wait = (await must('POST', '/operations/waitlist', {
-    name: `${marker} Waitlist`, partySize: 4, requestedResourceType: 'BILLIARD', desiredDurationMinutes: 45,
-    estimatedWaitMinutes: 1, notes: marker
-  })).body;
+  const wait = (await must('POST', '/operations/waitlist', { name: `${marker} Waitlist`, partySize: 4, requestedResourceType: 'BILLIARD', desiredDurationMinutes: 45, estimatedWaitMinutes: 1, notes: marker })).body;
   evidence.ids.waitlistId = wait.id;
   const seats = await Promise.all([
     request('POST', `/operations/waitlist/${wait.id}/seat`, { expectedVersion: wait.version, resourceId: r4.id, ratePlanId: hourly.id }),
@@ -164,18 +120,12 @@ async function main() {
   if (seatWins.length !== 1 || seatLosses.length !== 1) fail('waitlist seat conflict', { statuses: seats.map((x) => x.status), bodies: seats.map((x) => x.body) });
   const seatedBody = seatWins[0].body;
   let seatedSession = seatedBody.session || seatedBody.operationsSession || seatedBody;
-  if (!idOf(seatedSession)) {
-    const c = floorRows((await must('GET', '/operations/floor')).body).find((x) => x.id === r4.id);
-    seatedSession = c?.session;
-  }
+  if (!idOf(seatedSession)) { const c = floorRows((await must('GET', '/operations/floor')).body).find((x) => x.id === r4.id); seatedSession = c?.session; }
   if (!idOf(seatedSession)) fail('waitlist seating creates session', { seatedBody });
   ok('waitlist seat conflict', { statuses: seats.map((x) => x.status) });
   seatedSession = (await must('POST', `/operations/sessions/${idOf(seatedSession)}/finish`, { expectedVersion: versionOf(seatedSession) })).body;
 
-  const maintenance = (await must('POST', '/operations/maintenance', {
-    resourceId: r4.id, reason: 'Phase 3 production maintenance guard', notes: marker,
-    expectedReturnAt: new Date(Date.now() + 15 * 60_000).toISOString()
-  })).body;
+  const maintenance = (await must('POST', '/operations/maintenance', { resourceId: r4.id, reason: 'Phase 3 production maintenance guard', notes: marker, expectedReturnAt: new Date(Date.now() + 15 * 60_000).toISOString() })).body;
   evidence.ids.maintenanceId = maintenance.id;
   const blocked = await request('POST', '/operations/sessions/start', { resourceId: r4.id, ratePlanId: hourly.id, notes: marker });
   if (blocked.status !== 409) fail('maintenance start guard', { status: blocked.status, body: blocked.body });
@@ -202,17 +152,8 @@ async function main() {
   if (active.length !== 0) fail('acceptance floor cleanup', { active: active.map((x) => ({ resourceId: x.id, sessionId: x.session?.id })) });
   ok('final exclusive occupancy invariant / no active residue');
 
-  evidence.completedAt = new Date().toISOString();
-  evidence.status = 'PASS';
+  evidence.completedAt = new Date().toISOString(); evidence.status = 'PASS';
   await writeFile('/tmp/phase3-production-acceptance.json', JSON.stringify(evidence, null, 2));
   console.log('PHASE3_PRODUCTION_ACCEPTANCE=PASS');
 }
-
-main().catch(async (error) => {
-  evidence.completedAt = new Date().toISOString();
-  evidence.status = 'FAIL';
-  evidence.error = { message: error?.message || String(error), status: error?.status, payload: error?.payload };
-  await writeFile('/tmp/phase3-production-acceptance.json', JSON.stringify(evidence, null, 2)).catch(() => {});
-  console.error(error);
-  process.exit(1);
-});
+main().catch(async (error) => { evidence.completedAt = new Date().toISOString(); evidence.status = 'FAIL'; evidence.error = { message: error?.message || String(error), status: error?.status, payload: error?.payload }; await writeFile('/tmp/phase3-production-acceptance.json', JSON.stringify(evidence, null, 2)).catch(() => {}); console.error(error); process.exit(1); });
