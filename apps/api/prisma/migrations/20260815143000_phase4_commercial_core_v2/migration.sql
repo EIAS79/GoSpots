@@ -1,20 +1,5 @@
--- Phase 4 — Commercial Core ledger vocabulary expansion.
--- PostgreSQL requires newly-added enum labels to commit before later migrations consume them.
-ALTER TYPE "LedgerKind" ADD VALUE IF NOT EXISTS 'PAYMENT';
-ALTER TYPE "LedgerKind" ADD VALUE IF NOT EXISTS 'CASH_MOVEMENT';
-ALTER TYPE "LedgerKind" ADD VALUE IF NOT EXISTS 'STORED_VALUE';
-ALTER TYPE "LedgerKind" ADD VALUE IF NOT EXISTS 'DEPOSIT_APPLICATION';
-ALTER TYPE "LedgerKind" ADD VALUE IF NOT EXISTS 'REVERSAL';
-ALTER TYPE "LedgerKind" ADD VALUE IF NOT EXISTS 'CORRECTION';
-ALTER TYPE "LedgerKind" ADD VALUE IF NOT EXISTS 'TIP';
-
-ALTER TYPE "LedgerSourceType" ADD VALUE IF NOT EXISTS 'VENUE_ORDER';
-ALTER TYPE "LedgerSourceType" ADD VALUE IF NOT EXISTS 'CHECK_SETTLEMENT';
-ALTER TYPE "LedgerSourceType" ADD VALUE IF NOT EXISTS 'CHECKOUT_PAYMENT';
-ALTER TYPE "LedgerSourceType" ADD VALUE IF NOT EXISTS 'CASH_MOVEMENT';
-ALTER TYPE "LedgerSourceType" ADD VALUE IF NOT EXISTS 'COMMERCIAL_ADJUSTMENT';
-ALTER TYPE "LedgerSourceType" ADD VALUE IF NOT EXISTS 'SERVICE_CHARGE';
-ALTER TYPE "LedgerSourceType" ADD VALUE IF NOT EXISTS 'TIP';
-ALTER TYPE "LedgerSourceType" ADD VALUE IF NOT EXISTS 'DEPOSIT_APPLICATION';
-ALTER TYPE "LedgerSourceType" ADD VALUE IF NOT EXISTS 'STORED_VALUE';
-ALTER TYPE "LedgerSourceType" ADD VALUE IF NOT EXISTS 'REVERSAL';
+-- Phase 4 compatibility marker.
+-- LedgerEntry keeps its existing Prisma enum vocabulary. Phase 4 fact semantics
+-- (PAYMENT, CASH_MOVEMENT, STORED_VALUE, DEPOSIT_APPLICATION, REVERSAL,
+-- CORRECTION, TIP) are classified by LedgerFactMetadata while LedgerEntry
+-- remains the one canonical monetary ledger.
