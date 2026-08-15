@@ -86,7 +86,7 @@ async function main() {
       shopId,
       status: 'OPEN',
       currency: 'PLN',
-      openedById: userId,
+      createdById: userId,
     },
   });
 
