@@ -23,6 +23,7 @@ import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import type { JwtAccessPayload } from '../auth/auth.service';
 import { CheckoutPaymentService } from './checkout-payment.service';
 import { CheckoutService } from './checkout.service';
+import { CommercialMergeService } from './commercial-merge.service';
 import { CommercialSettlementService } from './commercial-settlement.service';
 import {
   CreateCheckoutPaymentDto,
@@ -34,7 +35,6 @@ import {
   CreateCheckSettlementDto,
   PreviewCheckoutDto,
 } from './dto/checkout.dto';
-import { GuestCheckMergeService } from './guest-check-merge.service';
 
 type RequestWithCorrelation = {
   correlationId?: string;
@@ -49,7 +49,7 @@ export class CheckoutController {
     private readonly checkout: CheckoutService,
     private readonly commercial: CommercialSettlementService,
     private readonly payments: CheckoutPaymentService,
-    private readonly merges: GuestCheckMergeService,
+    private readonly merges: CommercialMergeService,
     private readonly prisma: PrismaService,
   ) {}
 
