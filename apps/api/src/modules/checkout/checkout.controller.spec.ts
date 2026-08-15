@@ -3,7 +3,8 @@ import { clearIdempotencyMemoryCache } from '../../common/idempotency.util';
 import { CheckoutController } from './checkout.controller';
 import type { CheckoutPaymentService } from './checkout-payment.service';
 import type { CheckoutService } from './checkout.service';
-import type { GuestCheckMergeService } from './guest-check-merge.service';
+import type { CommercialMergeService } from './commercial-merge.service';
+import type { CommercialSettlementService } from './commercial-settlement.service';
 
 type Receipt = {
   status: string;
@@ -53,11 +54,18 @@ function fakePrisma() {
 }
 
 function makeController(
-  checkout: CheckoutService,
+  commercial: CommercialSettlementService,
   payments = {} as CheckoutPaymentService,
-  merges = {} as GuestCheckMergeService,
+  merges = {} as CommercialMergeService,
+  checkout = {} as CheckoutService,
 ) {
-  return new CheckoutController(checkout, payments, merges, fakePrisma());
+  return new CheckoutController(
+    checkout,
+    commercial,
+    payments,
+    merges,
+    fakePrisma(),
+  );
 }
 
 const owner = {
@@ -73,14 +81,14 @@ describe('CheckoutController settlement idempotency', () => {
   beforeEach(() => clearIdempotencyMemoryCache());
 
   it('replays repeated create with the same key instead of creating a duplicate settlement', async () => {
-    const checkout = {
+    const commercial = {
       createSettlement: jest.fn().mockResolvedValue({
         id: 'settlement-1',
         state: 'CALCULATED',
         total: '42.0000',
       }),
-    } as unknown as CheckoutService;
-    const controller = makeController(checkout);
+    } as unknown as CommercialSettlementService;
+    const controller = makeController(commercial);
 
     const first = await controller.createSettlement(
       owner,
@@ -98,14 +106,14 @@ describe('CheckoutController settlement idempotency', () => {
     );
 
     expect(second).toEqual(first);
-    expect(checkout.createSettlement).toHaveBeenCalledTimes(1);
+    expect(commercial.createSettlement).toHaveBeenCalledTimes(1);
   });
 
   it('requires Idempotency-Key for settlement creation', async () => {
-    const checkout = {
+    const commercial = {
       createSettlement: jest.fn(),
-    } as unknown as CheckoutService;
-    const controller = makeController(checkout);
+    } as unknown as CommercialSettlementService;
+    const controller = makeController(commercial);
 
     await expect(
       controller.createSettlement(
@@ -116,11 +124,11 @@ describe('CheckoutController settlement idempotency', () => {
         req,
       ),
     ).rejects.toThrow('Idempotency-Key header is required');
-    expect(checkout.createSettlement).not.toHaveBeenCalled();
+    expect(commercial.createSettlement).not.toHaveBeenCalled();
   });
 
   it('replays a repeated allocation request instead of recording a second payment', async () => {
-    const checkout = {} as CheckoutService;
+    const commercial = {} as CommercialSettlementService;
     const payments = {
       createPayment: jest.fn().mockResolvedValue({
         settlementId: 'settlement-1',
@@ -129,7 +137,7 @@ describe('CheckoutController settlement idempotency', () => {
         amountDue: '75.0000',
       }),
     } as unknown as CheckoutPaymentService;
-    const controller = makeController(checkout, payments);
+    const controller = makeController(commercial, payments);
     const dto = {
       expectedCheckVersion: 8,
       method: 'CASH',
