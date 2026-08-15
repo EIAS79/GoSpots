@@ -1,0 +1,84 @@
+name: Phase 3 quality hardening
+
+on:
+  push:
+    branches: [phase3-live-operations-v2]
+    paths: [.github/workflows/phase3-quality-fix.yml]
+
+permissions:
+  contents: write
+
+jobs:
+  harden:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: phase3-live-operations-v2
+      - name: Preserve visits and canonicalize waitlist resource type
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+
+          dto = Path('apps/api/src/modules/operations/dto/operations.dto.ts')
+          text = dto.read_text()
+          text = text.replace(
+              '  OperationsPauseBillingMode,\n} from \'@prisma/client\';',
+              '  OperationsPauseBillingMode,\n  ResourceType,\n} from \'@prisma/client\';',
+          )
+          text = text.replace(
+              '  @IsOptional() @IsString() @MaxLength(80) requestedResourceType?: string;',
+              '  @IsOptional() @IsEnum(ResourceType) requestedResourceType?: ResourceType;',
+          )
+          dto.write_text(text)
+
+          service = Path('apps/api/src/modules/operations/live-operations.service.ts')
+          text = service.read_text()
+          text = text.replace(
+              '  ResourceConfigurationState,\n  ReservationStatus,',
+              '  ResourceConfigurationState,\n  ResourceType,\n  ReservationStatus,',
+          )
+          text = text.replace(
+              '    requestedResourceType: string | undefined,',
+              '    requestedResourceType: ResourceType | undefined,',
+          )
+          text = text.replace(
+              '        ...(requestedResourceType ? { type: requestedResourceType as never } : {}),',
+              '        ...(requestedResourceType ? { type: requestedResourceType } : {}),',
+          )
+          service.write_text(text)
+
+          page = Path('apps/web/src/app/(tenant)/dashboard/[venuePath]/operations/page.tsx')
+          text = page.read_text()
+          text = text.replace(
+              'const TABS = ["Floor", "Waitlist", "Reservations", "Orders", "Handover", "Activity", "Policy"] as const;',
+              'const TABS = ["Floor", "Visits", "Waitlist", "Reservations", "Orders", "Handover", "Activity", "Policy"] as const;',
+          )
+          text = text.replace(
+              '  const available = useMemo(() => floor.resources.filter((row) => row.state === "AVAILABLE"), [floor.resources]);',
+              '  const available = useMemo(() => floor.resources.filter((row) => row.state === "AVAILABLE"), [floor.resources]);\n  const resourceTypes = useMemo(() => [...new Set(floor.resources.map((row) => row.type))].sort(), [floor.resources]);',
+          )
+          text = text.replace(
+              '        {tab === "Floor" || tab === "Orders" ? (',
+              '        {tab === "Floor" || tab === "Visits" || tab === "Orders" ? (',
+          )
+          text = text.replace(
+              '            {floor.resources.map((resource) => {',
+              '            {floor.resources.filter((resource) => tab !== "Visits" || Boolean(resource.session)).map((resource) => {',
+          )
+          text = text.replace(
+              '<input value={waitType} onChange={(e) => setWaitType(e.target.value)} placeholder="Resource type" className="min-h-11 rounded-lg border border-zinc-700 bg-zinc-900 px-3" />',
+              '<select value={waitType} onChange={(e) => setWaitType(e.target.value)} className="min-h-11 rounded-lg border border-zinc-700 bg-zinc-900 px-3"><option value="">Any resource type</option>{resourceTypes.map((type) => <option key={type} value={type}>{type}</option>)}</select>',
+          )
+          page.write_text(text)
+          PY
+          git diff --check
+      - name: Commit hardening and remove staging workflow
+        run: |
+          rm .github/workflows/phase3-quality-fix.yml
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add apps/api/src/modules/operations/dto/operations.dto.ts apps/api/src/modules/operations/live-operations.service.ts apps/web/src/app/'(tenant)'/dashboard/'[venuePath]'/operations/page.tsx .github/workflows/phase3-quality-fix.yml
+          git diff --cached --check
+          git commit -m "fix(phase3): preserve visits and validate waitlist types"
+          git push origin HEAD:phase3-live-operations-v2
