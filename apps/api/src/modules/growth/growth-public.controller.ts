@@ -10,6 +10,7 @@ import {
   Query,
   Req,
 } from '@nestjs/common';
+import { Prisma } from '@prisma/client';
 import { ApiTags } from '@nestjs/swagger';
 import { Throttle } from '@nestjs/throttler';
 import type { Request } from 'express';
@@ -110,7 +111,12 @@ export class GrowthPublicController {
     await this.assertBookingCaptcha(req, dto.captchaToken, captchaHeader);
     this.assertRequiredContact(dto);
     const shop = await this.requirePublishedShop(slug);
-    return this.capacity.createPublic(shop.id, {
+    const activePolicy = await this.prisma.reservationPolicy.findFirst({
+      where: { shopId: shop.id, active: true },
+      orderBy: [{ createdAt: 'desc' }, { id: 'desc' }],
+    });
+
+    const created = await this.capacity.createPublic(shop.id, {
       startsAt: dto.startsAt,
       endsAt: dto.endsAt,
       partySize: dto.partySize,
@@ -124,6 +130,56 @@ export class GrowthPublicController {
       recurrence: dto.recurrence,
       sourceChannel: dto.sourceChannel?.trim() || 'PUBLIC_WEB',
     });
+
+    if (!activePolicy || created.reservations.length === 0) return created;
+
+    const policySnapshot = {
+      name: activePolicy.name,
+      depositKind: activePolicy.depositKind,
+      depositFixedMinor: activePolicy.depositFixedMinor,
+      depositPercentBps: activePolicy.depositPercentBps,
+      cancellationWindowMinutes: activePolicy.cancellationWindowMinutes,
+      lateCancelForfeitPercent: activePolicy.lateCancelForfeitPercent,
+      noShowForfeitPercent: activePolicy.noShowForfeitPercent,
+      capturedAt: new Date().toISOString(),
+      source: 'PUBLIC_BOOKING_ACTIVE_POLICY',
+    } as Prisma.InputJsonValue;
+    const reservationIds = created.reservations.map((row) => row.reservationId);
+
+    try {
+      await this.prisma.$transaction(
+        reservationIds.map((reservationId) =>
+          this.prisma.reservationExtension.upsert({
+            where: { reservationId },
+            create: {
+              shopId: shop.id,
+              reservationId,
+              policyId: activePolicy.id,
+              policySnapshot,
+            },
+            update: {
+              policyId: activePolicy.id,
+              policySnapshot,
+            },
+          }),
+        ),
+      );
+    } catch (error) {
+      // Do not return a public confirmation with a missing deposit-policy snapshot.
+      // These rows are brand new and have not been exposed to the caller yet, so
+      // compensate the booking creation if policy persistence fails.
+      await this.prisma.$transaction([
+        this.prisma.reservationBookingEvidence.deleteMany({
+          where: { shopId: shop.id, reservationId: { in: reservationIds } },
+        }),
+        this.prisma.reservation.deleteMany({
+          where: { shopId: shop.id, id: { in: reservationIds } },
+        }),
+      ]);
+      throw error;
+    }
+
+    return created;
   }
 
   @Throttle(publicThrottle('booking'))
