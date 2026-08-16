@@ -46,13 +46,17 @@ async function main() {
       factType: 'SALE',
       referenceType: { in: ['SHOP_ORDER', 'PLAY_SESSION', 'OPERATIONS_SESSION'] },
     },
-    include: { ledgerEntry: true },
+  });
+  const gamingLedgerRows = await prisma.ledgerEntry.findMany({
+    where: { id: { in: gamingSaleFacts.map((fact) => fact.ledgerEntryId) } },
   });
   for (const referenceType of ['SHOP_ORDER', 'PLAY_SESSION', 'OPERATIONS_SESSION'] as const) {
     const facts = gamingSaleFacts.filter((fact) => fact.referenceType === referenceType);
     invariant(facts.length === 1, `gaming ${referenceType} did not produce exactly one canonical SALE fact`);
-    invariant(facts[0].ledgerEntry.kind === 'SALE', `gaming ${referenceType} ledger kind is not SALE`);
-    invariant(facts[0].ledgerEntry.guestCheckId === gaming.check.id, `gaming ${referenceType} ledger fact lost GuestCheck lineage`);
+    const ledger = gamingLedgerRows.find((row) => row.id === facts[0].ledgerEntryId);
+    invariant(ledger, `gaming ${referenceType} canonical LedgerEntry is missing`);
+    invariant(ledger.kind === 'SALE', `gaming ${referenceType} ledger kind is not SALE`);
+    invariant(ledger.guestCheckId === gaming.check.id, `gaming ${referenceType} ledger fact lost GuestCheck lineage`);
   }
   const duplicateGamingLedgerKeys = await prisma.$queryRaw<Array<{ count: bigint }>>`
     SELECT COUNT(*)::bigint AS count FROM (
