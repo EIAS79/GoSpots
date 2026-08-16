@@ -1,4 +1,5 @@
 Phase 4 production Gate P4 trigger
 Merged Phase 4 revision: 9a1d65ce7e3748f79000d6b5324bdf5d1f46893e
+Retry reason: production run 31917365220 proved registration/authentication but the harness expected a deprecated top-level shopId; it now resolves the canonical active OWNER membership shop id returned by /auth/me.
 Purpose: trigger the isolated production acceptance harness after the verified Phase 4 deployment and production migrations are live.
 This marker is intentionally path-scoped so ordinary future main pushes do not rerun the destructive acceptance drill.
