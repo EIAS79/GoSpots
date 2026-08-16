@@ -2,6 +2,10 @@ name: Phase 4 production acceptance
 
 on:
   workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - docs/acceptance/phase4-production-trigger.txt
 
 permissions:
   contents: read
