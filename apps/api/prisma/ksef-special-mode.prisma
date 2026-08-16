@@ -1,0 +1,46 @@
+// Phase 5 — explicit Polish KSeF special-mode workflow metadata.
+// This records legal/operational procedure and evidence only. The immutable
+// ComplianceDocument remains the invoice truth and ComplianceRequest remains
+// the transport truth.
+
+enum KsefSpecialMode {
+  OFFLINE24
+  SERVICE_UNAVAILABLE
+  ANNOUNCED_FAILURE
+  TOTAL_FAILURE
+}
+
+enum KsefSpecialModeStatus {
+  AWAITING_SUBMISSION
+  SUBMITTED
+  RECONCILED
+  OVERDUE_REVIEW
+  NO_SUBMISSION_REQUIRED
+}
+
+model KsefSpecialModeRecord {
+  id                       String                @id @default(cuid())
+  shopId                   String
+  documentId               String                @unique
+  mode                     KsefSpecialMode
+  status                   KsefSpecialModeStatus
+  issuedAt                 DateTime
+  triggeringEventReference String?
+  submissionDeadlineAt     DateTime?
+  buyerDeliveredAt         DateTime?
+  qrRequiredBeforeSubmit   Boolean               @default(false)
+  offlineQrPayloadHash     String?
+  offlineCertificateFingerprint String?
+  certificateQrPayloadHash String?
+  complianceRequestId      String?               @unique
+  submittedAt              DateTime?
+  reconciledAt             DateTime?
+  legalBasisNote           String
+  createdById              String
+  updatedById              String
+  createdAt                DateTime               @default(now())
+  updatedAt                DateTime               @updatedAt
+
+  @@index([shopId, status, submissionDeadlineAt])
+  @@index([shopId, mode, issuedAt])
+}

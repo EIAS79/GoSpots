@@ -8,9 +8,16 @@ import { PaymentDomainService } from './payment-domain.service';
 import { PaymentOperationStateService } from './payment-operation-state.service';
 import { PaymentController } from './payment.controller';
 import { StripeTerminalWebhookController } from './stripe-terminal-webhook.controller';
+import { MoneyOperationsController } from './money-operations.controller';
+import { MoneyOperationsService } from './money-operations.service';
 
 @Module({
-  controllers: [DeviceController, PaymentController, StripeTerminalWebhookController],
+  controllers: [
+    DeviceController,
+    PaymentController,
+    MoneyOperationsController,
+    StripeTerminalWebhookController,
+  ],
   providers: [
     DeviceRegistryService,
     PaymentConnectorRegistry,
@@ -18,6 +25,7 @@ import { StripeTerminalWebhookController } from './stripe-terminal-webhook.contr
     FakePaymentConnectorProvider,
     PaymentOperationStateService,
     PaymentDomainService,
+    MoneyOperationsService,
   ],
   exports: [
     DeviceRegistryService,
@@ -25,6 +33,7 @@ import { StripeTerminalWebhookController } from './stripe-terminal-webhook.contr
     StripeTerminalConnector,
     PaymentOperationStateService,
     PaymentDomainService,
+    MoneyOperationsService,
   ],
 })
 export class DevicePaymentModule {}
