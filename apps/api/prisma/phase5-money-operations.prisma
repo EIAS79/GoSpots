@@ -1,0 +1,94 @@
+// Phase 5 — Money Operations v2
+// Additive controls around the canonical Phase 4 GuestCheck/Settlement/Payment/Ledger authority.
+// These models store risk policy and reconciliation evidence only; they do not duplicate revenue truth.
+
+enum OfflinePaymentMinimumRole {
+  CASHIER
+  SUPERVISOR
+  MANAGER
+  OWNER
+}
+
+enum FinancialReconciliationStatus {
+  RUNNING
+  CLEAR
+  MISMATCH
+  FAILED
+}
+
+enum FinancialReconciliationIssueStatus {
+  OPEN
+  RESOLVED
+  ACKNOWLEDGED
+}
+
+enum FinancialReconciliationIssueType {
+  SETTLEMENT_PAYMENT_MISMATCH
+  PAYMENT_LEDGER_MISMATCH
+  CASH_SHIFT_MISMATCH
+  PAYMENT_REQUIRES_RECONCILIATION
+  FISCAL_REQUIRES_RECONCILIATION
+  KSEF_REQUIRES_RECONCILIATION
+}
+
+model OfflinePaymentPolicy {
+  id                         String                    @id @default(cuid())
+  shopId                     String                    @unique
+  enabled                    Boolean                   @default(false)
+  maxSingleAmount            Decimal                   @default(0) @db.Decimal(19, 4)
+  maxCumulativePendingAmount Decimal                   @default(0) @db.Decimal(19, 4)
+  minimumRole                OfflinePaymentMinimumRole @default(MANAGER)
+  customerWarningText        String?
+  forceReconnectAfterMinutes Int                       @default(30)
+  createdById                String?
+  updatedById                String?
+  createdAt                  DateTime                  @default(now())
+  updatedAt                  DateTime                  @updatedAt
+
+  @@index([shopId, enabled])
+}
+
+model FinancialReconciliationRun {
+  id            String                        @id @default(cuid())
+  shopId        String
+  businessDate  DateTime                      @db.Date
+  currency      String
+  status        FinancialReconciliationStatus @default(RUNNING)
+  totals        Json
+  mismatchCount Int                           @default(0)
+  correlationId String
+  startedById   String?
+  startedAt     DateTime                      @default(now())
+  completedAt   DateTime?
+
+  issues FinancialReconciliationIssue[]
+
+  @@unique([shopId, businessDate, currency, correlationId])
+  @@index([shopId, businessDate, status])
+}
+
+model FinancialReconciliationIssue {
+  id          String                                   @id @default(cuid())
+  runId       String
+  run         FinancialReconciliationRun               @relation(fields: [runId], references: [id], onDelete: Cascade)
+  shopId      String
+  type        FinancialReconciliationIssueType
+  status      FinancialReconciliationIssueStatus       @default(OPEN)
+  severity    String                                   @default("ERROR")
+  entityType  String?
+  entityId    String?
+  amount      Decimal?                                 @db.Decimal(19, 4)
+  currency    String
+  expected    Json?
+  actual      Json?
+  message     String
+  firstSeenAt DateTime                                 @default(now())
+  lastSeenAt  DateTime                                 @default(now())
+  resolvedAt  DateTime?
+  resolvedById String?
+  resolutionNote String?
+
+  @@index([shopId, status, type])
+  @@index([runId, type])
+  @@index([shopId, entityType, entityId])
+}
