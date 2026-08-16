@@ -8,6 +8,7 @@ import {
   type GuestCheck,
 } from "@/lib/guest-check-client";
 import { CheckoutDrawer } from "./checkout-drawer";
+import { CommercialControls } from "./commercial-controls";
 import { SettlementStatus } from "./settlement-status";
 
 function sourceCount(check: GuestCheck) {
@@ -19,10 +20,16 @@ function sourceCount(check: GuestCheck) {
 export function CheckoutWorkspace({
   canRead,
   canWrite,
+  canDiscount = false,
+  canComp = false,
+  canPriceOverride = false,
   locale = "en",
 }: {
   canRead: boolean;
   canWrite: boolean;
+  canDiscount?: boolean;
+  canComp?: boolean;
+  canPriceOverride?: boolean;
   locale?: string;
 }) {
   const [checks, setChecks] = useState<GuestCheck[]>([]);
@@ -277,13 +284,24 @@ export function CheckoutWorkspace({
         </ul>
       </aside>
 
-      <CheckoutDrawer
-        key={selected.id}
-        check={selected}
-        canWrite={canWrite}
-        locale={locale}
-        onCheckChanged={loadChecks}
-      />
+      <div className="min-w-0">
+        <CommercialControls
+          key={`commercial-${selected.id}`}
+          check={selected}
+          canWrite={canWrite}
+          canDiscount={canDiscount}
+          canComp={canComp}
+          canPriceOverride={canPriceOverride}
+          onChanged={loadChecks}
+        />
+        <CheckoutDrawer
+          key={selected.id}
+          check={selected}
+          canWrite={canWrite}
+          locale={locale}
+          onCheckChanged={loadChecks}
+        />
+      </div>
     </div>
   );
 }

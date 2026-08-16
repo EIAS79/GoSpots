@@ -255,5 +255,8 @@ export async function settleAndSplit(
 }
 
 export async function closePaidCheck(page: Page, checkId: string) {
-  return api<any>(page, 'POST', `/checkout/checks/${checkId}/close`, { data: {} });
+  return api<any>(page, 'POST', `/checkout/checks/${checkId}/close`, {
+    data: {},
+    idempotencyKey: `${checkId}-close`,
+  });
 }

@@ -1,0 +1,5 @@
+-- Phase 4 compatibility marker.
+-- LedgerEntry keeps its existing Prisma enum vocabulary. Phase 4 fact semantics
+-- (PAYMENT, CASH_MOVEMENT, STORED_VALUE, DEPOSIT_APPLICATION, REVERSAL,
+-- CORRECTION, TIP) are classified by LedgerFactMetadata while LedgerEntry
+-- remains the one canonical monetary ledger.

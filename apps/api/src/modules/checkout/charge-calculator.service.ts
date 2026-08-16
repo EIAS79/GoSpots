@@ -15,7 +15,14 @@ import {
 } from '../../common/money.util';
 import { PlayBillingService } from '../finance/play-billing.service';
 
-export type ChargeSourceType = 'SHOP_ORDER' | 'PLAY_SESSION' | 'RESERVATION';
+export type ChargeSourceType =
+  | 'SHOP_ORDER'
+  | 'PLAY_SESSION'
+  | 'RESERVATION'
+  | 'VENUE_ORDER'
+  | 'OPERATIONS_SESSION'
+  | 'SERVICE_CHARGE'
+  | 'TIP';
 
 export type CheckoutChargeLine = {
   position: number;

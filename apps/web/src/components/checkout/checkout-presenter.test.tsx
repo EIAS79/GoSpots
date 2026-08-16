@@ -85,6 +85,15 @@ const preview: CheckoutPreview = {
   depositAmount: "0.0000",
   total: "123.4500",
   amountDue: "123.4500",
+  billReady: true,
+  blockers: [],
+  commercial: {
+    discountAmount: "0.0000",
+    serviceChargeAmount: "0.0000",
+    tipAmount: "0.0000",
+    operationsSessionAmount: "0.0000",
+    venueOrderAmount: "0.0000",
+  },
   lines: [],
 };
 

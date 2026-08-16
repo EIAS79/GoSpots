@@ -24,7 +24,7 @@ test('@smoke Phase 3 refuses settlement while an attached order is still mutable
   expect(rejected.code).toBe('STATE_CONFLICT');
   expect(rejected.details?.stage).toBe('FINALIZE_BILL');
   expect(rejected.details?.blockers).toEqual(expect.arrayContaining([
-    expect.objectContaining({ sourceId: order.id, reason: 'ORDER_OPEN' }),
+    expect.objectContaining({ id: order.id, type: 'SHOP_ORDER', status: 'PENDING' }),
   ]));
 });
 
