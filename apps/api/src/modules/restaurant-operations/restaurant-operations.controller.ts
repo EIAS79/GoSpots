@@ -6,8 +6,10 @@ import { CurrentUser } from '../auth/decorators/current-user.decorator';
 import { Public } from '../auth/decorators/public.decorator';
 import { RequirePermissions } from '../auth/decorators/roles.decorator';
 import {
+  AppendRestaurantOrderDto,
   BarTabDto,
   BootstrapRestaurantOrderDto,
+  CombineTablesDto,
   FireCourseDto,
   MenuPresentationDto,
   MenuServiceModePolicyDto,
@@ -24,29 +26,35 @@ import {
   RestaurantLineOpsDto,
   TableTransferDto,
 } from './dto/restaurant-operations.dto';
+import { RestaurantConfigurationService } from './restaurant-configuration.service';
 import { RestaurantOperationsService } from './restaurant-operations.service';
+import { RestaurantOrderIntegrityService } from './restaurant-order-integrity.service';
 
 @ApiTags('restaurant-operations')
 @Controller('restaurant-operations')
 export class RestaurantOperationsController {
-  constructor(private readonly operations: RestaurantOperationsService) {}
+  constructor(
+    private readonly operations: RestaurantOperationsService,
+    private readonly configuration: RestaurantConfigurationService,
+    private readonly integrity: RestaurantOrderIntegrityService,
+  ) {}
 
   @Put('menu/service-mode')
   @RequirePermissions(PERMISSIONS.MENU_WRITE)
   setServiceMode(@CurrentUser() actor: JwtAccessPayload, @Body() dto: MenuServiceModePolicyDto) {
-    return this.operations.setServiceModePolicy(actor, dto);
+    return this.configuration.setServiceModePolicy(actor, dto);
   }
 
   @Put('menu/presentation')
   @RequirePermissions(PERMISSIONS.MENU_WRITE)
   setPresentation(@CurrentUser() actor: JwtAccessPayload, @Body() dto: MenuPresentationDto) {
-    return this.operations.setMenuPresentation(actor, dto);
+    return this.configuration.setPresentation(actor, dto);
   }
 
   @Put('menu/modifier-availability')
   @RequirePermissions(PERMISSIONS.MENU_WRITE)
   setModifierAvailability(@CurrentUser() actor: JwtAccessPayload, @Body() dto: ModifierAvailabilityDto) {
-    return this.operations.setModifierAvailability(actor, dto);
+    return this.configuration.setModifierAvailability(actor, dto);
   }
 
   @Post('orders/:orderId/bootstrap')
@@ -59,6 +67,17 @@ export class RestaurantOperationsController {
   @RequirePermissions(PERMISSIONS.ORDER_READ)
   getOrder(@CurrentUser() actor: JwtAccessPayload, @Param('orderId') orderId: string) {
     return this.operations.getOrderOps(actor, orderId);
+  }
+
+  @Post('orders/:orderId/items')
+  @RequirePermissions(PERMISSIONS.ORDER_WRITE)
+  appendOrder(
+    @CurrentUser() actor: JwtAccessPayload,
+    @Param('orderId') orderId: string,
+    @Headers('idempotency-key') idempotencyKey: string | undefined,
+    @Body() dto: AppendRestaurantOrderDto,
+  ) {
+    return this.integrity.appendOrder(actor, orderId, idempotencyKey, dto);
   }
 
   @Post('orders/:orderId/lifecycle')
@@ -82,7 +101,13 @@ export class RestaurantOperationsController {
   @Post('orders/:orderId/transfer')
   @RequirePermissions(PERMISSIONS.ORDER_WRITE)
   transfer(@CurrentUser() actor: JwtAccessPayload, @Param('orderId') orderId: string, @Body() dto: TableTransferDto) {
-    return this.operations.transferTable(actor, orderId, dto);
+    return this.integrity.transfer(actor, orderId, dto);
+  }
+
+  @Post('tables/combine')
+  @RequirePermissions(PERMISSIONS.ORDER_WRITE)
+  combine(@CurrentUser() actor: JwtAccessPayload, @Body() dto: CombineTablesDto) {
+    return this.integrity.combine(actor, dto.sourceOrderId, dto.targetOrderId, dto.reason);
   }
 
   @Post('orders/:orderId/tab/open')
@@ -118,7 +143,7 @@ export class RestaurantOperationsController {
   @Put('kds/timer-policy')
   @RequirePermissions(PERMISSIONS.MENU_WRITE)
   timerPolicy(@CurrentUser() actor: JwtAccessPayload, @Body() dto: PrepStationTimerPolicyDto) {
-    return this.operations.setStationTimerPolicy(actor, dto);
+    return this.configuration.setTimerPolicy(actor, dto);
   }
 
   @Post('kds/tickets/:ticketId/control')
@@ -172,7 +197,7 @@ export class RestaurantOperationsController {
   @Public()
   @Post('qr/:token/orders')
   publicOrder(@Param('token') token: string, @Headers('idempotency-key') idempotencyKey: string | undefined, @Body() dto: QrTableOrderDto) {
-    return this.operations.createQrOrderIdempotent(token, idempotencyKey, dto);
+    return this.integrity.createQrOrder(token, idempotencyKey, dto);
   }
 
   @Public()
