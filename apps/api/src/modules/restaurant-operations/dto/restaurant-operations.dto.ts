@@ -3,6 +3,7 @@ import {
   ArrayMinSize,
   IsArray,
   IsBoolean,
+  IsDateString,
   IsIn,
   IsInt,
   IsOptional,
@@ -18,10 +19,18 @@ export class MenuServiceModePolicyDto {
   @IsBoolean() enabled!: boolean;
 }
 
+export class MenuPresentationDto {
+  @IsString() menuItemId!: string;
+  @IsOptional() @IsString() customerName?: string;
+  @IsOptional() @IsString() kitchenName?: string;
+  @IsOptional() @IsDateString() expectedRestockAt?: string;
+}
+
 export class ModifierAvailabilityDto {
   @IsString() modifierId!: string;
   @IsBoolean() available!: boolean;
   @IsOptional() @IsString() reason?: string;
+  @IsOptional() @IsDateString() expectedRestockAt?: string;
 }
 
 export class BootstrapRestaurantOrderDto {
@@ -53,6 +62,12 @@ export class TableTransferDto {
   @IsOptional() @IsString() reason?: string;
 }
 
+export class CombineTablesDto {
+  @IsString() sourceOrderId!: string;
+  @IsString() targetOrderId!: string;
+  @IsOptional() @IsString() reason?: string;
+}
+
 export class BarTabDto {
   @IsString() name!: string;
   @IsOptional() @IsString() preauthOperationId?: string;
@@ -75,6 +90,12 @@ export class PrepStationGroupDto {
   @IsOptional() @IsBoolean() expo?: boolean;
   @IsOptional() @Type(() => Number) @IsInt() sortOrder?: number;
   @IsArray() @ArrayMinSize(1) @IsString({ each: true }) stationIds!: string[];
+}
+
+export class PrepStationTimerPolicyDto {
+  @IsString() stationId!: string;
+  @Type(() => Number) @IsInt() @Min(1) @Max(499) warningPct!: number;
+  @Type(() => Number) @IsInt() @Min(2) @Max(500) overduePct!: number;
 }
 
 export class PrinterRouteDto {
@@ -105,6 +126,14 @@ export class QrOrderLineDto {
 
 export class QrTableOrderDto {
   @IsOptional() @IsString() guestLabel?: string;
+  @ValidateNested({ each: true })
+  @Type(() => QrOrderLineDto)
+  @IsArray()
+  @ArrayMinSize(1)
+  lines!: QrOrderLineDto[];
+}
+
+export class AppendRestaurantOrderDto {
   @ValidateNested({ each: true })
   @Type(() => QrOrderLineDto)
   @IsArray()
