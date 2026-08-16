@@ -73,9 +73,10 @@ async function main() {
   const ratePlan = (await must('POST', '/operations/rate-plans', { name: `${marker} fixed session`, resourceId: resource.id, billingMode: 'FIXED_DURATION', unitPriceMinor: 1200, fixedDurationMinutes: 30, priority: 5000, active: true })).body;
   evidence.ids.ratePlanId = ratePlan.id;
   let ops = (await must('POST', '/operations/sessions/start', { resourceId: resource.id, ratePlanId: ratePlan.id, guestCheckId: check.id, participantCount: 2, notes: marker })).body;
+  await new Promise((resolve) => setTimeout(resolve, 1100));
   ops = (await must('POST', `/operations/sessions/${ops.id}/finish`, { expectedVersion: ops.version })).body;
   evidence.ids.operationsSessionId = ops.id;
-  if (!['FINISHED', 'ENDED'].includes(ops.status)) fail('timed revenue finalization', { ops });
+  if (!['FINISHED', 'ENDED'].includes(ops.status) || !(Number(ops.accruedMinor) > 0)) fail('timed revenue finalization', { ops });
   pass('timed revenue finalization', { operationsSessionId: ops.id, accruedMinor: ops.accruedMinor });
 
   const item = (await must('POST', '/menu/items', { name: `${marker} product`, kind: 'PRODUCT', unit: 'EA', sku: `P4-${runId}`.slice(0, 80), price: 20, trackStock: false, isAvailable: true })).body;
