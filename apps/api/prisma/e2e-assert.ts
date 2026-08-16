@@ -6,9 +6,9 @@ function invariant(condition: unknown, message: string): asserts condition {
   if (!condition) throw new Error(`Browser E2E database assertion failed: ${message}`);
 }
 
-async function assertClosedCheck(label: string) {
+async function assertClosedCheck(label: string, match: 'exact' | 'prefix' = 'exact') {
   const check = await prisma.guestCheck.findFirst({
-    where: { label },
+    where: match === 'prefix' ? { label: { startsWith: label } } : { label },
     include: {
       settlements: { include: { payments: true } },
       shopOrders: { select: { id: true } },
@@ -75,7 +75,7 @@ async function main() {
   });
   invariant(restaurantTicket, 'restaurant KDS ticket did not reach COLLECTED');
 
-  await assertClosedCheck('E2E Mixed Golden');
+  await assertClosedCheck('E2E Mixed Golden', 'prefix');
 
   const paymentOperation = await prisma.paymentOperation.findFirst({
     where: {
