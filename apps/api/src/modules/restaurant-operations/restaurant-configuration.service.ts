@@ -27,7 +27,12 @@ export class RestaurantConfigurationService {
       await this.emitAvailability(tx, shopId, dto.menuItemId, 'ITEM_SERVICE_MODE', { serviceMode: dto.serviceMode, enabled: dto.enabled });
       return policy;
     });
-    await this.audit.record(actor, { section: 'menu', action: 'menu.service_mode_availability', summary: `${dto.enabled ? 'Enabled' : 'Disabled'} item for ${dto.serviceMode}`, meta: dto });
+    await this.audit.record(actor, {
+      section: 'menu',
+      action: 'menu.service_mode_availability',
+      summary: `${dto.enabled ? 'Enabled' : 'Disabled'} item for ${dto.serviceMode}`,
+      meta: { menuItemId: dto.menuItemId, serviceMode: dto.serviceMode, enabled: dto.enabled },
+    });
     return row;
   }
 
