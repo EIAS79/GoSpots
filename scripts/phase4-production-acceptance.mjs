@@ -44,9 +44,12 @@ async function registerAcceptanceVenue() {
   token = cookie(registered.headers, 'access_token');
   if (!token) fail('fresh production venue authentication', { body: registered.body });
   const me = (await must('GET', '/auth/me')).body;
-  if (!me?.shopId) fail('venue-scoped owner authentication', { me });
-  evidence.ids.shopId = me.shopId; evidence.ids.ownerId = me.id || me.userId || me.sub || null;
-  pass('fresh production venue registration / owner authentication', { venuePath, shopId: me.shopId });
+  const activeMembership = me?.memberships?.find((membership) => membership?.isActive && membership?.shop?.slug === venuePath)
+    || me?.memberships?.find((membership) => membership?.isActive);
+  const shopId = me?.shopId || activeMembership?.shop?.id;
+  if (!shopId || activeMembership?.role !== 'OWNER') fail('venue-scoped owner authentication', { me });
+  evidence.ids.shopId = shopId; evidence.ids.ownerId = me.id || me.userId || me.sub || null;
+  pass('fresh production venue registration / owner authentication', { venuePath, shopId });
 }
 
 async function main() {
