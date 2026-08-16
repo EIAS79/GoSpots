@@ -45,6 +45,8 @@ jobs:
           cache-dependency-path: pnpm-lock.yaml
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
+      - name: Syntax-check production Gate P4 harness
+        run: node --check scripts/phase4-production-acceptance.mjs
       - name: Generate Prisma client
         working-directory: apps/api
         run: pnpm exec prisma generate
