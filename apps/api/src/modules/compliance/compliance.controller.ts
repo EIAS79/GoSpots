@@ -14,8 +14,13 @@ import {
   UpsertFiscalDeviceDto,
   UpsertTaxCategoryDto,
 } from './dto/compliance.dto';
+import {
+  LinkKsefSpecialModeSubmissionDto,
+  RegisterKsefSpecialModeDto,
+} from './dto/ksef-special-mode.dto';
 import { FiscalDocumentService } from './fiscal-document.service';
 import { FiscalizationService } from './fiscal/fiscalization.service';
+import { KsefSpecialModeService } from './ksef/ksef-special-mode.service';
 
 @ApiTags('compliance')
 @Controller('compliance')
@@ -26,6 +31,7 @@ export class ComplianceController {
     private readonly profiles: ComplianceProfileService,
     private readonly fiscal: FiscalDocumentService,
     private readonly fiscalization: FiscalizationService,
+    private readonly ksefSpecialModes: KsefSpecialModeService,
   ) {}
 
   @Get('profile')
@@ -114,6 +120,34 @@ export class ComplianceController {
   @Post('requests/:id/reconcile')
   reconcileKsef(@CurrentUser() user: JwtAccessPayload, @Param('id') id: string) {
     return this.compliance.reconcileKsef(user, id);
+  }
+
+  @Post('documents/:id/ksef-special-mode')
+  registerKsefSpecialMode(
+    @CurrentUser() user: JwtAccessPayload,
+    @Param('id') id: string,
+    @Body() dto: RegisterKsefSpecialModeDto,
+  ) {
+    return this.ksefSpecialModes.register(user, id, dto);
+  }
+
+  @Get('documents/:id/ksef-special-mode')
+  getKsefSpecialMode(@CurrentUser() user: JwtAccessPayload, @Param('id') id: string) {
+    return this.ksefSpecialModes.getForDocument(user, id);
+  }
+
+  @Post('documents/:id/ksef-special-mode/submission')
+  linkKsefSpecialModeSubmission(
+    @CurrentUser() user: JwtAccessPayload,
+    @Param('id') id: string,
+    @Body() dto: LinkKsefSpecialModeSubmissionDto,
+  ) {
+    return this.ksefSpecialModes.linkSubmission(user, id, dto);
+  }
+
+  @Get('ksef-special-mode/attention')
+  ksefSpecialModeAttention(@CurrentUser() user: JwtAccessPayload) {
+    return this.ksefSpecialModes.listAttention(user);
   }
 
   @Post('documents/:id/proofs')
