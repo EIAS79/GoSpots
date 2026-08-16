@@ -108,9 +108,18 @@ export class GrowthPublicController {
     await this.assertBookingCaptcha(req, dto.captchaToken, captchaHeader);
     this.assertRequiredContact(dto);
     const shop = await this.requirePublishedShop(slug);
-    const { captchaToken: _captchaToken, ...booking } = dto;
     return this.capacity.createPublic(shop.id, {
-      ...booking,
+      startsAt: dto.startsAt,
+      endsAt: dto.endsAt,
+      partySize: dto.partySize,
+      resourceId: dto.resourceId,
+      resourceCategoryId: dto.resourceCategoryId,
+      resourceType: dto.resourceType,
+      guestName: dto.guestName,
+      guestEmail: dto.guestEmail,
+      guestPhone: dto.guestPhone,
+      notes: dto.notes,
+      recurrence: dto.recurrence,
       sourceChannel: dto.sourceChannel?.trim() || 'PUBLIC_WEB',
     });
   }
