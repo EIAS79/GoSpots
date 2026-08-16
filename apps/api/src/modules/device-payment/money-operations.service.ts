@@ -6,12 +6,14 @@ import {
 } from '@nestjs/common';
 import {
   ComplianceRequestState,
+  FinancialReconciliationIssue,
   FinancialReconciliationIssueType,
+  FinancialReconciliationRun,
   FinancialReconciliationStatus,
   LedgerKind,
   OfflinePaymentMinimumRole,
+  OfflinePaymentPolicy,
   PaymentOperationState,
-  PaymentStatus,
   Prisma,
   RefundState,
 } from '@prisma/client';
@@ -44,6 +46,14 @@ const MIN_ROLE_RANK: Record<OfflinePaymentMinimumRole, number> = {
   OWNER: 4,
 };
 
+type ReconciliationRunWithIssues = FinancialReconciliationRun & {
+  issues: FinancialReconciliationIssue[];
+};
+type IssueDraft = Omit<
+  Prisma.FinancialReconciliationIssueCreateManyInput,
+  'runId' | 'shopId' | 'currency'
+>;
+
 @Injectable()
 export class MoneyOperationsService {
   constructor(
@@ -73,7 +83,12 @@ export class MoneyOperationsService {
     ]);
     const readiness = connector.readiness
       ? await connector.readiness()
-      : { ready: Boolean(health.ok && capabilities.payments), ok: health.ok, checkedAt: new Date().toISOString(), message: health.message };
+      : {
+          ready: Boolean(health.ok && capabilities.payments),
+          ok: health.ok,
+          checkedAt: new Date().toISOString(),
+          message: health.message,
+        };
     return { provider: connector.provider, capabilities, health, readiness };
   }
 
@@ -104,6 +119,7 @@ export class MoneyOperationsService {
     if (dto.enabled && (maxSingleAmount.lte(0) || maxCumulativePendingAmount.lte(0))) {
       throw new BadRequestException('Enabled offline payments require positive risk ceilings');
     }
+
     const row = await this.prisma.offlinePaymentPolicy.upsert({
       where: { shopId },
       create: {
@@ -127,6 +143,17 @@ export class MoneyOperationsService {
         updatedById: actor.sub,
       },
     });
+    await this.prisma.auditLog.create({
+      data: {
+        shopId,
+        userId: actor.sub,
+        section: 'money-operations',
+        action: 'offline_payment_policy.update',
+        summary: 'Offline card risk policy updated',
+        actorRole: actor.shopRole ?? null,
+        meta: JSON.stringify(this.serializePolicy(row)),
+      },
+    });
     return this.serializePolicy(row);
   }
 
@@ -142,7 +169,9 @@ export class MoneyOperationsService {
     if (!policy?.enabled) return { allowed: false, reason: 'OFFLINE_PAYMENT_DISABLED' as const };
     const amount = new Prisma.Decimal(amountRaw);
     if (amount.lte(0)) throw new BadRequestException('Amount must be greater than zero');
-    if (amount.gt(policy.maxSingleAmount)) return { allowed: false, reason: 'OFFLINE_SINGLE_LIMIT_EXCEEDED' as const };
+    if (amount.gt(policy.maxSingleAmount)) {
+      return { allowed: false, reason: 'OFFLINE_SINGLE_LIMIT_EXCEEDED' as const };
+    }
     const actorRank = ROLE_RANK[String(actor.shopRole ?? '').toUpperCase()] ?? 0;
     if (actorRank < MIN_ROLE_RANK[policy.minimumRole]) {
       return { allowed: false, reason: 'OFFLINE_ROLE_NOT_ALLOWED' as const };
@@ -150,6 +179,7 @@ export class MoneyOperationsService {
     const pending = await this.prisma.paymentOperation.aggregate({
       where: {
         shopId,
+        currency: policy.enabled ? undefined : undefined,
         reconciliationRequired: true,
         state: { in: [PaymentOperationState.UNKNOWN] },
       },
@@ -157,7 +187,11 @@ export class MoneyOperationsService {
     });
     const pendingAmount = pending._sum.amount ?? ZERO;
     if (pendingAmount.add(amount).gt(policy.maxCumulativePendingAmount)) {
-      return { allowed: false, reason: 'OFFLINE_CUMULATIVE_LIMIT_EXCEEDED' as const, pendingAmount: pendingAmount.toFixed(4) };
+      return {
+        allowed: false,
+        reason: 'OFFLINE_CUMULATIVE_LIMIT_EXCEEDED' as const,
+        pendingAmount: pendingAmount.toFixed(4),
+      };
     }
     return {
       allowed: true,
@@ -182,22 +216,29 @@ export class MoneyOperationsService {
     const currency = dto.currency.toUpperCase();
 
     const existing = await this.prisma.financialReconciliationRun.findUnique({
-      where: { shopId_businessDate_currency_correlationId: { shopId, businessDate, currency, correlationId: dto.correlationId } },
+      where: {
+        shopId_businessDate_currency_correlationId: {
+          shopId,
+          businessDate,
+          currency,
+          correlationId: dto.correlationId,
+        },
+      },
       include: { issues: true },
     });
     if (existing) return this.serializeRun(existing);
 
-    const [settlements, payments, paymentLedger, refunds, refundLedger, cashSessions, unresolvedPayments, complianceRequests] = await Promise.all([
+    const [settlements, payments, saleLedger, refunds, refundLedger, cashSessions, unresolvedPayments, complianceRequests] = await Promise.all([
       this.prisma.checkSettlement.aggregate({
         where: { shopId, state: 'PAID', currency, createdAt: { gte: from, lt: to } },
         _sum: { total: true },
       }),
       this.prisma.payment.aggregate({
-        where: { shopId, status: PaymentStatus.SUCCESS, currency, createdAt: { gte: from, lt: to } },
+        where: { shopId, status: 'SUCCESS', currency, createdAt: { gte: from, lt: to } },
         _sum: { amount: true },
       }),
       this.prisma.ledgerEntry.aggregate({
-        where: { shopId, kind: LedgerKind.PAYMENT, currency, createdAt: { gte: from, lt: to } },
+        where: { shopId, kind: LedgerKind.SALE, currency, occurredAt: { gte: from, lt: to } },
         _sum: { amount: true },
       }),
       this.prisma.refund.aggregate({
@@ -205,7 +246,7 @@ export class MoneyOperationsService {
         _sum: { amount: true },
       }),
       this.prisma.ledgerEntry.aggregate({
-        where: { shopId, kind: LedgerKind.REFUND, currency, createdAt: { gte: from, lt: to } },
+        where: { shopId, kind: LedgerKind.REFUND, currency, occurredAt: { gte: from, lt: to } },
         _sum: { amount: true },
       }),
       this.prisma.cashSession.findMany({
@@ -213,30 +254,39 @@ export class MoneyOperationsService {
         select: { id: true, variance: true, closedExpectedCash: true, countedCash: true },
       }),
       this.prisma.paymentOperation.findMany({
-        where: { shopId, reconciliationRequired: true },
-        select: { id: true, amount: true, currency: true, state: true, provider: true, providerPaymentId: true },
+        where: { shopId, currency, reconciliationRequired: true },
+        select: { id: true, amount: true, state: true, provider: true, providerPaymentId: true },
       }),
       this.prisma.complianceRequest.findMany({
         where: {
           shopId,
+          document: { currency },
           OR: [
             { reconciliationRequired: true },
             { state: { in: [ComplianceRequestState.UNKNOWN, ComplianceRequestState.FAILED] } },
           ],
         },
-        select: { id: true, documentId: true, adapter: true, operation: true, state: true, errorCode: true, errorMessage: true },
+        select: {
+          id: true,
+          documentId: true,
+          adapter: true,
+          operation: true,
+          state: true,
+          errorCode: true,
+          errorMessage: true,
+        },
       }),
     ]);
 
     const settlementTotal = settlements._sum.total ?? ZERO;
     const paymentTotal = payments._sum.amount ?? ZERO;
-    const paymentLedgerTotal = paymentLedger._sum.amount ?? ZERO;
+    const saleLedgerTotal = saleLedger._sum.amount ?? ZERO;
     const refundTotal = refunds._sum.amount ?? ZERO;
     const refundLedgerTotal = refundLedger._sum.amount ?? ZERO;
     const totals = {
       settlementTotal: settlementTotal.toFixed(4),
       successfulPaymentTotal: paymentTotal.toFixed(4),
-      paymentLedgerTotal: paymentLedgerTotal.toFixed(4),
+      saleLedgerTotal: saleLedgerTotal.toFixed(4),
       successfulRefundTotal: refundTotal.toFixed(4),
       refundLedgerTotal: refundLedgerTotal.toFixed(4),
       closedCashShiftCount: cashSessions.length,
@@ -250,13 +300,13 @@ export class MoneyOperationsService {
         businessDate,
         currency,
         status: FinancialReconciliationStatus.RUNNING,
-        totals: totals as Prisma.InputJsonValue,
+        totals,
         correlationId: dto.correlationId,
         startedById: actor.sub,
       },
     });
     const issues: Prisma.FinancialReconciliationIssueCreateManyInput[] = [];
-    const addIssue = (issue: Omit<Prisma.FinancialReconciliationIssueCreateManyInput, 'runId' | 'shopId' | 'currency'>) => {
+    const addIssue = (issue: IssueDraft) => {
       issues.push({ ...issue, runId: run.id, shopId, currency });
     };
 
@@ -269,13 +319,13 @@ export class MoneyOperationsService {
         actual: { successfulPaymentTotal: paymentTotal.toFixed(4) },
       });
     }
-    if (!paymentTotal.eq(paymentLedgerTotal)) {
+    if (!settlementTotal.eq(saleLedgerTotal)) {
       addIssue({
         type: FinancialReconciliationIssueType.PAYMENT_LEDGER_MISMATCH,
-        amount: paymentTotal.sub(paymentLedgerTotal).abs(),
-        message: 'Successful payment total does not equal PAYMENT ledger facts',
-        expected: { successfulPaymentTotal: paymentTotal.toFixed(4) },
-        actual: { paymentLedgerTotal: paymentLedgerTotal.toFixed(4) },
+        amount: settlementTotal.sub(saleLedgerTotal).abs(),
+        message: 'Paid settlement total does not equal canonical SALE ledger facts',
+        expected: { paidSettlementTotal: settlementTotal.toFixed(4) },
+        actual: { saleLedgerTotal: saleLedgerTotal.toFixed(4) },
       });
     }
     if (!refundTotal.eq(refundLedgerTotal.abs())) {
@@ -283,7 +333,7 @@ export class MoneyOperationsService {
         type: FinancialReconciliationIssueType.PAYMENT_LEDGER_MISMATCH,
         amount: refundTotal.sub(refundLedgerTotal.abs()).abs(),
         entityType: 'REFUND',
-        message: 'Successful provider refund total does not equal REFUND ledger facts',
+        message: 'Successful provider refund total does not equal canonical REFUND ledger facts',
         expected: { successfulRefundTotal: refundTotal.toFixed(4) },
         actual: { refundLedgerTotal: refundLedgerTotal.toFixed(4) },
       });
@@ -298,7 +348,10 @@ export class MoneyOperationsService {
           entityId: session.id,
           message: 'Closed cash shift has a non-zero counted variance',
           expected: { expectedCash: session.closedExpectedCash?.toFixed(4) ?? null },
-          actual: { countedCash: session.countedCash?.toFixed(4) ?? null, variance: variance.toFixed(4) },
+          actual: {
+            countedCash: session.countedCash?.toFixed(4) ?? null,
+            variance: variance.toFixed(4),
+          },
         });
       }
     }
@@ -306,12 +359,15 @@ export class MoneyOperationsService {
       addIssue({
         type: FinancialReconciliationIssueType.PAYMENT_REQUIRES_RECONCILIATION,
         amount: payment.amount,
-        currency: payment.currency,
         entityType: 'PAYMENT_OPERATION',
         entityId: payment.id,
         message: `Payment ${payment.id} remains ${payment.state} and requires provider reconciliation`,
-        actual: { provider: payment.provider, providerPaymentId: payment.providerPaymentId, state: payment.state },
-      } as any);
+        actual: {
+          provider: payment.provider,
+          providerPaymentId: payment.providerPaymentId,
+          state: payment.state,
+        },
+      });
     }
     for (const request of complianceRequests) {
       const isKsef = request.adapter.toLowerCase().includes('ksef');
@@ -322,15 +378,24 @@ export class MoneyOperationsService {
         entityType: 'COMPLIANCE_REQUEST',
         entityId: request.id,
         message: `${request.adapter} ${request.operation} is ${request.state} and requires reconciliation`,
-        actual: { documentId: request.documentId, state: request.state, errorCode: request.errorCode, errorMessage: request.errorMessage },
+        actual: {
+          documentId: request.documentId,
+          state: request.state,
+          errorCode: request.errorCode,
+          errorMessage: request.errorMessage,
+        },
       });
     }
 
-    if (issues.length) await this.prisma.financialReconciliationIssue.createMany({ data: issues });
+    if (issues.length) {
+      await this.prisma.financialReconciliationIssue.createMany({ data: issues });
+    }
     const completed = await this.prisma.financialReconciliationRun.update({
       where: { id: run.id },
       data: {
-        status: issues.length ? FinancialReconciliationStatus.MISMATCH : FinancialReconciliationStatus.CLEAR,
+        status: issues.length
+          ? FinancialReconciliationStatus.MISMATCH
+          : FinancialReconciliationStatus.CLEAR,
         mismatchCount: issues.length,
         completedAt: new Date(),
       },
@@ -360,7 +425,7 @@ export class MoneyOperationsService {
     return this.serializeRun(run);
   }
 
-  private serializePolicy(policy: any) {
+  private serializePolicy(policy: OfflinePaymentPolicy) {
     return {
       ...policy,
       maxSingleAmount: policy.maxSingleAmount.toFixed(4),
@@ -368,10 +433,10 @@ export class MoneyOperationsService {
     };
   }
 
-  private serializeRun(run: any) {
+  private serializeRun(run: ReconciliationRunWithIssues) {
     return {
       ...run,
-      issues: (run.issues ?? []).map((issue: any) => ({
+      issues: run.issues.map((issue) => ({
         ...issue,
         amount: issue.amount == null ? null : issue.amount.toFixed(4),
       })),
