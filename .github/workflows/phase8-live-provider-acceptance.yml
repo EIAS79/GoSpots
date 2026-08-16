@@ -87,3 +87,5 @@ jobs:
           path: ${{ runner.temp }}/phase8-live-provider.json
           if-no-files-found: error
           retention-days: 1
+
+# Regenerated acceptance checkout trigger: 2026-08-16T13:50+02:00
