@@ -7,6 +7,7 @@ import { GrowthAnalyticsService } from './growth-analytics.service';
 import { GrowthCapacityService } from './growth-capacity.service';
 import { GrowthCrmService } from './growth-crm.service';
 import { GrowthDepositPublicController } from './growth-deposit-public.controller';
+import { GrowthDepositReconciliationService } from './growth-deposit-reconciliation.service';
 import { GrowthDepositWebhookController } from './growth-deposit-webhook.controller';
 import { GrowthPricingService } from './growth-pricing.service';
 import { GrowthPrivacyService } from './growth-privacy.service';
@@ -37,6 +38,7 @@ import { ReservationStripeWebhookRoutingInterceptor } from './reservation-stripe
     EventsGrowthService,
     GrowthAnalyticsService,
     GrowthPublicDepositService,
+    GrowthDepositReconciliationService,
     Phase8ReservationService,
     {
       provide: APP_INTERCEPTOR,
