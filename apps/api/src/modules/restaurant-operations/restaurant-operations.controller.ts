@@ -28,7 +28,7 @@ import {
 } from './dto/restaurant-operations.dto';
 import { RestaurantConfigurationService } from './restaurant-configuration.service';
 import { RestaurantOperationsService } from './restaurant-operations.service';
-import { RestaurantOrderIntegrityService } from './restaurant-order-integrity.service';
+import { RestaurantOrderIntegrityService } from './restaurant-order-integrity-v2.service';
 
 @ApiTags('restaurant-operations')
 @Controller('restaurant-operations')
@@ -196,7 +196,11 @@ export class RestaurantOperationsController {
 
   @Public()
   @Post('qr/:token/orders')
-  publicOrder(@Param('token') token: string, @Headers('idempotency-key') idempotencyKey: string | undefined, @Body() dto: QrTableOrderDto) {
+  publicOrder(
+    @Param('token') token: string,
+    @Headers('idempotency-key') idempotencyKey: string | undefined,
+    @Body() dto: QrTableOrderDto,
+  ) {
     return this.integrity.createQrOrder(token, idempotencyKey, dto);
   }
 
