@@ -142,8 +142,8 @@ export class KitchenService {
 
   async submitOrder(actor: JwtAccessPayload, orderId: string) {
     const shopId = requireShopId(actor);
-    const count = await this.routeOrder(shopId, orderId);
-    await this.record(actor, 'kds.order.route', 'Routed fired order lines to prep stations', {
+    const count = await this.routeOrder(shopId, orderId, true, actor.sub);
+    await this.record(actor, 'kds.order.route', 'Explicitly submitted order lines to prep stations', {
       orderId,
       ticketCount: count,
     });
@@ -310,10 +310,15 @@ export class KitchenService {
       take: 100,
       orderBy: { createdAt: 'asc' },
     });
-    for (const order of orders) await this.routeOrder(shopId, order.id);
+    for (const order of orders) await this.routeOrder(shopId, order.id, false);
   }
 
-  private async routeOrder(shopId: string, orderId: string) {
+  private async routeOrder(
+    shopId: string,
+    orderId: string,
+    forceFire = false,
+    actorUserId = 'system:kds',
+  ) {
     const order = await this.prisma.venueOrder.findFirst({
       where: { id: orderId, shopId, status: { in: ['OPEN', 'SENT'] } },
     });
@@ -336,8 +341,18 @@ export class KitchenService {
     ]);
     const routed = new Set<string>();
     for (const line of lines) {
-      const phase6 = controls.find((control) => control.orderLineId === line.id);
-      if (phase6 && phase6.fireState !== RestaurantFireState.FIRED) continue;
+      let phase6 = controls.find((control) => control.orderLineId === line.id);
+      if (phase6 && phase6.fireState !== RestaurantFireState.FIRED) {
+        if (!forceFire) continue;
+        phase6 = await this.prisma.restaurantOrderLineOps.update({
+          where: { id: phase6.id },
+          data: {
+            fireState: RestaurantFireState.FIRED,
+            firedAt: new Date(),
+            updatedById: actorUserId,
+          },
+        });
+      }
       const key = routeKey(line.priceSnapshot);
       if (!key) continue;
       const route = await this.prisma.prepRoute.findFirst({ where: { shopId, key, active: true } });
