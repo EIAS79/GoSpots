@@ -12,6 +12,8 @@ import { GrowthPrivacyService } from './growth-privacy.service';
 import { GrowthPublicController } from './growth-public.controller';
 import { GrowthPublicDepositService } from './growth-public-deposit.service';
 import { GrowthController } from './growth.controller';
+import { Phase8ReservationController } from './phase8-reservation.controller';
+import { Phase8ReservationService } from './phase8-reservation.service';
 import { ReservationGrowthService } from './reservation-growth.service';
 
 @Module({
@@ -21,6 +23,7 @@ import { ReservationGrowthService } from './reservation-growth.service';
     GrowthPublicController,
     GrowthDepositPublicController,
     GrowthDepositWebhookController,
+    Phase8ReservationController,
   ],
   providers: [
     ReservationGrowthService,
@@ -32,6 +35,7 @@ import { ReservationGrowthService } from './reservation-growth.service';
     EventsGrowthService,
     GrowthAnalyticsService,
     GrowthPublicDepositService,
+    Phase8ReservationService,
   ],
   exports: [
     ReservationGrowthService,
@@ -40,6 +44,7 @@ import { ReservationGrowthService } from './reservation-growth.service';
     CommerceGrowthService,
     EventsGrowthService,
     GrowthAnalyticsService,
+    Phase8ReservationService,
   ],
 })
 export class GrowthModule {}

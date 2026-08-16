@@ -58,7 +58,6 @@ function enforceCap(now: number): void {
   if (state.byIpSurface.size + state.byIpAll.size <= MAX_TRACKED_IPS) return;
   pruneAll(now);
   if (state.byIpSurface.size <= MAX_TRACKED_IPS) return;
-  // Drop arbitrary oldest-ish entries (Map insertion order).
   const overflow = state.byIpSurface.size - MAX_TRACKED_IPS;
   let dropped = 0;
   for (const ip of state.byIpSurface.keys()) {
@@ -84,6 +83,9 @@ export function resolvePublicCreateSurface(
   if (/\/public\/venues\/[^/]+\/contact$/i.test(path)) return 'contact';
   if (/\/public\/venues\/[^/]+\/event-requests$/i.test(path)) return 'event';
   if (/\/public\/venues\/[^/]+\/(?:dining|gaming)\/reservations$/i.test(path)) {
+    return 'booking';
+  }
+  if (/\/growth\/public\/[^/]+\/(?:reservations|waitlist)$/i.test(path)) {
     return 'booking';
   }
   if (/\/public\/venues\/[^/]+\/chats$/i.test(path)) return 'chatOpen';

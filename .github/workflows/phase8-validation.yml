@@ -1,0 +1,90 @@
+name: Phase 8 reservation validation
+
+on:
+  pull_request:
+    paths:
+      - 'apps/api/src/modules/growth/**'
+      - 'apps/api/src/common/captcha*'
+      - 'apps/api/prisma/**'
+      - 'apps/web/src/components/reservations/**'
+      - 'apps/web/src/app/(tenant)/dashboard/**/reservations/**'
+      - '.github/workflows/phase8-validation.yml'
+  push:
+    branches: [main]
+    paths:
+      - 'apps/api/src/modules/growth/**'
+      - 'apps/api/src/common/captcha*'
+      - 'apps/api/prisma/**'
+      - 'apps/web/src/components/reservations/**'
+      - 'apps/web/src/app/(tenant)/dashboard/**/reservations/**'
+      - '.github/workflows/phase8-validation.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  phase8:
+    name: Phase 8 gate · reservations and deposits
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    services:
+      postgres:
+        image: postgres:17
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: gospots_phase8
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres -d gospots_phase8"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 20
+    env:
+      DATABASE_URL: postgresql://postgres:postgres@127.0.0.1:5432/gospots_phase8?schema=public
+      JWT_SECRET: phase8-ci-only-jwt-secret
+      NODE_ENV: test
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: pnpm
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Generate and validate Prisma
+        working-directory: apps/api
+        run: |
+          pnpm prisma:generate
+          pnpm exec prisma validate
+
+      - name: Deploy full migration chain
+        working-directory: apps/api
+        run: |
+          pnpm migrate:deploy
+          pnpm exec prisma migrate status
+
+      - name: Run Phase 8 reservation and provider contract tests
+        working-directory: apps/api
+        run: >-
+          pnpm exec jest --config jest.config.cjs --runInBand
+          src/modules/growth
+          src/common/captcha-escalation.phase8.spec.ts
+          src/common/venue-timezone.util.spec.ts
+          src/common/opening-hours.util.spec.ts
+
+      - name: Run persisted Phase 8 operational pilot
+        working-directory: apps/api
+        run: pnpm exec tsx prisma/phase8-operational-pilot.ts
+
+      - name: Build API
+        working-directory: apps/api
+        run: pnpm build
+
+      - name: Typecheck web reservation workspace
+        working-directory: apps/web
+        run: pnpm typecheck

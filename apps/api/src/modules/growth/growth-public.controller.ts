@@ -3,18 +3,46 @@ import {
   Body,
   Controller,
   Get,
+  Headers,
   NotFoundException,
   Param,
   Post,
   Query,
+  Req,
 } from '@nestjs/common';
 import { ApiTags } from '@nestjs/swagger';
+import { Throttle } from '@nestjs/throttler';
+import type { Request } from 'express';
+import { isCaptchaEscalated } from '../../common/captcha-escalation.util';
+import {
+  assertCaptchaOrThrow,
+  CAPTCHA_TOKEN_HEADER,
+  readCaptchaToken,
+} from '../../common/captcha.util';
+import { publicThrottle } from '../../common/throttle.config';
 import { PrismaService } from '../../prisma/prisma.service';
 import {
   type CapacityRequest,
   GrowthCapacityService,
   type UnifiedBookingInput,
 } from './growth-capacity.service';
+
+type PublicBookingInput = Omit<UnifiedBookingInput, 'sourceChannel'> & {
+  sourceChannel?: string;
+  captchaToken?: string;
+};
+
+type PublicWaitlistInput = {
+  resourceId?: string;
+  guestName: string;
+  guestEmail?: string;
+  guestPhone?: string;
+  partySize?: number;
+  desiredStartsAt: string;
+  desiredEndsAt: string;
+  note?: string;
+  captchaToken?: string;
+};
 
 @ApiTags('growth-public')
 @Controller('growth/public')
@@ -23,6 +51,30 @@ export class GrowthPublicController {
     private readonly prisma: PrismaService,
     private readonly capacity: GrowthCapacityService,
   ) {}
+
+  private async assertBookingCaptcha(
+    req: Request,
+    bodyToken?: string,
+    headerToken?: string,
+  ) {
+    const ip = req.ip ?? '';
+    await assertCaptchaOrThrow({
+      token: readCaptchaToken({ bodyToken, headerToken }),
+      remoteIp: ip,
+      escalated: isCaptchaEscalated(ip, 'booking'),
+    });
+  }
+
+  private assertRequiredContact(input: {
+    guestEmail?: string;
+    guestPhone?: string;
+  }) {
+    if (!input.guestEmail?.trim() && !input.guestPhone?.trim()) {
+      throw new BadRequestException(
+        'A guest email address or phone number is required.',
+      );
+    }
+  }
 
   @Get(':slug/capacity')
   async availability(
@@ -45,18 +97,34 @@ export class GrowthPublicController {
     });
   }
 
+  @Throttle(publicThrottle('booking'))
   @Post(':slug/reservations')
   async create(
     @Param('slug') slug: string,
-    @Body() dto: Omit<UnifiedBookingInput, 'sourceChannel'> & { sourceChannel?: string },
+    @Body() dto: PublicBookingInput,
+    @Req() req: Request,
+    @Headers(CAPTCHA_TOKEN_HEADER) captchaHeader?: string,
   ) {
+    await this.assertBookingCaptcha(req, dto.captchaToken, captchaHeader);
+    this.assertRequiredContact(dto);
     const shop = await this.requirePublishedShop(slug);
     return this.capacity.createPublic(shop.id, {
-      ...dto,
+      startsAt: dto.startsAt,
+      endsAt: dto.endsAt,
+      partySize: dto.partySize,
+      resourceId: dto.resourceId,
+      resourceCategoryId: dto.resourceCategoryId,
+      resourceType: dto.resourceType,
+      guestName: dto.guestName,
+      guestEmail: dto.guestEmail,
+      guestPhone: dto.guestPhone,
+      notes: dto.notes,
+      recurrence: dto.recurrence,
       sourceChannel: dto.sourceChannel?.trim() || 'PUBLIC_WEB',
     });
   }
 
+  @Throttle(publicThrottle('booking'))
   @Post(':slug/reservations/:id/reschedule')
   async reschedule(
     @Param('slug') slug: string,
@@ -64,10 +132,13 @@ export class GrowthPublicController {
     @Body() dto: CapacityRequest & { guestToken: string },
   ) {
     const shop = await this.requirePublishedShop(slug);
-    if (!dto.guestToken?.trim()) throw new BadRequestException('guestToken is required.');
+    if (!dto.guestToken?.trim()) {
+      throw new BadRequestException('guestToken is required.');
+    }
     return this.capacity.reschedulePublic(shop.id, id, dto.guestToken, dto);
   }
 
+  @Throttle(publicThrottle('booking'))
   @Post(':slug/reservations/:id/cancel')
   async cancel(
     @Param('slug') slug: string,
@@ -75,27 +146,26 @@ export class GrowthPublicController {
     @Body() dto: { guestToken: string; reason?: string },
   ) {
     const shop = await this.requirePublishedShop(slug);
-    if (!dto.guestToken?.trim()) throw new BadRequestException('guestToken is required.');
+    if (!dto.guestToken?.trim()) {
+      throw new BadRequestException('guestToken is required.');
+    }
     return this.capacity.cancelPublic(shop.id, id, dto.guestToken, dto.reason);
   }
 
+  @Throttle(publicThrottle('booking'))
   @Post(':slug/waitlist')
   async waitlist(
     @Param('slug') slug: string,
-    @Body()
-    dto: {
-      resourceId?: string;
-      guestName: string;
-      guestEmail?: string;
-      guestPhone?: string;
-      partySize?: number;
-      desiredStartsAt: string;
-      desiredEndsAt: string;
-      note?: string;
-    },
+    @Body() dto: PublicWaitlistInput,
+    @Req() req: Request,
+    @Headers(CAPTCHA_TOKEN_HEADER) captchaHeader?: string,
   ) {
+    await this.assertBookingCaptcha(req, dto.captchaToken, captchaHeader);
+    this.assertRequiredContact(dto);
     const shop = await this.requirePublishedShop(slug);
-    if (!dto.guestName?.trim()) throw new BadRequestException('Guest name is required.');
+    if (!dto.guestName?.trim()) {
+      throw new BadRequestException('Guest name is required.');
+    }
     const desiredStartsAt = new Date(dto.desiredStartsAt);
     const desiredEndsAt = new Date(dto.desiredEndsAt);
     if (
