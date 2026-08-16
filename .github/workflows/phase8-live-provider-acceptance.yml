@@ -1,0 +1,89 @@
+name: Phase 8 live provider acceptance
+
+on:
+  push:
+    branches: [phase8/live-provider-acceptance]
+
+permissions:
+  contents: read
+
+jobs:
+  prepare-live-checkout:
+    name: Prepare real reservation deposit checkout
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Create production acceptance reservation and Checkout
+        shell: bash
+        env:
+          BASE_URL: https://www.gospots.eu/api/v1
+          VENUE_SLUG: neon-billiard
+          STARTS_AT: '2026-08-18T12:00:00.000Z'
+          ENDS_AT: '2026-08-18T13:00:00.000Z'
+        run: |
+          set -euo pipefail
+
+          capacity=$(curl -fsS \
+            "$BASE_URL/growth/public/$VENUE_SLUG/capacity?startsAt=2026-08-18T12%3A00%3A00.000Z&endsAt=2026-08-18T13%3A00%3A00.000Z&partySize=2")
+          test "$(jq '.available | length' <<<"$capacity")" -gt 0
+
+          booking_payload=$(jq -nc \
+            --arg startsAt "$STARTS_AT" \
+            --arg endsAt "$ENDS_AT" \
+            '{startsAt:$startsAt,endsAt:$endsAt,partySize:2,guestName:"PHASE 8 LIVE PROVIDER ACCEPTANCE",guestEmail:"phase8-acceptance@gospots.invalid",notes:"Controlled refundable Phase 8 production provider acceptance"}')
+          booking=$(curl -fsS -X POST \
+            -H 'content-type: application/json' \
+            --data "$booking_payload" \
+            "$BASE_URL/growth/public/$VENUE_SLUG/reservations")
+
+          reservation_id=$(jq -r '.reservations[0].reservationId // empty' <<<"$booking")
+          guest_token=$(jq -r '.reservations[0].guestToken // empty' <<<"$booking")
+          test -n "$reservation_id"
+          test -n "$guest_token"
+          echo "::add-mask::$guest_token"
+
+          encoded_token=$(python3 - <<'PY' "$guest_token"
+          import sys, urllib.parse
+          print(urllib.parse.quote(sys.argv[1], safe=''))
+          PY
+          )
+          deposit_status=$(curl -fsS \
+            "$BASE_URL/public/growth/$VENUE_SLUG/reservations/$reservation_id/deposit?token=$encoded_token")
+          required_minor=$(jq -r '.requiredMinor // -1' <<<"$deposit_status")
+          currency=$(jq -r '.currency // empty' <<<"$deposit_status")
+          test "$required_minor" = "500"
+          test "$currency" = "PLN"
+
+          checkout_payload=$(jq -nc --arg token "$guest_token" '{token:$token}')
+          checkout=$(curl -fsS -X POST \
+            -H 'content-type: application/json' \
+            --data "$checkout_payload" \
+            "$BASE_URL/public/growth/$VENUE_SLUG/reservations/$reservation_id/deposit/checkout")
+          checkout_url=$(jq -r '.checkoutUrl // empty' <<<"$checkout")
+          session_id=$(jq -r '.checkoutSessionId // empty' <<<"$checkout")
+          test -n "$checkout_url"
+          test -n "$session_id"
+          echo "::add-mask::$checkout_url"
+
+          jq -nc \
+            --arg reservationId "$reservation_id" \
+            --arg guestToken "$guest_token" \
+            --arg checkoutUrl "$checkout_url" \
+            --arg checkoutSessionId "$session_id" \
+            --arg currency "$currency" \
+            --argjson requiredMinor "$required_minor" \
+            '{reservationId:$reservationId,guestToken:$guestToken,checkoutUrl:$checkoutUrl,checkoutSessionId:$checkoutSessionId,currency:$currency,requiredMinor:$requiredMinor}' \
+            > "$RUNNER_TEMP/phase8-live-provider.json"
+          chmod 600 "$RUNNER_TEMP/phase8-live-provider.json"
+
+          echo "reservation_id=$reservation_id" >> "$GITHUB_STEP_SUMMARY"
+          echo "checkout_session_id=$session_id" >> "$GITHUB_STEP_SUMMARY"
+          echo "amount=5.00 PLN refundable acceptance payment" >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Preserve acceptance handoff securely
+        uses: actions/upload-artifact@v4
+        with:
+          name: phase8-live-provider-acceptance-${{ github.run_id }}
+          path: ${{ runner.temp }}/phase8-live-provider.json
+          if-no-files-found: error
+          retention-days: 1
