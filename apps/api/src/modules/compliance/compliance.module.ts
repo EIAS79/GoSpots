@@ -11,6 +11,7 @@ import { SimulatedFiscalConnector } from './fiscal/simulated-fiscal.connector';
 import { Fa3BuilderService } from './ksef/fa3-builder.service';
 import { KsefClientService } from './ksef/ksef-client.service';
 import { KsefCryptoService } from './ksef/ksef-crypto.service';
+import { KsefSpecialModeService } from './ksef/ksef-special-mode.service';
 import { PolandComplianceAdapter } from './poland-compliance.adapter';
 
 @Module({
@@ -28,12 +29,14 @@ import { PolandComplianceAdapter } from './poland-compliance.adapter';
     Fa3BuilderService,
     KsefCryptoService,
     KsefClientService,
+    KsefSpecialModeService,
   ],
   exports: [
     ComplianceService,
     ComplianceProfileService,
     FiscalDocumentService,
     FiscalizationService,
+    KsefSpecialModeService,
     PolandComplianceAdapter,
   ],
 })
