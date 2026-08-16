@@ -58,38 +58,56 @@ model MenuServiceModePolicy {
   @@index([shopId, serviceMode, enabled])
 }
 
+/// Restaurant-facing presentation and stock-restock metadata. MenuItem remains catalog truth.
+model RestaurantMenuPresentation {
+  id                String   @id @default(cuid())
+  shopId            String
+  menuItemId        String
+  customerName      String?
+  kitchenName       String?
+  expectedRestockAt DateTime?
+  updatedById       String?
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+
+  @@unique([shopId, menuItemId])
+  @@index([shopId, expectedRestockAt])
+}
+
 model MenuModifierAvailability {
-  id          String   @id @default(cuid())
-  shopId      String
-  modifierId  String
-  available   Boolean  @default(true)
-  reason      String?
-  updatedById String?
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
+  id                String   @id @default(cuid())
+  shopId            String
+  modifierId        String
+  available         Boolean  @default(true)
+  reason            String?
+  expectedRestockAt DateTime?
+  updatedById       String?
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
 
   @@unique([shopId, modifierId])
   @@index([shopId, available])
+  @@index([shopId, expectedRestockAt])
 }
 
 model RestaurantOrderOps {
-  id                String                   @id @default(cuid())
-  shopId            String
-  orderId           String                   @unique
-  lifecycle         RestaurantOrderLifecycle @default(DRAFT)
-  origin            RestaurantOrderOrigin    @default(STAFF)
-  displayNumber     String
-  prepQuoteMinutes  Int?
-  pickupStatus      RestaurantPickupStatus   @default(NOT_APPLICABLE)
-  tabStatus         RestaurantTabStatus      @default(NONE)
-  tabName           String?
+  id                 String                   @id @default(cuid())
+  shopId             String
+  orderId            String                   @unique
+  lifecycle          RestaurantOrderLifecycle @default(DRAFT)
+  origin             RestaurantOrderOrigin    @default(STAFF)
+  displayNumber      String
+  prepQuoteMinutes   Int?
+  pickupStatus       RestaurantPickupStatus   @default(NOT_APPLICABLE)
+  tabStatus          RestaurantTabStatus      @default(NONE)
+  tabName            String?
   preauthOperationId String?
-  currentResourceId String?
-  version           Int                      @default(1)
-  createdById       String?
-  updatedById       String?
-  createdAt         DateTime                 @default(now())
-  updatedAt         DateTime                 @updatedAt
+  currentResourceId  String?
+  version            Int                      @default(1)
+  createdById        String?
+  updatedById        String?
+  createdAt          DateTime                 @default(now())
+  updatedAt          DateTime                 @updatedAt
 
   @@unique([shopId, displayNumber])
   @@index([shopId, lifecycle, updatedAt])
@@ -98,19 +116,19 @@ model RestaurantOrderOps {
 }
 
 model RestaurantOrderLineOps {
-  id          String              @id @default(cuid())
-  shopId      String
-  orderId     String
-  orderLineId String              @unique
-  courseNumber Int                @default(1)
-  fireState   RestaurantFireState @default(HOLD)
-  priority    Int                 @default(0)
-  rush        Boolean             @default(false)
-  firedAt     DateTime?
-  servedAt    DateTime?
-  updatedById String?
-  createdAt   DateTime            @default(now())
-  updatedAt   DateTime            @updatedAt
+  id           String              @id @default(cuid())
+  shopId       String
+  orderId      String
+  orderLineId  String              @unique
+  courseNumber Int                 @default(1)
+  fireState    RestaurantFireState @default(HOLD)
+  priority     Int                 @default(0)
+  rush         Boolean             @default(false)
+  firedAt      DateTime?
+  servedAt     DateTime?
+  updatedById  String?
+  createdAt    DateTime            @default(now())
+  updatedAt    DateTime            @updatedAt
 
   @@index([shopId, orderId, courseNumber, fireState])
 }
@@ -157,34 +175,48 @@ model PrepStationGroupMember {
   @@index([shopId, stationId])
 }
 
+model PrepStationTimerPolicy {
+  id          String   @id @default(cuid())
+  shopId      String
+  stationId   String
+  warningPct  Int      @default(75)
+  overduePct  Int      @default(100)
+  updatedById String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@unique([shopId, stationId])
+  @@index([shopId, stationId])
+}
+
 model PrepTicketControl {
-  id             String   @id @default(cuid())
-  shopId         String
-  ticketId       String   @unique
-  acknowledgedAt DateTime?
+  id               String   @id @default(cuid())
+  shopId           String
+  ticketId         String   @unique
+  acknowledgedAt   DateTime?
   acknowledgedById String?
-  recalledAt     DateTime?
-  recalledById   String?
-  priority       Int      @default(0)
-  rush           Boolean  @default(false)
-  held           Boolean  @default(false)
-  holdUntil      DateTime?
-  firedAt        DateTime?
-  updatedAt      DateTime @updatedAt
-  createdAt      DateTime @default(now())
+  recalledAt       DateTime?
+  recalledById     String?
+  priority         Int      @default(0)
+  rush             Boolean  @default(false)
+  held             Boolean  @default(false)
+  holdUntil        DateTime?
+  firedAt          DateTime?
+  updatedAt        DateTime @updatedAt
+  createdAt        DateTime @default(now())
 
   @@index([shopId, rush, priority, updatedAt])
 }
 
 model RestaurantPrinterRoute {
-  id                String   @id @default(cuid())
-  shopId            String
-  stationId         String
-  printerKey        String
+  id                 String   @id @default(cuid())
+  shopId             String
+  stationId          String
+  printerKey         String
   fallbackPrinterKey String?
-  active            Boolean  @default(true)
-  createdAt         DateTime @default(now())
-  updatedAt         DateTime @updatedAt
+  active             Boolean  @default(true)
+  createdAt          DateTime @default(now())
+  updatedAt          DateTime @updatedAt
 
   @@unique([shopId, stationId])
   @@index([shopId, active])
@@ -212,19 +244,23 @@ model RestaurantPrinterJob {
   @@index([shopId, ticketId])
 }
 
+/// Stored token is hash-only. One table token owns one open GuestCheck so repeated QR ordering
+/// stays in the same canonical commercial pipeline until the token is rotated/revoked.
 model QrTableOrderToken {
-  id          String   @id @default(cuid())
-  shopId      String
-  resourceId  String
-  tokenHash   String   @unique
-  expiresAt   DateTime
-  maxUses     Int      @default(20)
-  useCount    Int      @default(0)
-  lastUsedAt  DateTime?
-  revokedAt   DateTime?
-  createdById String
-  createdAt   DateTime @default(now())
+  id           String   @id @default(cuid())
+  shopId       String
+  resourceId   String
+  guestCheckId String?
+  tokenHash    String   @unique
+  expiresAt    DateTime
+  maxUses      Int      @default(20)
+  useCount     Int      @default(0)
+  lastUsedAt   DateTime?
+  revokedAt    DateTime?
+  createdById  String
+  createdAt    DateTime @default(now())
 
   @@index([shopId, resourceId, expiresAt])
+  @@index([shopId, guestCheckId])
   @@index([shopId, revokedAt])
 }
