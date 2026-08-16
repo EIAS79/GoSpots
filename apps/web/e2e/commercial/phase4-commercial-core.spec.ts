@@ -116,8 +116,11 @@ test('@smoke P4 commercial core exposes one controlled tab and settlement flow',
   });
 
   const guard = await api<any>(page, 'GET', '/commercial/day-close/open-tab-guard');
-  expect(guard.allowed).toBe(false);
+  expect(guard.openTabCount).toBeGreaterThan(0);
   expect(guard.openChecks.some((row: any) => row.id === check.id)).toBeTruthy();
+  expect(guard.policyAllowsOpenTabs).toBe(false);
+  expect(guard.allowed).toBe(true);
+  expect(guard.managerOverrideAvailable).toBe(true);
 
   const { settlement, state } = await settleAndSplit(page, check.id, ['MANUAL_CARD', 'OTHER']);
   const paid = state.payments.reduce((sum: number, payment: any) => sum + Number(payment.amount), 0);
