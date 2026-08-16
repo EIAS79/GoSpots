@@ -10,7 +10,7 @@ jobs:
   inventory:
     name: Inventory · purchasing · costing gate
     runs-on: ubuntu-latest
-    timeout-minutes: 30
+    timeout-minutes: 35
     services:
       postgres:
         image: postgres:17
@@ -30,16 +30,34 @@ jobs:
       - name: Generate Prisma client
         working-directory: apps/api
         run: pnpm exec prisma generate
+      - name: Representative historical upgrade migration
+        working-directory: apps/api
+        shell: bash
+        run: |
+          set -euo pipefail
+          MIGRATION='prisma/migrations/20260816090000_phase7_inventory_completion'
+          HOLD='/tmp/phase7_inventory_completion_migration'
+          mv "$MIGRATION" "$HOLD"
+          trap 'test -d "$HOLD" && mv "$HOLD" "$MIGRATION" || true' EXIT
+          pnpm exec prisma migrate deploy
+          pnpm exec tsx prisma/phase7-preupgrade-seed.ts
+          mv "$HOLD" "$MIGRATION"
+          trap - EXIT
+          pnpm exec prisma migrate deploy
+          pnpm exec tsx prisma/phase7-upgrade-assert.ts
       - name: Clean PostgreSQL migration and schema validation
         working-directory: apps/api
         run: |
           set -euo pipefail
-          pnpm exec prisma migrate deploy
+          pnpm exec prisma migrate reset --force --skip-seed
           pnpm exec prisma migrate status
           pnpm exec prisma validate
-      - name: Phase 7 DB and immutable-movement pilot
+      - name: Phase 7 DB integrity assertion
         working-directory: apps/api
         run: pnpm exec tsx prisma/phase7-inventory-assert.ts
+      - name: Full Phase 7 operational inventory pilot
+        working-directory: apps/api
+        run: pnpm exec tsx prisma/phase7-operational-pilot.ts
       - name: Phase 7 unit and integrity tests
         working-directory: apps/api
         run: pnpm exec jest --config jest.config.cjs --runInBand src/modules/inventory-v2/inventory-phase7.service.spec.ts src/modules/inventory-v2/inventory-v2.service.spec.ts
