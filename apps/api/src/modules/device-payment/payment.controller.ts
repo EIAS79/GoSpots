@@ -13,6 +13,7 @@ import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import type { JwtAccessPayload } from '../auth/auth.service';
 import { PaymentConnectorRegistry } from './connectors/payment-connector.registry';
 import { CreateProviderRefundDto, StartProviderPaymentDto } from './dto/payment.dto';
+import { MoneyOperationsService } from './money-operations.service';
 import { PaymentDomainService } from './payment-domain.service';
 
 @ApiTags('payments')
@@ -22,6 +23,7 @@ export class PaymentController {
   constructor(
     private readonly payments: PaymentDomainService,
     private readonly connectors: PaymentConnectorRegistry,
+    private readonly money: MoneyOperationsService,
   ) {}
 
   @Get('providers')
@@ -29,11 +31,17 @@ export class PaymentController {
     const providers = await Promise.all(
       this.connectors.providers().map(async (provider) => {
         const connector = this.connectors.resolve(provider);
-        return {
-          provider,
-          capabilities: await connector.capabilities(),
-          health: await connector.health(),
-        };
+        const capabilities = await connector.capabilities();
+        const health = await connector.health();
+        const readiness = connector.readiness
+          ? await connector.readiness()
+          : {
+              ready: Boolean(health.ok && capabilities.payments),
+              ok: health.ok,
+              checkedAt: new Date().toISOString(),
+              message: health.message,
+            };
+        return { provider, capabilities, health, readiness };
       }),
     );
     return { providers };
@@ -70,6 +78,7 @@ export class PaymentController {
     @Body() dto: CreateProviderRefundDto,
     @Headers('idempotency-key') idempotencyKey?: string,
   ) {
+    this.money.assertRefundAuthorized(user);
     return this.payments.createRefund(user, id, dto, idempotencyKey);
   }
 }
