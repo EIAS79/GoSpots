@@ -94,7 +94,6 @@ describe('KsefSpecialModeService', () => {
   it('does not allow deferred submission linking for total-failure records', async () => {
     const h = harness();
     h.prisma.ksefSpecialModeRecord.findFirst.mockResolvedValue({
-      ...h.prisma.ksefSpecialModeRecord.findFirst(),
       id: 'special-total',
       shopId: 'shop-1',
       documentId: 'doc-1',
