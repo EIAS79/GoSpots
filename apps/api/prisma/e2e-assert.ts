@@ -6,11 +6,6 @@ function invariant(condition: unknown, message: string): asserts condition {
   if (!condition) throw new Error(`Browser E2E database assertion failed: ${message}`);
 }
 
-function ledgerDualWriteEnabled() {
-  const value = process.env.LEDGER_DUAL_WRITE?.trim().toLowerCase();
-  return value === '1' || value === 'true' || value === 'on' || value === 'yes';
-}
-
 async function assertClosedCheck(label: string) {
   const check = await prisma.guestCheck.findFirst({
     where: { label },
@@ -39,19 +34,36 @@ async function assertClosedCheck(label: string) {
 async function main() {
   const gaming = await assertClosedCheck('E2E Gaming Golden');
   invariant(gaming.settlement.payments.length === 2, 'gaming split did not create exactly two payment rows');
-  const sourceIds = [
-    ...gaming.check.shopOrders.map((row) => row.id),
-    ...gaming.check.playSessions.map((row) => row.id),
-    ...gaming.check.reservations.map((row) => row.id),
-  ];
-  const ledgerRows = await prisma.ledgerEntry.findMany({
-    where: { shopId: gaming.check.shopId, sourceId: { in: sourceIds } },
+
+  // Phase 4 makes LedgerEntry the canonical monetary authority. The old
+  // LEDGER_DUAL_WRITE feature flag no longer controls whether revenue facts
+  // are written. Prove that the browser golden path produced one durable SALE
+  // fact for each common gaming revenue source, with GuestCheck lineage.
+  const gamingSaleFacts = await prisma.ledgerFactMetadata.findMany({
+    where: {
+      shopId: gaming.check.shopId,
+      guestCheckId: gaming.check.id,
+      factType: 'SALE',
+      referenceType: { in: ['SHOP_ORDER', 'PLAY_SESSION', 'OPERATIONS_SESSION'] },
+    },
+    include: { ledgerEntry: true },
   });
-  if (ledgerDualWriteEnabled()) {
-    invariant(ledgerRows.length >= 2, 'enabled ledger dual-write did not represent gaming financial sources');
-  } else {
-    invariant(ledgerRows.length === 0, 'ledger rows were written while LEDGER_DUAL_WRITE is disabled');
+  for (const referenceType of ['SHOP_ORDER', 'PLAY_SESSION', 'OPERATIONS_SESSION'] as const) {
+    const facts = gamingSaleFacts.filter((fact) => fact.referenceType === referenceType);
+    invariant(facts.length === 1, `gaming ${referenceType} did not produce exactly one canonical SALE fact`);
+    invariant(facts[0].ledgerEntry.kind === 'SALE', `gaming ${referenceType} ledger kind is not SALE`);
+    invariant(facts[0].ledgerEntry.guestCheckId === gaming.check.id, `gaming ${referenceType} ledger fact lost GuestCheck lineage`);
   }
+  const duplicateGamingLedgerKeys = await prisma.$queryRaw<Array<{ count: bigint }>>`
+    SELECT COUNT(*)::bigint AS count FROM (
+      SELECT "shopId","sourceType","sourceId","kind",COUNT(*)
+      FROM "LedgerEntry"
+      WHERE "shopId"=${gaming.check.shopId}
+      GROUP BY "shopId","sourceType","sourceId","kind"
+      HAVING COUNT(*) > 1
+    ) duplicates
+  `;
+  invariant(Number(duplicateGamingLedgerKeys[0]?.count ?? 0) === 0, 'gaming path created duplicate canonical ledger source keys');
 
   await assertClosedCheck('E2E Restaurant Golden');
   const restaurantTicket = await prisma.prepTicket.findFirst({
