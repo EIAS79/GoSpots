@@ -84,3 +84,22 @@ CREATE INDEX "FinancialReconciliationIssue_runId_type_idx"
   ON "FinancialReconciliationIssue"("runId", "type");
 CREATE INDEX "FinancialReconciliationIssue_shopId_entityType_entityId_idx"
   ON "FinancialReconciliationIssue"("shopId", "entityType", "entityId");
+
+-- Tenant isolation is enforced in the database as well as in application services.
+ALTER TABLE "OfflinePaymentPolicy" ENABLE ROW LEVEL SECURITY;
+ALTER TABLE "OfflinePaymentPolicy" FORCE ROW LEVEL SECURITY;
+CREATE POLICY "OfflinePaymentPolicy_tenant_policy" ON "OfflinePaymentPolicy"
+  USING (app_tenant_rls_ok("shopId"))
+  WITH CHECK (app_tenant_rls_ok("shopId"));
+
+ALTER TABLE "FinancialReconciliationRun" ENABLE ROW LEVEL SECURITY;
+ALTER TABLE "FinancialReconciliationRun" FORCE ROW LEVEL SECURITY;
+CREATE POLICY "FinancialReconciliationRun_tenant_policy" ON "FinancialReconciliationRun"
+  USING (app_tenant_rls_ok("shopId"))
+  WITH CHECK (app_tenant_rls_ok("shopId"));
+
+ALTER TABLE "FinancialReconciliationIssue" ENABLE ROW LEVEL SECURITY;
+ALTER TABLE "FinancialReconciliationIssue" FORCE ROW LEVEL SECURITY;
+CREATE POLICY "FinancialReconciliationIssue_tenant_policy" ON "FinancialReconciliationIssue"
+  USING (app_tenant_rls_ok("shopId"))
+  WITH CHECK (app_tenant_rls_ok("shopId"));
