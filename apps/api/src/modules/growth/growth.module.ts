@@ -1,4 +1,5 @@
 import { Module } from '@nestjs/common';
+import { APP_INTERCEPTOR } from '@nestjs/core';
 import { GuestCheckModule } from '../guest-check/guest-check.module';
 import { CommerceGrowthService } from './commerce-growth.service';
 import { EventsGrowthService } from './events-growth.service';
@@ -15,6 +16,7 @@ import { GrowthController } from './growth.controller';
 import { Phase8ReservationController } from './phase8-reservation.controller';
 import { Phase8ReservationService } from './phase8-reservation.service';
 import { ReservationGrowthService } from './reservation-growth.service';
+import { ReservationStripeWebhookRoutingInterceptor } from './reservation-stripe-webhook-routing.interceptor';
 
 @Module({
   imports: [GuestCheckModule],
@@ -36,6 +38,10 @@ import { ReservationGrowthService } from './reservation-growth.service';
     GrowthAnalyticsService,
     GrowthPublicDepositService,
     Phase8ReservationService,
+    {
+      provide: APP_INTERCEPTOR,
+      useClass: ReservationStripeWebhookRoutingInterceptor,
+    },
   ],
   exports: [
     ReservationGrowthService,
