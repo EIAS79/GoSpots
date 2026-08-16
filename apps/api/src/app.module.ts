@@ -56,6 +56,7 @@ import { PublicModule } from './modules/public/public.module';
 import { ReliabilityModule } from './modules/reliability/reliability.module';
 import { ReservationsModule } from './modules/reservations/reservations.module';
 import { ResourcesModule } from './modules/resources/resources.module';
+import { RestaurantOperationsModule } from './modules/restaurant-operations/restaurant-operations.module';
 import { ShopModule } from './modules/shop/shop.module';
 import { StaffApprovalsModule } from './modules/staff-approvals/staff-approvals.module';
 import { StaffModule } from './modules/staff/staff.module';
@@ -64,24 +65,14 @@ import { WorkforceModule } from './modules/workforce/workforce.module';
 
 @Module({
   imports: [
-    ConfigModule.forRoot({
-      isGlobal: true,
-      envFilePath: ['.env.local', '.env'],
-    }),
+    ConfigModule.forRoot({ isGlobal: true, envFilePath: ['.env.local', '.env'] }),
     ThrottlerModule.forRootAsync({
       inject: [ConfigService],
       useFactory: (config: ConfigService) => {
-        const ttl = parsePositiveInt(
-          config.get<string>('THROTTLE_TTL_MS'),
-          60000,
-        );
-        const limit = parsePositiveInt(
-          config.get<string>('THROTTLE_GLOBAL_LIMIT'),
-          100,
-        );
+        const ttl = parsePositiveInt(config.get<string>('THROTTLE_TTL_MS'), 60000);
+        const limit = parsePositiveInt(config.get<string>('THROTTLE_GLOBAL_LIMIT'), 100);
         return {
-          skipIf: () =>
-            isThrottleDisabled(config.get<string>('THROTTLE_DISABLED')),
+          skipIf: () => isThrottleDisabled(config.get<string>('THROTTLE_DISABLED')),
           throttlers: [{ name: 'default', ttl, limit }],
         };
       },
@@ -120,6 +111,7 @@ import { WorkforceModule } from './modules/workforce/workforce.module';
     OperationsModule,
     OrderingModule,
     KitchenModule,
+    RestaurantOperationsModule,
     InventoryV2Module,
     WorkforceModule,
     GrowthModule,
