@@ -1,0 +1,73 @@
+name: Phase 7 inventory validation
+on:
+  push:
+    branches: [main, master]
+  pull_request:
+concurrency:
+  group: phase7-inventory-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+jobs:
+  inventory:
+    name: Inventory · purchasing · costing gate
+    runs-on: ubuntu-latest
+    timeout-minutes: 35
+    services:
+      postgres:
+        image: postgres:17
+        env: { POSTGRES_USER: ci, POSTGRES_PASSWORD: ci, POSTGRES_DB: phase7_ci }
+        ports: [5432:5432]
+        options: >-
+          --health-cmd "pg_isready -U ci -d phase7_ci" --health-interval 10s --health-timeout 5s --health-retries 5
+    env:
+      DATABASE_URL: postgresql://ci:ci@localhost:5432/phase7_ci?schema=public
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+        with: { version: 10.12.1 }
+      - uses: actions/setup-node@v4
+        with: { node-version: '24', cache: pnpm, cache-dependency-path: pnpm-lock.yaml }
+      - run: pnpm install --frozen-lockfile
+      - name: Generate Prisma client
+        working-directory: apps/api
+        run: pnpm exec prisma generate
+      - name: Representative historical upgrade migration
+        working-directory: apps/api
+        shell: bash
+        run: |
+          set -euo pipefail
+          MIGRATION='prisma/migrations/20260816090000_phase7_inventory_completion'
+          HOLD='/tmp/phase7_inventory_completion_migration'
+          mv "$MIGRATION" "$HOLD"
+          trap 'test -d "$HOLD" && mv "$HOLD" "$MIGRATION" || true' EXIT
+          pnpm exec prisma migrate deploy
+          pnpm exec tsx prisma/phase7-preupgrade-seed.ts
+          mv "$HOLD" "$MIGRATION"
+          trap - EXIT
+          pnpm exec prisma migrate deploy
+          pnpm exec tsx prisma/phase7-upgrade-assert.ts
+      - name: Clean PostgreSQL migration and schema validation
+        working-directory: apps/api
+        run: |
+          set -euo pipefail
+          pnpm exec prisma migrate reset --force --skip-seed
+          pnpm exec prisma migrate status
+          pnpm exec prisma validate
+      - name: Phase 7 DB integrity assertion
+        working-directory: apps/api
+        run: pnpm exec tsx prisma/phase7-inventory-assert.ts
+      - name: Full Phase 7 operational inventory pilot
+        working-directory: apps/api
+        run: pnpm exec tsx prisma/phase7-operational-pilot.ts
+      - name: Phase 7 unit and integrity tests
+        working-directory: apps/api
+        run: pnpm exec jest --config jest.config.cjs --runInBand src/modules/inventory-v2/inventory-phase7.service.spec.ts src/modules/inventory-v2/inventory-v2.service.spec.ts
+      - name: API build
+        working-directory: apps/api
+        run: pnpm run build
+      - name: Web build
+        working-directory: apps/web
+        env:
+          GOSPOTS_E2E_DB: 'true'
+          NEXT_PUBLIC_API_BASE_URL: /api/v1
+          API_PROXY_TARGET: http://127.0.0.1:4000
+        run: pnpm run build

@@ -1,169 +1,227 @@
-// Chunk 14 — Inventory, Recipes and Purchasing
+// Phase 7 — Inventory, Recipes, Purchasing and Costing.
+// StockMovement is the canonical append-only inventory ledger.
 model InventoryProfile {
-  id             String   @id @default(cuid())
-  shopId         String   @unique
-  enabled        Boolean  @default(false)
-  legacyDualMode Boolean  @default(true)
-  createdAt      DateTime @default(now())
-  updatedAt      DateTime @updatedAt
+  id                          String   @id @default(cuid())
+  shopId                      String   @unique
+  enabled                     Boolean  @default(false)
+  legacyDualMode              Boolean  @default(true)
+  negativeStockPolicy         String   @default("BLOCK")
+  costingMethod               String   @default("WEIGHTED_AVERAGE")
+  restockOnRefund             Boolean  @default(true)
+  wasteApprovalThresholdMinor Int      @default(0)
+  createdAt                   DateTime @default(now())
+  updatedAt                   DateTime @updatedAt
 }
 model InventoryLocation {
-  id        String   @id @default(cuid())
-  shopId    String
-  name      String
-  active    Boolean  @default(true)
+  id String @id @default(cuid())
+  shopId String
+  name String
+  active Boolean @default(true)
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
   @@unique([shopId,name])
   @@index([shopId,active])
 }
 model StockCategory {
-  id        String   @id @default(cuid())
-  shopId    String
-  name      String
+  id String @id @default(cuid())
+  shopId String
+  name String
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
   @@unique([shopId,name])
 }
 model StockItem {
-  id                       String   @id @default(cuid())
-  shopId                   String
-  categoryId               String?
-  sku                      String?
-  name                     String
-  unit                     String   @default("unit")
-  weightedAverageCostMinor Int      @default(0)
-  active                   Boolean  @default(true)
-  createdAt                DateTime @default(now())
-  updatedAt                DateTime @updatedAt
+  id String @id @default(cuid())
+  shopId String
+  categoryId String?
+  sku String?
+  name String
+  unit String @default("unit")
+  purchaseUnit String?
+  purchaseToInventoryFactorMilli Int @default(1000)
+  defaultLocationId String?
+  reorderLevelMilli Int @default(0)
+  preferredSupplierId String?
+  purchaseTaxCode String?
+  purchaseTaxRateBps Int?
+  weightedAverageCostMinor Int @default(0)
+  latestPurchaseCostMinor Int @default(0)
+  negativeStockAllowed Boolean @default(false)
+  active Boolean @default(true)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
   @@unique([shopId,sku])
   @@index([shopId,active,name])
+  @@index([shopId,preferredSupplierId])
+  @@index([shopId,defaultLocationId])
 }
 model Supplier {
-  id        String   @id @default(cuid())
-  shopId    String
-  name      String
-  email     String?
-  phone     String?
-  active    Boolean  @default(true)
+  id String @id @default(cuid())
+  shopId String
+  name String
+  legalName String?
+  displayName String?
+  taxIdentifier String?
+  paymentTerms String?
+  leadTimeDays Int?
+  contactName String?
+  email String?
+  phone String?
+  active Boolean @default(true)
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
   @@index([shopId,active,name])
+  @@index([shopId,taxIdentifier])
 }
 model Recipe {
-  id         String   @id @default(cuid())
-  shopId     String
-  key        String
-  name       String
+  id String @id @default(cuid())
+  shopId String
+  key String
+  name String
   menuItemId String?
-  yieldMilli Int      @default(1000)
-  active     Boolean  @default(true)
-  createdAt  DateTime @default(now())
-  updatedAt  DateTime @updatedAt
+  yieldMilli Int @default(1000)
+  version Int @default(1)
+  active Boolean @default(true)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
   @@unique([shopId,key])
   @@index([shopId,menuItemId,active])
 }
 model RecipeComponent {
-  id            String @id @default(cuid())
-  shopId        String
-  recipeId      String
-  stockItemId   String
+  id String @id @default(cuid())
+  shopId String
+  recipeId String
+  stockItemId String
   quantityMilli Int
   @@unique([shopId,recipeId,stockItemId])
   @@index([shopId,stockItemId])
 }
 model StockMovement {
-  id                String   @id @default(cuid())
-  shopId            String
-  stockItemId       String
-  locationId        String
-  kind               String
-  quantityMilli      Int
-  unitCostMinor      Int
-  totalCostMinor     Int
-  referenceType      String?
-  referenceId        String?
-  movementKey        String   @unique
-  note               String?
-  actorUserId        String
-  occurredAt         DateTime @default(now())
-  createdAt          DateTime @default(now())
+  id String @id @default(cuid())
+  shopId String
+  stockItemId String
+  locationId String
+  kind String
+  quantityMilli Int
+  unitCostMinor Int
+  totalCostMinor Int
+  referenceType String?
+  referenceId String?
+  movementKey String @unique
+  reasonCode String?
+  approvalRef String?
+  attachmentUrl String?
+  note String?
+  actorUserId String
+  occurredAt DateTime @default(now())
+  createdAt DateTime @default(now())
   @@index([shopId,stockItemId,locationId,occurredAt])
   @@index([shopId,kind,occurredAt])
   @@index([shopId,referenceType,referenceId])
 }
 model PurchaseOrder {
-  id          String   @id @default(cuid())
-  shopId      String
-  supplierId  String
-  locationId  String
-  status      String   @default("DRAFT")
-  orderedAt   DateTime?
-  closedAt    DateTime?
+  id String @id @default(cuid())
+  shopId String
+  supplierId String
+  locationId String
+  status String @default("DRAFT")
+  orderedAt DateTime?
+  approvedAt DateTime?
+  approvedById String?
+  sentAt DateTime?
+  sentById String?
+  cancelledAt DateTime?
+  cancelledById String?
+  closedAt DateTime?
+  documentRef String?
   createdById String
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
   @@index([shopId,status,createdAt])
 }
 model PurchaseOrderLine {
-  id               String @id @default(cuid())
-  shopId           String
-  purchaseOrderId  String
-  stockItemId      String
-  orderedMilli     Int
-  unitCostMinor    Int
+  id String @id @default(cuid())
+  shopId String
+  purchaseOrderId String
+  stockItemId String
+  orderedMilli Int
+  orderedPurchaseMilli Int?
+  receivedMilli Int @default(0)
+  unitCostMinor Int
   @@index([shopId,purchaseOrderId])
 }
 model GoodsReceipt {
-  id              String   @id @default(cuid())
-  shopId          String
+  id String @id @default(cuid())
+  shopId String
   purchaseOrderId String?
-  supplierId      String?
-  locationId      String
-  receivedById    String
-  receivedAt      DateTime @default(now())
-  createdAt       DateTime @default(now())
+  supplierId String?
+  locationId String
+  idempotencyKey String?
+  invoiceRef String?
+  documentRef String?
+  receivedById String
+  receivedAt DateTime @default(now())
+  createdAt DateTime @default(now())
   @@index([shopId,purchaseOrderId,receivedAt])
 }
 model GoodsReceiptLine {
-  id             String @id @default(cuid())
-  shopId         String
+  id String @id @default(cuid())
+  shopId String
   goodsReceiptId String
-  stockItemId    String
-  quantityMilli  Int
-  unitCostMinor  Int
+  stockItemId String
+  purchaseQuantityMilli Int?
+  quantityMilli Int
+  damagedMilli Int @default(0)
+  unitCostMinor Int
+  lotBatch String?
+  expiresAt DateTime?
   @@index([shopId,goodsReceiptId])
 }
 model Stocktake {
-  id          String   @id @default(cuid())
-  shopId      String
-  locationId  String
-  status      String   @default("OPEN")
+  id String @id @default(cuid())
+  shopId String
+  locationId String
+  status String @default("OPEN")
   countedById String
-  postedAt    DateTime?
-  version     Int      @default(1)
-  createdAt   DateTime @default(now())
+  blindCount Boolean @default(false)
+  snapshotAt DateTime?
+  submittedAt DateTime?
+  approvedAt DateTime?
+  approvedById String?
+  postedAt DateTime?
+  version Int @default(1)
+  createdAt DateTime @default(now())
   @@index([shopId,locationId,status,createdAt])
 }
 model StocktakeLine {
-  id              String @id @default(cuid())
-  shopId          String
-  stocktakeId     String
-  stockItemId     String
-  countedMilli    Int
-  expectedMilli   Int
+  id String @id @default(cuid())
+  shopId String
+  stocktakeId String
+  stockItemId String
+  countedMilli Int
+  countedAt DateTime?
+  expectedMilli Int
   adjustmentMilli Int
   @@unique([shopId,stocktakeId,stockItemId])
 }
 model StockTransfer {
-  id             String   @id @default(cuid())
-  shopId         String
-  stockItemId    String
+  id String @id @default(cuid())
+  shopId String
+  stockItemId String
   fromLocationId String
-  toLocationId   String
-  quantityMilli  Int
-  actorUserId    String
-  transferredAt  DateTime @default(now())
-  createdAt      DateTime @default(now())
+  toLocationId String
+  quantityMilli Int
+  status String @default("IN_TRANSIT")
+  unitCostMinor Int @default(0)
+  receivedMilli Int @default(0)
+  damagedMilli Int @default(0)
+  missingMilli Int @default(0)
+  actorUserId String
+  receivedById String?
+  transferredAt DateTime @default(now())
+  receivedAt DateTime?
+  note String?
+  createdAt DateTime @default(now())
   @@index([shopId,stockItemId,transferredAt])
+  @@index([shopId,status,transferredAt])
 }
