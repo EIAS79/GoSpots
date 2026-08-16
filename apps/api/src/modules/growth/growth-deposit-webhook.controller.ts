@@ -7,8 +7,10 @@ import {
   type RawBodyRequest,
 } from '@nestjs/common';
 import type { Request } from 'express';
+import { Public } from '../auth/decorators/public.decorator';
 import { GrowthPublicDepositService } from './growth-public-deposit.service';
 
+@Public()
 @Controller('webhooks/stripe/reservation-deposits')
 export class GrowthDepositWebhookController {
   constructor(private readonly deposits: GrowthPublicDepositService) {}

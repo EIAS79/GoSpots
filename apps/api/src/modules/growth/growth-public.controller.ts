@@ -21,6 +21,7 @@ import {
 } from '../../common/captcha.util';
 import { publicThrottle } from '../../common/throttle.config';
 import { PrismaService } from '../../prisma/prisma.service';
+import { Public } from '../auth/decorators/public.decorator';
 import {
   type CapacityRequest,
   GrowthCapacityService,
@@ -45,6 +46,7 @@ type PublicWaitlistInput = {
 };
 
 @ApiTags('growth-public')
+@Public()
 @Controller('growth/public')
 export class GrowthPublicController {
   constructor(
