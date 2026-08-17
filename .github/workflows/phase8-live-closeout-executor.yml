@@ -1,0 +1,31 @@
+name: Phase 8 live closeout executor
+
+on:
+  push:
+    branches: [phase8/live-closeout-executor]
+
+permissions:
+  contents: read
+
+jobs:
+  reconcile:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Verify production return route
+        run: |
+          set -euo pipefail
+          code=$(curl -sS -o /tmp/return.html -w '%{http_code}' 'https://gospots.vercel.app/deposit-return?status=success')
+          echo "deposit_return_http=$code"
+          test "$code" = 200
+      - name: Reconcile existing paid Stripe Checkout twice
+        run: |
+          set -euo pipefail
+          endpoint='https://gospots.vercel.app/api/v1/public/growth/reservation-deposits/reconcile'
+          payload='{"sessionId":"cs_live_a13NfVGQRENMa9theCfpb6LToAgJDrpZ3Gv7z23mWb8gAD4yx7Mb51kuO4"}'
+          for n in 1 2; do
+            code=$(curl -sS -o "/tmp/reconcile-$n.json" -w '%{http_code}' -X POST "$endpoint" -H 'content-type: application/json' --data "$payload")
+            echo "reconcile_${n}_http=$code"
+            cat "/tmp/reconcile-$n.json"
+            echo
+            test "$code" = 200 -o "$code" = 201
+          done
