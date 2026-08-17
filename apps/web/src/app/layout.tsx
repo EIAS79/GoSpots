@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import { headers } from "next/headers";
 import { Geist, Geist_Mono } from "next/font/google";
+import { Analytics } from "@vercel/analytics/next";
 import { GoogleTagManager } from "@/components/analytics/google-tag-manager";
 import { PublicContactLinkTracker } from "@/components/analytics/public-contact-link-tracker";
 import { CookieConsent } from "@/components/consent/cookie-consent";
@@ -121,6 +122,7 @@ export default async function RootLayout({
           {children}
           <CookieConsent />
         </AppProviders>
+        <Analytics />
       </body>
     </html>
   );
