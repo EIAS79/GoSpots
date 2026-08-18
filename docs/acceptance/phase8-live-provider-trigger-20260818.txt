@@ -1,2 +1,0 @@
-Trigger the replay-safe Phase 8 live provider acceptance against production main after deployment d0522bc67a7c2b9406c99eff15f102f03d92ead1.
-Retry issued after canonical temporary rate-plan setup: 2026-08-18T00:42:00Z.
