@@ -2,8 +2,9 @@ name: Phase 8 live provider acceptance
 
 on:
   push:
-    branches:
-      - phase8/live-provider-acceptance-20260818
+    branches: [main]
+    paths:
+      - docs/acceptance/phase8-live-provider-trigger-20260818.txt
 
 permissions:
   contents: read
