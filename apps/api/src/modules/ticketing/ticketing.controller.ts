@@ -8,10 +8,7 @@ import {
   UseGuards,
 } from '@nestjs/common';
 import { ApiTags } from '@nestjs/swagger';
-import {
-  hashIdempotencyRequest,
-  withClientIdempotency,
-} from '../../common/idempotency.util';
+import { hashIdempotencyRequest, withClientIdempotency } from '../../common/idempotency.util';
 import { PERMISSIONS } from '../../common/permissions';
 import { PrismaService } from '../../prisma/prisma.service';
 import type { JwtAccessPayload } from '../auth/auth.service';
@@ -22,14 +19,20 @@ import { CapabilityService } from '../foundation/capability.service';
 import { FeatureFlagGuard } from '../foundation/feature-flag.guard';
 import { RequireFeature } from '../foundation/require-feature.decorator';
 import {
-  BindRfidCredentialDto,
-  CreateRfidWalletDto,
+  AccessScanDto,
+  AssignLockerDto,
+  BindAccessCredentialDto,
+  ConfigureAccessScannerDto,
+  CreateAccessRuleDto,
+  CreateAccessZoneDto,
+  CreateLockerDto,
   CreateTicketProductDto,
   IssueTicketOrderDto,
-  ReverseRfidEntryDto,
-  RfidTapDto,
-  RfidWalletMutationDto,
-  ScanTicketDto,
+  LockerEventDto,
+  OccupancyCorrectionDto,
+  ReleaseLockerDto,
+  StoredValueCredentialDto,
+  TicketMutationDto,
 } from './dto/ticketing.dto';
 import { TicketingService } from './ticketing.service';
 
@@ -46,10 +49,29 @@ export class TicketingController {
   ) {}
 
   private shopId(user: JwtAccessPayload): string {
-    if (!user.shopId) {
-      throw new BadRequestException('Venue context is required.');
-    }
+    if (!user.shopId) throw new BadRequestException('Venue context is required.');
     return user.shopId;
+  }
+
+  private idempotent<T>(
+    user: JwtAccessPayload,
+    scope: string,
+    key: string,
+    request: unknown,
+    run: () => Promise<T>,
+  ) {
+    return withClientIdempotency(
+      this.prisma,
+      {
+        shopId: this.shopId(user),
+        scope,
+        key,
+        requestHash: hashIdempotencyRequest(request),
+        correlationId: key,
+        requireKey: true,
+      },
+      run,
+    );
   }
 
   @Get()
@@ -58,159 +80,114 @@ export class TicketingController {
   }
 
   @Post('products')
-  createProduct(
-    @CurrentUser() user: JwtAccessPayload,
-    @Body() dto: CreateTicketProductDto,
-  ) {
+  createProduct(@CurrentUser() user: JwtAccessPayload, @Body() dto: CreateTicketProductDto) {
     return this.ticketing.createProduct(user, dto);
   }
 
   @Post('orders')
-  async issueOrder(
-    @CurrentUser() user: JwtAccessPayload,
-    @Body() dto: IssueTicketOrderDto,
-  ) {
-    const shopId = this.shopId(user);
-    let firstResponseRawTokens: string[] | undefined;
-    const result = await withClientIdempotency(
-      this.prisma,
-      {
-        shopId,
-        scope: 'ticketing.orders.issue',
-        key: dto.idempotencyKey,
-        requestHash: hashIdempotencyRequest(dto),
-      },
-      async () => {
-        const first = await this.ticketing.issueOrder(user, dto);
-        firstResponseRawTokens = first.replayed ? [] : first.rawTokens;
-        // Raw admission tokens are one-time secrets. Never persist them in the
-        // shared replay receipt; a replay receives the durable order/tickets only.
-        return { ...first, rawTokens: [] as string[] };
-      },
-    );
-    return firstResponseRawTokens === undefined
-      ? result
-      : { ...result, rawTokens: firstResponseRawTokens };
+  async issueOrder(@CurrentUser() user: JwtAccessPayload, @Body() dto: IssueTicketOrderDto) {
+    let firstRawTokens: string[] | undefined;
+    const result = await this.idempotent(user, 'ticketing.orders.fulfill', dto.idempotencyKey, dto, async () => {
+      const first = await this.ticketing.issueOrder(user, dto);
+      firstRawTokens = first.replayed ? [] : first.rawTokens;
+      return { ...first, rawTokens: [] as string[] };
+    });
+    return firstRawTokens === undefined ? result : { ...result, rawTokens: firstRawTokens };
   }
 
-  @Post('tickets/scan')
-  scan(
-    @CurrentUser() user: JwtAccessPayload,
-    @Body() dto: ScanTicketDto,
-  ) {
-    const shopId = this.shopId(user);
-    return withClientIdempotency(
-      this.prisma,
-      {
-        shopId,
-        scope: 'ticketing.tickets.scan',
-        key: dto.idempotencyKey,
-        requestHash: hashIdempotencyRequest(dto),
-      },
-      () => this.ticketing.scan(user, dto),
+  @Post('tickets/:id/cancel')
+  cancelTicket(@CurrentUser() user: JwtAccessPayload, @Param('id') id: string, @Body() dto: TicketMutationDto) {
+    return this.idempotent(user, 'ticketing.ticket.cancel', dto.idempotencyKey, { id, dto }, () =>
+      this.ticketing.cancelTicket(user, id, dto),
     );
   }
 
-  @Post('rfid/wallets')
-  createWallet(
-    @CurrentUser() user: JwtAccessPayload,
-    @Body() dto: CreateRfidWalletDto,
-  ) {
-    return this.ticketing.createWallet(user, dto);
+  @Post('tickets/:id/reissue')
+  async reissueTicket(@CurrentUser() user: JwtAccessPayload, @Param('id') id: string, @Body() dto: TicketMutationDto) {
+    let firstRawToken: string | null | undefined;
+    const result = await this.idempotent(user, 'ticketing.ticket.reissue', dto.idempotencyKey, { id, dto }, async () => {
+      const first = await this.ticketing.reissueTicket(user, id, dto);
+      firstRawToken = first.replayed ? null : first.rawToken;
+      return { ...first, rawToken: null as string | null };
+    });
+    return firstRawToken === undefined ? result : { ...result, rawToken: firstRawToken };
   }
 
-  @Post('rfid/credentials')
-  bindCredential(
+  @Post('zones')
+  createZone(@CurrentUser() user: JwtAccessPayload, @Body() dto: CreateAccessZoneDto) {
+    return this.ticketing.createZone(user, dto);
+  }
+
+  @Post('zones/:id/rules')
+  createRule(@CurrentUser() user: JwtAccessPayload, @Param('id') id: string, @Body() dto: CreateAccessRuleDto) {
+    return this.ticketing.createRule(user, id, dto);
+  }
+
+  @Post('scanners/:deviceId/configure')
+  configureScanner(
     @CurrentUser() user: JwtAccessPayload,
-    @Body() dto: BindRfidCredentialDto,
+    @Param('deviceId') deviceId: string,
+    @Body() dto: ConfigureAccessScannerDto,
   ) {
+    return this.ticketing.configureScanner(user, deviceId, dto);
+  }
+
+  @Post('credentials')
+  bindCredential(@CurrentUser() user: JwtAccessPayload, @Body() dto: BindAccessCredentialDto) {
     return this.ticketing.bindCredential(user, dto);
   }
 
-  private walletMutation(
-    user: JwtAccessPayload,
-    walletId: string,
-    operation: 'load' | 'spend' | 'refund',
-    dto: RfidWalletMutationDto,
-  ) {
-    const shopId = this.shopId(user);
-    return withClientIdempotency(
-      this.prisma,
-      {
-        shopId,
-        // RfidWalletEntry itself has one tenant-wide idempotency-key namespace.
-        // Keep all wallet-entry operations in that same canonical scope so a key
-        // reused for another wallet or operation is a conflict, never a replay.
-        scope: 'ticketing.rfid.wallet-entry',
-        key: dto.idempotencyKey,
-        requestHash: hashIdempotencyRequest({ walletId, operation, dto }),
-      },
-      () => this.ticketing[operation](user, walletId, dto),
+  @Post('credentials/stored-value')
+  storedValueCredential(@CurrentUser() user: JwtAccessPayload, @Body() dto: StoredValueCredentialDto) {
+    return this.ticketing.storedValueCredential(user, dto);
+  }
+
+  @Post('access/scan')
+  scanAccess(@CurrentUser() user: JwtAccessPayload, @Body() dto: AccessScanDto) {
+    return this.idempotent(user, 'ticketing.access.scan', dto.idempotencyKey, dto, () =>
+      this.ticketing.scanAccess(user, dto),
     );
   }
 
-  @Post('rfid/wallets/:id/load')
-  load(
-    @CurrentUser() user: JwtAccessPayload,
-    @Param('id') id: string,
-    @Body() dto: RfidWalletMutationDto,
-  ) {
-    return this.walletMutation(user, id, 'load', dto);
+  @Get('zones/:id/occupancy')
+  occupancy(@CurrentUser() user: JwtAccessPayload, @Param('id') id: string) {
+    return this.ticketing.occupancy(id, user).then((occupancy) => ({ zoneId: id, occupancy }));
   }
 
-  @Post('rfid/wallets/:id/spend')
-  spend(
+  @Post('zones/:id/occupancy/correct')
+  correctOccupancy(
     @CurrentUser() user: JwtAccessPayload,
     @Param('id') id: string,
-    @Body() dto: RfidWalletMutationDto,
+    @Body() dto: OccupancyCorrectionDto,
   ) {
-    return this.walletMutation(user, id, 'spend', dto);
-  }
-
-  @Post('rfid/wallets/:id/refund')
-  refund(
-    @CurrentUser() user: JwtAccessPayload,
-    @Param('id') id: string,
-    @Body() dto: RfidWalletMutationDto,
-  ) {
-    return this.walletMutation(user, id, 'refund', dto);
-  }
-
-  @Post('rfid/wallets/:id/reverse')
-  reverse(
-    @CurrentUser() user: JwtAccessPayload,
-    @Param('id') id: string,
-    @Body() dto: ReverseRfidEntryDto,
-  ) {
-    const shopId = this.shopId(user);
-    return withClientIdempotency(
-      this.prisma,
-      {
-        shopId,
-        scope: 'ticketing.rfid.wallet-entry',
-        key: dto.idempotencyKey,
-        requestHash: hashIdempotencyRequest({
-          walletId: id,
-          operation: 'reverse',
-          dto,
-        }),
-      },
-      () => this.ticketing.reverse(user, id, dto),
+    return this.idempotent(user, 'ticketing.occupancy.correct', dto.idempotencyKey, { id, dto }, () =>
+      this.ticketing.correctOccupancy(user, id, dto),
     );
   }
 
-  @Post('rfid/tap')
-  tap(@CurrentUser() user: JwtAccessPayload, @Body() dto: RfidTapDto) {
-    const shopId = this.shopId(user);
-    return withClientIdempotency(
-      this.prisma,
-      {
-        shopId,
-        scope: 'ticketing.rfid.tap',
-        key: dto.idempotencyKey,
-        requestHash: hashIdempotencyRequest(dto),
-      },
-      () => this.ticketing.tap(user, dto),
+  @Post('lockers')
+  createLocker(@CurrentUser() user: JwtAccessPayload, @Body() dto: CreateLockerDto) {
+    return this.ticketing.createLocker(user, dto);
+  }
+
+  @Post('lockers/:id/assign')
+  assignLocker(@CurrentUser() user: JwtAccessPayload, @Param('id') id: string, @Body() dto: AssignLockerDto) {
+    return this.idempotent(user, 'ticketing.locker.assign', dto.idempotencyKey, { id, dto }, () =>
+      this.ticketing.assignLocker(user, id, dto),
+    );
+  }
+
+  @Post('lockers/:id/events')
+  lockerEvent(@CurrentUser() user: JwtAccessPayload, @Param('id') id: string, @Body() dto: LockerEventDto) {
+    return this.idempotent(user, 'ticketing.locker.event', dto.idempotencyKey, { id, dto }, () =>
+      this.ticketing.recordLockerEvent(user, id, dto),
+    );
+  }
+
+  @Post('lockers/:id/release')
+  releaseLocker(@CurrentUser() user: JwtAccessPayload, @Param('id') id: string, @Body() dto: ReleaseLockerDto) {
+    return this.idempotent(user, 'ticketing.locker.release', dto.idempotencyKey, { id, dto }, () =>
+      this.ticketing.releaseLocker(user, id, dto),
     );
   }
 
