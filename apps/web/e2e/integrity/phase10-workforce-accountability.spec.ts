@@ -113,7 +113,7 @@ test.describe('Phase 10 workforce accountability @smoke', () => {
 
     await api(page, 'POST', '/auth/venue/e2e-mixed/session', {
       data: {},
-      expectedStatus: 403,
+      expectedStatus: 401,
     });
 
     const deniedRequest = await api<{ id: string }>(
