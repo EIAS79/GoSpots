@@ -18,14 +18,11 @@ async function clearAuth(page: Page) {
 }
 
 async function loginStaff(page: Page) {
-  const response = await page.request.post('/api/v1/auth/login', {
+  // Use the shared E2E API helper so login follows the same CSRF cookie/header
+  // handshake as every other state-changing GoSpots request.
+  await api(page, 'POST', '/auth/login', {
     data: { login: STAFF.email, password: STAFF.password },
-    failOnStatusCode: false,
   });
-  expect(
-    response.ok(),
-    `POST /auth/login for seeded staff: ${await response.text()}`,
-  ).toBeTruthy();
   await page.goto('/dashboard');
   await expect(page).toHaveURL(/\/dashboard(?:\/|$)/, { timeout: 20_000 });
 }
