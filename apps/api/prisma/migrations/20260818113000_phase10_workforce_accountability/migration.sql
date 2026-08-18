@@ -20,21 +20,15 @@ CREATE UNIQUE INDEX "StaffEmploymentProfile_shopId_employeeNumber_key" ON "Staff
 CREATE INDEX "StaffEmploymentProfile_shopId_employeeNumber_idx" ON "StaffEmploymentProfile"("shopId", "employeeNumber");
 CREATE INDEX "StaffEmploymentProfile_shopId_managerMembershipId_idx" ON "StaffEmploymentProfile"("shopId", "managerMembershipId");
 
--- Existing staff receive stable, non-secret employment numbers. Membership.isActive remains active-state truth.
 INSERT INTO "StaffEmploymentProfile" (
   "id", "shopId", "membershipId", "employeeNumber", "displayName",
   "createdById", "updatedById", "createdAt", "updatedAt"
 )
 SELECT
-  'p10_' || md5(m."id" || ':profile'),
-  m."shopId",
-  m."id",
+  'p10_' || md5(m."id" || ':profile'), m."shopId", m."id",
   'EMP-' || upper(substr(md5(m."shopId" || ':' || m."id"), 1, 8)),
   COALESCE(u."name", u."staffHandle", u."email"),
-  s."ownerId",
-  s."ownerId",
-  CURRENT_TIMESTAMP,
-  CURRENT_TIMESTAMP
+  s."ownerId", s."ownerId", CURRENT_TIMESTAMP, CURRENT_TIMESTAMP
 FROM "Membership" m
 JOIN "User" u ON u."id" = m."userId"
 JOIN "Shop" s ON s."id" = m."shopId"
@@ -115,9 +109,11 @@ CREATE TABLE "StaffApprovalRequestV2" (
   "decidedByMembershipId" TEXT,
   "decisionNote" TEXT,
   "decidedAt" TIMESTAMP(3),
+  "consumedAt" TIMESTAMP(3),
+  "consumedSourceId" TEXT,
   "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
   CONSTRAINT "StaffApprovalRequestV2_pkey" PRIMARY KEY ("id"),
-  CONSTRAINT "StaffApprovalRequestV2_status_check" CHECK ("status" IN ('PENDING','APPROVED','DENIED','EXPIRED','CANCELLED')),
+  CONSTRAINT "StaffApprovalRequestV2_status_check" CHECK ("status" IN ('PENDING','APPROVED','DENIED','EXPIRED','CANCELLED','IN_USE','CONSUMED')),
   CONSTRAINT "StaffApprovalRequestV2_amount_check" CHECK ("amountMinor" IS NULL OR "amountMinor" >= 0),
   CONSTRAINT "StaffApprovalRequestV2_policyVersion_check" CHECK ("policyVersion" > 0)
 );
@@ -226,13 +222,11 @@ CREATE INDEX "ShiftSwapRequest_shopId_status_createdAt_idx" ON "ShiftSwapRequest
 CREATE INDEX "ShiftSwapRequest_shopId_requesterMembershipId_createdAt_idx" ON "ShiftSwapRequest"("shopId", "requesterMembershipId", "createdAt");
 CREATE INDEX "ShiftSwapRequest_shopId_scheduleEntryId_idx" ON "ShiftSwapRequest"("shopId", "scheduleEntryId");
 
--- Seed venue policy defaults without changing existing runtime behavior.
 INSERT INTO "WorkforcePolicy" ("id", "shopId", "updatedById", "createdAt", "updatedAt")
 SELECT 'p10_' || md5(s."id" || ':policy'), s."id", s."ownerId", CURRENT_TIMESTAMP, CURRENT_TIMESTAMP
 FROM "Shop" s
 ON CONFLICT ("shopId") DO NOTHING;
 
--- Tenant RLS parity for every Phase 10 shop-scoped table.
 DO $$
 DECLARE tbl TEXT;
 BEGIN
