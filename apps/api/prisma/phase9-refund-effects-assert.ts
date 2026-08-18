@@ -14,9 +14,16 @@ async function main() {
       select: { id: true, ownerId: true },
     });
     if (!shop) throw new Error('PHASE9_REFUND_EFFECTS: pilot shop not found');
+    const membership = await prisma.customerMembership.findFirst({
+      where: { shopId: shop.id },
+      orderBy: { joinedAt: 'desc' },
+      select: { customerId: true },
+    });
+    if (!membership) {
+      throw new Error('PHASE9_REFUND_EFFECTS: pilot member linkage not found');
+    }
     const customer = await prisma.customerProfile.findFirst({
-      where: { shopId: shop.id, name: 'Canonical Member' },
-      orderBy: { createdAt: 'desc' },
+      where: { shopId: shop.id, id: membership.customerId },
       select: { id: true },
     });
     if (!customer) throw new Error('PHASE9_REFUND_EFFECTS: pilot customer not found');
@@ -57,7 +64,9 @@ async function main() {
       correlationId: `${sourceId}:reverse`,
     });
     if (replay.entry?.id !== reversed.entry?.id) {
-      throw new Error('PHASE9_REFUND_EFFECTS: refund reversal did not replay deterministically');
+      throw new Error(
+        'PHASE9_REFUND_EFFECTS: refund reversal did not replay deterministically',
+      );
     }
     const sourceRows = await prisma.loyaltyLedgerEntry.findMany({
       where: {
@@ -70,7 +79,9 @@ async function main() {
     });
     const net = sourceRows.reduce((sum, row) => sum + row.points, 0);
     if (net !== 0) {
-      throw new Error(`PHASE9_REFUND_EFFECTS: refund source net is ${net}, expected 0`);
+      throw new Error(
+        `PHASE9_REFUND_EFFECTS: refund source net is ${net}, expected 0`,
+      );
     }
     console.log(
       `PHASE9_REFUND_EFFECTS=PASS customer=${customer.id} reversed=30 replay=${replay.entry?.id}`,
