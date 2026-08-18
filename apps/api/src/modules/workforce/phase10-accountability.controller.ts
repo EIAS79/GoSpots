@@ -68,8 +68,12 @@ export class Phase10AccountabilityController {
   operatorSwitch(
     @CurrentUser() actor: JwtAccessPayload,
     @Body() dto: SwitchOperatorDto,
+    @Headers('x-workstation-id') workstationHeader?: string,
   ) {
-    return this.accountability.switchOperator(actor, dto);
+    return this.accountability.switchOperator(actor, {
+      ...dto,
+      workstation: dto.workstation?.trim() || workstationHeader?.trim() || undefined,
+    });
   }
 
   @Get('approval-policies')
