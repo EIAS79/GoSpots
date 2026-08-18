@@ -2,7 +2,7 @@ import { expect, test, type Page } from '@playwright/test';
 import { api, bindVenue, E2E, loginOwner } from '../helpers/app';
 
 const STAFF = {
-  loginId: 'e2e.staff@e2e-cash.gospots',
+  email: 'e2e.staff@gospots.local',
   password: 'GoSpots-E2E-Only-2026!',
 };
 
@@ -18,16 +18,15 @@ async function clearAuth(page: Page) {
 }
 
 async function loginStaff(page: Page) {
-  await page.goto('/login');
-  const preferences = page.locator('aside[aria-label="Cookie preferences"]');
-  if (await preferences.isVisible().catch(() => false)) {
-    await preferences.getByRole('button', { name: /reject optional/i }).click();
-  }
-  const staffTab = page.getByRole('tab', { name: /^staff$/i });
-  if (await staffTab.count()) await staffTab.click();
-  await page.getByLabel(/staff login id/i).fill(STAFF.loginId);
-  await page.getByLabel(/^password$/i).fill(STAFF.password);
-  await page.getByRole('button', { name: /sign in as staff/i }).click();
+  const response = await page.request.post('/api/v1/auth/login', {
+    data: { login: STAFF.email, password: STAFF.password },
+    failOnStatusCode: false,
+  });
+  expect(
+    response.ok(),
+    `POST /auth/login for seeded staff: ${await response.text()}`,
+  ).toBeTruthy();
+  await page.goto('/dashboard');
   await expect(page).toHaveURL(/\/dashboard(?:\/|$)/, { timeout: 20_000 });
 }
 
