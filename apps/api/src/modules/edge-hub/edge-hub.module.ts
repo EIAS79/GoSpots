@@ -5,11 +5,12 @@ import { OperationsModule } from '../operations/operations.module';
 import { EdgeContinuityService } from './edge-continuity.service';
 import { EdgeHubController } from './edge-hub.controller';
 import { EdgeHubService } from './edge-hub.service';
+import { EdgeOperatorSnapshotService } from './edge-operator-snapshot.service';
 
 @Module({
   imports: [OfflineSyncModule, OperationsModule, CheckoutModule],
   controllers: [EdgeHubController],
-  providers: [EdgeHubService, EdgeContinuityService],
-  exports: [EdgeHubService, EdgeContinuityService],
+  providers: [EdgeHubService, EdgeContinuityService, EdgeOperatorSnapshotService],
+  exports: [EdgeHubService, EdgeContinuityService, EdgeOperatorSnapshotService],
 })
 export class EdgeHubModule {}
