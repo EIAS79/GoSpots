@@ -17,8 +17,16 @@ async function main() {
   const prisma = new PrismaService();
   await prisma.$connect();
   const audit = new AuditService(prisma);
-  const notifications = new NotificationsService(prisma, audit, new NotificationsSseHub());
-  const phase10 = new Phase10AccountabilityService(prisma, audit, notifications);
+  const notifications = new NotificationsService(
+    prisma,
+    audit,
+    new NotificationsSseHub(),
+  );
+  const phase10 = new Phase10AccountabilityService(
+    prisma,
+    audit,
+    notifications,
+  );
 
   const prefix = `p10pilot_${Date.now()}`;
   const shopId = `${prefix}_shop`;
@@ -56,14 +64,6 @@ async function main() {
     email: staffEmail,
     perms: '*',
   };
-  const otherOwner: JwtAccessPayload = {
-    sub: otherOwnerId,
-    shopId: otherShopId,
-    sysRole: 'USER',
-    shopRole: 'OWNER',
-    email: otherOwnerEmail,
-    perms: '*',
-  };
 
   try {
     for (const [id, email, name] of [
@@ -72,7 +72,9 @@ async function main() {
       [staffId, staffEmail, 'Phase 10 Staff'],
       [otherOwnerId, otherOwnerEmail, 'Phase 10 Other Owner'],
     ] as const) {
-      await prisma.user.create({ data: { id, email, name, passwordHash: 'x' } });
+      await prisma.user.create({
+        data: { id, email, name, passwordHash: 'x' },
+      });
     }
 
     await prisma.shop.create({
@@ -98,7 +100,7 @@ async function main() {
       },
     });
 
-    const ownerMembership = await prisma.membership.create({
+    await prisma.membership.create({
       data: { shopId, userId: ownerId, role: 'OWNER', isActive: true },
     });
     const managerMembership = await prisma.membership.create({
@@ -108,7 +110,12 @@ async function main() {
       data: { shopId, userId: staffId, role: 'STAFF', isActive: true },
     });
     const otherMembership = await prisma.membership.create({
-      data: { shopId: otherShopId, userId: otherOwnerId, role: 'OWNER', isActive: true },
+      data: {
+        shopId: otherShopId,
+        userId: otherOwnerId,
+        role: 'OWNER',
+        isActive: true,
+      },
     });
 
     const role = await prisma.jobRole.create({
@@ -132,11 +139,17 @@ async function main() {
       managerMembershipId: managerMembership.id,
     });
     const ownerProfiles = await phase10.listProfiles(owner);
-    const staffProfile = ownerProfiles.find((row) => row.membershipId === staffMembership.id);
-    assert(staffProfile?.hourlyCost?.minor === 3500, 'owner could not see effective hourly cost');
+    const staffProfile = ownerProfiles.find(
+      (row) => row.membershipId === staffMembership.id,
+    );
+    assert(
+      staffProfile?.hourlyCost?.minor === 3500,
+      'owner could not see effective hourly cost',
+    );
     const staffProfiles = await phase10.listProfiles(staff);
     assert(
-      staffProfiles.find((row) => row.membershipId === staffMembership.id)?.hourlyCost === null,
+      staffProfiles.find((row) => row.membershipId === staffMembership.id)
+        ?.hourlyCost === null,
       'non-owner could see hourly cost',
     );
 
@@ -173,9 +186,17 @@ async function main() {
     }
     assert(locked, 'PIN lockout did not trigger');
     const lockedRow = await prisma.staffOperatorCredential.findUnique({
-      where: { shopId_membershipId: { shopId, membershipId: staffMembership.id } },
+      where: {
+        shopId_membershipId: {
+          shopId,
+          membershipId: staffMembership.id,
+        },
+      },
     });
-    assert(lockedRow?.lockedUntil && lockedRow.lockedUntil > new Date(), 'PIN lockout was not persisted');
+    assert(
+      lockedRow?.lockedUntil && lockedRow.lockedUntil > new Date(),
+      'PIN lockout was not persisted',
+    );
 
     await phase10.setOperatorCredential(owner, {
       membershipId: staffMembership.id,
@@ -187,8 +208,13 @@ async function main() {
       pin: '2468',
       workstation: 'counter-1',
     });
-    assert(switched.operator.membershipId === staffMembership.id, 'quick switch selected wrong employee');
-    const tokenHashRows = await prisma.staffOperatorSession.findMany({ where: { shopId } });
+    assert(
+      switched.operator.membershipId === staffMembership.id,
+      'quick switch selected wrong employee',
+    );
+    const tokenHashRows = await prisma.staffOperatorSession.findMany({
+      where: { shopId },
+    });
     assert(
       tokenHashRows.every((row) => row.tokenHash !== switched.operatorToken),
       'raw operator token was persisted',
@@ -203,7 +229,10 @@ async function main() {
     } catch (error) {
       crossTenantBlocked = String(error).includes('not found');
     }
-    assert(crossTenantBlocked, 'cross-tenant operator credential assignment was accepted');
+    assert(
+      crossTenantBlocked,
+      'cross-tenant operator credential assignment was accepted',
+    );
 
     await phase10.updateApprovalPolicy(owner, {
       actionKind: 'REFUND',
@@ -243,7 +272,10 @@ async function main() {
     } catch (error) {
       deniedCannotExecute = String(error).includes('Approved');
     }
-    assert(deniedCannotExecute, 'denied approval could authorize an action');
+    assert(
+      deniedCannotExecute,
+      'denied approval could authorize an action',
+    );
 
     const approvedRequest = await phase10.createApprovalRequest(
       staff,
@@ -278,10 +310,16 @@ async function main() {
         approvedRequest.id,
       ),
     ]);
-    assert(fulfilled(reservations) === 1, 'one approval could be concurrently reserved twice');
+    assert(
+      fulfilled(reservations) === 1,
+      'one approval could be concurrently reserved twice',
+    );
     const prepared = reservations.find(
-      (row): row is PromiseFulfilledResult<Awaited<ReturnType<typeof phase10.prepareAction>>> =>
-        row.status === 'fulfilled',
+      (
+        row,
+      ): row is PromiseFulfilledResult<
+        Awaited<ReturnType<typeof phase10.prepareAction>>
+      > => row.status === 'fulfilled',
     )?.value;
     assert(prepared, 'approved action did not reserve');
 
@@ -294,13 +332,18 @@ async function main() {
       afterHoursStartHour: null,
       afterHoursEndHour: null,
     });
-    await phase10.finalizePreparedAction(prepared, `${prefix}_refund_result`, {
-      pilot: true,
-    });
+    await phase10.finalizePreparedAction(
+      prepared,
+      `${prefix}_refund_result`,
+      { pilot: true },
+    );
     const consumed = await prisma.staffApprovalRequestV2.findUnique({
       where: { id: approvedRequest.id },
     });
-    assert(consumed?.status === 'CONSUMED' && consumed.consumedAt, 'approval was not consumed once');
+    assert(
+      consumed?.status === 'CONSUMED' && consumed.consumedAt,
+      'approval was not consumed once',
+    );
     const evidence = await prisma.staffActionEvidence.findFirst({
       where: { shopId, sourceId: `${prefix}_refund_result` },
     });
@@ -311,9 +354,15 @@ async function main() {
     );
     assert(evidence.suspicious, 'threshold refund was not marked suspicious');
     const notification = await prisma.notification.findFirst({
-      where: { shopId, title: { contains: 'Suspicious staff action' } },
+      where: {
+        shopId,
+        title: { contains: 'Suspicious staff action' },
+      },
     });
-    assert(notification, 'suspicious action did not create an owner/team notification');
+    assert(
+      notification,
+      'suspicious action did not create an owner/team notification',
+    );
 
     let consumedReuseBlocked = false;
     try {
@@ -338,7 +387,10 @@ async function main() {
     } catch (error) {
       highRiskIdentityBlocked = String(error).includes('full authentication');
     }
-    assert(highRiskIdentityBlocked, 'PIN-switched operator could perform high-risk action under owner JWT');
+    assert(
+      highRiskIdentityBlocked,
+      'PIN-switched operator could perform high-risk action under owner JWT',
+    );
 
     await phase10.updateWorkforcePolicy(owner, {
       enforceSchedule: true,
@@ -351,7 +403,10 @@ async function main() {
     } catch (error) {
       offScheduleBlocked = String(error).includes('schedule window');
     }
-    assert(offScheduleBlocked, 'schedule enforcement allowed unscheduled clock-in');
+    assert(
+      offScheduleBlocked,
+      'schedule enforcement allowed unscheduled clock-in',
+    );
 
     const now = new Date();
     const staffShift = await prisma.scheduleEntry.create({
@@ -366,7 +421,7 @@ async function main() {
     });
     await phase10.assertClockInAllowed(staff);
 
-    const managerShift = await prisma.scheduleEntry.create({
+    const futureShift = await prisma.scheduleEntry.create({
       data: {
         shopId,
         membershipId: staffMembership.id,
@@ -377,7 +432,7 @@ async function main() {
       },
     });
     const swap = await phase10.createShiftSwap(staff, {
-      scheduleEntryId: managerShift.id,
+      scheduleEntryId: futureShift.id,
       targetMembershipId: managerMembership.id,
       reason: 'Training coverage',
     });
@@ -385,20 +440,29 @@ async function main() {
       approve: true,
       note: 'Coverage confirmed',
     });
-    assert(approvedSwap.status === 'APPROVED', 'shift swap was not approved');
     assert(
-      (await prisma.scheduleEntry.findUnique({ where: { id: managerShift.id } }))?.membershipId ===
-        managerMembership.id,
+      approvedSwap.status === 'APPROVED',
+      'shift swap was not approved',
+    );
+    assert(
+      (
+        await prisma.scheduleEntry.findUnique({
+          where: { id: futureShift.id },
+        })
+      )?.membershipId === managerMembership.id,
       'approved shift swap did not reassign the schedule',
     );
 
+    const rate = await prisma.employeeRate.findFirstOrThrow({
+      where: { shopId, membershipId: staffMembership.id },
+    });
     await prisma.timePunch.create({
       data: {
         shopId,
         membershipId: staffMembership.id,
         scheduleEntryId: staffShift.id,
         jobRoleId: role.id,
-        employeeRateId: (await prisma.employeeRate.findFirstOrThrow({ where: { shopId, membershipId: staffMembership.id } })).id,
+        employeeRateId: rate.id,
         hourlyRateMinor: 3500,
         currency: 'PLN',
         startedAt: new Date(now.getTime() + 10 * 60_000),
@@ -406,9 +470,17 @@ async function main() {
       },
     });
     const metrics = await phase10.performance(owner, 30);
-    const staffMetrics = metrics.find((row) => row.membershipId === staffMembership.id);
-    assert(staffMetrics && staffMetrics.lateCount >= 1, 'lateness was not visible in performance metrics');
-    assert(staffMetrics.breakComplianceViolations >= 1, 'break compliance violation was not visible');
+    const staffMetrics = metrics.find(
+      (row) => row.membershipId === staffMembership.id,
+    );
+    assert(
+      staffMetrics && staffMetrics.lateCount >= 1,
+      'lateness was not visible in performance metrics',
+    );
+    assert(
+      staffMetrics.breakComplianceViolations >= 1,
+      'break compliance violation was not visible',
+    );
 
     console.log(
       JSON.stringify(
