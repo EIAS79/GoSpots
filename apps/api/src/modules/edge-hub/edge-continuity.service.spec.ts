@@ -40,7 +40,7 @@ function cashDto(overrides: Record<string, unknown> = {}): any {
   };
 }
 
-function fixture(options: { receipt?: any; payment?: any } = {}) {
+function fixture(options: { receipt?: any; payment?: any; permissions?: string[]; role?: string } = {}) {
   const idempotencyReceipt = {
     findUnique: jest.fn().mockResolvedValue(options.receipt ?? null),
     create: jest.fn().mockResolvedValue({}),
@@ -52,9 +52,9 @@ function fixture(options: { receipt?: any; payment?: any } = {}) {
       findFirst: jest.fn().mockResolvedValue({
         userId: 'cashier-1',
         shopId: 'shop-1',
-        role: 'CASHIER',
+        role: options.role ?? 'CASHIER',
         isActive: true,
-        permissionRows: [{ permission: 'checkout.read' }, { permission: 'checkout.write' }, { permission: 'cash.open' }],
+        permissionRows: (options.permissions ?? ['checkout.read', 'checkout.write', 'cash.open']).map((permission) => ({ permission })),
       }),
     },
     idempotencyReceipt,
@@ -82,6 +82,13 @@ describe('EdgeContinuityService Phase 12', () => {
     await expect(f.service.replayExtended('shop-1', 'edge-1', dto)).rejects.toThrow('venue does not match');
     expect(f.checkout.createPayment).not.toHaveBeenCalled();
     expect(f.prisma.membership.findFirst).not.toHaveBeenCalled();
+  });
+
+  it('rejects offline cash when the human operator lacks checkout.write', async () => {
+    const f = fixture({ permissions: ['checkout.read'], role: 'VIEWER' });
+    await expect(f.service.replayExtended('shop-1', 'edge-1', cashDto())).rejects.toThrow('Missing checkout.write');
+    expect(f.checkout.createPayment).not.toHaveBeenCalled();
+    expect(f.idempotencyReceipt.create).not.toHaveBeenCalled();
   });
 
   it('replays offline cash through canonical CheckoutPaymentService with stable correlation', async () => {
@@ -112,7 +119,6 @@ describe('EdgeContinuityService Phase 12', () => {
       requestHash: null, status: 'PENDING', responseJson: null,
     };
     const dto = cashDto();
-    // Build the same request hash indirectly by first executing once far enough to inspect create input.
     const seed = fixture();
     await seed.service.replayExtended('shop-1', 'edge-1', dto);
     pending.requestHash = seed.idempotencyReceipt.create.mock.calls[0][0].data.requestHash;
