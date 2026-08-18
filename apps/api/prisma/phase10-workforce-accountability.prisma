@@ -91,6 +91,8 @@ model StaffApprovalRequestV2 {
   decidedByMembershipId String?
   decisionNote          String?
   decidedAt             DateTime?
+  consumedAt            DateTime?
+  consumedSourceId      String?
   createdAt             DateTime  @default(now())
 
   @@index([shopId, status, createdAt])
