@@ -19,6 +19,8 @@ import {
   CreateShiftSwapRequestDto,
   DecideApprovalRequestV2Dto,
   DecideShiftSwapRequestDto,
+  MarkScheduleAbsenceDto,
+  PublishScheduleEntryDto,
   SetOperatorCredentialDto,
   SwitchOperatorDto,
   UpdateApprovalPolicyDto,
@@ -28,6 +30,7 @@ import {
 } from './dto/phase10-accountability.dto';
 import { Phase10AccountabilityService } from './phase10-accountability.service';
 import { Phase10PerformanceService } from './phase10-performance.service';
+import { Phase10ScheduleService } from './phase10-schedule.service';
 
 @ApiTags('workforce-phase10')
 @Controller('workforce/phase10')
@@ -36,6 +39,7 @@ export class Phase10AccountabilityController {
   constructor(
     private readonly accountability: Phase10AccountabilityService,
     private readonly performanceProjection: Phase10PerformanceService,
+    private readonly schedules: Phase10ScheduleService,
   ) {}
 
   @Get('staff')
@@ -139,6 +143,24 @@ export class Phase10AccountabilityController {
     @Body() dto: UpdateWorkforcePolicyDto,
   ) {
     return this.accountability.updateWorkforcePolicy(actor, dto);
+  }
+
+  @Post('schedule/:id/publish')
+  publishSchedule(
+    @CurrentUser() actor: JwtAccessPayload,
+    @Param('id') id: string,
+    @Body() dto: PublishScheduleEntryDto,
+  ) {
+    return this.schedules.publish(actor, id, dto);
+  }
+
+  @Post('schedule/:id/absence')
+  markScheduleAbsence(
+    @CurrentUser() actor: JwtAccessPayload,
+    @Param('id') id: string,
+    @Body() dto: MarkScheduleAbsenceDto,
+  ) {
+    return this.schedules.markAbsence(actor, id, dto);
   }
 
   @Get('shift-swaps')
