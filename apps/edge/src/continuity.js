@@ -9,6 +9,18 @@ import {
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 const DRAWER_TRIGGERS = new Set(['CASH_SALE', 'PAID_IN', 'PAID_OUT', 'MANAGER_OPEN', 'TEST']);
 const SCAN_TYPES = new Set(['BARCODE', 'QR', 'ACCESS', 'PRODUCT', 'CREDENTIAL']);
+const OPERATION_PERMISSIONS = Object.freeze({
+  SESSION_START: 'session.write',
+  SESSION_PAUSE: 'session.write',
+  SESSION_RESUME: 'session.write',
+  SESSION_END: 'session.write',
+  ORDER_CREATE: 'order.write',
+  CHECK_CREATE: 'checkout.write',
+  CHECK_UPDATE: 'checkout.write',
+  CASH_PAYMENT: 'checkout.write',
+});
+const ZERO_MINOR_CURRENCIES = new Set(['BIF', 'CLP', 'DJF', 'GNF', 'ISK', 'JPY', 'KMF', 'KRW', 'PYG', 'RWF', 'UGX', 'VND', 'VUV', 'XAF', 'XOF', 'XPF']);
+const THREE_MINOR_CURRENCIES = new Set(['BHD', 'IQD', 'JOD', 'KWD', 'LYD', 'OMR', 'TND']);
 
 function nowIso() { return new Date().toISOString(); }
 function required(value, field) {
@@ -19,6 +31,23 @@ function required(value, field) {
 function positiveInt(value, field) {
   if (!Number.isInteger(value) || value <= 0) throw new Error(`${field} must be a positive integer`);
   return value;
+}
+function currencyScale(currency) {
+  const code = required(currency, 'currency').toUpperCase();
+  if (ZERO_MINOR_CURRENCIES.has(code)) return 0;
+  if (THREE_MINOR_CURRENCIES.has(code)) return 3;
+  return 2;
+}
+function decimalToMinorExact(value, currency) {
+  const raw = required(value, 'allocation.amount');
+  const match = /^(\d+)(?:\.(\d+))?$/.exec(raw);
+  if (!match) throw new Error(`allocation.amount must be a non-negative decimal: ${raw}`);
+  const scale = currencyScale(currency);
+  const fraction = match[2] ?? '';
+  const retained = fraction.slice(0, scale).padEnd(scale, '0');
+  const excess = fraction.slice(scale);
+  if (/[^0]/.test(excess)) throw new Error(`allocation.amount has precision smaller than ${currency} minor units`);
+  return BigInt(match[1]) * (10n ** BigInt(scale)) + BigInt(retained || '0');
 }
 
 export class ContinuityEngine {
@@ -123,6 +152,7 @@ export class ContinuityEngine {
     const groups = [
       ['venue', [venue]],
       ['device', snapshot.devices ?? []],
+      ['operator', snapshot.operators ?? []],
       ['resource', snapshot.resources ?? []],
       ['rate', snapshot.rates ?? []],
       ['catalog', snapshot.catalog ?? []],
@@ -189,6 +219,7 @@ export class ContinuityEngine {
         return { ...this.#commandRow(existing), duplicate: true };
       }
       const sequence = Number(this.db.prepare('SELECT COALESCE(MAX(local_sequence),0)+1 AS next FROM local_commands WHERE device_id=?').get(deviceId).next);
+      this.#assertOperatorPermission(operationType, payload);
       this.#applyLocalProjection({ operationType, aggregateType, aggregateId, aggregateVersion: input.aggregateVersion, payload, venueId, operationId, occurredAt });
       const row = this.db.prepare(`INSERT INTO local_commands(
           operation_id,device_id,venue_id,local_sequence,idempotency_key,operation_type,
@@ -202,6 +233,19 @@ export class ContinuityEngine {
     } catch (error) {
       this.db.exec('ROLLBACK');
       throw error;
+    }
+  }
+
+  #assertOperatorPermission(operationType, payload) {
+    const requiredPermission = OPERATION_PERMISSIONS[operationType];
+    if (!requiredPermission) return;
+    const operatorUserId = required(payload.operatorUserId, 'payload.operatorUserId');
+    const operator = this.cache('operator', operatorUserId);
+    if (!operator || operator.isActive === false) throw new Error('PERMISSION_DENIED: operator is not active in the last-known venue snapshot');
+    if (operator.role === 'OWNER') return;
+    const permissions = new Set(String(operator.permissions ?? '').split(',').map((value) => value.trim()).filter(Boolean));
+    if (!permissions.has('*') && !permissions.has(requiredPermission)) {
+      throw new Error(`PERMISSION_DENIED: operator is missing ${requiredPermission}`);
     }
   }
 
@@ -239,17 +283,38 @@ export class ContinuityEngine {
     }
     if (command.operationType === 'CASH_PAYMENT') {
       const amountMinor = positiveInt(command.payload.amountMinor, 'payload.amountMinor');
-      const currency = required(command.payload.currency, 'payload.currency');
+      const currency = required(command.payload.currency, 'payload.currency').toUpperCase();
       const settlementId = required(command.payload.settlementId, 'payload.settlementId');
       const operatorUserId = required(command.payload.operatorUserId, 'payload.operatorUserId');
       const venue = this.cache('venue', command.venueId);
-      if (venue?.currency && venue.currency !== currency) throw new Error('CURRENCY_CONFLICT: cash currency differs from venue currency');
+      if (venue?.currency && String(venue.currency).toUpperCase() !== currency) throw new Error('CURRENCY_CONFLICT: cash currency differs from venue currency');
+      if (!Array.isArray(command.payload.allocations) || command.payload.allocations.length === 0) throw new Error('payload.allocations is required');
+      const allocatedMinor = command.payload.allocations.reduce((sum, allocation) => {
+        if (!allocation || typeof allocation !== 'object' || Array.isArray(allocation)) throw new Error('payload.allocations entries must be objects');
+        required(allocation.snapshotId, 'allocation.snapshotId');
+        return sum + decimalToMinorExact(allocation.amount, currency);
+      }, 0n);
+      if (allocatedMinor !== BigInt(amountMinor)) throw new Error('AMOUNT_CONFLICT: cash amountMinor must exactly equal allocation total');
       this.db.prepare(`INSERT INTO local_cash_ledger(operation_id,venue_id,settlement_id,amount_minor,currency,operator_user_id,occurred_at)
         VALUES(?,?,?,?,?,?,?)`).run(command.operationId, command.venueId, settlementId, amountMinor, currency, operatorUserId, command.occurredAt);
       return;
     }
     if (command.operationType === 'ORDER_CREATE') {
       this.#upsertCache('order', command.aggregateId, 1, { id: command.aggregateId, status: 'OPEN', pendingCloud: true, ...command.payload });
+      return;
+    }
+    if (command.operationType === 'CHECK_CREATE') {
+      this.#upsertCache('check', command.aggregateId, 1, { id: command.aggregateId, status: 'OPEN', version: 1, pendingCloud: true, ...command.payload });
+      return;
+    }
+    if (command.operationType === 'CHECK_UPDATE') {
+      const current = this.cache('check', command.aggregateId);
+      if (!current) throw new Error('STATE_CONFLICT: check is not present locally');
+      if (command.aggregateVersion && current.version !== command.aggregateVersion) {
+        throw new Error(`VERSION_CONFLICT: expected ${command.aggregateVersion}, current ${current.version}`);
+      }
+      const version = Number(current.version ?? 0) + 1;
+      this.#upsertCache('check', command.aggregateId, version, { ...current, ...command.payload, id: command.aggregateId, version, pendingCloud: true });
     }
   }
 
