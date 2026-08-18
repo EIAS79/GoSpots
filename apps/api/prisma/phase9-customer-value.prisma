@@ -1,0 +1,205 @@
+// Phase 9 — Customers, Memberships, Loyalty, Packages, Promotions and Stored Value
+// Expand-only models. Existing Growth v2 customer/value ledgers remain canonical;
+// these rows add lifecycle, policy, provenance and reconciliation evidence.
+
+model CustomerConsentEvent {
+  id         String   @id @default(uuid())
+  shopId     String
+  customerId String
+  purpose    String   @default("MARKETING")
+  state      String
+  source     String
+  occurredAt DateTime @default(now())
+  actorUserId String?
+  createdAt  DateTime @default(now())
+
+  @@index([shopId, customerId, purpose, occurredAt])
+}
+
+model CustomerPreference {
+  id         String   @id @default(uuid())
+  shopId     String
+  customerId String
+  key        String
+  value      Json
+  version    Int      @default(1)
+  updatedById String?
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  @@unique([shopId, customerId, key])
+  @@index([shopId, customerId])
+}
+
+model MembershipLifecycleEvent {
+  id           String   @id @default(uuid())
+  shopId       String
+  customerId   String
+  membershipId String
+  eventType    String
+  previousStatus String?
+  newStatus    String
+  effectiveAt  DateTime @default(now())
+  expiresAt    DateTime?
+  correlationId String
+  requestHash  String
+  reason       String?
+  actorUserId  String?
+  createdAt    DateTime @default(now())
+
+  @@unique([shopId, correlationId])
+  @@index([shopId, customerId, createdAt])
+  @@index([shopId, membershipId, effectiveAt])
+}
+
+model MembershipUsageLedgerEntry {
+  id            String   @id @default(uuid())
+  shopId        String
+  customerId    String
+  membershipId  String
+  benefitKey    String
+  unitKind      String
+  type          String
+  units         Int
+  sourceType    String?
+  sourceId      String?
+  correlationId String
+  requestHash   String
+  note          String?
+  actorUserId   String?
+  createdAt     DateTime @default(now())
+
+  @@unique([shopId, correlationId])
+  @@index([shopId, membershipId, benefitKey, createdAt])
+  @@index([shopId, customerId, createdAt])
+  @@index([shopId, sourceType, sourceId])
+}
+
+model CustomerPackageAccount {
+  id                  String   @id @default(uuid())
+  shopId              String
+  customerId          String
+  packageDefinitionId String
+  unitKind            String
+  status              String   @default("ACTIVE")
+  startsAt            DateTime @default(now())
+  expiresAt           DateTime?
+  createdAt           DateTime @default(now())
+  updatedAt           DateTime @updatedAt
+
+  @@index([shopId, customerId, status])
+  @@index([shopId, packageDefinitionId, status])
+}
+
+model CustomerPackageLedgerEntry {
+  id            String   @id @default(uuid())
+  shopId        String
+  accountId     String
+  customerId    String
+  type          String
+  units         Int
+  sourceType    String?
+  sourceId      String?
+  paymentId     String?
+  correlationId String
+  requestHash   String
+  note          String?
+  actorUserId   String?
+  createdAt     DateTime @default(now())
+
+  @@unique([shopId, correlationId])
+  @@index([shopId, accountId, createdAt])
+  @@index([shopId, customerId, createdAt])
+  @@index([shopId, sourceType, sourceId])
+}
+
+model LoyaltyProgramPolicy {
+  id               String   @id @default(uuid())
+  shopId           String
+  programVersion   Int      @default(1)
+  pointsExpireDays Int?
+  active            Boolean  @default(true)
+  startsAt          DateTime @default(now())
+  endsAt            DateTime?
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+
+  @@unique([shopId, programVersion])
+  @@index([shopId, active, startsAt])
+}
+
+model LoyaltyEntryPolicyEvidence {
+  id             String   @id @default(uuid())
+  shopId         String
+  ledgerEntryId  String   @unique
+  correlationId  String
+  requestHash    String
+  programVersion Int
+  expiresAt      DateTime?
+  createdAt      DateTime @default(now())
+
+  @@unique([shopId, correlationId])
+  @@index([shopId, expiresAt])
+}
+
+model StoredValueAccountPolicy {
+  id             String   @id @default(uuid())
+  shopId         String
+  accountId      String   @unique
+  transferAllowed Boolean @default(false)
+  refundAllowed   Boolean @default(true)
+  expiresAt       DateTime?
+  legalPolicyRef  String?
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  @@index([shopId, expiresAt])
+}
+
+model PromotionUsagePolicy {
+  id               String   @id @default(uuid())
+  shopId           String
+  promotionId      String   @unique
+  domain            String   @default("GENERAL")
+  firstVisitOnly    Boolean  @default(false)
+  minQuantity       Int?
+  maxQuantity       Int?
+  totalLimit        Int?
+  perCustomerLimit  Int?
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+
+  @@index([shopId, domain])
+}
+
+model PromotionRedemption {
+  id             String   @id @default(uuid())
+  shopId         String
+  promotionId    String
+  customerId     String?
+  sourceType     String
+  sourceId       String
+  discountMinor  Int
+  correlationId  String
+  requestHash    String
+  createdAt      DateTime @default(now())
+
+  @@unique([shopId, correlationId])
+  @@unique([shopId, promotionId, sourceType, sourceId])
+  @@index([shopId, promotionId, createdAt])
+  @@index([shopId, promotionId, customerId, createdAt])
+}
+
+model CustomerPortalAccessToken {
+  id         String   @id @default(uuid())
+  shopId     String
+  customerId String
+  tokenHash  String   @unique
+  expiresAt  DateTime
+  revokedAt  DateTime?
+  lastUsedAt DateTime?
+  createdById String?
+  createdAt  DateTime @default(now())
+
+  @@index([shopId, customerId, expiresAt])
+}

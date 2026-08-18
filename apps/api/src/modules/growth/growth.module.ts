@@ -14,6 +14,19 @@ import { GrowthPrivacyService } from './growth-privacy.service';
 import { GrowthPublicController } from './growth-public.controller';
 import { GrowthPublicDepositService } from './growth-public-deposit.service';
 import { GrowthController } from './growth.controller';
+import { Phase9CustomerPortalProfileController } from './phase9-customer-portal-profile.controller';
+import { Phase9CustomerPortalProfileService } from './phase9-customer-portal-profile.service';
+import {
+  Phase9CustomerPortalController,
+  Phase9CustomerValueController,
+} from './phase9-customer-value.controller';
+import { Phase9CustomerPortalService } from './phase9-customer-portal.service';
+import { Phase9CustomerValueService } from './phase9-customer-value.service';
+import { Phase9GrowthInterceptor } from './phase9-growth.interceptor';
+import { Phase9GuardrailsService } from './phase9-guardrails.service';
+import { Phase9LoyaltyExpiryService } from './phase9-loyalty-expiry.service';
+import { Phase9ReconciliationController } from './phase9-reconciliation.controller';
+import { Phase9ReconciliationService } from './phase9-reconciliation.service';
 import { Phase8ReservationController } from './phase8-reservation.controller';
 import { Phase8ReservationService } from './phase8-reservation.service';
 import { ReservationGrowthService } from './reservation-growth.service';
@@ -27,6 +40,10 @@ import { ReservationStripeWebhookRoutingInterceptor } from './reservation-stripe
     GrowthDepositPublicController,
     GrowthDepositWebhookController,
     Phase8ReservationController,
+    Phase9CustomerValueController,
+    Phase9CustomerPortalController,
+    Phase9CustomerPortalProfileController,
+    Phase9ReconciliationController,
   ],
   providers: [
     ReservationGrowthService,
@@ -40,9 +57,19 @@ import { ReservationStripeWebhookRoutingInterceptor } from './reservation-stripe
     GrowthPublicDepositService,
     GrowthDepositReconciliationService,
     Phase8ReservationService,
+    Phase9CustomerValueService,
+    Phase9CustomerPortalService,
+    Phase9CustomerPortalProfileService,
+    Phase9GuardrailsService,
+    Phase9LoyaltyExpiryService,
+    Phase9ReconciliationService,
     {
       provide: APP_INTERCEPTOR,
       useClass: ReservationStripeWebhookRoutingInterceptor,
+    },
+    {
+      provide: APP_INTERCEPTOR,
+      useClass: Phase9GrowthInterceptor,
     },
   ],
   exports: [
@@ -53,6 +80,9 @@ import { ReservationStripeWebhookRoutingInterceptor } from './reservation-stripe
     EventsGrowthService,
     GrowthAnalyticsService,
     Phase8ReservationService,
+    Phase9CustomerValueService,
+    Phase9GuardrailsService,
+    Phase9ReconciliationService,
   ],
 })
 export class GrowthModule {}

@@ -71,7 +71,9 @@ export class AuditService {
         correlationId: input.correlationId?.slice(0, 128) ?? null,
         sourceDevice: input.sourceDevice?.slice(0, 200) ?? null,
         reason: input.reason?.slice(0, 1000) ?? null,
-        ...(input.previousState !== undefined && { previousState: input.previousState }),
+        ...(input.previousState !== undefined && {
+          previousState: input.previousState,
+        }),
         ...(input.newState !== undefined && { newState: input.newState }),
       },
     });
@@ -85,6 +87,11 @@ export class AuditService {
       summary: string;
       meta?: Record<string, unknown>;
       actorName?: string;
+      correlationId?: string;
+      sourceDevice?: string;
+      reason?: string;
+      previousState?: Prisma.InputJsonValue;
+      newState?: Prisma.InputJsonValue;
     },
   ) {
     return this.prisma.auditLog.create({
@@ -98,6 +105,13 @@ export class AuditService {
         actorRole: null,
         actorName: input.actorName ?? 'Guest',
         actorEmail: null,
+        correlationId: input.correlationId?.slice(0, 128) ?? null,
+        sourceDevice: input.sourceDevice?.slice(0, 200) ?? null,
+        reason: input.reason?.slice(0, 1000) ?? null,
+        ...(input.previousState !== undefined && {
+          previousState: input.previousState,
+        }),
+        ...(input.newState !== undefined && { newState: input.newState }),
       },
     });
   }
