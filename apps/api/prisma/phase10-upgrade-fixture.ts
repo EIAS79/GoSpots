@@ -59,38 +59,49 @@ async function main() {
         createdById: owner.id,
       },
     });
-    const schedule = await prisma.scheduleEntry.create({
-      data: {
-        shopId: shop.id,
-        membershipId: membership.id,
-        jobRoleId: role.id,
-        startsAt: new Date('2026-08-18T08:00:00.000Z'),
-        endsAt: new Date('2026-08-18T16:00:00.000Z'),
-        note: 'Representative pre-Phase-10 schedule',
-        createdById: owner.id,
-      },
-    });
+
+    // This script intentionally runs against a database *before* the Phase 10
+    // migrations. The generated Prisma client already knows the current schema,
+    // so a normal ScheduleEntry.create() may try to RETURN newly-added columns
+    // that do not exist yet. Insert only columns that existed in the legacy schema.
+    const scheduleId = `${prefix}_schedule_primary`;
+    const overlappingLegacyScheduleId = `${prefix}_schedule_overlap`;
+    await prisma.$executeRaw`
+      INSERT INTO "ScheduleEntry" (
+        "id", "shopId", "membershipId", "jobRoleId", "startsAt", "endsAt",
+        "status", "note", "createdById", "createdAt", "updatedAt"
+      ) VALUES (
+        ${scheduleId}, ${shop.id}, ${membership.id}, ${role.id},
+        ${new Date('2026-08-18T08:00:00.000Z')},
+        ${new Date('2026-08-18T16:00:00.000Z')},
+        'SCHEDULED', 'Representative pre-Phase-10 schedule', ${owner.id},
+        CURRENT_TIMESTAMP, CURRENT_TIMESTAMP
+      )
+    `;
+
     // Old schema did not enforce shift conflicts. Keep one deliberate overlap in
     // the representative upgrade DB to prove Phase 10 does not make deployment
     // destructive or fail on historical scheduling debt.
-    const overlappingLegacySchedule = await prisma.scheduleEntry.create({
-      data: {
-        shopId: shop.id,
-        membershipId: membership.id,
-        jobRoleId: role.id,
-        startsAt: new Date('2026-08-18T12:00:00.000Z'),
-        endsAt: new Date('2026-08-18T18:00:00.000Z'),
-        note: 'Representative legacy overlapping schedule',
-        createdById: owner.id,
-      },
-    });
+    await prisma.$executeRaw`
+      INSERT INTO "ScheduleEntry" (
+        "id", "shopId", "membershipId", "jobRoleId", "startsAt", "endsAt",
+        "status", "note", "createdById", "createdAt", "updatedAt"
+      ) VALUES (
+        ${overlappingLegacyScheduleId}, ${shop.id}, ${membership.id}, ${role.id},
+        ${new Date('2026-08-18T12:00:00.000Z')},
+        ${new Date('2026-08-18T18:00:00.000Z')},
+        'SCHEDULED', 'Representative legacy overlapping schedule', ${owner.id},
+        CURRENT_TIMESTAMP, CURRENT_TIMESTAMP
+      )
+    `;
+
     console.log(
       JSON.stringify({
         shopId: shop.id,
         membershipId: membership.id,
         rateId: rate.id,
-        scheduleId: schedule.id,
-        overlappingLegacyScheduleId: overlappingLegacySchedule.id,
+        scheduleId,
+        overlappingLegacyScheduleId,
       }),
     );
   } finally {
