@@ -2,7 +2,7 @@ import { expect, test, type Page } from '@playwright/test';
 import { api, bindVenue, E2E, loginOwner } from '../helpers/app';
 
 const STAFF = {
-  email: 'e2e.staff@gospots.local',
+  loginId: 'e2e.staff@e2e-cash.gospots',
   password: 'GoSpots-E2E-Only-2026!',
 };
 
@@ -25,7 +25,7 @@ async function loginStaff(page: Page) {
   }
   const staffTab = page.getByRole('tab', { name: /^staff$/i });
   if (await staffTab.count()) await staffTab.click();
-  await page.getByLabel(/staff login id/i).fill(STAFF.email);
+  await page.getByLabel(/staff login id/i).fill(STAFF.loginId);
   await page.getByLabel(/^password$/i).fill(STAFF.password);
   await page.getByRole('button', { name: /sign in as staff/i }).click();
   await expect(page).toHaveURL(/\/dashboard(?:\/|$)/, { timeout: 20_000 });
