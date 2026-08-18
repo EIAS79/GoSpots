@@ -10,6 +10,9 @@ export const PHASE10_ACTION_KINDS = [
   'COMP',
   'MANUAL_TIME_EDIT',
   'PRICE_OVERRIDE',
+  'STORED_VALUE_CORRECTION',
+  'REOPEN_CHECK',
+  'REOPEN_DAY',
   'CANCELLATION_FEE_WAIVER',
   'MANAGER_OVERRIDE',
 ] as const;
@@ -29,6 +32,9 @@ export const HIGH_RISK_ACTION_KINDS = new Set<Phase10ActionKind>([
   'COMP',
   'MANUAL_TIME_EDIT',
   'PRICE_OVERRIDE',
+  'STORED_VALUE_CORRECTION',
+  'REOPEN_CHECK',
+  'REOPEN_DAY',
   'CANCELLATION_FEE_WAIVER',
   'MANAGER_OVERRIDE',
 ]);
@@ -126,6 +132,40 @@ export function classifyAccountableAction(
 
   if (path.includes('refund')) {
     return { actionKind: 'REFUND', amountMinor, sourceType: 'refund' };
+  }
+
+  // Phase 9 stored-value entries explicitly support ADJUST. Treat that as a
+  // money-like correction rather than a routine load/redeem/refund operation.
+  if (path.includes('stored-value')) {
+    const movement = text(body, ['type', 'entryType', 'movementType']);
+    if (movement === 'ADJUST' || path.includes('correction')) {
+      return {
+        actionKind: 'STORED_VALUE_CORRECTION',
+        amountMinor,
+        sourceType: 'stored-value',
+      };
+    }
+  }
+
+  // Reopening a financially/operationally closed object is explicitly high risk.
+  // Keep check and business-day policies separate so owners can require different
+  // approval strength or alerting for each.
+  if (path.includes('reopen')) {
+    if (
+      path.includes('day') ||
+      path.includes('business-day') ||
+      path.includes('day-close') ||
+      path.includes('close-day')
+    ) {
+      return { actionKind: 'REOPEN_DAY', amountMinor, sourceType: 'day-close' };
+    }
+    if (
+      path.includes('check') ||
+      path.includes('guest-check') ||
+      path.includes('settlement')
+    ) {
+      return { actionKind: 'REOPEN_CHECK', amountMinor, sourceType: 'commercial' };
+    }
   }
 
   // These restaurant cancellation routes can cancel active production work.
