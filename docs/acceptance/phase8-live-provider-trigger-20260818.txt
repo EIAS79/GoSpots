@@ -1,0 +1,1 @@
+Trigger the replay-safe Phase 8 live provider acceptance against the deployed production closeout commit d0522bc67a7c2b9406c99eff15f102f03d92ead1.
