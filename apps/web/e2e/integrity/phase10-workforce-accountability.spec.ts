@@ -6,6 +6,8 @@ const STAFF = {
   password: 'GoSpots-E2E-Only-2026!',
 };
 
+type CashShift = { session: { id: string } | null };
+
 async function clearAuth(page: Page) {
   await page.context().clearCookies();
   await page.goto('/login');
@@ -21,12 +23,23 @@ async function loginStaff(page: Page) {
   if (await preferences.isVisible().catch(() => false)) {
     await preferences.getByRole('button', { name: /reject optional/i }).click();
   }
-  const staffTab = page.getByRole('tab', { name: /staff/i });
+  const staffTab = page.getByRole('tab', { name: /^staff$/i });
   if (await staffTab.count()) await staffTab.click();
-  await page.locator('input[type="email"]').first().fill(STAFF.email);
-  await page.locator('input[type="password"]').first().fill(STAFF.password);
-  await page.locator('form').first().getByRole('button', { name: /sign in|log in/i }).click();
+  await page.getByLabel(/staff login id/i).fill(STAFF.email);
+  await page.getByLabel(/^password$/i).fill(STAFF.password);
+  await page.getByRole('button', { name: /sign in as staff/i }).click();
   await expect(page).toHaveURL(/\/dashboard(?:\/|$)/, { timeout: 20_000 });
+}
+
+async function ensureOwnerCashSession(page: Page): Promise<string> {
+  const current = await api<CashShift>(page, 'GET', '/cash/my-shift');
+  if (current.session?.id) return current.session.id;
+
+  const opened = await api<{ id: string }>(page, 'POST', '/cash/sessions', {
+    data: { openingFloat: '100.00' },
+    idempotencyKey: `phase10-open-${Date.now()}`,
+  });
+  return opened.id;
 }
 
 test.describe('Phase 10 workforce accountability @smoke', () => {
@@ -96,10 +109,7 @@ test.describe('Phase 10 workforce accountability @smoke', () => {
         afterHoursEndHour: null,
       },
     });
-    await api(page, 'POST', '/cash/sessions', {
-      data: { openingFloat: '100.00' },
-      idempotencyKey: `phase10-open-${Date.now()}`,
-    });
+    const cashSessionId = await ensureOwnerCashSession(page);
 
     await clearAuth(page);
     await loginStaff(page);
@@ -141,8 +151,13 @@ test.describe('Phase 10 workforce accountability @smoke', () => {
     await clearAuth(page);
     await loginStaff(page);
     await bindVenue(page, E2E.venues.cash);
-    await api(page, 'POST', '/cash/movements', {
-      data: { type: 'PAID_OUT', amount: '5.00', reasonCategory: 'E2E', note: 'Denied request must not work' },
+    await api(page, 'POST', `/cash/sessions/${cashSessionId}/movements`, {
+      data: {
+        type: 'PAY_OUT',
+        amount: '5.00',
+        reasonCategory: 'E2E',
+        note: 'Denied request must not work',
+      },
       idempotencyKey: `phase10-denied-movement-${Date.now()}`,
       headers: { 'x-staff-approval-id': deniedRequest.id },
       expectedStatus: 403,
@@ -180,18 +195,33 @@ test.describe('Phase 10 workforce accountability @smoke', () => {
     await clearAuth(page);
     await loginStaff(page);
     await bindVenue(page, E2E.venues.cash);
-    await api(page, 'POST', '/cash/movements', {
-      data: { type: 'PAID_OUT', amount: '5.00', reasonCategory: 'E2E', note: 'Approval required' },
+    await api(page, 'POST', `/cash/sessions/${cashSessionId}/movements`, {
+      data: {
+        type: 'PAY_OUT',
+        amount: '5.00',
+        reasonCategory: 'E2E',
+        note: 'Approval required',
+      },
       idempotencyKey: `phase10-missing-approval-${Date.now()}`,
       expectedStatus: 403,
     });
-    await api(page, 'POST', '/cash/movements', {
-      data: { type: 'PAID_OUT', amount: '5.00', reasonCategory: 'E2E', note: 'Approved payout' },
+    await api(page, 'POST', `/cash/sessions/${cashSessionId}/movements`, {
+      data: {
+        type: 'PAY_OUT',
+        amount: '5.00',
+        reasonCategory: 'E2E',
+        note: 'Approved payout',
+      },
       idempotencyKey: `phase10-approved-movement-${Date.now()}`,
       headers: { 'x-staff-approval-id': approval.id },
     });
-    await api(page, 'POST', '/cash/movements', {
-      data: { type: 'PAID_OUT', amount: '1.00', reasonCategory: 'E2E', note: 'Consumed approval reuse' },
+    await api(page, 'POST', `/cash/sessions/${cashSessionId}/movements`, {
+      data: {
+        type: 'PAY_OUT',
+        amount: '1.00',
+        reasonCategory: 'E2E',
+        note: 'Consumed approval reuse',
+      },
       idempotencyKey: `phase10-consumed-reuse-${Date.now()}`,
       headers: { 'x-staff-approval-id': approval.id },
       expectedStatus: 403,
