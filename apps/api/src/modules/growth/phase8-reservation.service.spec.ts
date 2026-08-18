@@ -30,6 +30,7 @@ function makeService(tx: any, configValues: Record<string, string> = {}) {
 function diningArrivalTx(overrides: Record<string, any> = {}) {
   const tx: any = {
     $executeRaw: jest.fn().mockResolvedValue(0),
+    $queryRaw: jest.fn().mockResolvedValue([]),
     reservation: {
       findFirst: jest.fn().mockResolvedValue({
         id: 'reservation-1',
@@ -60,6 +61,7 @@ function diningArrivalTx(overrides: Record<string, any> = {}) {
     guestCheck: {
       findFirst: jest.fn(),
       create: jest.fn().mockResolvedValue({ id: 'check-1', status: 'OPEN' }),
+      updateMany: jest.fn().mockResolvedValue({ count: 1 }),
     },
     reservationExtension: {
       upsert: jest.fn().mockResolvedValue({ convertedSessionId: null }),
@@ -90,8 +92,15 @@ function diningArrivalTx(overrides: Record<string, any> = {}) {
       }),
     },
     commercialAdjustment: {
+      findMany: jest.fn().mockResolvedValue([]),
       create: jest.fn().mockResolvedValue({ id: 'adjustment-1' }),
+      update: jest.fn().mockResolvedValue({ id: 'adjustment-1' }),
     },
+    checkSettlement: {
+      findFirst: jest.fn(),
+      updateMany: jest.fn().mockResolvedValue({ count: 1 }),
+    },
+    payment: { count: jest.fn().mockResolvedValue(0) },
     reservationBookingEvidence: {
       upsert: jest.fn().mockResolvedValue({ id: 'evidence-1' }),
     },
@@ -246,6 +255,116 @@ describe('Phase8ReservationService', () => {
       }),
     });
     expect(result.refundId).toBe('re_1');
+  });
+
+  it('releases an applied deposit credit before refunding the full remaining provider balance', async () => {
+    const tx = diningArrivalTx();
+    tx.reservationDepositLedgerEntry.findFirst.mockResolvedValue(null);
+    tx.reservation.findFirst.mockResolvedValue({ id: 'reservation-1' });
+    tx.reservationDepositLedgerEntry.findMany.mockResolvedValue([
+      { amountMinor: 3000, currency: 'EUR' },
+    ]);
+    tx.reservationDepositApplication.findMany.mockResolvedValue([
+      { amountMinor: 3000, guestCheckId: 'check-1' },
+    ]);
+    tx.reservationDepositCheckoutAttempt.findFirst.mockResolvedValue({
+      id: 'attempt-1',
+      providerPaymentIntentId: 'pi_1',
+      currency: 'EUR',
+      status: 'SUCCEEDED',
+    });
+    tx.guestCheck.findFirst.mockResolvedValue({
+      id: 'check-1',
+      status: 'OPEN',
+      currentSettlementId: null,
+    });
+    tx.commercialAdjustment.findMany.mockResolvedValue([
+      { id: 'adjustment-1', amountMinor: 3000 },
+    ]);
+    tx.reservationDepositApplication.create.mockResolvedValue({
+      id: 'application-reversal-1',
+      amountMinor: -3000,
+    });
+    tx.reservationDepositLedgerEntry.create.mockResolvedValue({
+      id: 'refund-ledger-1',
+      reservationId: 'reservation-1',
+      amountMinor: -3000,
+      refundId: 're_1',
+      correlationId: 'refund-after-arrival-1',
+    });
+    const { service } = makeService(tx, { STRIPE_SECRET_KEY: 'sk_test_dummy' });
+    const createRefund = jest.fn().mockResolvedValue({
+      id: 're_1',
+      status: 'succeeded',
+    });
+    jest.spyOn(service as any, 'stripe').mockReturnValue({
+      refunds: { create: createRefund },
+    });
+
+    const result = await service.refundProviderDeposit(actor, 'reservation-1', {
+      amountMinor: 3000,
+      correlationId: 'refund-after-arrival-1',
+      reason: 'Cancellation after arrival acceptance test',
+    });
+
+    expect(createRefund).toHaveBeenCalledTimes(1);
+    expect(tx.commercialAdjustment.update).toHaveBeenCalledWith({
+      where: { id: 'adjustment-1' },
+      data: expect.objectContaining({
+        voidedById: 'user-1',
+        voidReason: 'Provider deposit refund: refund-after-arrival-1',
+      }),
+    });
+    expect(tx.reservationDepositApplication.create).toHaveBeenCalledWith({
+      data: expect.objectContaining({
+        reservationId: 'reservation-1',
+        guestCheckId: 'check-1',
+        amountMinor: -3000,
+        correlationId: 'phase8-refund-release:refund-after-arrival-1',
+      }),
+    });
+    expect(tx.guestCheck.updateMany).toHaveBeenCalledWith({
+      where: { id: 'check-1', shopId: 'shop-1', status: 'OPEN' },
+      data: {
+        currentSettlementId: null,
+        version: { increment: 1 },
+      },
+    });
+    expect(result.refundId).toBe('re_1');
+  });
+
+  it('rejects a partial refund that would leave applied credit out of sync', async () => {
+    const tx = diningArrivalTx();
+    tx.reservationDepositLedgerEntry.findFirst.mockResolvedValue(null);
+    tx.reservation.findFirst.mockResolvedValue({ id: 'reservation-1' });
+    tx.reservationDepositLedgerEntry.findMany.mockResolvedValue([
+      { amountMinor: 3000, currency: 'EUR' },
+    ]);
+    tx.reservationDepositApplication.findMany.mockResolvedValue([
+      { amountMinor: 3000, guestCheckId: 'check-1' },
+    ]);
+    tx.reservationDepositCheckoutAttempt.findFirst.mockResolvedValue({
+      id: 'attempt-1',
+      providerPaymentIntentId: 'pi_1',
+      currency: 'EUR',
+      status: 'SUCCEEDED',
+    });
+    const { service } = makeService(tx, { STRIPE_SECRET_KEY: 'sk_test_dummy' });
+    const createRefund = jest.fn();
+    jest.spyOn(service as any, 'stripe').mockReturnValue({
+      refunds: { create: createRefund },
+    });
+
+    await expect(
+      service.refundProviderDeposit(actor, 'reservation-1', {
+        amountMinor: 1000,
+        correlationId: 'partial-after-arrival-1',
+        reason: 'Partial refund after arrival',
+      }),
+    ).rejects.toThrow(
+      'A refund that touches applied deposit credit must refund the full remaining deposit balance.',
+    );
+    expect(createRefund).not.toHaveBeenCalled();
   });
 
   it('replays the same refund correlation without calling Stripe twice', async () => {
