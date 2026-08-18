@@ -1,0 +1,459 @@
+name: Phase 8 applied-deposit refund patcher
+
+on:
+  push:
+    branches:
+      - phase8/refund-applied-deposit
+
+permissions:
+  contents: write
+
+jobs:
+  patch-test-commit:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: phase8/refund-applied-deposit
+          fetch-depth: 0
+
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 10.12.1
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: pnpm
+
+      - name: Patch applied-deposit refund lifecycle
+        shell: bash
+        run: |
+          python3 <<'PY'
+          from pathlib import Path
+
+          service_path = Path('apps/api/src/modules/growth/phase8-reservation.service.ts')
+          spec_path = Path('apps/api/src/modules/growth/phase8-reservation.service.spec.ts')
+          service = service_path.read_text()
+          spec = spec_path.read_text()
+
+          marker = "phase8-refund-release:"
+          if marker not in service:
+              old = """          tx.reservationDepositApplication.findMany({
+            where: { shopId, reservationId },
+            select: { amountMinor: true },
+          }),"""
+              new = """          tx.reservationDepositApplication.findMany({
+            where: { shopId, reservationId },
+            select: { amountMinor: true, guestCheckId: true },
+          }),"""
+              if old not in service:
+                  raise SystemExit('application select block not found')
+              service = service.replace(old, new, 1)
+
+              old = """        const refundableMinor = Math.max(0, balanceMinor - appliedMinor);
+        if (dto.amountMinor > refundableMinor) {
+          throw new ConflictException(
+            'Refund exceeds the captured, unapplied reservation deposit balance.',
+          );
+        }
+        if (!attempt?.providerPaymentIntentId) {
+          throw new ConflictException(
+            'No successful provider payment is available for this refund.',
+          );
+        }
+
+        const refund = await stripe.refunds.create("""
+              new = """        const availableRefundMinor = Math.max(0, balanceMinor);
+        if (dto.amountMinor > availableRefundMinor) {
+          throw new ConflictException(
+            'Refund exceeds the remaining captured reservation deposit balance.',
+          );
+        }
+        if (!attempt?.providerPaymentIntentId) {
+          throw new ConflictException(
+            'No successful provider payment is available for this refund.',
+          );
+        }
+
+        const unappliedMinor = Math.max(0, balanceMinor - appliedMinor);
+        const appliedReleaseMinor = Math.max(
+          0,
+          dto.amountMinor - unappliedMinor,
+        );
+        if (appliedReleaseMinor > Math.max(0, appliedMinor)) {
+          throw new ConflictException(
+            'Refund exceeds the reservation deposit amount that can be released.',
+          );
+        }
+
+        let appliedGuestCheckId: string | null = null;
+        let appliedCurrentSettlementId: string | null = null;
+        let depositAdjustments: { id: string; amountMinor: number | null }[] = [];
+
+        if (appliedReleaseMinor > 0) {
+          const guestCheckIds = [
+            ...new Set(
+              applications
+                .filter(
+                  (application) =>
+                    application.amountMinor > 0 && application.guestCheckId,
+                )
+                .map((application) => application.guestCheckId),
+            ),
+          ];
+          if (guestCheckIds.length !== 1) {
+            throw new ConflictException(
+              'Applied reservation deposit cannot be released unambiguously.',
+            );
+          }
+          appliedGuestCheckId = guestCheckIds[0];
+
+          await tx.$queryRaw(
+            Prisma.sql`SELECT \"id\" FROM \"GuestCheck\" WHERE \"id\"=${appliedGuestCheckId} AND \"shopId\"=${shopId} FOR UPDATE`,
+          );
+          const guestCheck = await tx.guestCheck.findFirst({
+            where: { id: appliedGuestCheckId, shopId },
+            select: { id: true, status: true, currentSettlementId: true },
+          });
+          if (!guestCheck || guestCheck.status !== 'OPEN') {
+            throw new ConflictException(
+              'Applied reservation deposit can only be refunded while its guest check is open.',
+            );
+          }
+          appliedCurrentSettlementId = guestCheck.currentSettlementId;
+
+          if (guestCheck.currentSettlementId) {
+            const settlement = await tx.checkSettlement.findFirst({
+              where: {
+                id: guestCheck.currentSettlementId,
+                shopId,
+                guestCheckId: guestCheck.id,
+              },
+              select: { id: true, state: true },
+            });
+            const successfulPayments = await tx.payment.count({
+              where: {
+                shopId,
+                settlementId: guestCheck.currentSettlementId,
+                status: 'SUCCESS',
+              },
+            });
+            if (
+              !settlement ||
+              successfulPayments > 0 ||
+              !['OPEN', 'CALCULATED', 'VOID'].includes(settlement.state)
+            ) {
+              throw new ConflictException(
+                'Applied reservation deposit is locked by checkout settlement state.',
+              );
+            }
+          }
+
+          depositAdjustments = await tx.commercialAdjustment.findMany({
+            where: {
+              shopId,
+              guestCheckId: appliedGuestCheckId,
+              type: CommercialAdjustmentType.DEPOSIT_APPLICATION,
+              targetSourceType: 'RESERVATION_DEPOSIT',
+              targetSourceId: reservationId,
+              voidedAt: null,
+            },
+            select: { id: true, amountMinor: true },
+            orderBy: [{ createdAt: 'asc' }, { id: 'asc' }],
+          });
+          const activeAppliedMinor = depositAdjustments.reduce(
+            (sum, adjustment) => sum + (adjustment.amountMinor ?? 0),
+            0,
+          );
+          if (appliedReleaseMinor > activeAppliedMinor) {
+            throw new ConflictException(
+              'Applied reservation deposit credit is inconsistent with its commercial adjustment.',
+            );
+          }
+        }
+
+        const refund = await stripe.refunds.create("""
+              if old not in service:
+                  raise SystemExit('refund balance block not found')
+              service = service.replace(old, new, 1)
+
+              old = """        if (refund.status === 'failed' || refund.status === 'canceled') {
+          throw new ServiceUnavailableException(
+            `Stripe refund did not succeed (${refund.status}).`,
+          );
+        }
+
+        return tx.reservationDepositLedgerEntry.create({
+          data: {
+            shopId,
+            reservationId,
+            type: 'REFUND',
+            amountMinor: -dto.amountMinor,
+            currency: (
+              ledger.find((entry) => entry.currency)?.currency ??
+              attempt.currency
+            ).toUpperCase(),
+            refundId: refund.id,
+            correlationId,
+            note: dto.reason.trim(),
+            actorUserId: actor.sub,
+          },
+        });"""
+              new = """        if (refund.status === 'failed' || refund.status === 'canceled') {
+          throw new ServiceUnavailableException(
+            `Stripe refund did not succeed (${refund.status}).`,
+          );
+        }
+
+        const refundCurrency = (
+          ledger.find((entry) => entry.currency)?.currency ?? attempt.currency
+        ).toUpperCase();
+
+        if (appliedReleaseMinor > 0 && appliedGuestCheckId) {
+          let remainingReleaseMinor = appliedReleaseMinor;
+          const voidedAt = new Date();
+          for (const adjustment of depositAdjustments) {
+            if (remainingReleaseMinor <= 0) break;
+            const adjustmentMinor = Math.max(0, adjustment.amountMinor ?? 0);
+            if (adjustmentMinor <= 0) continue;
+
+            await tx.commercialAdjustment.update({
+              where: { id: adjustment.id },
+              data: {
+                voidedAt,
+                voidedById: actor.sub,
+                voidReason: `Provider deposit refund: ${correlationId}`,
+              },
+            });
+
+            if (adjustmentMinor > remainingReleaseMinor) {
+              await tx.commercialAdjustment.create({
+                data: {
+                  shopId,
+                  guestCheckId: appliedGuestCheckId,
+                  type: CommercialAdjustmentType.DEPOSIT_APPLICATION,
+                  scope: CommercialAdjustmentScope.CHECK,
+                  targetSourceType: 'RESERVATION_DEPOSIT',
+                  targetSourceId: reservationId,
+                  amountMinor: adjustmentMinor - remainingReleaseMinor,
+                  beforeTotalMinor: 0,
+                  afterTotalMinor: 0,
+                  reason:
+                    'Reservation deposit credit retained after provider refund',
+                  source: CommercialAdjustmentSource.DEPOSIT,
+                  createdById: actor.sub,
+                },
+              });
+              remainingReleaseMinor = 0;
+            } else {
+              remainingReleaseMinor -= adjustmentMinor;
+            }
+          }
+          if (remainingReleaseMinor !== 0) {
+            throw new ConflictException(
+              'Applied reservation deposit credit changed during refund.',
+            );
+          }
+
+          await tx.reservationDepositApplication.create({
+            data: {
+              shopId,
+              reservationId,
+              guestCheckId: appliedGuestCheckId,
+              amountMinor: -appliedReleaseMinor,
+              currency: refundCurrency,
+              correlationId: `phase8-refund-release:${correlationId}`,
+              actorUserId: actor.sub,
+            },
+          });
+
+          if (appliedCurrentSettlementId) {
+            await tx.checkSettlement.updateMany({
+              where: {
+                id: appliedCurrentSettlementId,
+                shopId,
+                guestCheckId: appliedGuestCheckId,
+                state: { in: ['OPEN', 'CALCULATED'] },
+              },
+              data: { state: 'VOID' },
+            });
+          }
+          const released = await tx.guestCheck.updateMany({
+            where: { id: appliedGuestCheckId, shopId, status: 'OPEN' },
+            data: {
+              currentSettlementId: null,
+              version: { increment: 1 },
+            },
+          });
+          if (released.count !== 1) {
+            throw new ConflictException(
+              'Guest check changed while the applied deposit was being refunded.',
+            );
+          }
+        }
+
+        return tx.reservationDepositLedgerEntry.create({
+          data: {
+            shopId,
+            reservationId,
+            type: 'REFUND',
+            amountMinor: -dto.amountMinor,
+            currency: refundCurrency,
+            refundId: refund.id,
+            correlationId,
+            note: dto.reason.trim(),
+            actorUserId: actor.sub,
+          },
+        });"""
+              if old not in service:
+                  raise SystemExit('refund persistence block not found')
+              service = service.replace(old, new, 1)
+              service_path.write_text(service)
+
+          test_marker = 'releases an applied deposit credit before refunding the provider'
+          if test_marker not in spec:
+              old = """    guestCheck: {
+      findFirst: jest.fn(),
+      create: jest.fn().mockResolvedValue({ id: 'check-1', status: 'OPEN' }),
+    },"""
+              new = """    guestCheck: {
+      findFirst: jest.fn(),
+      create: jest.fn().mockResolvedValue({ id: 'check-1', status: 'OPEN' }),
+      updateMany: jest.fn().mockResolvedValue({ count: 1 }),
+    },"""
+              if old not in spec:
+                  raise SystemExit('guestCheck mock block not found')
+              spec = spec.replace(old, new, 1)
+
+              old = """    commercialAdjustment: {
+      create: jest.fn().mockResolvedValue({ id: 'adjustment-1' }),
+    },"""
+              new = """    commercialAdjustment: {
+      findMany: jest.fn().mockResolvedValue([]),
+      create: jest.fn().mockResolvedValue({ id: 'adjustment-1' }),
+      update: jest.fn().mockResolvedValue({ id: 'adjustment-1' }),
+    },
+    checkSettlement: {
+      findFirst: jest.fn(),
+      updateMany: jest.fn().mockResolvedValue({ count: 1 }),
+    },
+    payment: { count: jest.fn().mockResolvedValue(0) },"""
+              if old not in spec:
+                  raise SystemExit('commercialAdjustment mock block not found')
+              spec = spec.replace(old, new, 1)
+
+              anchor = """  it('replays the same refund correlation without calling Stripe twice', async () => {"""
+              test = """  it('releases an applied deposit credit before refunding the provider', async () => {
+    const tx = diningArrivalTx();
+    tx.reservationDepositLedgerEntry.findFirst.mockResolvedValue(null);
+    tx.reservation.findFirst.mockResolvedValue({ id: 'reservation-1' });
+    tx.reservationDepositLedgerEntry.findMany.mockResolvedValue([
+      { amountMinor: 3000, currency: 'EUR' },
+    ]);
+    tx.reservationDepositApplication.findMany.mockResolvedValue([
+      { amountMinor: 3000, guestCheckId: 'check-1' },
+    ]);
+    tx.reservationDepositCheckoutAttempt.findFirst.mockResolvedValue({
+      id: 'attempt-1',
+      providerPaymentIntentId: 'pi_1',
+      currency: 'EUR',
+      status: 'SUCCEEDED',
+    });
+    tx.guestCheck.findFirst.mockResolvedValue({
+      id: 'check-1',
+      status: 'OPEN',
+      currentSettlementId: null,
+    });
+    tx.commercialAdjustment.findMany.mockResolvedValue([
+      { id: 'adjustment-1', amountMinor: 3000 },
+    ]);
+    tx.reservationDepositApplication.create.mockResolvedValue({
+      id: 'application-reversal-1',
+      amountMinor: -1000,
+    });
+    tx.reservationDepositLedgerEntry.create.mockResolvedValue({
+      id: 'refund-ledger-1',
+      reservationId: 'reservation-1',
+      amountMinor: -1000,
+      refundId: 're_1',
+      correlationId: 'refund-after-arrival-1',
+    });
+    const { service } = makeService(tx, { STRIPE_SECRET_KEY: 'sk_test_dummy' });
+    const createRefund = jest.fn().mockResolvedValue({
+      id: 're_1',
+      status: 'succeeded',
+    });
+    jest.spyOn(service as any, 'stripe').mockReturnValue({
+      refunds: { create: createRefund },
+    });
+
+    const result = await service.refundProviderDeposit(actor, 'reservation-1', {
+      amountMinor: 1000,
+      correlationId: 'refund-after-arrival-1',
+      reason: 'Cancellation after arrival acceptance test',
+    });
+
+    expect(createRefund).toHaveBeenCalledTimes(1);
+    expect(tx.commercialAdjustment.update).toHaveBeenCalledWith({
+      where: { id: 'adjustment-1' },
+      data: expect.objectContaining({
+        voidedById: 'user-1',
+      }),
+    });
+    expect(tx.commercialAdjustment.create).toHaveBeenCalledWith({
+      data: expect.objectContaining({
+        type: CommercialAdjustmentType.DEPOSIT_APPLICATION,
+        targetSourceId: 'reservation-1',
+        amountMinor: 2000,
+      }),
+    });
+    expect(tx.reservationDepositApplication.create).toHaveBeenCalledWith({
+      data: expect.objectContaining({
+        reservationId: 'reservation-1',
+        guestCheckId: 'check-1',
+        amountMinor: -1000,
+        correlationId: 'phase8-refund-release:refund-after-arrival-1',
+      }),
+    });
+    expect(tx.guestCheck.updateMany).toHaveBeenCalledWith({
+      where: { id: 'check-1', shopId: 'shop-1', status: 'OPEN' },
+      data: {
+        currentSettlementId: null,
+        version: { increment: 1 },
+      },
+    });
+    expect(result.refundId).toBe('re_1');
+  });
+
+"""
+              if anchor not in spec:
+                  raise SystemExit('refund replay test anchor not found')
+              spec = spec.replace(anchor, test + anchor, 1)
+              spec_path.write_text(spec)
+          PY
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Targeted Phase 8 tests
+        run: pnpm --filter @gospots/api test -- phase8-reservation.service.spec.ts
+
+      - name: API lint and build
+        run: |
+          pnpm --filter @gospots/api run lint
+          pnpm --filter @gospots/api run build
+
+      - name: Commit patched implementation
+        shell: bash
+        run: |
+          if git diff --quiet -- apps/api/src/modules/growth/phase8-reservation.service.ts apps/api/src/modules/growth/phase8-reservation.service.spec.ts; then
+            echo "Patch already present; nothing to commit."
+            exit 0
+          fi
+          git config user.name "GoSpots Phase 8 Automation"
+          git config user.email "actions@users.noreply.github.com"
+          git add apps/api/src/modules/growth/phase8-reservation.service.ts apps/api/src/modules/growth/phase8-reservation.service.spec.ts
+          git commit -m "Phase 8: refund applied reservation deposits safely"
+          git push origin HEAD:phase8/refund-applied-deposit
