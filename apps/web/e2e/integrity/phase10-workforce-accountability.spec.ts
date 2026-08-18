@@ -97,7 +97,7 @@ test.describe('Phase 10 workforce accountability @smoke', () => {
       },
     });
     await api(page, 'POST', '/cash/sessions', {
-      data: { openingFloat: '100.00', drawerId: 'phase10-e2e' },
+      data: { openingFloat: '100.00' },
       idempotencyKey: `phase10-open-${Date.now()}`,
     });
 
