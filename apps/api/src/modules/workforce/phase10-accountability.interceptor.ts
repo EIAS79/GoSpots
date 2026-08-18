@@ -88,8 +88,15 @@ export class Phase10AccountabilityInterceptor implements NestInterceptor {
           ),
         ),
       ),
-      switchMap((prepared) =>
-        (next.handle() as Observable<unknown>).pipe(
+      switchMap((prepared) => {
+        // A caller may send an arbitrary x-staff-approval-id even when the
+        // configured policy does not require approval. Only an approval that
+        // the service atomically reserved may be linked to immutable evidence.
+        if (prepared && !prepared.approvalReserved) {
+          prepared.approvalRequestId = undefined;
+          prepared.approverMembershipId = undefined;
+        }
+        return (next.handle() as Observable<unknown>).pipe(
           mergeMap((value: unknown) =>
             from(
               this.accountability.finalizePreparedAction(
@@ -108,8 +115,8 @@ export class Phase10AccountabilityInterceptor implements NestInterceptor {
               mergeMap(() => throwError(() => error)),
             ),
           ),
-        ),
-      ),
+        );
+      }),
     );
   }
 }
