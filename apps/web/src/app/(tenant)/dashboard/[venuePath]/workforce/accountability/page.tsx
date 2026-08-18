@@ -3,6 +3,12 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { TenantPage } from "@/components/layout/tenant-page";
 import { api } from "@/lib/api";
+import {
+  clearOperatorSession,
+  getOperatorSession,
+  setOperatorSession,
+  type StoredOperatorSession,
+} from "@/lib/operator-session";
 import { useCurrentMembership } from "@/lib/use-current-membership";
 
 type StaffProfile = {
@@ -14,7 +20,7 @@ type StaffProfile = {
   managerMembershipId: string | null;
   jobRoleId: string | null;
   hourlyCost: { minor: number; currency: string } | null;
-  assignedBranches: { shopId: string; name: string; branchCode: string | null; role: string; active: boolean }[];
+  assignedBranches: Array<{ shopId: string; name: string; active: boolean }>;
 };
 
 type ApprovalPolicy = {
@@ -23,7 +29,6 @@ type ApprovalPolicy = {
   amountThresholdMinor: number | null;
   requirePassword: boolean;
   notifyOnUse: boolean;
-  version: number;
 };
 
 type NotificationRule = {
@@ -42,7 +47,6 @@ type Approval = {
   requesterMembershipId: string;
   sourceType: string;
   sourceId: string | null;
-  amountMinor: number | null;
   reason: string;
   status: string;
   expiresAt: string;
@@ -54,7 +58,6 @@ type Evidence = {
   actorName: string;
   approverName: string | null;
   authStrength: string;
-  amountMinor: number | null;
   suspicious: boolean;
   suspiciousReasons: string[] | null;
   occurredAt: string;
@@ -64,11 +67,9 @@ type Performance = {
   membershipId: string;
   displayName: string;
   salesCount: number;
-  salesMinor: number;
   averageCheckMinor: number;
   refundCount: number;
   voidCount: number;
-  discountCount: number;
   workedHours: number;
   overtimeSeconds: number;
   lateCount: number;
@@ -78,23 +79,35 @@ type Performance = {
 
 type WorkforcePolicy = {
   enforceSchedule: boolean;
-  earlyClockInMinutes: number;
   lateGraceMinutes: number;
-  overtimeWeeklySeconds: number;
-  minimumBreakAfterSeconds: number;
-  minimumBreakSeconds: number;
   operatorSessionMinutes: number;
   pinLockoutAttempts: number;
   pinLockoutMinutes: number;
 };
 
-const tabs = ["Staff", "Approvals", "Owner controls", "Accountability", "Performance"] as const;
+type SwitchResponse = {
+  operatorToken: string;
+  expiresAt: string;
+  authStrength: "PIN" | "BADGE";
+  operator: { membershipId: string; displayName: string };
+};
+
+const tabs = [
+  "Staff",
+  "Approvals",
+  "Owner controls",
+  "Accountability",
+  "Performance",
+] as const;
 type Tab = (typeof tabs)[number];
 
 export default function WorkforceAccountabilityPage() {
   const membership = useCurrentMembership();
   const isOwner = membership?.role === "OWNER";
-  const canManage = isOwner || membership?.role === "MANAGER" || (membership?.permissions ?? "").includes("staff.write");
+  const canManage =
+    isOwner ||
+    membership?.role === "MANAGER" ||
+    (membership?.permissions ?? "").includes("staff.write");
   const [tab, setTab] = useState<Tab>("Staff");
   const [staff, setStaff] = useState<StaffProfile[]>([]);
   const [policies, setPolicies] = useState<ApprovalPolicy[]>([]);
@@ -103,36 +116,56 @@ export default function WorkforceAccountabilityPage() {
   const [evidence, setEvidence] = useState<Evidence[]>([]);
   const [performance, setPerformance] = useState<Performance[]>([]);
   const [workforcePolicy, setWorkforcePolicy] = useState<WorkforcePolicy | null>(null);
+  const [operator, setOperator] = useState<StoredOperatorSession | null>(null);
   const [message, setMessage] = useState("");
 
   const load = useCallback(async () => {
     try {
-      const [staffRows, policyRows, ruleRows, evidenceRows, performanceRows, timePolicy] = await Promise.all([
-        api<StaffProfile[]>("/workforce/phase10/staff"),
-        api<ApprovalPolicy[]>("/workforce/phase10/approval-policies"),
-        api<NotificationRule[]>("/workforce/phase10/notification-rules"),
-        api<Evidence[]>("/workforce/phase10/accountability?take=100"),
-        api<Performance[]>("/workforce/phase10/performance?days=30"),
-        api<WorkforcePolicy>("/workforce/phase10/policy"),
-      ]);
+      const [staffRows, policyRows, ruleRows, evidenceRows, performanceRows, timePolicy] =
+        await Promise.all([
+          api<StaffProfile[]>("/workforce/phase10/staff"),
+          api<ApprovalPolicy[]>("/workforce/phase10/approval-policies"),
+          api<NotificationRule[]>("/workforce/phase10/notification-rules"),
+          api<Evidence[]>("/workforce/phase10/accountability?take=100"),
+          api<Performance[]>("/workforce/phase10/performance?days=30"),
+          api<WorkforcePolicy>("/workforce/phase10/policy"),
+        ]);
       setStaff(staffRows);
       setPolicies(policyRows);
       setNotificationRules(ruleRows);
       setEvidence(evidenceRows);
       setPerformance(performanceRows);
       setWorkforcePolicy(timePolicy);
-      if (canManage) setApprovals(await api<Approval[]>("/workforce/phase10/approvals?status=PENDING"));
+      if (canManage) {
+        setApprovals(
+          await api<Approval[]>("/workforce/phase10/approvals?status=PENDING"),
+        );
+      }
       setMessage("");
     } catch (error) {
-      setMessage(error instanceof Error ? error.message : "Phase 10 workforce controls unavailable");
+      setMessage(
+        error instanceof Error
+          ? error.message
+          : "Phase 10 workforce controls unavailable",
+      );
     }
   }, [canManage]);
+
+  useEffect(() => {
+    setOperator(getOperatorSession());
+    const sync = () => setOperator(getOperatorSession());
+    window.addEventListener("gospots:operator-session", sync);
+    return () => window.removeEventListener("gospots:operator-session", sync);
+  }, []);
 
   useEffect(() => {
     void load();
   }, [load]);
 
-  const staffNames = useMemo(() => new Map(staff.map((row) => [row.membershipId, row.displayName])), [staff]);
+  const staffNames = useMemo(
+    () => new Map(staff.map((row) => [row.membershipId, row.displayName])),
+    [staff],
+  );
 
   async function put(path: string, body: unknown) {
     try {
@@ -152,10 +185,49 @@ export default function WorkforceAccountabilityPage() {
     }
   }
 
+  async function setPin(row: StaffProfile) {
+    const pin = window.prompt(`Set a 4–8 digit operator PIN for ${row.displayName}`) ?? "";
+    if (!pin) return;
+    await put("/workforce/phase10/operator-credentials", {
+      membershipId: row.membershipId,
+      pin,
+      active: true,
+    });
+  }
+
+  async function switchOperator(row: StaffProfile) {
+    const pin = window.prompt(`Enter operator PIN for ${row.displayName}`) ?? "";
+    if (!pin) return;
+    try {
+      const result = await api<SwitchResponse>("/workforce/phase10/operator-switch", {
+        method: "POST",
+        body: JSON.stringify({ membershipId: row.membershipId, pin }),
+      });
+      setOperatorSession({
+        token: result.operatorToken,
+        membershipId: result.operator.membershipId,
+        displayName: result.operator.displayName,
+        authStrength: result.authStrength,
+        expiresAt: result.expiresAt,
+      });
+      setMessage(
+        `${result.operator.displayName} is now the active counter operator. High-risk actions still require full authenticated identity.`,
+      );
+    } catch (error) {
+      setMessage(error instanceof Error ? error.message : "Operator switch failed");
+    }
+  }
+
   async function decideApproval(row: Approval, approve: boolean) {
-    const password = approve ? window.prompt("Confirm your account password for this elevated approval") ?? "" : "";
+    const password = approve
+      ? (window.prompt("Confirm your account password for this elevated approval") ?? "")
+      : "";
     if (approve && !password) return;
-    const note = window.prompt(approve ? "Approval note (optional)" : "Reason for denial", "") ?? "";
+    const note =
+      window.prompt(
+        approve ? "Approval note (optional)" : "Reason for denial",
+        "",
+      ) ?? "";
     try {
       await api(`/workforce/phase10/approvals/${row.id}/decision`, {
         method: "POST",
@@ -168,72 +240,124 @@ export default function WorkforceAccountabilityPage() {
     }
   }
 
-  async function setPin(row: StaffProfile) {
-    const pin = window.prompt(`Set a 4–8 digit operator PIN for ${row.displayName}`) ?? "";
-    if (!pin) return;
-    try {
-      await api("/workforce/phase10/operator-credentials", {
-        method: "PUT",
-        body: JSON.stringify({ membershipId: row.membershipId, pin, active: true }),
-      });
-      setMessage(`Quick-switch PIN rotated for ${row.displayName}. Existing operator sessions were revoked.`);
-    } catch (error) {
-      setMessage(error instanceof Error ? error.message : "PIN update failed");
-    }
-  }
-
   return (
     <TenantPage
       title="Workforce accountability"
       description="Staff identity, quick operator switching, owner approvals, suspicious-action controls and operational employee metrics."
     >
       <div className="space-y-5">
-        <div className="flex flex-wrap gap-2">
-          {tabs.filter((item) => item !== "Owner controls" || isOwner).map((item) => (
+        {operator ? (
+          <div className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-sky-500/40 bg-sky-500/10 p-3 text-sm">
+            <span>
+              Active operator: <strong>{operator.displayName}</strong> · {operator.authStrength} ·
+              expires {new Date(operator.expiresAt).toLocaleTimeString()}
+            </span>
             <button
-              key={item}
               type="button"
-              onClick={() => setTab(item)}
-              className={`min-h-11 rounded-lg px-4 ${tab === item ? "bg-emerald-400 font-semibold text-zinc-950" : "border border-zinc-700"}`}
+              onClick={() => clearOperatorSession()}
+              className="min-h-11 rounded-lg border border-sky-400/50 px-3"
             >
-              {item}
+              Clear operator
             </button>
-          ))}
+          </div>
+        ) : null}
+
+        <div className="flex flex-wrap gap-2">
+          {tabs
+            .filter((item) => item !== "Owner controls" || isOwner)
+            .map((item) => (
+              <button
+                key={item}
+                type="button"
+                onClick={() => setTab(item)}
+                className={`min-h-11 rounded-lg px-4 ${
+                  tab === item
+                    ? "bg-emerald-400 font-semibold text-zinc-950"
+                    : "border border-zinc-700"
+                }`}
+              >
+                {item}
+              </button>
+            ))}
         </div>
 
-        {message ? <div className="rounded-xl border border-amber-500/40 p-3 text-sm text-amber-100">{message}</div> : null}
+        {message ? (
+          <div className="rounded-xl border border-amber-500/40 p-3 text-sm text-amber-100">
+            {message}
+          </div>
+        ) : null}
 
         {tab === "Staff" ? (
           <div className="grid gap-3 lg:grid-cols-2">
             {staff.map((row) => (
-              <section key={row.membershipId} className="rounded-2xl border border-zinc-800 bg-zinc-950 p-5">
+              <section
+                key={row.membershipId}
+                className="rounded-2xl border border-zinc-800 bg-zinc-950 p-5"
+              >
                 <div className="flex items-start justify-between gap-3">
                   <div>
                     <h2 className="text-lg font-semibold">{row.displayName}</h2>
-                    <p className="text-sm text-zinc-400">{row.employeeNumber} · {row.permissionRole}</p>
+                    <p className="text-sm text-zinc-400">
+                      {row.employeeNumber} · {row.permissionRole}
+                    </p>
                   </div>
-                  <span className={`rounded-full px-2 py-1 text-xs ${row.active ? "bg-emerald-500/15 text-emerald-300" : "bg-red-500/15 text-red-300"}`}>
+                  <span
+                    className={`rounded-full px-2 py-1 text-xs ${
+                      row.active
+                        ? "bg-emerald-500/15 text-emerald-300"
+                        : "bg-red-500/15 text-red-300"
+                    }`}
+                  >
                     {row.active ? "Active" : "Inactive"}
                   </span>
                 </div>
                 <div className="mt-4 text-sm text-zinc-300">
                   <p>Job role: {row.jobRoleId ?? "Not assigned"}</p>
-                  {row.hourlyCost ? <p>Hourly cost: {(row.hourlyCost.minor / 100).toFixed(2)} {row.hourlyCost.currency}</p> : null}
-                  <p>Manager: {row.managerMembershipId ? staffNames.get(row.managerMembershipId) ?? row.managerMembershipId : "Not assigned"}</p>
-                  <p className="mt-2 text-zinc-500">Branches: {row.assignedBranches.map((branch) => branch.name).join(", ") || "Current venue"}</p>
+                  {row.hourlyCost ? (
+                    <p>
+                      Hourly cost: {(row.hourlyCost.minor / 100).toFixed(2)} {row.hourlyCost.currency}
+                    </p>
+                  ) : null}
+                  <p>
+                    Manager: {row.managerMembershipId ? staffNames.get(row.managerMembershipId) ?? row.managerMembershipId : "Not assigned"}
+                  </p>
+                  <p className="mt-2 text-zinc-500">
+                    Branches: {row.assignedBranches.map((branch) => branch.name).join(", ") || "Current venue"}
+                  </p>
                 </div>
-                {canManage ? (
-                  <div className="mt-4 flex flex-wrap gap-2">
-                    <button type="button" onClick={() => void setPin(row)} className="min-h-11 rounded-lg border border-sky-500/50 px-3 text-sky-200">Rotate PIN</button>
+                <div className="mt-4 flex flex-wrap gap-2">
+                  {row.active ? (
                     <button
                       type="button"
-                      onClick={() => void patch(`/workforce/phase10/staff/${row.membershipId}`, { active: !row.active })}
-                      className="min-h-11 rounded-lg border border-zinc-700 px-3"
+                      onClick={() => void switchOperator(row)}
+                      className="min-h-11 rounded-lg bg-sky-400 px-3 font-semibold text-zinc-950"
                     >
-                      {row.active ? "Deactivate" : "Reactivate"}
+                      Switch operator
                     </button>
-                  </div>
-                ) : null}
+                  ) : null}
+                  {canManage ? (
+                    <>
+                      <button
+                        type="button"
+                        onClick={() => void setPin(row)}
+                        className="min-h-11 rounded-lg border border-sky-500/50 px-3 text-sky-200"
+                      >
+                        Rotate PIN
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() =>
+                          void patch(`/workforce/phase10/staff/${row.membershipId}`, {
+                            active: !row.active,
+                          })
+                        }
+                        className="min-h-11 rounded-lg border border-zinc-700 px-3"
+                      >
+                        {row.active ? "Deactivate" : "Reactivate"}
+                      </button>
+                    </>
+                  ) : null}
+                </div>
               </section>
             ))}
           </div>
@@ -241,23 +365,37 @@ export default function WorkforceAccountabilityPage() {
 
         {tab === "Approvals" ? (
           <div className="space-y-3">
-            {!approvals.length ? <p className="text-sm text-zinc-500">No pending elevated approvals.</p> : null}
+            {!approvals.length ? (
+              <p className="text-sm text-zinc-500">No pending elevated approvals.</p>
+            ) : null}
             {approvals.map((row) => (
               <section key={row.id} className="rounded-xl border border-zinc-800 p-4">
-                <div className="flex flex-wrap items-start justify-between gap-3">
-                  <div>
-                    <strong>{row.actionKind}</strong>
-                    <p className="text-sm text-zinc-400">Requested by {staffNames.get(row.requesterMembershipId) ?? row.requesterMembershipId}</p>
-                    <p className="mt-1 text-sm">{row.reason}</p>
-                    <p className="text-xs text-zinc-500">{row.sourceType} {row.sourceId ?? ""} · expires {new Date(row.expiresAt).toLocaleString()}</p>
+                <strong>{row.actionKind}</strong>
+                <p className="text-sm text-zinc-400">
+                  Requested by {staffNames.get(row.requesterMembershipId) ?? row.requesterMembershipId}
+                </p>
+                <p className="mt-1 text-sm">{row.reason}</p>
+                <p className="text-xs text-zinc-500">
+                  {row.sourceType} {row.sourceId ?? ""} · expires {new Date(row.expiresAt).toLocaleString()}
+                </p>
+                {canManage ? (
+                  <div className="mt-3 flex gap-2">
+                    <button
+                      type="button"
+                      onClick={() => void decideApproval(row, false)}
+                      className="min-h-11 rounded-lg border border-red-500/50 px-3 text-red-200"
+                    >
+                      Deny
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => void decideApproval(row, true)}
+                      className="min-h-11 rounded-lg bg-emerald-400 px-3 font-semibold text-zinc-950"
+                    >
+                      Approve
+                    </button>
                   </div>
-                  {canManage ? (
-                    <div className="flex gap-2">
-                      <button type="button" onClick={() => void decideApproval(row, false)} className="min-h-11 rounded-lg border border-red-500/50 px-3 text-red-200">Deny</button>
-                      <button type="button" onClick={() => void decideApproval(row, true)} className="min-h-11 rounded-lg bg-emerald-400 px-3 font-semibold text-zinc-950">Approve</button>
-                    </div>
-                  ) : null}
-                </div>
+                ) : null}
               </section>
             ))}
           </div>
@@ -271,13 +409,23 @@ export default function WorkforceAccountabilityPage() {
                 <div className="mt-3 flex flex-wrap items-center gap-3 text-sm">
                   <button
                     type="button"
-                    onClick={() => void put("/workforce/phase10/policy", { enforceSchedule: !workforcePolicy.enforceSchedule })}
-                    className={`min-h-11 rounded-lg px-3 ${workforcePolicy.enforceSchedule ? "bg-emerald-400 text-zinc-950" : "border border-zinc-700"}`}
+                    onClick={() =>
+                      void put("/workforce/phase10/policy", {
+                        enforceSchedule: !workforcePolicy.enforceSchedule,
+                      })
+                    }
+                    className={`min-h-11 rounded-lg px-3 ${
+                      workforcePolicy.enforceSchedule
+                        ? "bg-emerald-400 text-zinc-950"
+                        : "border border-zinc-700"
+                    }`}
                   >
                     Enforce schedule: {workforcePolicy.enforceSchedule ? "On" : "Off"}
                   </button>
                   <span>Late grace {workforcePolicy.lateGraceMinutes} min</span>
-                  <span>PIN lockout {workforcePolicy.pinLockoutAttempts} attempts / {workforcePolicy.pinLockoutMinutes} min</span>
+                  <span>
+                    PIN lockout {workforcePolicy.pinLockoutAttempts} attempts / {workforcePolicy.pinLockoutMinutes} min
+                  </span>
                 </div>
               ) : null}
             </section>
@@ -285,49 +433,66 @@ export default function WorkforceAccountabilityPage() {
             <section className="rounded-2xl border border-zinc-800 p-5">
               <h2 className="text-lg font-semibold">Elevated approval rules</h2>
               <div className="mt-3 grid gap-2 md:grid-cols-2">
-                {policies.filter((row) => row.actionKind !== "SALE").map((row) => (
-                  <button
-                    key={row.actionKind}
-                    type="button"
-                    onClick={() => void put("/workforce/phase10/approval-policies", {
-                      actionKind: row.actionKind,
-                      enabled: !row.enabled,
-                      amountThresholdMinor: row.amountThresholdMinor,
-                      requirePassword: true,
-                      notifyOnUse: true,
-                    })}
-                    className={`min-h-12 rounded-xl border px-3 text-left ${row.enabled ? "border-emerald-500/60 bg-emerald-500/10" : "border-zinc-800"}`}
-                  >
-                    <strong>{row.actionKind}</strong>
-                    <span className="ml-2 text-xs text-zinc-400">{row.enabled ? "Approval required" : "Permission only"}</span>
-                  </button>
-                ))}
+                {policies
+                  .filter((row) => row.actionKind !== "SALE")
+                  .map((row) => (
+                    <button
+                      key={row.actionKind}
+                      type="button"
+                      onClick={() =>
+                        void put("/workforce/phase10/approval-policies", {
+                          actionKind: row.actionKind,
+                          enabled: !row.enabled,
+                          amountThresholdMinor: row.amountThresholdMinor,
+                          requirePassword: true,
+                          notifyOnUse: true,
+                        })
+                      }
+                      className={`min-h-12 rounded-xl border px-3 text-left ${
+                        row.enabled
+                          ? "border-emerald-500/60 bg-emerald-500/10"
+                          : "border-zinc-800"
+                      }`}
+                    >
+                      <strong>{row.actionKind}</strong>
+                      <span className="ml-2 text-xs text-zinc-400">
+                        {row.enabled ? "Approval required" : "Permission only"}
+                      </span>
+                    </button>
+                  ))}
               </div>
             </section>
 
             <section className="rounded-2xl border border-zinc-800 p-5">
               <h2 className="text-lg font-semibold">Suspicious-action alerts</h2>
-              <p className="mt-1 text-sm text-zinc-500">Rules aggregate repeated activity so owners are alerted without one notification per action.</p>
+              <p className="mt-1 text-sm text-zinc-500">
+                Repeated actions are grouped into dedupe windows to avoid alert fatigue.
+              </p>
               <div className="mt-3 grid gap-2 md:grid-cols-2">
-                {notificationRules.filter((row) => row.actionKind !== "SALE").map((row) => (
-                  <button
-                    key={row.actionKind}
-                    type="button"
-                    onClick={() => void put("/workforce/phase10/notification-rules", {
-                      actionKind: row.actionKind,
-                      enabled: !row.enabled,
-                      amountThresholdMinor: row.amountThresholdMinor,
-                      repeatWindowMinutes: row.repeatWindowMinutes,
-                      repeatCountThreshold: row.repeatCountThreshold,
-                      afterHoursStartHour: row.afterHoursStartHour,
-                      afterHoursEndHour: row.afterHoursEndHour,
-                    })}
-                    className={`min-h-12 rounded-xl border px-3 text-left ${row.enabled ? "border-amber-500/60 bg-amber-500/10" : "border-zinc-800"}`}
-                  >
-                    <strong>{row.actionKind}</strong>
-                    <span className="ml-2 text-xs text-zinc-400">{row.enabled ? "Alerting" : "Off"}</span>
-                  </button>
-                ))}
+                {notificationRules
+                  .filter((row) => row.actionKind !== "SALE")
+                  .map((row) => (
+                    <button
+                      key={row.actionKind}
+                      type="button"
+                      onClick={() =>
+                        void put("/workforce/phase10/notification-rules", {
+                          ...row,
+                          enabled: !row.enabled,
+                        })
+                      }
+                      className={`min-h-12 rounded-xl border px-3 text-left ${
+                        row.enabled
+                          ? "border-amber-500/60 bg-amber-500/10"
+                          : "border-zinc-800"
+                      }`}
+                    >
+                      <strong>{row.actionKind}</strong>
+                      <span className="ml-2 text-xs text-zinc-400">
+                        {row.enabled ? "Alerting" : "Off"}
+                      </span>
+                    </button>
+                  ))}
               </div>
             </section>
           </div>
@@ -336,7 +501,16 @@ export default function WorkforceAccountabilityPage() {
         {tab === "Accountability" ? (
           <div className="overflow-x-auto rounded-xl border border-zinc-800">
             <table className="w-full text-sm">
-              <thead className="bg-zinc-900 text-left"><tr><th className="p-3">When</th><th className="p-3">Employee</th><th className="p-3">Action</th><th className="p-3">Approved by</th><th className="p-3">Auth</th><th className="p-3">Flag</th></tr></thead>
+              <thead className="bg-zinc-900 text-left">
+                <tr>
+                  <th className="p-3">When</th>
+                  <th className="p-3">Employee</th>
+                  <th className="p-3">Action</th>
+                  <th className="p-3">Approved by</th>
+                  <th className="p-3">Auth</th>
+                  <th className="p-3">Flag</th>
+                </tr>
+              </thead>
               <tbody>
                 {evidence.map((row) => (
                   <tr key={row.id} className="border-t border-zinc-800">
@@ -345,7 +519,11 @@ export default function WorkforceAccountabilityPage() {
                     <td className="p-3">{row.actionKind}</td>
                     <td className="p-3">{row.approverName ?? "—"}</td>
                     <td className="p-3">{row.authStrength}</td>
-                    <td className={`p-3 ${row.suspicious ? "text-amber-300" : "text-zinc-500"}`}>{row.suspicious ? (row.suspiciousReasons ?? []).join(", ") : "Normal"}</td>
+                    <td className={`p-3 ${row.suspicious ? "text-amber-300" : "text-zinc-500"}`}>
+                      {row.suspicious
+                        ? (row.suspiciousReasons ?? []).join(", ")
+                        : "Normal"}
+                    </td>
                   </tr>
                 ))}
               </tbody>
@@ -356,7 +534,19 @@ export default function WorkforceAccountabilityPage() {
         {tab === "Performance" ? (
           <div className="overflow-x-auto rounded-xl border border-zinc-800">
             <table className="w-full text-sm">
-              <thead className="bg-zinc-900 text-left"><tr><th className="p-3">Employee</th><th className="p-3">Sales</th><th className="p-3">Avg check</th><th className="p-3">Refunds / voids</th><th className="p-3">Hours</th><th className="p-3">Late</th><th className="p-3">Break exceptions</th><th className="p-3">Flags</th></tr></thead>
+              <thead className="bg-zinc-900 text-left">
+                <tr>
+                  <th className="p-3">Employee</th>
+                  <th className="p-3">Sales</th>
+                  <th className="p-3">Avg check</th>
+                  <th className="p-3">Refunds / voids</th>
+                  <th className="p-3">Hours</th>
+                  <th className="p-3">Overtime</th>
+                  <th className="p-3">Late</th>
+                  <th className="p-3">Break exceptions</th>
+                  <th className="p-3">Flags</th>
+                </tr>
+              </thead>
               <tbody>
                 {performance.map((row) => (
                   <tr key={row.membershipId} className="border-t border-zinc-800">
@@ -365,6 +555,7 @@ export default function WorkforceAccountabilityPage() {
                     <td className="p-3">{(row.averageCheckMinor / 100).toFixed(2)}</td>
                     <td className="p-3">{row.refundCount} / {row.voidCount}</td>
                     <td className="p-3">{row.workedHours.toFixed(1)}</td>
+                    <td className="p-3">{(row.overtimeSeconds / 3600).toFixed(1)} h</td>
                     <td className="p-3">{row.lateCount}</td>
                     <td className="p-3">{row.breakComplianceViolations}</td>
                     <td className="p-3">{row.exceptionCount}</td>
@@ -372,7 +563,9 @@ export default function WorkforceAccountabilityPage() {
                 ))}
               </tbody>
             </table>
-            <p className="border-t border-zinc-800 p-3 text-xs text-zinc-500">Operational metrics only. GoSpots does not treat this report as payroll.</p>
+            <p className="border-t border-zinc-800 p-3 text-xs text-zinc-500">
+              Operational metrics only. GoSpots does not treat this report as payroll.
+            </p>
           </div>
         ) : null}
       </div>
