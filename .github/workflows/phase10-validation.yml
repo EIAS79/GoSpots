@@ -79,6 +79,7 @@ jobs:
         run: >-
           pnpm exec jest --config jest.config.cjs --runInBand
           src/modules/workforce/phase10.rules.spec.ts
+          src/modules/workforce/phase10-clockin-restriction.interceptor.spec.ts
           src/modules/workforce/workforce.service.spec.ts
 
       - name: Run persisted Phase 10 operational pilot
