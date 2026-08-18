@@ -87,6 +87,10 @@ jobs:
         working-directory: apps/api
         run: pnpm exec tsx prisma/phase10-operational-pilot.ts
 
+      - name: Prove persisted clock-in device and location restrictions
+        working-directory: apps/api
+        run: pnpm exec tsx prisma/phase10-clockin-restriction-assert.ts
+
       - name: Prove manual time approval and alert dedupe
         working-directory: apps/api
         run: pnpm exec tsx prisma/phase10-manual-time-alert-assert.ts
