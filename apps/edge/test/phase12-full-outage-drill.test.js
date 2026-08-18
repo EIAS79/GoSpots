@@ -14,6 +14,10 @@ function seed(continuity) {
     generatedAt: '2026-08-18T20:00:00.000Z',
     venue: { id: 'shop-outage', currency: 'PLN', timezone: 'Europe/Warsaw', version: 1 },
     devices: [{ id: 'edge-1', type: 'EDGE_HUB', status: 'ACTIVE' }],
+    operators: [
+      { id: 'user-a', role: 'CASHIER', isActive: true, permissions: 'session.write,order.write,checkout.write' },
+      { id: 'user-b', role: 'CASHIER', isActive: true, permissions: 'session.write,order.write,checkout.write' },
+    ],
     resources: [{ id: 'table-1', name: 'Table 1', status: 'AVAILABLE', version: 1 }],
     rates: [{ id: 'rate-1', resourceId: 'table-1', billingMode: 'HOURLY', hourlyRateMinor: 6000 }],
     catalog: [{ id: 'cola-1', name: 'Cola', barcode: '5901234567890', priceMinor: 1200 }],
@@ -51,7 +55,7 @@ test('Phase 12 full venue outage drill survives restart and never duplicates que
       operationId: 'eeeeeeee-eeee-4eee-8eee-eeeeeeeeeeee',
       deviceId: 'pos-a', venueId: 'shop-outage', operationType: 'ORDER_CREATE',
       aggregateType: 'VenueOrder', aggregateId: 'ffffffff-ffff-4fff-8fff-ffffffffffff',
-      payload: { guestCheckId: 'check-1', lines: [{ menuItemId: 'cola-1', quantity: 2 }] },
+      payload: { operatorUserId: 'user-a', guestCheckId: 'check-1', lines: [{ menuItemId: 'cola-1', quantity: 2 }] },
       occurredAt: '2026-08-18T20:06:00.000Z',
     });
 
@@ -70,27 +74,28 @@ test('Phase 12 full venue outage drill survives restart and never duplicates que
     assert.equal(Number(store.db.prepare('SELECT COUNT(*) count FROM local_cash_ledger').get().count), 1);
     store.close();
 
-    // Simulate Edge host/device restart while WAN remains unavailable.
     store = new EdgeStore(dbPath);
     continuity = new ContinuityEngine(store);
     assert.equal(continuity.pendingCommands().length, 3);
     assert.equal(continuity.cache('session', session.aggregateId).status, 'ACTIVE');
     assert.equal(continuity.cache('order', 'ffffffff-ffff-4fff-8fff-ffffffffffff').pendingCloud, true);
 
-    // User/device retry after restart replays the same durable result; it cannot insert cash again.
     const duplicate = continuity.createCommand(cash);
     assert.equal(duplicate.duplicate, true);
     const localCash = store.db.prepare('SELECT COUNT(*) count, SUM(amount_minor) total FROM local_cash_ledger').get();
     assert.equal(Number(localCash.count), 1);
     assert.equal(Number(localCash.total), 2400);
 
-    // Simulate cloud restoration + acknowledgements, then pull authoritative reconciled state.
     for (const command of continuity.pendingCommands()) continuity.markSynced(command.operationId, { syncState: 'SYNCED' });
     continuity.applySnapshot({
       cursor: 'cloud-after-reconcile',
       generatedAt: '2026-08-18T20:10:00.000Z',
       venue: { id: 'shop-outage', currency: 'PLN', timezone: 'Europe/Warsaw', version: 1 },
       devices: [{ id: 'edge-1', type: 'EDGE_HUB', status: 'ACTIVE' }],
+      operators: [
+        { id: 'user-a', role: 'CASHIER', isActive: true, permissions: 'session.write,order.write,checkout.write' },
+        { id: 'user-b', role: 'CASHIER', isActive: true, permissions: 'session.write,order.write,checkout.write' },
+      ],
       resources: [{ id: 'table-1', name: 'Table 1', status: 'OCCUPIED', version: 2 }],
       rates: [{ id: 'rate-1', resourceId: 'table-1', billingMode: 'HOURLY', hourlyRateMinor: 6000 }],
       catalog: [{ id: 'cola-1', name: 'Cola', barcode: '5901234567890', priceMinor: 1200 }],
