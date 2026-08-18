@@ -31,61 +31,94 @@ export class Phase9CustomerPortalService {
       ...(customer.email ? [{ guestEmail: customer.email }] : []),
       ...(customer.phone ? [{ guestPhone: customer.phone }] : []),
     ];
-    const [membership, loyalty, packageAccounts, storedAccounts, visits, preferences, consentEvents, upcomingReservations] =
-      await Promise.all([
-        this.prisma.customerMembership.findFirst({
-          where: { shopId: access.shopId, customerId: customer.id },
-        }),
-        this.prisma.loyaltyLedgerEntry.findMany({
-          where: { shopId: access.shopId, customerId: customer.id },
-          orderBy: { createdAt: 'desc' },
-          take: 200,
-        }),
-        this.prisma.customerPackageAccount.findMany({
-          where: { shopId: access.shopId, customerId: customer.id },
-          orderBy: { createdAt: 'desc' },
-        }),
-        this.prisma.storedValueAccount.findMany({
-          where: { shopId: access.shopId, customerId: customer.id },
-          orderBy: { createdAt: 'desc' },
-        }),
-        this.prisma.customerVisit.findMany({
-          where: { shopId: access.shopId, customerId: customer.id },
-          orderBy: { completedAt: 'desc' },
-          take: 200,
-        }),
-        this.prisma.customerPreference.findMany({
-          where: { shopId: access.shopId, customerId: customer.id },
-          orderBy: { key: 'asc' },
-        }),
-        this.prisma.customerConsentEvent.findMany({
-          where: { shopId: access.shopId, customerId: customer.id },
-          orderBy: { occurredAt: 'desc' },
-          take: 200,
-        }),
-        identityOr.length
-          ? this.prisma.reservation.findMany({
-              where: {
-                shopId: access.shopId,
-                startsAt: { gte: now },
-                status: { in: ['PENDING', 'CONFIRMED', 'CHECKED_IN'] },
-                OR: identityOr,
-              },
-              select: {
-                id: true,
-                resourceId: true,
-                guestName: true,
-                partySize: true,
-                startsAt: true,
-                endsAt: true,
-                status: true,
-                notes: true,
-              },
-              orderBy: { startsAt: 'asc' },
-              take: 100,
-            })
-          : Promise.resolve([]),
-      ]);
+    const reservationSelect = {
+      id: true,
+      resourceId: true,
+      guestName: true,
+      partySize: true,
+      startsAt: true,
+      endsAt: true,
+      status: true,
+      notes: true,
+    } as const;
+    const [
+      membership,
+      loyalty,
+      packageAccounts,
+      storedAccounts,
+      visits,
+      preferences,
+      consentEvents,
+      upcomingReservations,
+      bookingHistory,
+    ] = await Promise.all([
+      this.prisma.customerMembership.findFirst({
+        where: { shopId: access.shopId, customerId: customer.id },
+      }),
+      this.prisma.loyaltyLedgerEntry.findMany({
+        where: { shopId: access.shopId, customerId: customer.id },
+        orderBy: { createdAt: 'desc' },
+        take: 200,
+      }),
+      this.prisma.customerPackageAccount.findMany({
+        where: { shopId: access.shopId, customerId: customer.id },
+        orderBy: { createdAt: 'desc' },
+      }),
+      this.prisma.storedValueAccount.findMany({
+        where: { shopId: access.shopId, customerId: customer.id },
+        orderBy: { createdAt: 'desc' },
+      }),
+      this.prisma.customerVisit.findMany({
+        where: { shopId: access.shopId, customerId: customer.id },
+        orderBy: { completedAt: 'desc' },
+        take: 200,
+      }),
+      this.prisma.customerPreference.findMany({
+        where: { shopId: access.shopId, customerId: customer.id },
+        orderBy: { key: 'asc' },
+      }),
+      this.prisma.customerConsentEvent.findMany({
+        where: { shopId: access.shopId, customerId: customer.id },
+        orderBy: { occurredAt: 'desc' },
+        take: 200,
+      }),
+      identityOr.length
+        ? this.prisma.reservation.findMany({
+            where: {
+              shopId: access.shopId,
+              startsAt: { gte: now },
+              status: { in: ['PENDING', 'CONFIRMED', 'CHECKED_IN'] },
+              OR: identityOr,
+            },
+            select: reservationSelect,
+            orderBy: { startsAt: 'asc' },
+            take: 100,
+          })
+        : Promise.resolve([]),
+      identityOr.length
+        ? this.prisma.reservation.findMany({
+            where: {
+              shopId: access.shopId,
+              OR: identityOr,
+              AND: [
+                {
+                  OR: [
+                    { endsAt: { lt: now } },
+                    {
+                      status: {
+                        in: ['COMPLETED', 'CANCELLED', 'NO_SHOW'],
+                      },
+                    },
+                  ],
+                },
+              ],
+            },
+            select: reservationSelect,
+            orderBy: { startsAt: 'desc' },
+            take: 100,
+          })
+        : Promise.resolve([]),
+    ]);
 
     const guestCheckIds = visits
       .map((row) => row.guestCheckId)
@@ -132,7 +165,11 @@ export class Phase9CustomerPortalService {
           select: { amountMinor: true },
         });
         return {
-          account: { id: account.id, currency: account.currency, status: account.status },
+          account: {
+            id: account.id,
+            currency: account.currency,
+            status: account.status,
+          },
           balanceMinor: rows.reduce((sum, row) => sum + row.amountMinor, 0),
         };
       }),
@@ -148,6 +185,7 @@ export class Phase9CustomerPortalService {
         consentSource: customer.consentSource,
       },
       upcomingReservations,
+      bookingHistory,
       visitHistory: visits,
       membership: membership
         ? {
@@ -199,11 +237,16 @@ export class Phase9CustomerPortalService {
     });
     await this.audit.recordForShop(access.shopId, {
       section: 'customer',
-      action: granted ? 'customer.portal.consent.grant' : 'customer.portal.consent.revoke',
+      action: granted
+        ? 'customer.portal.consent.grant'
+        : 'customer.portal.consent.revoke',
       summary: granted
         ? 'Customer granted marketing consent in portal'
         : 'Customer revoked marketing consent in portal',
-      meta: { customerId: access.customerId, consentEventId: result.event.id },
+      meta: {
+        customerId: access.customerId,
+        consentEventId: result.event.id,
+      },
       actorName: 'Customer portal',
     });
     return {
@@ -213,13 +256,19 @@ export class Phase9CustomerPortalService {
     };
   }
 
+  async accessContext(rawToken: string) {
+    return this.requireAccess(rawToken);
+  }
+
   private async requireAccess(rawToken: string) {
     const tokenHash = createHash('sha256').update(rawToken).digest('hex');
     const access = await this.prisma.customerPortalAccessToken.findUnique({
       where: { tokenHash },
     });
     if (!access || access.revokedAt || access.expiresAt <= new Date()) {
-      throw new NotFoundException('Customer portal access is invalid or expired.');
+      throw new NotFoundException(
+        'Customer portal access is invalid or expired.',
+      );
     }
     return access;
   }
