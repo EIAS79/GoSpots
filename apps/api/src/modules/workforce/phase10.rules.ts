@@ -89,10 +89,15 @@ function truthy(body: BodyLike, keys: string[]): boolean {
   });
 }
 
+function matches(path: string, pattern: RegExp): boolean {
+  return pattern.test(path);
+}
+
 /**
  * Route/body classifier used by the global accountability interceptor.
- * It is intentionally conservative: only mutating routes with recognizable
- * financial/operational semantics become evidence. Unknown routes are ignored.
+ * It deliberately recognizes canonical successful mutation routes instead of
+ * broadly classifying every POST under a domain. This avoids recording previews,
+ * drafts or setup operations as employee financial actions.
  */
 export function classifyAccountableAction(
   method: string,
@@ -111,31 +116,83 @@ export function classifyAccountableAction(
   ]);
 
   if (
+    verb === 'POST' &&
     path.includes('/workforce/adjustments/') &&
     path.endsWith('/decision') &&
     body?.approve === true
   ) {
     return { actionKind: 'MANUAL_TIME_EDIT', sourceType: 'time-adjustment' };
   }
+
   if (path.includes('refund')) {
     return { actionKind: 'REFUND', amountMinor, sourceType: 'refund' };
+  }
+
+  // These restaurant cancellation routes can cancel active production work.
+  // When an owner enables VOID_AFTER_SEND, the boundary is intentionally
+  // conservative rather than allowing a sent ticket to bypass approval.
+  if (
+    (verb === 'DELETE' && matches(path, /\/ordering\/orders\/[^/]+$/)) ||
+    (verb === 'POST' &&
+      matches(path, /\/ordering\/orders\/[^/]+\/lines\/[^/]+\/cancel$/))
+  ) {
+    return { actionKind: 'VOID_AFTER_SEND', amountMinor, sourceType: 'order' };
   }
   if (path.includes('void') && (path.includes('order') || path.includes('kitchen'))) {
     return { actionKind: 'VOID_AFTER_SEND', amountMinor, sourceType: 'order' };
   }
-  if (path.includes('inventory')) {
+
+  if (path.includes('/inventory-v2/')) {
+    if (
+      verb === 'POST' &&
+      (matches(path, /\/inventory-v2\/waste(?:-with-approval)?$/) ||
+        path.includes('/write-off'))
+    ) {
+      return {
+        actionKind: 'INVENTORY_WRITE_OFF',
+        amountMinor,
+        sourceType: 'inventory',
+      };
+    }
+    if (
+      (verb === 'POST' && matches(path, /\/inventory-v2\/stocktakes$/)) ||
+      path.endsWith('/approve') ||
+      path.endsWith('/complete-with-approval') ||
+      path.endsWith('/reverse') ||
+      path.includes('/correction')
+    ) {
+      return {
+        actionKind: 'INVENTORY_CORRECTION',
+        amountMinor,
+        sourceType: 'inventory',
+      };
+    }
+  } else if (path.includes('inventory')) {
     const movement = text(body, ['type', 'reason', 'movementType']);
-    if (movement.includes('WRITE') || movement.includes('WASTE') || movement.includes('LOSS')) {
-      return { actionKind: 'INVENTORY_WRITE_OFF', amountMinor, sourceType: 'inventory' };
+    if (
+      movement.includes('WRITE') ||
+      movement.includes('WASTE') ||
+      movement.includes('LOSS')
+    ) {
+      return {
+        actionKind: 'INVENTORY_WRITE_OFF',
+        amountMinor,
+        sourceType: 'inventory',
+      };
     }
     if (
       movement.includes('CORRECTION') ||
       movement.includes('ADJUST') ||
       path.includes('correction')
     ) {
-      return { actionKind: 'INVENTORY_CORRECTION', amountMinor, sourceType: 'inventory' };
+      return {
+        actionKind: 'INVENTORY_CORRECTION',
+        amountMinor,
+        sourceType: 'inventory',
+      };
     }
   }
+
   if (path.includes('/cash/')) {
     const movement = text(body, ['type', 'movementType']);
     if (
@@ -149,6 +206,7 @@ export function classifyAccountableAction(
       return { actionKind: 'CASH_VARIANCE', amountMinor, sourceType: 'cash' };
     }
   }
+
   if (truthy(body, ['comp', 'isComp', 'complimentary'])) {
     return { actionKind: 'COMP', amountMinor, sourceType: 'commercial' };
   }
@@ -173,17 +231,25 @@ export function classifyAccountableAction(
     body?.discountPercent != null ||
     path.includes('discount')
   ) {
-    return { actionKind: 'LARGE_DISCOUNT', amountMinor, sourceType: 'commercial' };
+    return {
+      actionKind: 'LARGE_DISCOUNT',
+      amountMinor,
+      sourceType: 'commercial',
+    };
   }
   if (truthy(body, ['managerOverride']) || path.includes('manager-override')) {
     return { actionKind: 'MANAGER_OVERRIDE', amountMinor, sourceType: 'override' };
   }
+
+  // A SALE fact is emitted only when the canonical settlement payment mutation
+  // succeeds. Previewing a check or creating a settlement is not a completed sale.
   if (
-    (path.includes('/checkout') && (path.includes('payment') || verb === 'POST')) ||
-    (path.includes('/orders') && verb === 'POST')
+    verb === 'POST' &&
+    matches(path, /\/checkout\/settlements\/[^/]+\/payments$/)
   ) {
     return { actionKind: 'SALE', amountMinor, sourceType: 'sale' };
   }
+
   return null;
 }
 
@@ -264,5 +330,9 @@ export function breakCompliance(input: {
   const required = input.workedSeconds >= input.minimumBreakAfterSeconds;
   if (!required) return { required: false, compliant: true, missingSeconds: 0 };
   const missingSeconds = Math.max(0, input.minimumBreakSeconds - input.unpaidBreakSeconds);
-  return { required: true, compliant: missingSeconds === 0, missingSeconds };
+  return {
+    required: true,
+    compliant: missingSeconds === 0,
+    missingSeconds,
+  };
 }
