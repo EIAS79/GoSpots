@@ -1,1 +1,0 @@
-Run the non-mutating Phase 8 production auth/deposit diagnostic once.
