@@ -88,6 +88,11 @@ export class EdgeContinuityService {
     if (!hasPermission(actor.perms ?? '', PERMISSIONS.SESSION_WRITE)) throw new ForbiddenException('Missing session.write');
   }
 
+  private assertCheckoutWrite(actor: JwtAccessPayload) {
+    if (actor.shopRole === 'OWNER') return;
+    if (!hasPermission(actor.perms ?? '', PERMISSIONS.CHECKOUT_WRITE)) throw new ForbiddenException('Missing checkout.write');
+  }
+
   private async existingReceipt(shopId: string, scope: string, key: string, requestHash: string) {
     const receipt = await this.prisma.idempotencyReceipt.findUnique({ where: { shopId_scope_key: { shopId, scope, key } } });
     if (!receipt) return null;
@@ -207,6 +212,7 @@ export class EdgeContinuityService {
     const { requestHash } = this.validateEnvelope(shopId, dto);
     const parsed = this.normalizeCashPayload(dto);
     const actor = await this.actorForOperator(shopId, parsed.operatorUserId);
+    this.assertCheckoutWrite(actor);
     const key = `${edgeDeviceId}:${dto.operationId}`;
     const correlationId = `offline:${dto.operationId}`;
     const existing = await this.existingReceipt(shopId, CASH_SCOPE, key, requestHash);
