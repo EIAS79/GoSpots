@@ -8,6 +8,8 @@ import { Phase10AccountabilityInterceptor } from './phase10-accountability.inter
 import { Phase10AccountabilityService } from './phase10-accountability.service';
 import { Phase10ClockInRestrictionInterceptor } from './phase10-clockin-restriction.interceptor';
 import { Phase10PerformanceService } from './phase10-performance.service';
+import { Phase10ScheduleConflictInterceptor } from './phase10-schedule-conflict.interceptor';
+import { Phase10ScheduleService } from './phase10-schedule.service';
 import { WorkforceController } from './workforce.controller';
 import { WorkforceService } from './workforce.service';
 
@@ -18,6 +20,11 @@ import { WorkforceService } from './workforce.service';
     WorkforceService,
     Phase10AccountabilityService,
     Phase10PerformanceService,
+    Phase10ScheduleService,
+    {
+      provide: APP_INTERCEPTOR,
+      useClass: Phase10ScheduleConflictInterceptor,
+    },
     {
       provide: APP_INTERCEPTOR,
       useClass: Phase10ClockInRestrictionInterceptor,
@@ -27,6 +34,11 @@ import { WorkforceService } from './workforce.service';
       useClass: Phase10AccountabilityInterceptor,
     },
   ],
-  exports: [WorkforceService, Phase10AccountabilityService, Phase10PerformanceService],
+  exports: [
+    WorkforceService,
+    Phase10AccountabilityService,
+    Phase10PerformanceService,
+    Phase10ScheduleService,
+  ],
 })
 export class WorkforceModule {}
