@@ -1,0 +1,193 @@
+name: Phase 8 live provider acceptance
+
+on:
+  push:
+    branches:
+      - phase8/live-provider-acceptance-20260818
+
+permissions:
+  contents: read
+
+concurrency:
+  group: phase8-live-provider-acceptance-20260818
+  cancel-in-progress: false
+
+jobs:
+  live-provider-gate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Execute canonical production reservation/deposit lifecycle
+        shell: bash
+        run: |
+          node <<'NODE'
+          const fs = require('fs');
+          const base = 'https://www.gospots.eu/api/v1';
+          const reservationId = 'cmsvr1yv90001go1g9iobvg1b';
+          const checkoutSessionId = 'cs_live_a13NfVGQRENMa9theCfpb6LToAgJDrpZ3Gv7z23mWb8gAD4yx7Mb51kuO4';
+          const targetShopId = 'cmsklydxb0002c81g33mz49sj';
+          const targetVenuePath = 'neon-billiard';
+          const acceptanceEmail = 'p4-31919110371-0vl9xk@gospots.local';
+          const runId = acceptanceEmail.match(/^p4-(\d+)-/)?.[1];
+          if (!runId) throw new Error('Could not derive controlled acceptance credential run id.');
+          const acceptancePassword = `P4-Accept-${runId}!Aa9`;
+          const refundCorrelationId = 'phase8-live-refund-20260818';
+          const evidence = { base, reservationId, checkoutSessionId, targetShopId, startedAt: new Date().toISOString(), checks: [] };
+          let token = null;
+
+          function pass(name, detail = {}) {
+            evidence.checks.push({ name, status: 'PASS', ...detail });
+            console.log(`PASS ${name}`, detail);
+          }
+          function fail(name, detail = {}) {
+            evidence.checks.push({ name, status: 'FAIL', ...detail });
+            throw new Error(`${name}: ${JSON.stringify(detail)}`);
+          }
+          function parse(text) {
+            if (!text) return null;
+            try { return JSON.parse(text); } catch { return text; }
+          }
+          function cookie(headers, name) {
+            const values = typeof headers.getSetCookie === 'function' ? headers.getSetCookie() : [headers.get('set-cookie') || ''];
+            for (const value of values) {
+              const match = value.match(new RegExp(`(?:^|[,;]\\s*)${name}=([^;]+)`));
+              if (match) return decodeURIComponent(match[1]);
+            }
+            return null;
+          }
+          async function request(method, path, body, options = {}) {
+            const headers = { accept: 'application/json', ...(options.headers || {}) };
+            if (options.auth !== false && token) headers.authorization = `Bearer ${token}`;
+            if (body !== undefined) headers['content-type'] = 'application/json';
+            const response = await fetch(`${base}${path}`, {
+              method,
+              headers,
+              body: body === undefined ? undefined : JSON.stringify(body),
+              redirect: 'manual',
+            });
+            return { status: response.status, body: parse(await response.text()), headers: response.headers };
+          }
+          async function must(method, path, body, options = {}) {
+            const result = await request(method, path, body, options);
+            if (result.status < 200 || result.status >= 300) {
+              throw new Error(`${method} ${path} -> ${result.status}: ${JSON.stringify(result.body).slice(0, 1800)}`);
+            }
+            return result;
+          }
+
+          async function main() {
+            const ready = await must('GET', '/ready', undefined, { auth: false });
+            if (ready.body?.status !== 'ok' || ready.body?.database !== 'up') fail('production readiness', { body: ready.body });
+            pass('production readiness', { database: ready.body.database, billing: ready.body.billing });
+
+            const csrf = await must('GET', '/auth/csrf', undefined, { auth: false });
+            const csrfToken = cookie(csrf.headers, 'csrf_token') || csrf.body?.csrfToken;
+            if (!csrfToken) fail('CSRF bootstrap', { body: csrf.body });
+
+            const login = await request('POST', '/auth/login', {
+              login: acceptanceEmail,
+              password: acceptancePassword,
+            }, {
+              auth: false,
+              headers: {
+                cookie: `csrf_token=${encodeURIComponent(csrfToken)}`,
+                'x-csrf-token': csrfToken,
+              },
+            });
+            if (login.status < 200 || login.status >= 300) fail('controlled acceptance login', { status: login.status, body: login.body });
+            token = cookie(login.headers, 'access_token');
+            if (!token) fail('controlled acceptance token', { body: login.body });
+            pass('controlled acceptance login');
+
+            const bind = await must('POST', `/auth/venue/${targetVenuePath}/session`);
+            const boundToken = cookie(bind.headers, 'access_token');
+            if (boundToken) token = boundToken;
+            if (bind.body?.shop?.id !== targetShopId) fail('target venue bind', { body: bind.body });
+            pass('target venue bind', { shopId: bind.body.shop.id, slug: bind.body.shop.slug });
+
+            const before = (await must('GET', `/growth/reservations/${reservationId}/deposits`)).body;
+            if (Number(before.balanceMinor) !== 500 || Number(before.capturedMinor) !== 500 || Number(before.refundedMinor) !== 0) {
+              fail('pre-arrival canonical deposit state', { before });
+            }
+            pass('pre-arrival canonical deposit state', { balanceMinor: before.balanceMinor, appliedMinor: before.appliedMinor });
+
+            const rec1 = (await must('POST', '/public/growth/reservation-deposits/reconcile', { sessionId: checkoutSessionId }, { auth: false })).body;
+            const rec2 = (await must('POST', '/public/growth/reservation-deposits/reconcile', { sessionId: checkoutSessionId }, { auth: false })).body;
+            pass('reconciliation replay accepted', { first: rec1, second: rec2 });
+
+            const arrival1 = (await must('POST', `/growth/reservations/${reservationId}/arrival`)).body;
+            const arrival2 = (await must('POST', `/growth/reservations/${reservationId}/arrival`)).body;
+            if (!arrival1.guestCheckId || arrival2.guestCheckId !== arrival1.guestCheckId || Number(arrival1.depositApplicationMinor) !== 500 || Number(arrival2.depositApplicationMinor) !== 500) {
+              fail('arrival/application replay', { arrival1, arrival2 });
+            }
+            evidence.guestCheckId = arrival1.guestCheckId;
+            pass('arrival/application replay', { guestCheckId: arrival1.guestCheckId, depositApplicationMinor: arrival1.depositApplicationMinor });
+
+            const applied = (await must('GET', `/growth/reservations/${reservationId}/deposits`)).body;
+            if (Number(applied.balanceMinor) !== 500 || Number(applied.appliedMinor) !== 500 || Number(applied.unappliedMinor) !== 0) {
+              fail('applied deposit summary', { applied });
+            }
+            pass('applied deposit summary', { balanceMinor: applied.balanceMinor, appliedMinor: applied.appliedMinor });
+
+            const contextBeforeRefund = (await must('GET', `/commercial/checks/${arrival1.guestCheckId}`)).body;
+            const activeDepositCredits = (contextBeforeRefund.adjustments || []).filter((x) => !x.voidedAt && x.type === 'DEPOSIT_APPLICATION');
+            if (activeDepositCredits.length !== 1 || Number(activeDepositCredits[0].amountMinor) !== 500) {
+              fail('active GuestCheck deposit credit', { adjustments: contextBeforeRefund.adjustments });
+            }
+            pass('active GuestCheck deposit credit', { adjustmentId: activeDepositCredits[0].id });
+
+            const outcome = (await must('POST', `/growth/reservations/${reservationId}/outcome`, {
+              outcome: 'CANCELED',
+              reason: 'Phase 8 live provider acceptance cleanup after arrival',
+            })).body;
+            if (outcome.reservation?.status !== 'CANCELED') fail('canonical cancellation outcome', { outcome });
+            pass('canonical cancellation outcome', { status: outcome.reservation.status, refundDueMinor: outcome.refundDueMinor });
+
+            const refundBody = {
+              amountMinor: 500,
+              correlationId: refundCorrelationId,
+              reason: 'Phase 8 live provider acceptance refund after arrival/application',
+            };
+            const refund1 = (await must('POST', `/growth/reservations/${reservationId}/deposit-refunds`, refundBody)).body;
+            const refund2 = (await must('POST', `/growth/reservations/${reservationId}/deposit-refunds`, refundBody)).body;
+            if (!refund1.refundId || refund2.refundId !== refund1.refundId || refund2.id !== refund1.id) {
+              fail('provider refund replay', { refund1, refund2 });
+            }
+            evidence.refundId = refund1.refundId;
+            pass('provider refund replay', { refundId: refund1.refundId, ledgerEntryId: refund1.id });
+
+            const finalSummary = (await must('GET', `/growth/reservations/${reservationId}/deposits`)).body;
+            if (Number(finalSummary.balanceMinor) !== 0 || Number(finalSummary.appliedMinor) !== 0 || Number(finalSummary.refundedMinor) !== 500) {
+              fail('final zero-balance deposit state', { finalSummary });
+            }
+            pass('final zero-balance deposit state', { balanceMinor: finalSummary.balanceMinor, appliedMinor: finalSummary.appliedMinor, refundedMinor: finalSummary.refundedMinor });
+
+            const contextAfterRefund = (await must('GET', `/commercial/checks/${arrival1.guestCheckId}`)).body;
+            const remainingCredits = (contextAfterRefund.adjustments || []).filter((x) => !x.voidedAt && x.type === 'DEPOSIT_APPLICATION');
+            if (remainingCredits.length !== 0) fail('GuestCheck deposit credit released after provider refund', { adjustments: contextAfterRefund.adjustments });
+            pass('GuestCheck deposit credit released after provider refund');
+
+            evidence.finishedAt = new Date().toISOString();
+            evidence.result = 'PASS';
+            console.log('PHASE8_LIVE_PROVIDER_ACCEPTANCE=PASS');
+          }
+
+          main().catch((error) => {
+            evidence.finishedAt = new Date().toISOString();
+            evidence.result = 'FAIL';
+            evidence.error = error instanceof Error ? error.message : String(error);
+            console.error(error);
+            process.exitCode = 1;
+          }).finally(() => {
+            fs.writeFileSync('/tmp/phase8-live-provider-acceptance.json', JSON.stringify(evidence, null, 2));
+          });
+          NODE
+
+      - name: Upload live acceptance evidence
+        if: ${{ always() }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: phase8-live-provider-acceptance-${{ github.run_id }}
+          if-no-files-found: error
+          retention-days: 30
+          path: /tmp/phase8-live-provider-acceptance.json
