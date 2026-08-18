@@ -21,6 +21,47 @@ export class Phase10ScheduleService {
     private readonly audit: AuditService,
   ) {}
 
+  async list(actor: JwtAccessPayload, days = 30) {
+    this.assertManage(actor);
+    const shopId = requireShopId(actor);
+    const boundedDays = Math.min(Math.max(1, Math.trunc(days)), 366);
+    const from = new Date(Date.now() - 7 * 86_400_000);
+    const to = new Date(Date.now() + boundedDays * 86_400_000);
+    const rows = await this.prisma.scheduleEntry.findMany({
+      where: {
+        shopId,
+        startsAt: { lt: to },
+        endsAt: { gt: from },
+      },
+      orderBy: [{ startsAt: 'asc' }, { membershipId: 'asc' }],
+      take: 1000,
+    });
+    const membershipIds = [...new Set(rows.map((row) => row.membershipId))];
+    const roleIds = [...new Set(rows.map((row) => row.jobRoleId))];
+    const [memberships, roles] = await Promise.all([
+      this.prisma.membership.findMany({
+        where: { shopId, id: { in: membershipIds } },
+        include: { user: true },
+      }),
+      this.prisma.jobRole.findMany({
+        where: { shopId, id: { in: roleIds } },
+      }),
+    ]);
+    const names = new Map(
+      memberships.map((membership) => [
+        membership.id,
+        membership.user.name ?? membership.user.email,
+      ]),
+    );
+    const roleNames = new Map(roles.map((role) => [role.id, role.name]));
+    return rows.map((row) => ({
+      ...row,
+      employeeName: names.get(row.membershipId) ?? row.membershipId,
+      jobRoleName: roleNames.get(row.jobRoleId) ?? row.jobRoleId,
+      published: row.publishedAt != null,
+    }));
+  }
+
   async assertNoConflict(input: {
     shopId: string;
     membershipId: string;
