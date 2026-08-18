@@ -7,6 +7,17 @@ function assert(value: unknown, message: string): asserts value {
   if (!value) throw new Error(`PHASE10_SCHEDULE: ${message}`);
 }
 
+function parseAuditMeta(raw: string | null): { scheduleEntryId?: string } | null {
+  if (!raw) return null;
+  try {
+    const parsed = JSON.parse(raw) as unknown;
+    if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) return null;
+    return parsed as { scheduleEntryId?: string };
+  } catch {
+    return null;
+  }
+}
+
 async function main() {
   const prisma = new PrismaService();
   await prisma.$connect();
@@ -158,10 +169,17 @@ async function main() {
     take: 20,
   });
   const auditRows = candidateAuditRows.filter((row) => {
-    const meta = row.meta as { scheduleEntryId?: string } | null;
+    const meta = parseAuditMeta(row.meta);
     return meta?.scheduleEntryId === base.id;
   });
-  assert(auditRows.length >= 2, 'publish/absence changes were not audited');
+  assert(
+    auditRows.some((row) => row.action === 'workforce.schedule.publish'),
+    'schedule publish audit evidence is missing',
+  );
+  assert(
+    auditRows.some((row) => row.action === 'workforce.schedule.absence'),
+    'schedule absence audit evidence is missing',
+  );
 
   console.log(
     JSON.stringify(
