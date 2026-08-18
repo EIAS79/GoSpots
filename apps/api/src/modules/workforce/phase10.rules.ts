@@ -72,6 +72,15 @@ function numeric(body: BodyLike, keys: string[]): number | undefined {
   return undefined;
 }
 
+function text(body: BodyLike, keys: string[]): string {
+  if (!body) return '';
+  for (const key of keys) {
+    const value = body[key];
+    if (typeof value === 'string') return value.trim().toUpperCase();
+  }
+  return '';
+}
+
 function truthy(body: BodyLike, keys: string[]): boolean {
   if (!body) return false;
   return keys.some((key) => {
@@ -101,7 +110,11 @@ export function classifyAccountableAction(
     'totalMinor',
   ]);
 
-  if (path.includes('/workforce/adjustments/') && path.endsWith('/decision') && body?.approve === true) {
+  if (
+    path.includes('/workforce/adjustments/') &&
+    path.endsWith('/decision') &&
+    body?.approve === true
+  ) {
     return { actionKind: 'MANUAL_TIME_EDIT', sourceType: 'time-adjustment' };
   }
   if (path.includes('refund')) {
@@ -111,17 +124,25 @@ export function classifyAccountableAction(
     return { actionKind: 'VOID_AFTER_SEND', amountMinor, sourceType: 'order' };
   }
   if (path.includes('inventory')) {
-    const movement = String(body?.type ?? body?.reason ?? body?.movementType ?? '').toUpperCase();
+    const movement = text(body, ['type', 'reason', 'movementType']);
     if (movement.includes('WRITE') || movement.includes('WASTE') || movement.includes('LOSS')) {
       return { actionKind: 'INVENTORY_WRITE_OFF', amountMinor, sourceType: 'inventory' };
     }
-    if (movement.includes('CORRECTION') || movement.includes('ADJUST') || path.includes('correction')) {
+    if (
+      movement.includes('CORRECTION') ||
+      movement.includes('ADJUST') ||
+      path.includes('correction')
+    ) {
       return { actionKind: 'INVENTORY_CORRECTION', amountMinor, sourceType: 'inventory' };
     }
   }
   if (path.includes('/cash/')) {
-    const movement = String(body?.type ?? body?.movementType ?? '').toUpperCase();
-    if (movement.includes('PAID_OUT') || movement.includes('PAYOUT') || movement.includes('PAY_OUT')) {
+    const movement = text(body, ['type', 'movementType']);
+    if (
+      movement.includes('PAID_OUT') ||
+      movement.includes('PAYOUT') ||
+      movement.includes('PAY_OUT')
+    ) {
       return { actionKind: 'CASH_PAYOUT', amountMinor, sourceType: 'cash' };
     }
     if (path.includes('variance') || body?.varianceMinor != null) {
@@ -131,11 +152,21 @@ export function classifyAccountableAction(
   if (truthy(body, ['comp', 'isComp', 'complimentary'])) {
     return { actionKind: 'COMP', amountMinor, sourceType: 'commercial' };
   }
-  if (truthy(body, ['priceOverride', 'overridePrice', 'manualPrice']) || path.includes('price-override')) {
+  if (
+    truthy(body, ['priceOverride', 'overridePrice', 'manualPrice']) ||
+    path.includes('price-override')
+  ) {
     return { actionKind: 'PRICE_OVERRIDE', amountMinor, sourceType: 'commercial' };
   }
-  if (truthy(body, ['waiveCancellationFee', 'feeWaived']) || path.includes('fee-waiver')) {
-    return { actionKind: 'CANCELLATION_FEE_WAIVER', amountMinor, sourceType: 'reservation' };
+  if (
+    truthy(body, ['waiveCancellationFee', 'feeWaived']) ||
+    path.includes('fee-waiver')
+  ) {
+    return {
+      actionKind: 'CANCELLATION_FEE_WAIVER',
+      amountMinor,
+      sourceType: 'reservation',
+    };
   }
   if (
     body?.discountAmountMinor != null ||
@@ -163,7 +194,11 @@ export type SuspicionRule = {
   afterHoursEndHour?: number | null;
 };
 
-export function isAfterHours(hour: number, start?: number | null, end?: number | null): boolean {
+export function isAfterHours(
+  hour: number,
+  start?: number | null,
+  end?: number | null,
+): boolean {
   if (start == null || end == null) return false;
   if (start === end) return false;
   if (start < end) return hour >= start && hour < end;
@@ -188,7 +223,13 @@ export function computeSuspiciousReasons(input: {
   if (input.recentSameActorCount + 1 >= input.rule.repeatCountThreshold) {
     reasons.push('REPEAT_THRESHOLD');
   }
-  if (isAfterHours(input.localHour, input.rule.afterHoursStartHour, input.rule.afterHoursEndHour)) {
+  if (
+    isAfterHours(
+      input.localHour,
+      input.rule.afterHoursStartHour,
+      input.rule.afterHoursEndHour,
+    )
+  ) {
     reasons.push('AFTER_HOURS');
   }
   if (input.managerOverride) reasons.push('MANAGER_OVERRIDE');
@@ -208,7 +249,10 @@ export function scheduleStatus(input: {
 }
 
 export function overtimeSeconds(workedSeconds: number, thresholdSeconds: number): number {
-  return Math.max(0, Math.trunc(workedSeconds) - Math.max(0, Math.trunc(thresholdSeconds)));
+  return Math.max(
+    0,
+    Math.trunc(workedSeconds) - Math.max(0, Math.trunc(thresholdSeconds)),
+  );
 }
 
 export function breakCompliance(input: {
