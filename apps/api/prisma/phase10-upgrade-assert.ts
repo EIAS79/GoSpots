@@ -13,30 +13,69 @@ async function main() {
   });
   assert(membership?.isActive, 'legacy staff membership was not preserved as active');
 
-  const rate = await prisma.employeeRate.findFirst({ where: { shopId, membershipId: membership.id } });
-  assert(rate?.hourlyRateMinor === 4200 && rate.currency === 'PLN', 'legacy employee rate was not preserved');
+  const rate = await prisma.employeeRate.findFirst({
+    where: { shopId, membershipId: membership.id },
+  });
+  assert(
+    rate?.hourlyRateMinor === 4200 && rate.currency === 'PLN',
+    'legacy employee rate was not preserved',
+  );
 
   const schedule = await prisma.scheduleEntry.findFirst({
-    where: { shopId, membershipId: membership.id, note: 'Representative pre-Phase-10 schedule' },
+    where: {
+      shopId,
+      membershipId: membership.id,
+      note: 'Representative pre-Phase-10 schedule',
+    },
   });
   assert(schedule, 'legacy schedule was not preserved');
+  assert(
+    schedule.publishedAt == null &&
+      schedule.absenceStatus == null &&
+      schedule.absenceReason == null,
+    'upgrade invented publish/absence state for a legacy planned shift',
+  );
 
   const profile = await prisma.staffEmploymentProfile.findUnique({
     where: { shopId_membershipId: { shopId, membershipId: membership.id } },
   });
-  assert(profile?.employeeNumber.startsWith('EMP-'), 'legacy employee profile was not safely backfilled');
-  assert(profile.displayName === 'Phase 10 Upgrade Staff', 'backfilled display name did not preserve employee identity');
+  assert(
+    profile?.employeeNumber.startsWith('EMP-'),
+    'legacy employee profile was not safely backfilled',
+  );
+  assert(
+    profile.displayName === 'Phase 10 Upgrade Staff',
+    'backfilled display name did not preserve employee identity',
+  );
 
   const policy = await prisma.workforcePolicy.findUnique({ where: { shopId } });
   assert(policy && !policy.enforceSchedule, 'upgrade unexpectedly enabled schedule enforcement');
   assert(policy.pinLockoutAttempts === 5, 'safe PIN lockout default was not seeded');
   assert(!policy.clockInDeviceRequired, 'upgrade unexpectedly required a clock-in device');
-  assert(policy.clockInAllowedDeviceIds.length === 0, 'upgrade unexpectedly restricted clock-in devices');
+  assert(
+    policy.clockInAllowedDeviceIds.length === 0,
+    'upgrade unexpectedly restricted clock-in devices',
+  );
   assert(!policy.clockInLocationRequired, 'upgrade unexpectedly required location evidence');
-  assert(policy.clockInLatitude == null && policy.clockInLongitude == null, 'upgrade invented a venue geofence');
+  assert(
+    policy.clockInLatitude == null && policy.clockInLongitude == null,
+    'upgrade invented a venue geofence',
+  );
   assert(policy.clockInRadiusMeters === 100, 'safe clock-in radius default was not seeded');
 
-  const rls = await prisma.$queryRaw<Array<{ tablename: string; rowsecurity: boolean; forcerowsecurity: boolean }>>`
+  const overlapConstraint = await prisma.$queryRaw<Array<{ constraint_name: string }>>`
+    SELECT conname AS constraint_name
+    FROM pg_constraint
+    WHERE conname = 'ScheduleEntry_no_member_overlap'
+  `;
+  assert(
+    overlapConstraint.length === 1,
+    'advanced schedule overlap constraint is missing after upgrade',
+  );
+
+  const rls = await prisma.$queryRaw<
+    Array<{ tablename: string; rowsecurity: boolean; forcerowsecurity: boolean }>
+  >`
     SELECT c.relname AS tablename, c.relrowsecurity AS rowsecurity, c.relforcerowsecurity AS forcerowsecurity
     FROM pg_class c
     WHERE c.relname IN (
@@ -46,18 +85,29 @@ async function main() {
     )
   `;
   assert(rls.length === 9, 'not all Phase 10 tables exist after upgrade');
-  assert(rls.every((row) => row.rowsecurity && row.forcerowsecurity), 'Phase 10 RLS is not enabled and forced');
+  assert(
+    rls.every((row) => row.rowsecurity && row.forcerowsecurity),
+    'Phase 10 RLS is not enabled and forced',
+  );
 
-  console.log(JSON.stringify({
-    ok: true,
-    shopId,
-    legacyRatePreserved: true,
-    legacySchedulePreserved: true,
-    profileBackfilled: true,
-    safePolicyDefault: true,
-    clockInRestrictionsDefaultOff: true,
-    rlsForced: true,
-  }, null, 2));
+  console.log(
+    JSON.stringify(
+      {
+        ok: true,
+        shopId,
+        legacyRatePreserved: true,
+        legacySchedulePreserved: true,
+        legacyScheduleStateSafe: true,
+        profileBackfilled: true,
+        safePolicyDefault: true,
+        clockInRestrictionsDefaultOff: true,
+        scheduleOverlapInvariant: true,
+        rlsForced: true,
+      },
+      null,
+      2,
+    ),
+  );
   await prisma.$disconnect();
 }
 
