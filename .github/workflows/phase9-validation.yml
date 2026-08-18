@@ -87,6 +87,10 @@ jobs:
         working-directory: apps/api
         run: pnpm exec tsx prisma/phase9-operational-pilot.ts
 
+      - name: Assert portal profile and historical booking continuity
+        working-directory: apps/api
+        run: pnpm exec tsx prisma/phase9-portal-profile-assert.ts
+
       - name: Assert refund and loyalty reversal effects
         working-directory: apps/api
         run: pnpm exec tsx prisma/phase9-refund-effects-assert.ts
