@@ -87,6 +87,10 @@ jobs:
         working-directory: apps/api
         run: pnpm exec tsx prisma/phase10-operational-pilot.ts
 
+      - name: Prove role matrix, permission escalation and inactive denial
+        working-directory: apps/api
+        run: pnpm exec tsx prisma/phase10-permission-inactive-assert.ts
+
       - name: Prove persisted clock-in device and location restrictions
         working-directory: apps/api
         run: pnpm exec tsx prisma/phase10-clockin-restriction-assert.ts
