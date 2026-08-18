@@ -13,6 +13,7 @@ import { PERMISSIONS } from '../../common/permissions';
 import { requireShopId } from '../../common/tenant';
 import type { JwtAccessPayload } from '../auth/auth.service';
 import { CurrentUser } from '../auth/decorators/current-user.decorator';
+import { Public } from '../auth/decorators/public.decorator';
 import { RequirePermissions } from '../auth/decorators/roles.decorator';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { GrowthPricingService } from './growth-pricing.service';
@@ -301,6 +302,7 @@ export class Phase9CustomerValueController {
 }
 
 @ApiTags('growth-phase9-portal')
+@Public()
 @Controller('growth/phase9/portal')
 export class Phase9CustomerPortalController {
   constructor(private readonly portal: Phase9CustomerPortalService) {}
