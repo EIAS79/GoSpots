@@ -1,4 +1,4 @@
-import { expect, test } from '@playwright/test';
+import { expect, test, type Dialog } from '@playwright/test';
 import { api, bindVenue, E2E, loginOwner } from '../helpers/app';
 
 test.describe('Phase 10 workforce scheduling @smoke', () => {
@@ -56,7 +56,7 @@ test.describe('Phase 10 workforce scheduling @smoke', () => {
     await expect(row).toContainText('Published');
 
     let dialogIndex = 0;
-    const dialogHandler = async (dialog: Parameters<typeof page.on<'dialog'>>[1] extends (dialog: infer T) => unknown ? T : never) => {
+    const dialogHandler = async (dialog: Dialog) => {
       dialogIndex += 1;
       await dialog.accept(dialogIndex === 1 ? 'EXCUSED' : 'Phase 10 E2E absence');
     };
