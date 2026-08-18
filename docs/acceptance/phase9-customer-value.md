@@ -2,9 +2,22 @@
 
 ## Status
 
-`READY_FOR_ACCEPTANCE`
+`ACCEPTED`
 
-This document records software evidence for Phase 9 of the GoSpots Master Product & Engineering Execution Plan v2. Final `ACCEPTED` status requires exact-head CI, merge, production deployment and runtime verification.
+Phase 9 of the GoSpots Master Product & Engineering Execution Plan v2 is accepted. The implementation, exact-head CI, guarded merge, resulting `main`, production deployment, runtime health and the critical customer-portal production route have been verified. Phase 10 was not started as part of this acceptance.
+
+## Final acceptance evidence
+
+- Phase 9 implementation PR: `#69` — `Phase 9: customer value integrity and growth completion`.
+- Final PR head validated before merge: `3c0e3b861d49780df06d646f4f00731b4c6165af`.
+- All required workflows were green on that exact PR head, including the dedicated Phase 9 gate and repository-wide Chromium E2E.
+- PR `#69` was squash-merged with expected-head protection.
+- Resulting `main` revision: `c23167ff348b6afe27b69e2b53a615fcc2c28a9d`.
+- Vercel production deployment: `dpl_9hiNFga1vkNoAKkdSXtUd2NSCsM3`, target `production`, exact Git revision `c23167ff348b6afe27b69e2b53a615fcc2c28a9d`, state `READY`.
+- Canonical production domains include `gospots.pl`, `www.gospots.pl`, `gospots.eu`, and `www.gospots.eu`; `https://www.gospots.pl/` returned HTTP `200` after deployment.
+- Production Phase 9 route `https://www.gospots.pl/customer/<token>` matched `/customer/[token]` and returned HTTP `200` in the production smoke check. A deliberately invalid token was used so the smoke check did not read or mutate real customer data.
+- Vercel production runtime-error inspection after deployment returned no runtime errors, and production `error`/`fatal` log inspection returned no matching log entries.
+- The merge commit's Vercel status changed to `success`.
 
 ## Scope
 
@@ -100,6 +113,7 @@ The implementation extends the existing Growth domain instead of creating parall
 - Profile changes are audited and cannot claim another same-tenant customer's email/phone identity.
 - Historical identity aliases remain linked to the canonical customer so prior reservation history remains visible after contact details change.
 - Portal does not create a second customer or financial source of truth.
+- Portal capability-token controllers are explicitly public capability surfaces; dashboard/staff Phase 9 APIs remain JWT/permission protected. This prevents dashboard session cookies from incorrectly forcing session-CSRF semantics onto customer capability-token mutations without disabling CSRF for authenticated dashboard mutations.
 
 ## Database and migration strategy
 
@@ -163,6 +177,8 @@ A reconciliation assertion proves the final pilot has no silent customer-value d
 - customer can grant marketing consent;
 - persisted portal projection reflects profile, consent provenance and loyalty value.
 
+The permanent Chromium suite exposed a final pre-merge defect: dashboard cookies caused the customer capability-token profile mutation to be evaluated under dashboard session-CSRF semantics. The fix classifies the customer portal controllers with the repository's existing `@Public()` capability pattern. The same permanent Chromium test and its persisted-state assertion passed afterward on the exact merged candidate.
+
 ## CI gate
 
 Blocking workflow: `.github/workflows/phase9-validation.yml`
@@ -182,11 +198,9 @@ It requires:
 11. web typecheck;
 12. web production build.
 
-The repository-wide CI and earlier phase regression workflows remain required for the final exact Phase 9 head.
+Repository-wide CI and the earlier phase regression workflows were also green on the final PR head before the guarded merge.
 
 ## Acceptance gate P9
-
-Phase 9 is ready for final acceptance only when all of the following are true:
 
 - [x] benefits with financial value use immutable ledgers;
 - [x] retryable value mutations use canonical request-hash idempotency;
@@ -201,10 +215,10 @@ Phase 9 is ready for final acceptance only when all of the following are true:
 - [x] profile changes preserve historical identity/booking evidence and reject identity conflicts;
 - [x] clean migration proof exists in CI;
 - [x] representative upgrade proof exists in CI;
-- [ ] exact final Phase 9 head is green across all required CI;
-- [ ] PR is merged with expected-head protection;
-- [ ] resulting `main` is verified;
-- [ ] exact merged revision is deployed to production;
-- [ ] production runtime and critical Phase 9 route are verified.
+- [x] exact final Phase 9 PR head is green across all required CI;
+- [x] PR is merged with expected-head protection;
+- [x] resulting `main` is verified;
+- [x] exact merged revision is deployed to production;
+- [x] production runtime and critical Phase 9 route are verified.
 
-The final five boxes are intentionally not pre-claimed by repository code. They are closed only with GitHub and production evidence.
+**Gate P9: ACCEPTED.**
