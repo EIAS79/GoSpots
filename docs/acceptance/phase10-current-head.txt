@@ -1,0 +1,3 @@
+Phase 10 execution branch: agent/phase-10-workforce-accountability
+Status: IN_PROGRESS
+Do not use this file as final exact-head evidence; the acceptance record is authoritative after CI closeout.

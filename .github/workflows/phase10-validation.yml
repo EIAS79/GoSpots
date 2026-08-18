@@ -1,0 +1,134 @@
+name: Phase 10 workforce accountability validation
+
+on:
+  pull_request:
+    paths:
+      - 'apps/api/src/modules/workforce/**'
+      - 'apps/api/src/common/permissions*'
+      - 'apps/api/src/common/idempotency*'
+      - 'apps/api/prisma/**'
+      - 'apps/web/src/app/**/workforce/**'
+      - 'apps/web/src/lib/operator-session.ts'
+      - 'apps/web/src/lib/venue-api-headers.ts'
+      - 'apps/web/e2e/integrity/phase10-workforce-*.spec.ts'
+      - '.github/workflows/phase10-validation.yml'
+  push:
+    branches: [main]
+    paths:
+      - 'apps/api/src/modules/workforce/**'
+      - 'apps/api/src/common/permissions*'
+      - 'apps/api/src/common/idempotency*'
+      - 'apps/api/prisma/**'
+      - 'apps/web/src/app/**/workforce/**'
+      - 'apps/web/src/lib/operator-session.ts'
+      - 'apps/web/src/lib/venue-api-headers.ts'
+      - 'apps/web/e2e/integrity/phase10-workforce-*.spec.ts'
+      - '.github/workflows/phase10-validation.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  phase10:
+    name: Phase 10 gate · workforce accountability
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    services:
+      postgres:
+        image: postgres:17
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: gospots_phase10
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres -d gospots_phase10"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 20
+    env:
+      DATABASE_URL: postgresql://postgres:postgres@127.0.0.1:5432/gospots_phase10?schema=public
+      JWT_SECRET: phase10-ci-only-jwt-secret
+      NODE_ENV: test
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: pnpm
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Generate and validate Prisma
+        working-directory: apps/api
+        run: |
+          pnpm prisma:generate
+          pnpm exec prisma validate
+
+      - name: Deploy clean migration chain
+        working-directory: apps/api
+        run: |
+          pnpm migrate:deploy
+          pnpm exec prisma migrate status
+
+      - name: Run Phase 10 and workforce regression tests
+        working-directory: apps/api
+        run: >-
+          pnpm exec jest --config jest.config.cjs --runInBand
+          src/modules/workforce/phase10.rules.spec.ts
+          src/modules/workforce/phase10-clockin-restriction.interceptor.spec.ts
+          src/modules/workforce/phase10-performance.service.spec.ts
+          src/modules/workforce/workforce.service.spec.ts
+
+      - name: Run persisted Phase 10 operational pilot
+        working-directory: apps/api
+        run: pnpm exec tsx prisma/phase10-operational-pilot.ts
+
+      - name: Prove role matrix, permission escalation and inactive denial
+        working-directory: apps/api
+        run: pnpm exec tsx prisma/phase10-permission-inactive-assert.ts
+
+      - name: Prove persisted clock-in device and location restrictions
+        working-directory: apps/api
+        run: pnpm exec tsx prisma/phase10-clockin-restriction-assert.ts
+
+      - name: Prove published conflict-safe absence-aware scheduling
+        working-directory: apps/api
+        run: pnpm exec tsx prisma/phase10-schedule-assert.ts
+
+      - name: Prove manual time approval and alert dedupe
+        working-directory: apps/api
+        run: pnpm exec tsx prisma/phase10-manual-time-alert-assert.ts
+
+      - name: Build API
+        working-directory: apps/api
+        run: pnpm build
+
+      - name: Verify representative pre-Phase-10 upgrade
+        env:
+          UPGRADE_DATABASE_URL: postgresql://postgres:postgres@127.0.0.1:5432/gospots_phase10_upgrade?schema=public
+          PGPASSWORD: postgres
+        run: |
+          createdb -h 127.0.0.1 -U postgres gospots_phase10_upgrade
+          mkdir -p /tmp/phase10_migrations
+          mv apps/api/prisma/migrations/20260818113000_phase10_workforce_accountability /tmp/phase10_migrations/
+          mv apps/api/prisma/migrations/20260818113100_phase10_clockin_restrictions /tmp/phase10_migrations/
+          mv apps/api/prisma/migrations/20260818113200_phase10_schedule_advanced /tmp/phase10_migrations/
+          DATABASE_URL="$UPGRADE_DATABASE_URL" pnpm --filter @gospots/api migrate:deploy
+          DATABASE_URL="$UPGRADE_DATABASE_URL" pnpm --filter @gospots/api exec tsx prisma/phase10-upgrade-fixture.ts
+          mv /tmp/phase10_migrations/20260818113000_phase10_workforce_accountability apps/api/prisma/migrations/
+          mv /tmp/phase10_migrations/20260818113100_phase10_clockin_restrictions apps/api/prisma/migrations/
+          mv /tmp/phase10_migrations/20260818113200_phase10_schedule_advanced apps/api/prisma/migrations/
+          DATABASE_URL="$UPGRADE_DATABASE_URL" pnpm --filter @gospots/api migrate:deploy
+          DATABASE_URL="$UPGRADE_DATABASE_URL" pnpm --filter @gospots/api exec tsx prisma/phase10-upgrade-assert.ts
+
+      - name: Typecheck web
+        working-directory: apps/web
+        run: pnpm typecheck
+
+      - name: Build web
+        working-directory: apps/web
+        run: pnpm build

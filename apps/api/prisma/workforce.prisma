@@ -33,20 +33,25 @@ model EmployeeRate {
 }
 
 model ScheduleEntry {
-  id           String   @id @default(cuid())
-  shopId       String
-  membershipId String
-  jobRoleId    String
-  startsAt     DateTime
-  endsAt       DateTime
-  status       String   @default("SCHEDULED")
-  note         String?
-  createdById  String
-  createdAt    DateTime @default(now())
-  updatedAt    DateTime @updatedAt
+  id            String   @id @default(cuid())
+  shopId        String
+  membershipId  String
+  jobRoleId     String
+  startsAt      DateTime
+  endsAt        DateTime
+  status        String   @default("SCHEDULED")
+  publishedAt   DateTime?
+  absenceStatus String?
+  absenceReason String?
+  note          String?
+  createdById   String
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
 
   @@index([shopId, membershipId, startsAt])
   @@index([shopId, startsAt, endsAt])
+  @@index([shopId, publishedAt, startsAt])
+  @@index([shopId, absenceStatus, startsAt])
 }
 
 model TimePunch {
@@ -81,19 +86,19 @@ model BreakRecord {
 }
 
 model TimeAdjustment {
-  id                   String   @id @default(cuid())
-  shopId               String
-  timePunchId          String
-  proposedStartedAt    DateTime?
-  proposedEndedAt      DateTime?
+  id                         String   @id @default(cuid())
+  shopId                     String
+  timePunchId                String
+  proposedStartedAt          DateTime?
+  proposedEndedAt            DateTime?
   proposedUnpaidBreakSeconds Int?
-  reason               String
-  status               String   @default("PENDING")
-  requestedById        String
-  decidedById          String?
-  decisionNote         String?
-  decidedAt            DateTime?
-  createdAt            DateTime @default(now())
+  reason                     String
+  status                     String   @default("PENDING")
+  requestedById              String
+  decidedById                String?
+  decisionNote               String?
+  decidedAt                  DateTime?
+  createdAt                  DateTime @default(now())
 
   @@index([shopId, timePunchId, status, createdAt])
   @@index([shopId, status, createdAt])
