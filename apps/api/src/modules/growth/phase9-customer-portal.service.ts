@@ -198,6 +198,7 @@ export class Phase9CustomerPortalService {
       return { customer: updated, event };
     });
     await this.audit.recordForShop(access.shopId, {
+      section: 'customer',
       action: granted ? 'customer.portal.consent.grant' : 'customer.portal.consent.revoke',
       summary: granted
         ? 'Customer granted marketing consent in portal'
