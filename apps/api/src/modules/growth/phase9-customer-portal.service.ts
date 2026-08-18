@@ -119,7 +119,7 @@ export class Phase9CustomerPortalService {
                     { endsAt: { lt: now } },
                     {
                       status: {
-                        in: ['COMPLETED', 'CANCELLED', 'NO_SHOW'],
+                        in: ['COMPLETED', 'CANCELED', 'NO_SHOW'],
                       },
                     },
                   ],
