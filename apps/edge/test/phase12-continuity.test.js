@@ -11,6 +11,10 @@ function engine() {
     cursor: 'snapshot-1',
     generatedAt: '2026-08-18T20:00:00.000Z',
     venue: { id: 'shop-1', currency: 'PLN', timezone: 'Europe/Warsaw', version: 3 },
+    operators: [
+      { id: 'user-1', role: 'CASHIER', isActive: true, permissions: 'session.write,order.write,checkout.write' },
+      { id: 'viewer-1', role: 'VIEWER', isActive: true, permissions: 'session.read,order.read' },
+    ],
     resources: [{ id: 'resource-1', status: 'AVAILABLE', version: 1, name: 'Table 1' }],
     activeSessions: [],
     openChecks: [{ id: 'check-1', status: 'OPEN', version: 4 }],
@@ -35,7 +39,7 @@ test('command envelope has stable operation, sequence, idempotency, hash and cor
       operationId: '11111111-1111-4111-8111-111111111111',
       deviceId: 'pos-a', venueId: 'shop-1', operationType: 'SESSION_START',
       aggregateType: 'OperationsSession', aggregateId: '22222222-2222-4222-8222-222222222222',
-      payload: { resourceId: 'resource-1' }, correlationId: 'corr-1',
+      payload: { resourceId: 'resource-1', operatorUserId: 'user-1' }, correlationId: 'corr-1',
       occurredAt: '2026-08-18T20:01:00.000Z',
     });
     assert.equal(command.localSequence, 1);
@@ -48,7 +52,7 @@ test('command envelope has stable operation, sequence, idempotency, hash and cor
       operationId: command.operationId,
       deviceId: 'pos-a', venueId: 'shop-1', operationType: 'SESSION_START',
       aggregateType: 'OperationsSession', aggregateId: command.aggregateId,
-      payload: { resourceId: 'resource-1' }, correlationId: 'corr-1',
+      payload: { resourceId: 'resource-1', operatorUserId: 'user-1' }, correlationId: 'corr-1',
       occurredAt: '2026-08-18T20:01:00.000Z',
     });
     assert.equal(replay.duplicate, true);
@@ -62,23 +66,35 @@ test('concurrent/stale local resource start is rejected instead of creating dupl
     continuity.createCommand({
       operationId: '33333333-3333-4333-8333-333333333333', deviceId: 'pos-a', venueId: 'shop-1',
       operationType: 'SESSION_START', aggregateType: 'OperationsSession', aggregateId: '44444444-4444-4444-8444-444444444444',
-      payload: { resourceId: 'resource-1' }, occurredAt: '2026-08-18T20:01:00.000Z',
+      payload: { resourceId: 'resource-1', operatorUserId: 'user-1' }, occurredAt: '2026-08-18T20:01:00.000Z',
     });
     assert.throws(() => continuity.createCommand({
       operationId: '55555555-5555-4555-8555-555555555555', deviceId: 'pos-b', venueId: 'shop-1',
       operationType: 'SESSION_START', aggregateType: 'OperationsSession', aggregateId: '66666666-6666-4666-8666-666666666666',
-      payload: { resourceId: 'resource-1' }, occurredAt: '2026-08-18T20:01:01.000Z',
+      payload: { resourceId: 'resource-1', operatorUserId: 'user-1' }, occurredAt: '2026-08-18T20:01:01.000Z',
     }), /RESOURCE_CONFLICT/);
   } finally { store.close(); }
 });
 
-test('cash payment creates one durable local financial fact and duplicate replay cannot double-apply', () => {
+test('local operator permissions fail closed for certified writes', () => {
+  const { store, continuity } = engine();
+  try {
+    assert.throws(() => continuity.createCommand({
+      operationId: '12121212-1212-4121-8121-121212121212', deviceId: 'pos-a', venueId: 'shop-1',
+      operationType: 'ORDER_CREATE', aggregateType: 'VenueOrder', aggregateId: '34343434-3434-4343-8343-343434343434',
+      payload: { operatorUserId: 'viewer-1', lines: [] },
+    }), /PERMISSION_DENIED.*order\.write/);
+    assert.equal(continuity.pendingCommands().length, 0);
+  } finally { store.close(); }
+});
+
+test('cash payment creates one durable exact local financial fact and duplicate replay cannot double-apply', () => {
   const { store, continuity } = engine();
   try {
     const input = {
       operationId: '77777777-7777-4777-8777-777777777777', deviceId: 'pos-a', venueId: 'shop-1',
       operationType: 'CASH_PAYMENT', aggregateType: 'CheckSettlement', aggregateId: 'settlement-1', aggregateVersion: 4,
-      payload: { settlementId: 'settlement-1', operatorUserId: 'user-1', amountMinor: 2500, currency: 'PLN', allocationKind: 'CUSTOM', allocations: [{ snapshotId: 'snap-1', amount: '25.00' }] },
+      payload: { settlementId: 'settlement-1', operatorUserId: 'user-1', amountMinor: 2500, currency: 'PLN', allocationKind: 'CUSTOM', allocations: [{ snapshotId: 'snap-1', amount: '25.0000' }] },
       occurredAt: '2026-08-18T20:05:00.000Z',
     };
     continuity.createCommand(input);
@@ -87,6 +103,12 @@ test('cash payment creates one durable local financial fact and duplicate replay
     const row = store.db.prepare('SELECT COUNT(*) count, SUM(amount_minor) total FROM local_cash_ledger').get();
     assert.equal(Number(row.count), 1);
     assert.equal(Number(row.total), 2500);
+
+    assert.throws(() => continuity.createCommand({
+      ...input,
+      operationId: '78787878-7878-4787-8787-787878787878',
+      payload: { ...input.payload, amountMinor: 2499 },
+    }), /AMOUNT_CONFLICT/);
   } finally { store.close(); }
 });
 
@@ -125,7 +147,7 @@ test('snapshot rejects another tenant and local state remains venue-bound', () =
     assert.throws(() => continuity.applySnapshot({ venue: { id: 'shop-2' } }), /TENANT_CONFLICT/);
     assert.throws(() => continuity.createCommand({
       operationId: '99999999-9999-4999-8999-999999999999', deviceId: 'pos-a', venueId: 'shop-2',
-      operationType: 'ORDER_CREATE', aggregateType: 'VenueOrder', aggregateId: 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa', payload: { lines: [] },
+      operationType: 'ORDER_CREATE', aggregateType: 'VenueOrder', aggregateId: 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa', payload: { operatorUserId: 'user-1', lines: [] },
     }), /TENANT_CONFLICT/);
   } finally { store.close(); }
 });
