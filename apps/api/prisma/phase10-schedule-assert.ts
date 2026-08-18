@@ -38,7 +38,10 @@ async function main() {
     }),
     prisma.jobRole.findFirst({ where: { shopId: shop.id, active: true } }),
   ]);
-  assert(ownerMembership && staffMembership && otherOwnerMembership && role, 'pilot schedule actors/role were not found');
+  assert(
+    ownerMembership && staffMembership && otherOwnerMembership && role,
+    'pilot schedule actors/role were not found',
+  );
 
   const actor = (
     membership: typeof ownerMembership,
@@ -100,7 +103,10 @@ async function main() {
   } catch {
     databaseConflict = true;
   }
-  assert(databaseConflict, 'database overlap invariant accepted a racing/conflicting shift');
+  assert(
+    databaseConflict,
+    'database overlap invariant accepted a racing/conflicting shift',
+  );
 
   const adjacent = await prisma.scheduleEntry.create({
     data: {
@@ -143,12 +149,17 @@ async function main() {
     'planned-shift projection did not expose publish/absence state',
   );
 
-  const auditRows = await prisma.auditLog.findMany({
+  const candidateAuditRows = await prisma.auditLog.findMany({
     where: {
       shopId: shop.id,
       action: { in: ['workforce.schedule.publish', 'workforce.schedule.absence'] },
-      meta: { contains: base.id },
     },
+    orderBy: { createdAt: 'desc' },
+    take: 20,
+  });
+  const auditRows = candidateAuditRows.filter((row) => {
+    const meta = row.meta as { scheduleEntryId?: string } | null;
+    return meta?.scheduleEntryId === base.id;
   });
   assert(auditRows.length >= 2, 'publish/absence changes were not audited');
 
