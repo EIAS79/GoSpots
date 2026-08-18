@@ -157,6 +157,12 @@ model WorkforcePolicy {
   operatorSessionMinutes     Int      @default(15)
   pinLockoutAttempts         Int      @default(5)
   pinLockoutMinutes          Int      @default(15)
+  clockInDeviceRequired      Boolean  @default(false)
+  clockInAllowedDeviceIds    String[] @default([])
+  clockInLocationRequired    Boolean  @default(false)
+  clockInLatitude            Float?
+  clockInLongitude           Float?
+  clockInRadiusMeters        Int      @default(100)
   updatedById                String
   createdAt                  DateTime @default(now())
   updatedAt                  DateTime @updatedAt
