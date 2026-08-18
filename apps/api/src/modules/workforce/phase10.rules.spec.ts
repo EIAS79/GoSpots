@@ -78,6 +78,31 @@ describe('Phase 10 workforce accountability rules', () => {
         type: 'PAID_OUT',
       }),
     ).toMatchObject({ actionKind: 'CASH_PAYOUT' });
+    expect(
+      classifyAccountableAction(
+        'POST',
+        '/api/v1/growth/phase9/stored-value/accounts/sv1/ledger',
+        { type: 'ADJUST', amountMinor: 1200 },
+      ),
+    ).toEqual({
+      actionKind: 'STORED_VALUE_CORRECTION',
+      amountMinor: 1200,
+      sourceType: 'stored-value',
+    });
+    expect(
+      classifyAccountableAction(
+        'POST',
+        '/api/v1/checkout/guest-checks/gc1/reopen',
+        {},
+      ),
+    ).toMatchObject({ actionKind: 'REOPEN_CHECK' });
+    expect(
+      classifyAccountableAction(
+        'POST',
+        '/api/v1/finance/business-day/day1/reopen',
+        {},
+      ),
+    ).toMatchObject({ actionKind: 'REOPEN_DAY' });
     expect(classifyAccountableAction('GET', '/api/v1/refunds')).toBeNull();
   });
 
