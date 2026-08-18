@@ -67,14 +67,24 @@ type Performance = {
   membershipId: string;
   displayName: string;
   salesCount: number;
+  salesMinor: number;
   averageCheckMinor: number;
   refundCount: number;
   voidCount: number;
+  discountCount: number;
   workedHours: number;
   overtimeSeconds: number;
   lateCount: number;
   breakComplianceViolations: number;
   exceptionCount: number;
+  resourceSessionCount: number;
+  cashVariance: string;
+  cashVarianceCurrency: string | null;
+  cashVarianceCloseCount: number;
+  laborCostMinor: number | null;
+  laborToSalesBasisPoints: number | null;
+  kdsReadyCount: number;
+  kdsAverageReadySeconds: number | null;
 };
 
 type WorkforcePolicy = {
@@ -83,6 +93,12 @@ type WorkforcePolicy = {
   operatorSessionMinutes: number;
   pinLockoutAttempts: number;
   pinLockoutMinutes: number;
+  clockInDeviceRequired: boolean;
+  clockInAllowedDeviceIds: string[];
+  clockInLocationRequired: boolean;
+  clockInLatitude: number | null;
+  clockInLongitude: number | null;
+  clockInRadiusMeters: number;
 };
 
 type SwitchResponse = {
@@ -100,6 +116,16 @@ const tabs = [
   "Performance",
 ] as const;
 type Tab = (typeof tabs)[number];
+
+function formatMinor(value: number | null, currency?: string | null) {
+  if (value == null) return "—";
+  return `${(value / 100).toFixed(2)}${currency ? ` ${currency}` : ""}`;
+}
+
+function formatCashVariance(value: string, currency?: string | null) {
+  const amount = Number(value);
+  return `${Number.isFinite(amount) ? amount.toFixed(2) : value}${currency ? ` ${currency}` : ""}`;
+}
 
 export default function WorkforceAccountabilityPage() {
   const membership = useCurrentMembership();
@@ -238,6 +264,53 @@ export default function WorkforceAccountabilityPage() {
     } catch (error) {
       setMessage(error instanceof Error ? error.message : "Approval decision failed");
     }
+  }
+
+  async function configureGeofence() {
+    if (!workforcePolicy) return;
+    const latitudeText =
+      window.prompt(
+        "Clock-in geofence latitude (-90 to 90)",
+        workforcePolicy.clockInLatitude?.toString() ?? "",
+      ) ?? "";
+    if (!latitudeText) return;
+    const longitudeText =
+      window.prompt(
+        "Clock-in geofence longitude (-180 to 180)",
+        workforcePolicy.clockInLongitude?.toString() ?? "",
+      ) ?? "";
+    if (!longitudeText) return;
+    const radiusText =
+      window.prompt(
+        "Allowed clock-in radius in meters (10 to 100000)",
+        String(workforcePolicy.clockInRadiusMeters || 100),
+      ) ?? "";
+    if (!radiusText) return;
+
+    const latitude = Number(latitudeText);
+    const longitude = Number(longitudeText);
+    const radius = Number(radiusText);
+    if (
+      !Number.isFinite(latitude) ||
+      latitude < -90 ||
+      latitude > 90 ||
+      !Number.isFinite(longitude) ||
+      longitude < -180 ||
+      longitude > 180 ||
+      !Number.isInteger(radius) ||
+      radius < 10 ||
+      radius > 100000
+    ) {
+      setMessage("Invalid geofence coordinates or radius.");
+      return;
+    }
+
+    await put("/workforce/phase10/policy", {
+      clockInLocationRequired: true,
+      clockInLatitude: latitude,
+      clockInLongitude: longitude,
+      clockInRadiusMeters: radius,
+    });
   }
 
   return (
@@ -406,26 +479,79 @@ export default function WorkforceAccountabilityPage() {
             <section className="rounded-2xl border border-zinc-800 p-5">
               <h2 className="text-lg font-semibold">Time-clock policy</h2>
               {workforcePolicy ? (
-                <div className="mt-3 flex flex-wrap items-center gap-3 text-sm">
-                  <button
-                    type="button"
-                    onClick={() =>
-                      void put("/workforce/phase10/policy", {
-                        enforceSchedule: !workforcePolicy.enforceSchedule,
-                      })
-                    }
-                    className={`min-h-11 rounded-lg px-3 ${
-                      workforcePolicy.enforceSchedule
-                        ? "bg-emerald-400 text-zinc-950"
-                        : "border border-zinc-700"
-                    }`}
-                  >
-                    Enforce schedule: {workforcePolicy.enforceSchedule ? "On" : "Off"}
-                  </button>
-                  <span>Late grace {workforcePolicy.lateGraceMinutes} min</span>
-                  <span>
-                    PIN lockout {workforcePolicy.pinLockoutAttempts} attempts / {workforcePolicy.pinLockoutMinutes} min
-                  </span>
+                <div className="mt-3 space-y-3 text-sm">
+                  <div className="flex flex-wrap items-center gap-3">
+                    <button
+                      type="button"
+                      onClick={() =>
+                        void put("/workforce/phase10/policy", {
+                          enforceSchedule: !workforcePolicy.enforceSchedule,
+                        })
+                      }
+                      className={`min-h-11 rounded-lg px-3 ${
+                        workforcePolicy.enforceSchedule
+                          ? "bg-emerald-400 text-zinc-950"
+                          : "border border-zinc-700"
+                      }`}
+                    >
+                      Enforce schedule: {workforcePolicy.enforceSchedule ? "On" : "Off"}
+                    </button>
+                    <span>Late grace {workforcePolicy.lateGraceMinutes} min</span>
+                    <span>
+                      PIN lockout {workforcePolicy.pinLockoutAttempts} attempts / {workforcePolicy.pinLockoutMinutes} min
+                    </span>
+                  </div>
+
+                  <div className="flex flex-wrap items-center gap-3 border-t border-zinc-800 pt-3">
+                    <button
+                      type="button"
+                      onClick={() =>
+                        void put("/workforce/phase10/policy", {
+                          clockInDeviceRequired: !workforcePolicy.clockInDeviceRequired,
+                        })
+                      }
+                      className={`min-h-11 rounded-lg px-3 ${
+                        workforcePolicy.clockInDeviceRequired
+                          ? "bg-sky-400 text-zinc-950"
+                          : "border border-zinc-700"
+                      }`}
+                    >
+                      Require registered device: {workforcePolicy.clockInDeviceRequired ? "On" : "Off"}
+                    </button>
+                    <span className="text-zinc-500">
+                      {workforcePolicy.clockInAllowedDeviceIds.length
+                        ? `${workforcePolicy.clockInAllowedDeviceIds.length} approved device(s)`
+                        : "Any active device registered to this venue"}
+                    </span>
+                  </div>
+
+                  <div className="flex flex-wrap items-center gap-3 border-t border-zinc-800 pt-3">
+                    <button
+                      type="button"
+                      onClick={() => void configureGeofence()}
+                      className="min-h-11 rounded-lg border border-emerald-500/50 px-3 text-emerald-200"
+                    >
+                      Configure clock-in geofence
+                    </button>
+                    {workforcePolicy.clockInLocationRequired ? (
+                      <button
+                        type="button"
+                        onClick={() =>
+                          void put("/workforce/phase10/policy", {
+                            clockInLocationRequired: false,
+                          })
+                        }
+                        className="min-h-11 rounded-lg border border-zinc-700 px-3"
+                      >
+                        Disable geofence
+                      </button>
+                    ) : null}
+                    <span className="text-zinc-500">
+                      {workforcePolicy.clockInLocationRequired
+                        ? `${workforcePolicy.clockInLatitude}, ${workforcePolicy.clockInLongitude} · ${workforcePolicy.clockInRadiusMeters} m`
+                        : "Location restriction off"}
+                    </span>
+                  </div>
                 </div>
               ) : null}
             </section>
@@ -539,8 +665,13 @@ export default function WorkforceAccountabilityPage() {
                   <th className="p-3">Employee</th>
                   <th className="p-3">Sales</th>
                   <th className="p-3">Avg check</th>
+                  <th className="p-3">Resource sessions</th>
+                  <th className="p-3">Discounts</th>
                   <th className="p-3">Refunds / voids</th>
+                  <th className="p-3">Cash variance</th>
                   <th className="p-3">Hours</th>
+                  <th className="p-3">Labor / sales</th>
+                  <th className="p-3">KDS ready / avg</th>
                   <th className="p-3">Overtime</th>
                   <th className="p-3">Late</th>
                   <th className="p-3">Break exceptions</th>
@@ -552,9 +683,25 @@ export default function WorkforceAccountabilityPage() {
                   <tr key={row.membershipId} className="border-t border-zinc-800">
                     <td className="p-3">{row.displayName}</td>
                     <td className="p-3">{row.salesCount}</td>
-                    <td className="p-3">{(row.averageCheckMinor / 100).toFixed(2)}</td>
+                    <td className="p-3">{formatMinor(row.averageCheckMinor)}</td>
+                    <td className="p-3">{row.resourceSessionCount}</td>
+                    <td className="p-3">{row.discountCount}</td>
                     <td className="p-3">{row.refundCount} / {row.voidCount}</td>
+                    <td className="p-3">
+                      {formatCashVariance(row.cashVariance, row.cashVarianceCurrency)}
+                      <span className="ml-1 text-xs text-zinc-500">
+                        ({row.cashVarianceCloseCount} close{row.cashVarianceCloseCount === 1 ? "" : "s"})
+                      </span>
+                    </td>
                     <td className="p-3">{row.workedHours.toFixed(1)}</td>
+                    <td className="p-3">
+                      {row.laborToSalesBasisPoints == null
+                        ? "—"
+                        : `${(row.laborToSalesBasisPoints / 100).toFixed(2)}%`}
+                    </td>
+                    <td className="p-3">
+                      {row.kdsReadyCount} / {row.kdsAverageReadySeconds == null ? "—" : `${row.kdsAverageReadySeconds}s`}
+                    </td>
                     <td className="p-3">{(row.overtimeSeconds / 3600).toFixed(1)} h</td>
                     <td className="p-3">{row.lateCount}</td>
                     <td className="p-3">{row.breakComplianceViolations}</td>
@@ -564,7 +711,7 @@ export default function WorkforceAccountabilityPage() {
               </tbody>
             </table>
             <p className="border-t border-zinc-800 p-3 text-xs text-zinc-500">
-              Operational metrics only. GoSpots does not treat this report as payroll.
+              Operational review aids only. Metrics are not automatic grounds for punitive conclusions and GoSpots does not treat this report as payroll.
             </p>
           </div>
         ) : null}
