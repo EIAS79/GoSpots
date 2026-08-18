@@ -97,3 +97,12 @@ export class DecideShiftSwapRequestDto {
   @IsBoolean() approve!: boolean;
   @IsOptional() @IsString() @MaxLength(500) note?: string;
 }
+
+export class PublishScheduleEntryDto {
+  @IsBoolean() published!: boolean;
+}
+
+export class MarkScheduleAbsenceDto {
+  @IsOptional() @IsIn(['ABSENT', 'EXCUSED', 'NO_SHOW']) status?: string | null;
+  @IsOptional() @IsString() @MaxLength(500) reason?: string | null;
+}
