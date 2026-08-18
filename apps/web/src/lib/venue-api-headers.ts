@@ -1,3 +1,5 @@
+import { getOperatorAttributionHeaders } from "./operator-session";
+
 export const VENUE_PATH_STORAGE_KEY = "gospots.venuePath";
 const LEGACY_VENUE_PATH_STORAGE_KEY = "Locora.venuePath";
 
@@ -13,10 +15,18 @@ export function setStoredVenuePath(venuePath: string | null) {
   }
 }
 
+/**
+ * Shared tenant/request headers. Phase 10 operator attribution is attached to
+ * the same authenticated API origin and is server-validated before it can
+ * influence action attribution. The short-lived raw token remains session-only.
+ */
 export function getVenuePathHeaders(): Record<string, string> {
   if (typeof window === "undefined") return {};
   const path =
     sessionStorage.getItem(VENUE_PATH_STORAGE_KEY) ||
     sessionStorage.getItem(LEGACY_VENUE_PATH_STORAGE_KEY);
-  return path ? { "x-venue-path": path } : {};
+  return {
+    ...(path ? { "x-venue-path": path } : {}),
+    ...getOperatorAttributionHeaders(),
+  };
 }
