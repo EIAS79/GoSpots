@@ -145,6 +145,14 @@ export class Phase10AccountabilityController {
     return this.accountability.updateWorkforcePolicy(actor, dto);
   }
 
+  @Get('schedule')
+  schedule(
+    @CurrentUser() actor: JwtAccessPayload,
+    @Query('days') days?: string,
+  ) {
+    return this.schedules.list(actor, Number(days ?? 30));
+  }
+
   @Post('schedule/:id/publish')
   publishSchedule(
     @CurrentUser() actor: JwtAccessPayload,
