@@ -403,7 +403,7 @@ export class Phase8ReservationService {
           }),
           tx.reservationDepositApplication.findMany({
             where: { shopId, reservationId },
-            select: { amountMinor: true },
+            select: { amountMinor: true, guestCheckId: true },
           }),
           tx.reservationDepositCheckoutAttempt.findFirst({
             where: {
@@ -423,16 +423,110 @@ export class Phase8ReservationService {
           (sum, application) => sum + application.amountMinor,
           0,
         );
-        const refundableMinor = Math.max(0, balanceMinor - appliedMinor);
-        if (dto.amountMinor > refundableMinor) {
+        const availableRefundMinor = Math.max(0, balanceMinor);
+        if (dto.amountMinor > availableRefundMinor) {
           throw new ConflictException(
-            'Refund exceeds the captured, unapplied reservation deposit balance.',
+            'Refund exceeds the remaining captured reservation deposit balance.',
           );
         }
         if (!attempt?.providerPaymentIntentId) {
           throw new ConflictException(
             'No successful provider payment is available for this refund.',
           );
+        }
+
+        const unappliedMinor = Math.max(0, balanceMinor - appliedMinor);
+        const releasesAppliedCredit = dto.amountMinor > unappliedMinor;
+        if (releasesAppliedCredit && dto.amountMinor !== availableRefundMinor) {
+          throw new ConflictException(
+            'A refund that touches applied deposit credit must refund the full remaining deposit balance.',
+          );
+        }
+
+        let appliedGuestCheckId: string | null = null;
+        let appliedCurrentSettlementId: string | null = null;
+        let depositAdjustments: { id: string; amountMinor: number | null }[] = [];
+
+        if (releasesAppliedCredit && appliedMinor > 0) {
+          const guestCheckIds = [
+            ...new Set(
+              applications
+                .filter(
+                  (application) =>
+                    application.amountMinor > 0 && application.guestCheckId,
+                )
+                .map((application) => application.guestCheckId),
+            ),
+          ];
+          if (guestCheckIds.length !== 1) {
+            throw new ConflictException(
+              'Applied reservation deposit cannot be released unambiguously.',
+            );
+          }
+          appliedGuestCheckId = guestCheckIds[0];
+
+          await tx.$queryRaw(
+            Prisma.sql`SELECT "id" FROM "GuestCheck" WHERE "id"=${appliedGuestCheckId} AND "shopId"=${shopId} FOR UPDATE`,
+          );
+          const guestCheck = await tx.guestCheck.findFirst({
+            where: { id: appliedGuestCheckId, shopId },
+            select: { id: true, status: true, currentSettlementId: true },
+          });
+          if (!guestCheck || guestCheck.status !== 'OPEN') {
+            throw new ConflictException(
+              'Applied reservation deposit can only be refunded while its guest check is open.',
+            );
+          }
+          appliedCurrentSettlementId = guestCheck.currentSettlementId;
+
+          if (guestCheck.currentSettlementId) {
+            const settlement = await tx.checkSettlement.findFirst({
+              where: {
+                id: guestCheck.currentSettlementId,
+                shopId,
+                guestCheckId: guestCheck.id,
+              },
+              select: { id: true, state: true },
+            });
+            const successfulPayments = await tx.payment.count({
+              where: {
+                shopId,
+                settlementId: guestCheck.currentSettlementId,
+                status: 'SUCCESS',
+              },
+            });
+            if (
+              !settlement ||
+              successfulPayments > 0 ||
+              !['OPEN', 'CALCULATED', 'VOID'].includes(settlement.state)
+            ) {
+              throw new ConflictException(
+                'Applied reservation deposit is locked by checkout settlement state.',
+              );
+            }
+          }
+
+          depositAdjustments = await tx.commercialAdjustment.findMany({
+            where: {
+              shopId,
+              guestCheckId: appliedGuestCheckId,
+              type: CommercialAdjustmentType.DEPOSIT_APPLICATION,
+              targetSourceType: 'RESERVATION_DEPOSIT',
+              targetSourceId: reservationId,
+              voidedAt: null,
+            },
+            select: { id: true, amountMinor: true },
+            orderBy: [{ createdAt: 'asc' }, { id: 'asc' }],
+          });
+          const activeAppliedMinor = depositAdjustments.reduce(
+            (sum, adjustment) => sum + (adjustment.amountMinor ?? 0),
+            0,
+          );
+          if (activeAppliedMinor !== appliedMinor) {
+            throw new ConflictException(
+              'Applied reservation deposit credit is inconsistent with its commercial adjustment.',
+            );
+          }
         }
 
         const refund = await stripe.refunds.create(
@@ -456,16 +550,67 @@ export class Phase8ReservationService {
           );
         }
 
+        const refundCurrency = (
+          ledger.find((entry) => entry.currency)?.currency ?? attempt.currency
+        ).toUpperCase();
+
+        if (releasesAppliedCredit && appliedMinor > 0 && appliedGuestCheckId) {
+          const voidedAt = new Date();
+          for (const adjustment of depositAdjustments) {
+            await tx.commercialAdjustment.update({
+              where: { id: adjustment.id },
+              data: {
+                voidedAt,
+                voidedById: actor.sub,
+                voidReason: `Provider deposit refund: ${correlationId}`,
+              },
+            });
+          }
+
+          await tx.reservationDepositApplication.create({
+            data: {
+              shopId,
+              reservationId,
+              guestCheckId: appliedGuestCheckId,
+              amountMinor: -appliedMinor,
+              currency: refundCurrency,
+              correlationId: `phase8-refund-release:${correlationId}`,
+              actorUserId: actor.sub,
+            },
+          });
+
+          if (appliedCurrentSettlementId) {
+            await tx.checkSettlement.updateMany({
+              where: {
+                id: appliedCurrentSettlementId,
+                shopId,
+                guestCheckId: appliedGuestCheckId,
+                state: { in: ['OPEN', 'CALCULATED'] },
+              },
+              data: { state: 'VOID' },
+            });
+          }
+          const released = await tx.guestCheck.updateMany({
+            where: { id: appliedGuestCheckId, shopId, status: 'OPEN' },
+            data: {
+              currentSettlementId: null,
+              version: { increment: 1 },
+            },
+          });
+          if (released.count !== 1) {
+            throw new ConflictException(
+              'Guest check changed while the applied deposit was being refunded.',
+            );
+          }
+        }
+
         return tx.reservationDepositLedgerEntry.create({
           data: {
             shopId,
             reservationId,
             type: 'REFUND',
             amountMinor: -dto.amountMinor,
-            currency: (
-              ledger.find((entry) => entry.currency)?.currency ??
-              attempt.currency
-            ).toUpperCase(),
+            currency: refundCurrency,
             refundId: refund.id,
             correlationId,
             note: dto.reason.trim(),
