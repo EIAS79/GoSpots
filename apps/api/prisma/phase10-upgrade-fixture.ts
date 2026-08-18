@@ -70,7 +70,29 @@ async function main() {
         createdById: owner.id,
       },
     });
-    console.log(JSON.stringify({ shopId: shop.id, membershipId: membership.id, rateId: rate.id, scheduleId: schedule.id }));
+    // Old schema did not enforce shift conflicts. Keep one deliberate overlap in
+    // the representative upgrade DB to prove Phase 10 does not make deployment
+    // destructive or fail on historical scheduling debt.
+    const overlappingLegacySchedule = await prisma.scheduleEntry.create({
+      data: {
+        shopId: shop.id,
+        membershipId: membership.id,
+        jobRoleId: role.id,
+        startsAt: new Date('2026-08-18T12:00:00.000Z'),
+        endsAt: new Date('2026-08-18T18:00:00.000Z'),
+        note: 'Representative legacy overlapping schedule',
+        createdById: owner.id,
+      },
+    });
+    console.log(
+      JSON.stringify({
+        shopId: shop.id,
+        membershipId: membership.id,
+        rateId: rate.id,
+        scheduleId: schedule.id,
+        overlappingLegacyScheduleId: overlappingLegacySchedule.id,
+      }),
+    );
   } finally {
     await prisma.$disconnect();
   }
