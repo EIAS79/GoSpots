@@ -9,11 +9,15 @@ import type { JwtAccessPayload } from '../auth/auth.service';
 import { ApplyOfflineOperationDto } from '../offline-sync/dto/offline-operation.dto';
 import { EdgeHeartbeatDto, RegisterEdgeHubDto } from './dto/edge-hub.dto';
 import { EdgeHubService } from './edge-hub.service';
+import { EdgeOperatorSnapshotService } from './edge-operator-snapshot.service';
 
 @ApiTags('edge-hub')
 @Controller('edge-hub')
 export class EdgeHubController {
-  constructor(private readonly edge: EdgeHubService) {}
+  constructor(
+    private readonly edge: EdgeHubService,
+    private readonly operators: EdgeOperatorSnapshotService,
+  ) {}
 
   @Post('devices/:deviceId/provision')
   @UseGuards(JwtAuthGuard)
@@ -36,6 +40,16 @@ export class EdgeHubController {
   @Post('cloud/snapshot')
   snapshot(@Headers() headers: Record<string, string | string[] | undefined>, @Body() body: { cursor?: string | null }) {
     return this.edge.snapshot(headers, body ?? {});
+  }
+
+  @Public()
+  @Post('cloud/operators')
+  async operatorSnapshot(
+    @Headers() headers: Record<string, string | string[] | undefined>,
+    @Body() body: { cursor?: string | null },
+  ) {
+    const { device } = await this.edge.authenticateSignedRequest(headers, 'POST', '/edge-hub/cloud/operators', body ?? {});
+    return { operators: await this.operators.snapshot(device.shopId), generatedAt: new Date().toISOString() };
   }
 
   @Public()
