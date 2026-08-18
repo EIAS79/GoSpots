@@ -1,0 +1,1 @@
+Ensure the temporary resource-scoped Phase 8 acceptance rate plan exists in production.
