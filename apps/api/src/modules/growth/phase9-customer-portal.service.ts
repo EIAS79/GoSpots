@@ -26,10 +26,23 @@ export class Phase9CustomerPortalService {
       data: { lastUsedAt: new Date() },
     });
 
+    const identities = await this.prisma.customerIdentity.findMany({
+      where: { shopId: access.shopId, customerId: customer.id },
+      select: { kind: true, normalizedValue: true },
+    });
+    const emails = new Set<string>();
+    const phones = new Set<string>();
+    if (customer.email) emails.add(customer.email);
+    if (customer.phone) phones.add(customer.phone);
+    for (const identity of identities) {
+      if (identity.kind === 'EMAIL') emails.add(identity.normalizedValue);
+      if (identity.kind === 'PHONE') phones.add(identity.normalizedValue);
+    }
+
     const now = new Date();
     const identityOr = [
-      ...(customer.email ? [{ guestEmail: customer.email }] : []),
-      ...(customer.phone ? [{ guestPhone: customer.phone }] : []),
+      ...[...emails].map((guestEmail) => ({ guestEmail })),
+      ...[...phones].map((guestPhone) => ({ guestPhone })),
     ];
     const reservationSelect = {
       id: true,
