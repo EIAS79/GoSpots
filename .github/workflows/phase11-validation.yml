@@ -1,0 +1,110 @@
+name: Phase 11 access entitlement validation
+
+on:
+  pull_request:
+    paths:
+      - 'apps/api/src/modules/ticketing/**'
+      - 'apps/api/src/modules/growth/**'
+      - 'apps/api/src/common/idempotency*'
+      - 'apps/api/prisma/**'
+      - 'apps/web/src/app/**/access/**'
+      - 'apps/web/src/components/enterprise/access-workspace.tsx'
+      - '.github/workflows/phase11-validation.yml'
+  push:
+    branches: [main]
+    paths:
+      - 'apps/api/src/modules/ticketing/**'
+      - 'apps/api/src/modules/growth/**'
+      - 'apps/api/src/common/idempotency*'
+      - 'apps/api/prisma/**'
+      - 'apps/web/src/app/**/access/**'
+      - 'apps/web/src/components/enterprise/access-workspace.tsx'
+      - '.github/workflows/phase11-validation.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  phase11:
+    name: Phase 11 gate · ticketing access occupancy lockers
+    runs-on: ubuntu-latest
+    timeout-minutes: 35
+    services:
+      postgres:
+        image: postgres:17
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: gospots_phase11
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres -d gospots_phase11"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 20
+    env:
+      DATABASE_URL: postgresql://postgres:postgres@127.0.0.1:5432/gospots_phase11?schema=public
+      JWT_SECRET: phase11-ci-only-jwt-secret
+      OPAQUE_IDENTIFIER_SECRET: phase11-ci-only-opaque-secret
+      NODE_ENV: test
+
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 10.12.1
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: pnpm
+          cache-dependency-path: pnpm-lock.yaml
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Generate and validate Prisma
+        working-directory: apps/api
+        run: |
+          pnpm prisma:generate
+          pnpm exec prisma validate
+
+      - name: Deploy clean migration chain
+        working-directory: apps/api
+        run: |
+          pnpm migrate:deploy
+          pnpm exec prisma migrate status
+
+      - name: Run focused Phase 11 service tests
+        working-directory: apps/api
+        run: pnpm exec jest --config jest.config.cjs --runInBand src/modules/ticketing/ticketing.service.spec.ts
+
+      - name: Prove persisted tenant, replay, occupancy and locker constraints
+        working-directory: apps/api
+        run: pnpm exec tsx prisma/phase11-integrity-assert.ts
+
+      - name: Build API
+        working-directory: apps/api
+        run: pnpm build
+
+      - name: Verify representative pre-Phase-11 upgrade
+        env:
+          UPGRADE_DATABASE_URL: postgresql://postgres:postgres@127.0.0.1:5432/gospots_phase11_upgrade?schema=public
+          PGPASSWORD: postgres
+        run: |
+          createdb -h 127.0.0.1 -U postgres gospots_phase11_upgrade
+          mkdir -p /tmp/phase11_migrations
+          mv apps/api/prisma/migrations/20260818210500_phase11_ticketing_access_control /tmp/phase11_migrations/
+          DATABASE_URL="$UPGRADE_DATABASE_URL" pnpm --filter @gospots/api migrate:deploy
+          DATABASE_URL="$UPGRADE_DATABASE_URL" pnpm --filter @gospots/api exec tsx prisma/phase11-upgrade-fixture.ts
+          mv /tmp/phase11_migrations/20260818210500_phase11_ticketing_access_control apps/api/prisma/migrations/
+          DATABASE_URL="$UPGRADE_DATABASE_URL" pnpm --filter @gospots/api migrate:deploy
+          DATABASE_URL="$UPGRADE_DATABASE_URL" pnpm --filter @gospots/api exec tsx prisma/phase11-upgrade-assert.ts
+
+      - name: Typecheck web
+        working-directory: apps/web
+        run: pnpm typecheck
+
+      - name: Build web
+        working-directory: apps/web
+        run: pnpm build

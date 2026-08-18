@@ -9,6 +9,7 @@ enum TicketStatus {
 enum TicketOrderStatus {
   OPEN
   PAID
+  FULFILLED
   VOIDED
   REFUNDED
 }
@@ -42,13 +43,70 @@ enum RfidTapAction {
   LOAD
 }
 
+enum AccessCredentialType {
+  QR_TICKET
+  RFID
+  NFC
+  WRISTBAND
+  MEMBERSHIP
+  LOCKER
+}
+
+enum AccessCredentialStatus {
+  ACTIVE
+  SUSPENDED
+  REVOKED
+  EXPIRED
+}
+
+enum AccessRuleEffect {
+  ALLOW
+  DENY
+}
+
+enum AccessDirection {
+  ENTER
+  EXIT
+  VERIFY
+  CORRECTION
+}
+
+enum AccessDecision {
+  ALLOWED
+  DENIED
+  DUPLICATE
+}
+
+enum LockerAvailability {
+  AVAILABLE
+  MAINTENANCE
+  DISABLED
+}
+
+enum LockerAssignmentStatus {
+  ACTIVE
+  RELEASED
+  CANCELLED
+}
+
+enum LockerEventType {
+  ASSIGNED
+  RELEASED
+  OPENED
+  CLOSED
+  MANUAL_OVERRIDE
+}
+
 model TicketProduct {
   id              String   @id @default(cuid())
   shopId          String
   name            String
   sku             String?
+  // Legacy display fields. New Phase 11 issuance derives financial authority
+  // from the linked canonical MenuItem + paid GuestCheck settlement.
   priceMinor      Int
   currency        String   @default("EUR")
+  menuItemId      String?
   validityMinutes Int?
   maxScans        Int      @default(1)
   active          Boolean  @default(true)
@@ -58,6 +116,7 @@ model TicketProduct {
 
   @@unique([shopId, name])
   @@unique([shopId, sku])
+  @@unique([shopId, menuItemId])
   @@index([shopId, active, updatedAt])
 }
 
@@ -66,55 +125,71 @@ model TicketOrder {
   shopId          String
   idempotencyKey  String
   status          TicketOrderStatus @default(OPEN)
-  totalMinor      Int
+  // Populated only on legacy orders. New Phase 11 fulfillment has no
+  // independent monetary total and points at the canonical settlement.
+  totalMinor      Int?
   currency        String            @default("EUR")
+  settlementId    String?
+  guestCheckId    String?
+  requestHash     String?
   customerRefHash String?
   metadataJson    String?
+  fulfilledAt     DateTime?
   createdAt       DateTime          @default(now())
   updatedAt       DateTime          @updatedAt
 
   @@unique([shopId, idempotencyKey])
+  @@unique([shopId, settlementId])
   @@index([shopId, status, createdAt])
 }
 
 model Ticket {
-  id            String       @id @default(cuid())
-  shopId        String
-  orderId       String?
-  productId     String
-  tokenHash     String       @unique
-  status        TicketStatus @default(ISSUED)
-  scansUsed     Int          @default(0)
-  maxScans      Int          @default(1)
-  issuedAt      DateTime     @default(now())
-  expiresAt     DateTime?
-  redeemedAt    DateTime?
-  voidedAt      DateTime?
-  lastScannedAt DateTime?
-  createdAt     DateTime     @default(now())
-  updatedAt     DateTime     @updatedAt
+  id                String       @id @default(cuid())
+  shopId            String
+  orderId           String?
+  productId         String
+  tokenHash         String       @unique
+  status            TicketStatus @default(ISSUED)
+  scansUsed         Int          @default(0)
+  maxScans          Int          @default(1)
+  sourceSnapshotId  String?
+  sourceOrderLineId String?
+  reissuedFromId    String?
+  cancelReason      String?
+  version           Int          @default(1)
+  issuedAt          DateTime     @default(now())
+  expiresAt         DateTime?
+  redeemedAt        DateTime?
+  voidedAt          DateTime?
+  lastScannedAt     DateTime?
+  createdAt         DateTime     @default(now())
+  updatedAt         DateTime     @updatedAt
 
   @@index([shopId, productId, status])
   @@index([shopId, orderId, createdAt])
+  @@index([shopId, sourceSnapshotId])
   @@index([shopId, expiresAt])
 }
 
 model TicketScan {
-  id             String           @id @default(cuid())
-  shopId         String
-  ticketId       String?
-  presentedHash  String
-  result         TicketScanResult
+  id              String           @id @default(cuid())
+  shopId          String
+  ticketId        String?
+  presentedHash   String
+  result          TicketScanResult
   scannerDeviceId String?
-  idempotencyKey String
-  reasonCode     String?
-  scannedAt      DateTime         @default(now())
+  idempotencyKey  String
+  reasonCode      String?
+  scannedAt       DateTime         @default(now())
 
   @@unique([shopId, idempotencyKey])
   @@index([shopId, ticketId, scannedAt])
   @@index([shopId, presentedHash, scannedAt])
 }
 
+// Legacy Phase-before-v2 wallet tables are retained for upgrade compatibility.
+// Phase 11 code must not create new financial facts here; canonical stored
+// value is StoredValueAccount + StoredValueLedgerEntry from Phase 9.
 model RfidWallet {
   id              String   @id @default(cuid())
   shopId          String
@@ -132,19 +207,21 @@ model RfidWallet {
 }
 
 model RfidCredential {
-  id        String               @id @default(cuid())
-  shopId    String
-  uidHash   String
-  walletId  String
-  label     String?
-  status    RfidCredentialStatus @default(ACTIVE)
-  lastTapAt DateTime?
-  version   Int                  @default(1)
-  createdAt DateTime             @default(now())
-  updatedAt DateTime             @updatedAt
+  id                   String               @id @default(cuid())
+  shopId               String
+  uidHash              String
+  walletId             String?
+  storedValueAccountId String?
+  label                String?
+  status               RfidCredentialStatus @default(ACTIVE)
+  lastTapAt            DateTime?
+  version              Int                  @default(1)
+  createdAt            DateTime             @default(now())
+  updatedAt            DateTime             @updatedAt
 
   @@unique([shopId, uidHash])
   @@index([shopId, walletId, status])
+  @@index([shopId, storedValueAccountId, status])
 }
 
 model RfidWalletEntry {
@@ -184,4 +261,168 @@ model RfidTap {
   @@unique([shopId, idempotencyKey])
   @@index([shopId, credentialId, createdAt])
   @@index([shopId, uidHash, createdAt])
+}
+
+model AccessZone {
+  id        String   @id @default(cuid())
+  shopId    String
+  code      String
+  name      String
+  zoneType  String?
+  capacity  Int?
+  active    Boolean  @default(true)
+  version   Int      @default(1)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([shopId, code])
+  @@unique([shopId, id])
+  @@index([shopId, active, name])
+}
+
+model AccessRule {
+  id               String           @id @default(cuid())
+  shopId           String
+  zoneId           String
+  name             String
+  priority         Int              @default(100)
+  effect           AccessRuleEffect @default(ALLOW)
+  ticketProductId  String?
+  membershipTierId String?
+  startsAt         DateTime?
+  endsAt           DateTime?
+  maxVisits        Int?
+  active           Boolean          @default(true)
+  createdAt        DateTime         @default(now())
+  updatedAt        DateTime         @updatedAt
+
+  @@index([shopId, zoneId, active, priority])
+  @@index([shopId, ticketProductId, active])
+  @@index([shopId, membershipTierId, active])
+}
+
+model AccessCredential {
+  id                   String                 @id @default(cuid())
+  shopId               String
+  type                 AccessCredentialType
+  tokenHash            String
+  label                String?
+  status               AccessCredentialStatus @default(ACTIVE)
+  ticketId             String?
+  customerId           String?
+  membershipId         String?
+  storedValueAccountId String?
+  visitLimit           Int?
+  visitsUsed           Int                    @default(0)
+  expiresAt            DateTime?
+  lastSeenAt           DateTime?
+  version              Int                    @default(1)
+  createdAt            DateTime               @default(now())
+  updatedAt            DateTime               @updatedAt
+
+  @@unique([shopId, tokenHash])
+  @@unique([shopId, ticketId])
+  @@index([shopId, customerId, status])
+  @@index([shopId, membershipId, status])
+  @@index([shopId, storedValueAccountId, status])
+}
+
+model AccessScannerConfiguration {
+  id                    String   @id @default(cuid())
+  shopId                String
+  deviceId              String
+  zoneId                String
+  allowOfflineCache     Boolean  @default(false)
+  offlineCacheTtlSeconds Int?
+  enforceSequence       Boolean  @default(true)
+  lastSequence          Int?
+  version               Int      @default(1)
+  createdAt             DateTime @default(now())
+  updatedAt             DateTime @updatedAt
+
+  @@unique([shopId, deviceId])
+  @@index([shopId, zoneId])
+}
+
+model AccessEvent {
+  id             String          @id @default(cuid())
+  shopId         String
+  zoneId         String
+  credentialId   String?
+  ticketId       String?
+  deviceId       String?
+  direction      AccessDirection
+  decision       AccessDecision
+  reasonCode     String?
+  occupancyDelta Int             @default(0)
+  deviceSequence Int?
+  offlineReplay  Boolean         @default(false)
+  idempotencyKey String
+  actorUserId    String?
+  correctionOfId String?
+  metadataJson   String?
+  occurredAt     DateTime        @default(now())
+  recordedAt     DateTime        @default(now())
+
+  @@unique([shopId, idempotencyKey])
+  @@unique([shopId, deviceId, deviceSequence])
+  @@index([shopId, zoneId, occurredAt])
+  @@index([shopId, credentialId, occurredAt])
+  @@index([shopId, ticketId, occurredAt])
+}
+
+model Locker {
+  id                String             @id @default(cuid())
+  shopId            String
+  code              String
+  sizeType          String?
+  availability      LockerAvailability @default(AVAILABLE)
+  rentalMenuItemId  String?
+  depositMenuItemId String?
+  version           Int                @default(1)
+  createdAt         DateTime           @default(now())
+  updatedAt         DateTime           @updatedAt
+
+  @@unique([shopId, code])
+  @@unique([shopId, id])
+  @@index([shopId, availability, code])
+}
+
+model LockerAssignment {
+  id           String                 @id @default(cuid())
+  shopId       String
+  lockerId     String
+  credentialId String
+  customerId   String?
+  ticketId     String?
+  settlementId String?
+  status       LockerAssignmentStatus @default(ACTIVE)
+  assignedAt   DateTime               @default(now())
+  releasedAt   DateTime?
+  version      Int                    @default(1)
+  createdAt    DateTime               @default(now())
+  updatedAt    DateTime               @updatedAt
+
+  @@index([shopId, lockerId, status])
+  @@index([shopId, credentialId, status])
+}
+
+model LockerEvent {
+  id             String          @id @default(cuid())
+  shopId         String
+  lockerId       String
+  assignmentId   String?
+  credentialId   String?
+  type           LockerEventType
+  deviceId       String?
+  idempotencyKey String
+  reason         String?
+  actorUserId    String?
+  metadataJson   String?
+  occurredAt     DateTime        @default(now())
+  createdAt      DateTime        @default(now())
+
+  @@unique([shopId, idempotencyKey])
+  @@index([shopId, lockerId, occurredAt])
+  @@index([shopId, assignmentId, occurredAt])
 }
