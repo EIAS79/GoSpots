@@ -1,2 +1,2 @@
 Trigger the replay-safe Phase 8 live provider acceptance against production main after deployment d0522bc67a7c2b9406c99eff15f102f03d92ead1.
-Trigger issued: 2026-08-18T00:25:00Z.
+Retry issued after controlled acceptance permission bootstrap: 2026-08-18T00:31:00Z.
