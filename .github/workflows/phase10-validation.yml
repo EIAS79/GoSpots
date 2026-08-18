@@ -10,7 +10,7 @@ on:
       - 'apps/web/src/app/**/workforce/**'
       - 'apps/web/src/lib/operator-session.ts'
       - 'apps/web/src/lib/venue-api-headers.ts'
-      - 'apps/web/e2e/integrity/phase10-workforce-accountability.spec.ts'
+      - 'apps/web/e2e/integrity/phase10-workforce-*.spec.ts'
       - '.github/workflows/phase10-validation.yml'
   push:
     branches: [main]
@@ -22,7 +22,7 @@ on:
       - 'apps/web/src/app/**/workforce/**'
       - 'apps/web/src/lib/operator-session.ts'
       - 'apps/web/src/lib/venue-api-headers.ts'
-      - 'apps/web/e2e/integrity/phase10-workforce-accountability.spec.ts'
+      - 'apps/web/e2e/integrity/phase10-workforce-*.spec.ts'
       - '.github/workflows/phase10-validation.yml'
 
 permissions:
