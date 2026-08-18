@@ -1,7 +1,10 @@
+import { Type } from 'class-transformer';
 import {
+  IsArray,
   IsBoolean,
   IsIn,
   IsInt,
+  IsNumber,
   IsOptional,
   IsString,
   Matches,
@@ -76,6 +79,12 @@ export class UpdateWorkforcePolicyDto {
   @IsOptional() @IsInt() @Min(1) @Max(480) operatorSessionMinutes?: number;
   @IsOptional() @IsInt() @Min(2) @Max(20) pinLockoutAttempts?: number;
   @IsOptional() @IsInt() @Min(1) @Max(1440) pinLockoutMinutes?: number;
+  @IsOptional() @IsBoolean() clockInDeviceRequired?: boolean;
+  @IsOptional() @IsArray() @IsString({ each: true }) clockInAllowedDeviceIds?: string[];
+  @IsOptional() @IsBoolean() clockInLocationRequired?: boolean;
+  @IsOptional() @Type(()=>Number) @IsNumber() @Min(-90) @Max(90) clockInLatitude?: number | null;
+  @IsOptional() @Type(()=>Number) @IsNumber() @Min(-180) @Max(180) clockInLongitude?: number | null;
+  @IsOptional() @Type(()=>Number) @IsInt() @Min(10) @Max(100000) clockInRadiusMeters?: number;
 }
 
 export class CreateShiftSwapRequestDto {
