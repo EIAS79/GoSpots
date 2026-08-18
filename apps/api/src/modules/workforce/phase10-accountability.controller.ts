@@ -27,12 +27,16 @@ import {
   UpdateWorkforcePolicyDto,
 } from './dto/phase10-accountability.dto';
 import { Phase10AccountabilityService } from './phase10-accountability.service';
+import { Phase10PerformanceService } from './phase10-performance.service';
 
 @ApiTags('workforce-phase10')
 @Controller('workforce/phase10')
 @UseGuards(JwtAuthGuard)
 export class Phase10AccountabilityController {
-  constructor(private readonly accountability: Phase10AccountabilityService) {}
+  constructor(
+    private readonly accountability: Phase10AccountabilityService,
+    private readonly performanceProjection: Phase10PerformanceService,
+  ) {}
 
   @Get('staff')
   staff(@CurrentUser() actor: JwtAccessPayload) {
@@ -172,6 +176,6 @@ export class Phase10AccountabilityController {
     @CurrentUser() actor: JwtAccessPayload,
     @Query('days') days?: string,
   ) {
-    return this.accountability.performance(actor, Number(days ?? 30));
+    return this.performanceProjection.performance(actor, Number(days ?? 30));
   }
 }
