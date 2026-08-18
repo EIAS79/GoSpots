@@ -10,6 +10,7 @@ on:
       - 'apps/api/prisma/**'
       - 'apps/web/src/app/**/customer/**'
       - 'apps/web/src/components/customer/**'
+      - 'apps/web/e2e/integrity/phase9-customer-portal.spec.ts'
       - '.github/workflows/phase9-validation.yml'
   push:
     branches: [main]
@@ -21,6 +22,7 @@ on:
       - 'apps/api/prisma/**'
       - 'apps/web/src/app/**/customer/**'
       - 'apps/web/src/components/customer/**'
+      - 'apps/web/e2e/integrity/phase9-customer-portal.spec.ts'
       - '.github/workflows/phase9-validation.yml'
 
 permissions:
@@ -83,6 +85,10 @@ jobs:
       - name: Run persisted Phase 9 operational pilot
         working-directory: apps/api
         run: pnpm exec tsx prisma/phase9-operational-pilot.ts
+
+      - name: Assert Phase 9 reconciliation is clean
+        working-directory: apps/api
+        run: pnpm exec tsx prisma/phase9-reconciliation-assert.ts
 
       - name: Build API
         working-directory: apps/api
