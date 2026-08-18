@@ -1,0 +1,110 @@
+name: Phase 9 customer value validation
+
+on:
+  pull_request:
+    paths:
+      - 'apps/api/src/modules/growth/**'
+      - 'apps/api/src/common/idempotency*'
+      - 'apps/api/src/common/permissions*'
+      - 'apps/api/src/common/audit*'
+      - 'apps/api/prisma/**'
+      - 'apps/web/src/app/**/customer/**'
+      - 'apps/web/src/components/customer/**'
+      - '.github/workflows/phase9-validation.yml'
+  push:
+    branches: [main]
+    paths:
+      - 'apps/api/src/modules/growth/**'
+      - 'apps/api/src/common/idempotency*'
+      - 'apps/api/src/common/permissions*'
+      - 'apps/api/src/common/audit*'
+      - 'apps/api/prisma/**'
+      - 'apps/web/src/app/**/customer/**'
+      - 'apps/web/src/components/customer/**'
+      - '.github/workflows/phase9-validation.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  phase9:
+    name: Phase 9 gate · customer value integrity
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    services:
+      postgres:
+        image: postgres:17
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: gospots_phase9
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres -d gospots_phase9"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 20
+    env:
+      DATABASE_URL: postgresql://postgres:postgres@127.0.0.1:5432/gospots_phase9?schema=public
+      JWT_SECRET: phase9-ci-only-jwt-secret
+      NODE_ENV: test
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: pnpm
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Generate and validate Prisma
+        working-directory: apps/api
+        run: |
+          pnpm prisma:generate
+          pnpm exec prisma validate
+
+      - name: Deploy clean migration chain
+        working-directory: apps/api
+        run: |
+          pnpm migrate:deploy
+          pnpm exec prisma migrate status
+
+      - name: Run Phase 9 rule and growth regression tests
+        working-directory: apps/api
+        run: >-
+          pnpm exec jest --config jest.config.cjs --runInBand
+          src/modules/growth/phase9.rules.spec.ts
+          src/modules/growth/growth-crm.service.spec.ts
+          src/modules/growth/growth-pricing.service.spec.ts
+
+      - name: Run persisted Phase 9 operational pilot
+        working-directory: apps/api
+        run: pnpm exec tsx prisma/phase9-operational-pilot.ts
+
+      - name: Build API
+        working-directory: apps/api
+        run: pnpm build
+
+      - name: Verify representative upgrade migration
+        env:
+          UPGRADE_DATABASE_URL: postgresql://postgres:postgres@127.0.0.1:5432/gospots_phase9_upgrade?schema=public
+          PGPASSWORD: postgres
+        run: |
+          createdb -h 127.0.0.1 -U postgres gospots_phase9_upgrade
+          mv apps/api/prisma/migrations/20260818100000_phase9_customer_value_completion /tmp/phase9_customer_value_completion
+          DATABASE_URL="$UPGRADE_DATABASE_URL" pnpm --filter @gospots/api migrate:deploy
+          DATABASE_URL="$UPGRADE_DATABASE_URL" pnpm --filter @gospots/api exec tsx prisma/phase9-upgrade-fixture.ts
+          mv /tmp/phase9_customer_value_completion apps/api/prisma/migrations/20260818100000_phase9_customer_value_completion
+          DATABASE_URL="$UPGRADE_DATABASE_URL" pnpm --filter @gospots/api migrate:deploy
+          DATABASE_URL="$UPGRADE_DATABASE_URL" pnpm --filter @gospots/api exec tsx prisma/phase9-upgrade-assert.ts
+
+      - name: Typecheck web
+        working-directory: apps/web
+        run: pnpm typecheck
+
+      - name: Build web
+        working-directory: apps/web
+        run: pnpm build
