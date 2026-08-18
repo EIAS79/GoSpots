@@ -10,6 +10,7 @@ import {
   Min,
 } from 'class-validator';
 
+/** Operations handled by the original Offline Lite replay service. */
 export const OFFLINE_OPERATION_TYPES = [
   'CHECK_CREATE',
   'CHECK_UPDATE',
@@ -18,33 +19,68 @@ export const OFFLINE_OPERATION_TYPES = [
   'SESSION_END',
 ] as const;
 
+/** Phase 12 adds Edge-certified operations without widening legacy handler dispatch. */
+export const EDGE_OFFLINE_OPERATION_TYPES = [
+  ...OFFLINE_OPERATION_TYPES,
+  'SESSION_PAUSE',
+  'SESSION_RESUME',
+  'CASH_PAYMENT',
+] as const;
+
 export type OfflineOperationType = (typeof OFFLINE_OPERATION_TYPES)[number];
 
 export class ApplyOfflineOperationDto {
-  /** Stable client mutation ID. Reusing it with different content is a conflict. */
+  /** Stable local mutation ID. Reusing it with different content is a conflict. */
   @IsUUID()
   operationId!: string;
 
+  /** LAN client/device that originated the mutation. */
   @IsString()
   @MaxLength(120)
   deviceId!: string;
 
-  @IsIn(OFFLINE_OPERATION_TYPES)
+  /** Informational client venue; server context remains authoritative. */
+  @IsOptional()
+  @IsString()
+  @MaxLength(120)
+  venueId?: string;
+
+  /** Monotonic per-device local sequence. Optional for pre-Phase-12 clients. */
+  @IsOptional()
+  @IsInt()
+  @Min(1)
+  localSequence?: number;
+
+  @IsOptional()
+  @IsString()
+  @MaxLength(160)
+  idempotencyKey?: string;
+
+  @IsIn(EDGE_OFFLINE_OPERATION_TYPES)
   operationType!: OfflineOperationType;
 
-  /** Client-addressed aggregate ID. CREATE operations persist this exact ID. */
-  @IsUUID()
+  @IsOptional()
+  @IsString()
+  @MaxLength(120)
+  aggregateType?: string;
+
+  /** Client-addressed aggregate or existing aggregate ID. */
+  @IsString()
+  @MaxLength(160)
   entityId!: string;
 
-  /** Required for versioned update/end operations. */
   @IsOptional()
   @IsInt()
   @Min(1)
   expectedVersion?: number;
 
-  /** Wall-clock time at which the user performed the local operation. */
   @IsISO8601({ strict: true })
   occurredAt!: string;
+
+  @IsOptional()
+  @IsString()
+  @MaxLength(160)
+  correlationId?: string;
 
   @IsString()
   @MaxLength(64)

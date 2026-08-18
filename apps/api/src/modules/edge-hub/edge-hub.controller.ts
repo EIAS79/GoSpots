@@ -18,34 +18,29 @@ export class EdgeHubController {
   @Post('devices/:deviceId/provision')
   @UseGuards(JwtAuthGuard)
   @RequirePermissions(PERMISSIONS.SHOP_MANAGE)
-  provision(
-    @CurrentUser() actor: JwtAccessPayload,
-    @Param('deviceId') deviceId: string,
-  ) {
+  provision(@CurrentUser() actor: JwtAccessPayload, @Param('deviceId') deviceId: string) {
     return this.edge.createProvisioningToken(actor, deviceId);
   }
 
   @Public()
   @Post('register')
-  register(@Body() dto: RegisterEdgeHubDto) {
-    return this.edge.register(dto);
-  }
+  register(@Body() dto: RegisterEdgeHubDto) { return this.edge.register(dto); }
 
   @Public()
   @Post('cloud/heartbeat')
-  heartbeat(
-    @Headers() headers: Record<string, string | string[] | undefined>,
-    @Body() dto: EdgeHeartbeatDto,
-  ) {
+  heartbeat(@Headers() headers: Record<string, string | string[] | undefined>, @Body() dto: EdgeHeartbeatDto) {
     return this.edge.heartbeat(headers, dto);
   }
 
   @Public()
+  @Post('cloud/snapshot')
+  snapshot(@Headers() headers: Record<string, string | string[] | undefined>, @Body() body: { cursor?: string | null }) {
+    return this.edge.snapshot(headers, body ?? {});
+  }
+
+  @Public()
   @Post('cloud/replay')
-  replay(
-    @Headers() headers: Record<string, string | string[] | undefined>,
-    @Body() dto: ApplyOfflineOperationDto,
-  ) {
+  replay(@Headers() headers: Record<string, string | string[] | undefined>, @Body() dto: ApplyOfflineOperationDto) {
     return this.edge.replay(headers, dto);
   }
 }
