@@ -21,19 +21,45 @@ async function main() {
     'legacy employee rate was not preserved',
   );
 
-  const schedule = await prisma.scheduleEntry.findFirst({
-    where: {
-      shopId,
-      membershipId: membership.id,
-      note: 'Representative pre-Phase-10 schedule',
-    },
+  const schedules = await prisma.scheduleEntry.findMany({
+    where: { shopId, membershipId: membership.id },
+    orderBy: { startsAt: 'asc' },
   });
-  assert(schedule, 'legacy schedule was not preserved');
+  const schedule = schedules.find(
+    (row) => row.note === 'Representative pre-Phase-10 schedule',
+  );
+  const legacyOverlap = schedules.find(
+    (row) => row.note === 'Representative legacy overlapping schedule',
+  );
+  assert(schedule && legacyOverlap, 'legacy schedules including overlap were not preserved');
   assert(
     schedule.publishedAt == null &&
       schedule.absenceStatus == null &&
-      schedule.absenceReason == null,
-    'upgrade invented publish/absence state for a legacy planned shift',
+      schedule.absenceReason == null &&
+      legacyOverlap.publishedAt == null &&
+      legacyOverlap.absenceStatus == null,
+    'upgrade invented publish/absence state for legacy planned shifts',
+  );
+
+  let newOverlapDenied = false;
+  try {
+    await prisma.scheduleEntry.create({
+      data: {
+        shopId,
+        membershipId: membership.id,
+        jobRoleId: schedule.jobRoleId,
+        startsAt: new Date('2026-08-18T13:00:00.000Z'),
+        endsAt: new Date('2026-08-18T14:00:00.000Z'),
+        note: 'Post-upgrade overlap must fail',
+        createdById: 'phase10_upgrade_fixture_owner',
+      },
+    });
+  } catch {
+    newOverlapDenied = true;
+  }
+  assert(
+    newOverlapDenied,
+    'post-upgrade schedule trigger accepted a new overlap against legacy rows',
   );
 
   const profile = await prisma.staffEmploymentProfile.findUnique({
@@ -98,7 +124,9 @@ async function main() {
         shopId,
         legacyRatePreserved: true,
         legacySchedulePreserved: true,
+        legacyOverlapPreserved: true,
         legacyScheduleStateSafe: true,
+        newOverlapDenied: true,
         profileBackfilled: true,
         safePolicyDefault: true,
         clockInRestrictionsDefaultOff: true,
