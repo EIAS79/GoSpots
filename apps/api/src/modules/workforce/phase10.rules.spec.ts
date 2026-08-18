@@ -16,7 +16,7 @@ describe('Phase 10 workforce accountability rules', () => {
     expect(() => assertOperatorPinFormat('12a4')).toThrow(/4 to 8 digits/);
   });
 
-  it('classifies real high-risk and ordinary-sale mutation shapes', () => {
+  it('classifies canonical successful and high-risk mutation routes', () => {
     expect(
       classifyAccountableAction(
         'POST',
@@ -25,11 +25,59 @@ describe('Phase 10 workforce accountability rules', () => {
       ),
     ).toMatchObject({ actionKind: 'MANUAL_TIME_EDIT' });
     expect(
-      classifyAccountableAction('POST', '/api/v1/refunds', { amountMinor: 2500 }),
-    ).toEqual({ actionKind: 'REFUND', amountMinor: 2500, sourceType: 'refund' });
+      classifyAccountableAction('POST', '/api/v1/refunds', {
+        amountMinor: 2500,
+      }),
+    ).toEqual({
+      actionKind: 'REFUND',
+      amountMinor: 2500,
+      sourceType: 'refund',
+    });
     expect(
-      classifyAccountableAction('POST', '/api/v1/checkout/payments', { totalMinor: 9000 }),
+      classifyAccountableAction(
+        'POST',
+        '/api/v1/checkout/settlements/s1/payments',
+        { amountMinor: 9000 },
+      ),
     ).toEqual({ actionKind: 'SALE', amountMinor: 9000, sourceType: 'sale' });
+    expect(
+      classifyAccountableAction('POST', '/api/v1/checkout/checks/c1/preview', {}),
+    ).toBeNull();
+    expect(
+      classifyAccountableAction('POST', '/api/v1/checkout/checks/c1/settlements', {}),
+    ).toBeNull();
+    expect(
+      classifyAccountableAction('POST', '/api/v1/inventory-v2/waste', {}),
+    ).toMatchObject({ actionKind: 'INVENTORY_WRITE_OFF' });
+    expect(
+      classifyAccountableAction(
+        'POST',
+        '/api/v1/inventory-v2/stocktakes/st1/approve',
+        {},
+      ),
+    ).toMatchObject({ actionKind: 'INVENTORY_CORRECTION' });
+    expect(
+      classifyAccountableAction(
+        'POST',
+        '/api/v1/inventory-v2/orders/o1/complete-with-approval',
+        {},
+      ),
+    ).toMatchObject({ actionKind: 'INVENTORY_CORRECTION' });
+    expect(
+      classifyAccountableAction(
+        'POST',
+        '/api/v1/ordering/orders/o1/lines/l1/cancel',
+        {},
+      ),
+    ).toMatchObject({ actionKind: 'VOID_AFTER_SEND' });
+    expect(
+      classifyAccountableAction('DELETE', '/api/v1/ordering/orders/o1', {}),
+    ).toMatchObject({ actionKind: 'VOID_AFTER_SEND' });
+    expect(
+      classifyAccountableAction('POST', '/api/v1/cash/movements', {
+        type: 'PAID_OUT',
+      }),
+    ).toMatchObject({ actionKind: 'CASH_PAYOUT' });
     expect(classifyAccountableAction('GET', '/api/v1/refunds')).toBeNull();
   });
 
@@ -74,6 +122,10 @@ describe('Phase 10 workforce accountability rules', () => {
         minimumBreakAfterSeconds: 6 * 3600,
         minimumBreakSeconds: 30 * 60,
       }),
-    ).toEqual({ required: true, compliant: false, missingSeconds: 15 * 60 });
+    ).toEqual({
+      required: true,
+      compliant: false,
+      missingSeconds: 15 * 60,
+    });
   });
 });
