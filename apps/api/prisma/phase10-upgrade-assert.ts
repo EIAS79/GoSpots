@@ -63,14 +63,15 @@ async function main() {
   );
   assert(policy.clockInRadiusMeters === 100, 'safe clock-in radius default was not seeded');
 
-  const overlapConstraint = await prisma.$queryRaw<Array<{ constraint_name: string }>>`
-    SELECT conname AS constraint_name
-    FROM pg_constraint
-    WHERE conname = 'ScheduleEntry_no_member_overlap'
+  const overlapTrigger = await prisma.$queryRaw<Array<{ trigger_name: string }>>`
+    SELECT tgname AS trigger_name
+    FROM pg_trigger
+    WHERE tgname = 'ScheduleEntry_prevent_overlap'
+      AND NOT tgisinternal
   `;
   assert(
-    overlapConstraint.length === 1,
-    'advanced schedule overlap constraint is missing after upgrade',
+    overlapTrigger.length === 1,
+    'advanced schedule overlap trigger is missing after upgrade',
   );
 
   const rls = await prisma.$queryRaw<
@@ -102,6 +103,7 @@ async function main() {
         safePolicyDefault: true,
         clockInRestrictionsDefaultOff: true,
         scheduleOverlapInvariant: true,
+        scheduleTriggerUpgradeSafe: true,
         rlsForced: true,
       },
       null,
