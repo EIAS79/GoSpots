@@ -32,17 +32,22 @@ export class GrowthDepositReconciliationService {
       throw new NotFoundException('Reservation deposit checkout attempt not found.');
     }
 
-    if (attempt.status !== 'SUCCEEDED') {
-      const stripe = this.stripe();
-      let session: Stripe.Checkout.Session;
-      try {
-        session = await stripe.checkout.sessions.retrieve(sessionId);
-      } catch {
+    const stripe = this.stripe();
+    let session: Stripe.Checkout.Session | null = null;
+    try {
+      session = await stripe.checkout.sessions.retrieve(sessionId);
+    } catch {
+      // An already-captured deposit remains canonically succeeded even if the
+      // provider read is temporarily unavailable. Recovery of an unresolved
+      // attempt still requires a successful provider read.
+      if (attempt.status !== 'SUCCEEDED') {
         throw new ServiceUnavailableException(
           'Stripe Checkout status could not be reconciled.',
         );
       }
+    }
 
+    if (session) {
       if (
         session.metadata?.purpose !== 'RESERVATION_DEPOSIT' ||
         session.metadata?.reservationId !== attempt.reservationId ||
@@ -71,8 +76,10 @@ export class GrowthDepositReconciliationService {
           secret,
         });
 
-        // Reuse the exact signed-webhook capture path. Reconciliation is not a
-        // second financial authority and cannot manufacture a paid outcome.
+        // Always reuse the exact signed-webhook capture path, including after
+        // success. A repeated reconciliation therefore exercises the same
+        // duplicate-callback path as Stripe while the webhook handler's lock,
+        // SUCCEEDED guard and ledger correlation keep the financial fact single.
         await this.deposits.handleStripeWebhook(
           Buffer.from(payload, 'utf8'),
           signature,

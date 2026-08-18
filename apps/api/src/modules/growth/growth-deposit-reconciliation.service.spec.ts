@@ -13,7 +13,11 @@ const attempt = {
 };
 
 describe('GrowthDepositReconciliationService', () => {
-  function makeService(options?: { status?: string; paymentStatus?: string }) {
+  function makeService(options?: {
+    status?: string;
+    paymentStatus?: string;
+    retrieveError?: boolean;
+  }) {
     const currentStatus = options?.status ?? 'OPEN';
     const prisma: any = {
       reservationDepositCheckoutAttempt: {
@@ -56,30 +60,43 @@ describe('GrowthDepositReconciliationService', () => {
       config,
       deposits,
     );
-    const retrieve = jest.fn().mockResolvedValue({
-      id: 'cs_live_phase8',
-      object: 'checkout.session',
-      payment_status: options?.paymentStatus ?? 'paid',
-      status: 'complete',
-      livemode: true,
-      metadata: {
-        purpose: 'RESERVATION_DEPOSIT',
-        shopId: 'shop-1',
-        reservationId: 'reservation-1',
-      },
-    });
-    const generateTestHeaderString = jest.fn().mockReturnValue('stripe-signature');
+    const retrieve = options?.retrieveError
+      ? jest.fn().mockRejectedValue(new Error('provider unavailable'))
+      : jest.fn().mockResolvedValue({
+          id: 'cs_live_phase8',
+          object: 'checkout.session',
+          payment_status: options?.paymentStatus ?? 'paid',
+          status: 'complete',
+          livemode: true,
+          metadata: {
+            purpose: 'RESERVATION_DEPOSIT',
+            shopId: 'shop-1',
+            reservationId: 'reservation-1',
+          },
+        });
+    const generateTestHeaderString = jest
+      .fn()
+      .mockReturnValue('stripe-signature');
     const stripe = {
       checkout: { sessions: { retrieve } },
       webhooks: { generateTestHeaderString },
     };
     jest.spyOn(service as any, 'stripe').mockReturnValue(stripe);
-    jest.spyOn(service as any, 'webhookSecret').mockReturnValue('whsec_phase8');
-    return { service, prisma, deposits, retrieve, generateTestHeaderString };
+    jest
+      .spyOn(service as any, 'webhookSecret')
+      .mockReturnValue('whsec_phase8');
+    return {
+      service,
+      prisma,
+      deposits,
+      retrieve,
+      generateTestHeaderString,
+    };
   }
 
   it('reuses the signed webhook path to recover a paid Checkout session', async () => {
-    const { service, deposits, retrieve, generateTestHeaderString } = makeService();
+    const { service, deposits, retrieve, generateTestHeaderString } =
+      makeService();
 
     await expect(service.reconcile('cs_live_phase8')).resolves.toEqual(
       expect.objectContaining({
@@ -96,8 +113,9 @@ describe('GrowthDepositReconciliationService', () => {
     expect(deposits.handleStripeWebhook).toHaveBeenCalledTimes(1);
   });
 
-  it('is idempotent after the deposit is already captured', async () => {
-    const { service, deposits, retrieve } = makeService({ status: 'SUCCEEDED' });
+  it('replays an already-captured deposit through the same signed webhook path', async () => {
+    const { service, deposits, retrieve, generateTestHeaderString } =
+      makeService({ status: 'SUCCEEDED' });
 
     await expect(service.reconcile('cs_live_phase8')).resolves.toEqual(
       expect.objectContaining({
@@ -108,7 +126,27 @@ describe('GrowthDepositReconciliationService', () => {
       }),
     );
 
-    expect(retrieve).not.toHaveBeenCalled();
+    expect(retrieve).toHaveBeenCalledWith('cs_live_phase8');
+    expect(generateTestHeaderString).toHaveBeenCalledTimes(1);
+    expect(deposits.handleStripeWebhook).toHaveBeenCalledTimes(1);
+  });
+
+  it('keeps a succeeded local capture available when the provider read is temporarily unavailable', async () => {
+    const { service, deposits, retrieve } = makeService({
+      status: 'SUCCEEDED',
+      retrieveError: true,
+    });
+
+    await expect(service.reconcile('cs_live_phase8')).resolves.toEqual(
+      expect.objectContaining({
+        attemptStatus: 'SUCCEEDED',
+        reconciled: true,
+        balanceMinor: 500,
+        ledgerEntries: 1,
+      }),
+    );
+
+    expect(retrieve).toHaveBeenCalledWith('cs_live_phase8');
     expect(deposits.handleStripeWebhook).not.toHaveBeenCalled();
   });
 
