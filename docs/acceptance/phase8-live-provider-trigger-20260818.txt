@@ -1,2 +1,2 @@
 Trigger the replay-safe Phase 8 live provider acceptance against production main after deployment d0522bc67a7c2b9406c99eff15f102f03d92ead1.
-Retry issued with controlled acceptance account isolated to neon-billiard: 2026-08-18T00:35:00Z.
+Retry issued with exact workflow evidence relay enabled: 2026-08-18T00:43:00Z.
