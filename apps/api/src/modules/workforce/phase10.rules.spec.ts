@@ -3,6 +3,7 @@ import {
   breakCompliance,
   classifyAccountableAction,
   computeSuspiciousReasons,
+  distanceBetweenCoordinatesMeters,
   isAfterHours,
   overtimeSeconds,
   scheduleStatus,
@@ -128,6 +129,20 @@ describe('Phase 10 workforce accountability rules', () => {
       'AFTER_HOURS',
       'MANAGER_OVERRIDE',
     ]);
+  });
+
+  it('calculates clock-in geofence distance deterministically', () => {
+    const same = distanceBetweenCoordinatesMeters(
+      { latitude: 52.2297, longitude: 21.0122 },
+      { latitude: 52.2297, longitude: 21.0122 },
+    );
+    const nearby = distanceBetweenCoordinatesMeters(
+      { latitude: 52.2297, longitude: 21.0122 },
+      { latitude: 52.2300, longitude: 21.0122 },
+    );
+    expect(same).toBe(0);
+    expect(nearby).toBeGreaterThan(30);
+    expect(nearby).toBeLessThan(40);
   });
 
   it('calculates lateness, overtime visibility and break compliance deterministically', () => {
