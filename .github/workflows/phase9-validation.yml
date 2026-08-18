@@ -79,12 +79,17 @@ jobs:
         run: >-
           pnpm exec jest --config jest.config.cjs --runInBand
           src/modules/growth/phase9.rules.spec.ts
+          src/modules/growth/phase9-promotions.spec.ts
           src/modules/growth/growth-crm.service.spec.ts
           src/modules/growth/growth-pricing.service.spec.ts
 
       - name: Run persisted Phase 9 operational pilot
         working-directory: apps/api
         run: pnpm exec tsx prisma/phase9-operational-pilot.ts
+
+      - name: Assert refund and loyalty reversal effects
+        working-directory: apps/api
+        run: pnpm exec tsx prisma/phase9-refund-effects-assert.ts
 
       - name: Assert Phase 9 reconciliation is clean
         working-directory: apps/api
