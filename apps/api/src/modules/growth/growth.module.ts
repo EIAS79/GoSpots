@@ -14,6 +14,8 @@ import { GrowthPrivacyService } from './growth-privacy.service';
 import { GrowthPublicController } from './growth-public.controller';
 import { GrowthPublicDepositService } from './growth-public-deposit.service';
 import { GrowthController } from './growth.controller';
+import { Phase9CustomerPortalProfileController } from './phase9-customer-portal-profile.controller';
+import { Phase9CustomerPortalProfileService } from './phase9-customer-portal-profile.service';
 import {
   Phase9CustomerPortalController,
   Phase9CustomerValueController,
@@ -40,6 +42,7 @@ import { ReservationStripeWebhookRoutingInterceptor } from './reservation-stripe
     Phase8ReservationController,
     Phase9CustomerValueController,
     Phase9CustomerPortalController,
+    Phase9CustomerPortalProfileController,
     Phase9ReconciliationController,
   ],
   providers: [
@@ -56,6 +59,7 @@ import { ReservationStripeWebhookRoutingInterceptor } from './reservation-stripe
     Phase8ReservationService,
     Phase9CustomerValueService,
     Phase9CustomerPortalService,
+    Phase9CustomerPortalProfileService,
     Phase9GuardrailsService,
     Phase9LoyaltyExpiryService,
     Phase9ReconciliationService,
