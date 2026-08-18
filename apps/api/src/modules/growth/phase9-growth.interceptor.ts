@@ -12,6 +12,7 @@ import {
   PERMISSIONS,
   type PermissionKey,
 } from '../../common/permissions';
+import { requireShopId } from '../../common/tenant';
 import type { JwtAccessPayload } from '../auth/auth.service';
 import { GrowthPricingService } from './growth-pricing.service';
 import type {
@@ -48,11 +49,16 @@ export class Phase9GrowthInterceptor implements NestInterceptor {
     return from(this.route(request, next));
   }
 
-  private async route(request: RequestLike, next: CallHandler) {
+  private async route(
+    request: RequestLike,
+    next: CallHandler,
+  ): Promise<unknown> {
     const method = (request.method ?? '').toUpperCase();
     const path = (request.path ?? request.url ?? '').split('?')[0];
     const actor = request.user;
-    if (!actor || !path.includes('/growth')) return lastValueFrom(next.handle());
+    if (!actor || !path.includes('/growth')) {
+      return lastValueFrom(next.handle() as Observable<unknown>);
+    }
 
     let match: RegExpMatchArray | null;
 
@@ -87,7 +93,11 @@ export class Phase9GrowthInterceptor implements NestInterceptor {
     match = path.match(/\/growth\/customers\/([^/]+)\/loyalty$/);
     if (method === 'POST' && match) {
       const customerId = decodeURIComponent(match[1]);
-      await this.loyaltyExpiry.processDue(actor.shopId!, customerId, actor.sub);
+      await this.loyaltyExpiry.processDue(
+        requireShopId(actor),
+        customerId,
+        actor.sub,
+      );
       return this.phase9.loyalty(
         actor,
         customerId,
@@ -98,7 +108,11 @@ export class Phase9GrowthInterceptor implements NestInterceptor {
     match = path.match(/\/growth\/customers\/([^/]+)\/rewards\/reverse$/);
     if (method === 'POST' && match) {
       const customerId = decodeURIComponent(match[1]);
-      await this.loyaltyExpiry.processDue(actor.shopId!, customerId, actor.sub);
+      await this.loyaltyExpiry.processDue(
+        requireShopId(actor),
+        customerId,
+        actor.sub,
+      );
       return this.phase9.reverseRewards(
         actor,
         customerId,
@@ -132,7 +146,9 @@ export class Phase9GrowthInterceptor implements NestInterceptor {
       return this.phase9.snapshotWithUsagePolicies(actor, normalized);
     }
 
-    const result = await lastValueFrom(next.handle());
+    const result: unknown = await lastValueFrom(
+      next.handle() as Observable<unknown>,
+    );
 
     if (method === 'POST' && /\/growth\/customers$/.test(path)) {
       const customerId = this.resultId(result);
