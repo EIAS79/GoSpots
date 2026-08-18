@@ -63,7 +63,7 @@ export class Phase10ScheduleService {
       data: { publishedAt: dto.published ? new Date() : null },
     });
     await this.audit.record(actor, {
-      section: 'workforce',
+      section: 'team',
       action: dto.published
         ? 'workforce.schedule.publish'
         : 'workforce.schedule.unpublish',
@@ -94,7 +94,7 @@ export class Phase10ScheduleService {
       data: { absenceStatus, absenceReason },
     });
     await this.audit.record(actor, {
-      section: 'workforce',
+      section: 'team',
       action: absenceStatus
         ? 'workforce.schedule.absence'
         : 'workforce.schedule.absence.clear',
