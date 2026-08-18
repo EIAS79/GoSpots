@@ -9,7 +9,6 @@ CREATE TABLE "StaffEmploymentProfile" (
   "displayName" TEXT,
   "primaryJobRoleId" TEXT,
   "managerMembershipId" TEXT,
-  "active" BOOLEAN NOT NULL DEFAULT true,
   "createdById" TEXT NOT NULL,
   "updatedById" TEXT NOT NULL,
   "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
@@ -18,12 +17,12 @@ CREATE TABLE "StaffEmploymentProfile" (
 );
 CREATE UNIQUE INDEX "StaffEmploymentProfile_shopId_membershipId_key" ON "StaffEmploymentProfile"("shopId", "membershipId");
 CREATE UNIQUE INDEX "StaffEmploymentProfile_shopId_employeeNumber_key" ON "StaffEmploymentProfile"("shopId", "employeeNumber");
-CREATE INDEX "StaffEmploymentProfile_shopId_active_employeeNumber_idx" ON "StaffEmploymentProfile"("shopId", "active", "employeeNumber");
+CREATE INDEX "StaffEmploymentProfile_shopId_employeeNumber_idx" ON "StaffEmploymentProfile"("shopId", "employeeNumber");
 CREATE INDEX "StaffEmploymentProfile_shopId_managerMembershipId_idx" ON "StaffEmploymentProfile"("shopId", "managerMembershipId");
 
--- Existing staff receive stable, non-secret employment numbers. Owners remain owners, not employees.
+-- Existing staff receive stable, non-secret employment numbers. Membership.isActive remains active-state truth.
 INSERT INTO "StaffEmploymentProfile" (
-  "id", "shopId", "membershipId", "employeeNumber", "displayName", "active",
+  "id", "shopId", "membershipId", "employeeNumber", "displayName",
   "createdById", "updatedById", "createdAt", "updatedAt"
 )
 SELECT
@@ -32,7 +31,6 @@ SELECT
   m."id",
   'EMP-' || upper(substr(md5(m."shopId" || ':' || m."id"), 1, 8)),
   COALESCE(u."name", u."staffHandle", u."email"),
-  true,
   s."ownerId",
   s."ownerId",
   CURRENT_TIMESTAMP,
