@@ -99,10 +99,13 @@ jobs:
           PGPASSWORD: postgres
         run: |
           createdb -h 127.0.0.1 -U postgres gospots_phase10_upgrade
-          mv apps/api/prisma/migrations/20260818113000_phase10_workforce_accountability /tmp/phase10_workforce_accountability
+          mkdir -p /tmp/phase10_migrations
+          mv apps/api/prisma/migrations/20260818113000_phase10_workforce_accountability /tmp/phase10_migrations/
+          mv apps/api/prisma/migrations/20260818113100_phase10_clockin_restrictions /tmp/phase10_migrations/
           DATABASE_URL="$UPGRADE_DATABASE_URL" pnpm --filter @gospots/api migrate:deploy
           DATABASE_URL="$UPGRADE_DATABASE_URL" pnpm --filter @gospots/api exec tsx prisma/phase10-upgrade-fixture.ts
-          mv /tmp/phase10_workforce_accountability apps/api/prisma/migrations/20260818113000_phase10_workforce_accountability
+          mv /tmp/phase10_migrations/20260818113000_phase10_workforce_accountability apps/api/prisma/migrations/
+          mv /tmp/phase10_migrations/20260818113100_phase10_clockin_restrictions apps/api/prisma/migrations/
           DATABASE_URL="$UPGRADE_DATABASE_URL" pnpm --filter @gospots/api migrate:deploy
           DATABASE_URL="$UPGRADE_DATABASE_URL" pnpm --filter @gospots/api exec tsx prisma/phase10-upgrade-assert.ts
 
