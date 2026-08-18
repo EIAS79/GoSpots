@@ -17,7 +17,7 @@ Phase 9 owns:
 - loyalty earn/redeem/expiry/refund reversal;
 - stored value and transfer policy;
 - deterministic promotions and usage limits;
-- customer portal projections and consent control;
+- customer portal projections, booking history, profile and consent controls;
 - reconciliation of benefits with financial value.
 
 Phase 10 workforce/approval work is not part of this change.
@@ -95,7 +95,10 @@ The implementation extends the existing Growth domain instead of creating parall
 - Portal access uses random opaque tokens; only the SHA-256 token hash is persisted.
 - Portal tokens expire and can be revoked.
 - Projection is built from canonical customer, reservation, visit, membership, loyalty, package, stored-value and compliance-document facts.
-- Portal exposes upcoming reservations, visit history, membership, loyalty, package balances, stored value, receipts/invoices and customer-controlled marketing consent.
+- Portal exposes upcoming reservations, past booking history, visit history, membership, loyalty, package balances, stored value and receipts/invoices.
+- Customers can update their current name/email/phone and marketing consent from the portal.
+- Profile changes are audited and cannot claim another same-tenant customer's email/phone identity.
+- Historical identity aliases remain linked to the canonical customer so prior reservation history remains visible after contact details change.
 - Portal does not create a second customer or financial source of truth.
 
 ## Database and migration strategy
@@ -144,6 +147,8 @@ The Phase 9 operational pilot proves:
 
 A separate persisted assertion proves loyalty benefit reversal after refund/cancel and deterministic replay of that reversal.
 
+A dedicated portal/profile assertion proves profile normalization, identity-conflict rejection and historical booking continuity after the customer changes their current contact details.
+
 A reconciliation assertion proves the final pilot has no silent customer-value discrepancy.
 
 ### Browser acceptance
@@ -153,8 +158,10 @@ A reconciliation assertion proves the final pilot has no silent customer-value d
 - authenticated operator creates an anonymous customer;
 - loyalty value is visible in the customer portal;
 - portal route renders through the real API;
+- booking-history surface exists;
+- customer can update name, email and phone through the portal;
 - customer can grant marketing consent;
-- persisted portal projection reflects that consent and its provenance.
+- persisted portal projection reflects profile, consent provenance and loyalty value.
 
 ## CI gate
 
@@ -167,12 +174,13 @@ It requires:
 3. clean PostgreSQL migration chain;
 4. Phase 9 + Growth regression tests;
 5. persisted operational pilot;
-6. persisted refund/reversal assertion;
-7. reconciliation assertion;
-8. API build;
-9. representative upgrade migration and assertions;
-10. web typecheck;
-11. web production build.
+6. portal profile/historical booking continuity assertion;
+7. persisted refund/reversal assertion;
+8. reconciliation assertion;
+9. API build;
+10. representative upgrade migration and assertions;
+11. web typecheck;
+12. web production build.
 
 The repository-wide CI and earlier phase regression workflows remain required for the final exact Phase 9 head.
 
@@ -189,7 +197,8 @@ Phase 9 is ready for final acceptance only when all of the following are true:
 - [x] promotion stacking, time windows and usage caps are deterministic;
 - [x] stored value and packages retain canonical payment/settlement lineage;
 - [x] reconciliation surfaces customer-value anomalies;
-- [x] customer portal uses canonical projections and customer-controlled consent;
+- [x] customer portal uses canonical projections, booking history, profile and consent controls;
+- [x] profile changes preserve historical identity/booking evidence and reject identity conflicts;
 - [x] clean migration proof exists in CI;
 - [x] representative upgrade proof exists in CI;
 - [ ] exact final Phase 9 head is green across all required CI;
@@ -198,4 +207,4 @@ Phase 9 is ready for final acceptance only when all of the following are true:
 - [ ] exact merged revision is deployed to production;
 - [ ] production runtime and critical Phase 9 route are verified.
 
-The final four boxes are intentionally not pre-claimed by repository code. They are closed only with GitHub and production evidence.
+The final five boxes are intentionally not pre-claimed by repository code. They are closed only with GitHub and production evidence.
