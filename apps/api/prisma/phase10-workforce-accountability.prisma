@@ -1,5 +1,5 @@
 // Phase 10 — Workforce, Time Clock, Staff Accountability and Owner Controls
-// Membership remains authentication/permission + branch access truth.
+// Membership remains authentication/permission + branch access truth, including isActive.
 // EmployeeRate remains effective-dated labor-cost truth.
 // These rows add employment metadata, operator attribution, approvals and owner controls.
 
@@ -11,7 +11,6 @@ model StaffEmploymentProfile {
   displayName         String?
   primaryJobRoleId    String?
   managerMembershipId String?
-  active              Boolean  @default(true)
   createdById         String
   updatedById         String
   createdAt           DateTime @default(now())
@@ -19,7 +18,7 @@ model StaffEmploymentProfile {
 
   @@unique([shopId, membershipId])
   @@unique([shopId, employeeNumber])
-  @@index([shopId, active, employeeNumber])
+  @@index([shopId, employeeNumber])
   @@index([shopId, managerMembershipId])
 }
 
