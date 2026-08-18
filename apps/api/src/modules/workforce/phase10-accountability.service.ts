@@ -46,7 +46,6 @@ import {
   PHASE10_ACTION_KINDS,
   scheduleStatus,
   type AccountableActionClassification,
-  type Phase10ActionKind,
 } from './phase10.rules';
 
 const APPROVAL_TTL_MS = 15 * 60_000;
@@ -72,6 +71,17 @@ export type PreparedStaffAction = {
   approverMembershipId?: string;
   approvalReserved: boolean;
 };
+
+type OperatorSwitchTxResult =
+  | { outcome: 'UNAVAILABLE' }
+  | { outcome: 'LOCKED' }
+  | { outcome: 'INVALID'; locked: boolean }
+  | {
+      outcome: 'SUCCESS';
+      rawToken: string;
+      expiresAt: Date;
+      authStrength: 'PIN' | 'BADGE';
+    };
 
 @Injectable()
 export class Phase10AccountabilityService {
@@ -134,31 +144,46 @@ export class Phase10AccountabilityService {
         user: { select: { name: true, email: true, staffHandle: true } },
       },
     });
-    if (!membership) throw new NotFoundException('Staff membership not found in this venue.');
+    if (!membership) {
+      throw new NotFoundException('Staff membership not found in this venue.');
+    }
     return membership;
   }
 
   private async workforcePolicy(shopId: string, updatedById?: string) {
-    const current = await this.prisma.workforcePolicy.findUnique({ where: { shopId } });
+    const current = await this.prisma.workforcePolicy.findUnique({
+      where: { shopId },
+    });
     if (current) return current;
     return this.prisma.workforcePolicy.create({
-      data: { shopId, updatedById: updatedById ?? 'system', ...DEFAULT_POLICY },
+      data: {
+        shopId,
+        updatedById: updatedById ?? 'system',
+        ...DEFAULT_POLICY,
+      },
     });
   }
 
   async listProfiles(actor: JwtAccessPayload) {
     this.assertRead(actor);
     const shopId = requireShopId(actor);
+    const canViewHourlyCost = actor.shopRole === 'OWNER';
     const memberships = await this.prisma.membership.findMany({
       where: { shopId, role: { not: 'OWNER' } },
       include: {
-        user: { select: { id: true, name: true, email: true, staffHandle: true } },
+        user: {
+          select: { id: true, name: true, email: true, staffHandle: true },
+        },
         permissionRows: { select: { permission: true } },
       },
       orderBy: { createdAt: 'asc' },
     });
-    const profiles = await this.prisma.staffEmploymentProfile.findMany({ where: { shopId } });
-    const byMembership = new Map(profiles.map((row) => [row.membershipId, row]));
+    const profiles = await this.prisma.staffEmploymentProfile.findMany({
+      where: { shopId },
+    });
+    const byMembership = new Map(
+      profiles.map((row) => [row.membershipId, row]),
+    );
     const now = new Date();
 
     return Promise.all(
@@ -187,13 +212,19 @@ export class Phase10AccountabilityService {
             membership.user.staffHandle ??
             membership.user.email,
           employeeNumber:
-            profile?.employeeNumber ?? this.defaultEmployeeNumber(shopId, membership.id),
+            profile?.employeeNumber ??
+            this.defaultEmployeeNumber(shopId, membership.id),
           jobRoleId: profile?.primaryJobRoleId ?? rate?.jobRoleId ?? null,
           permissionRole: membership.role,
           permissions: membership.permissionRows.map((row) => row.permission),
-          hourlyCost: rate
-            ? { minor: rate.hourlyRateMinor, currency: rate.currency, effectiveFrom: rate.effectiveFrom }
-            : null,
+          hourlyCost:
+            canViewHourlyCost && rate
+              ? {
+                  minor: rate.hourlyRateMinor,
+                  currency: rate.currency,
+                  effectiveFrom: rate.effectiveFrom,
+                }
+              : null,
           active: membership.isActive,
           managerMembershipId: profile?.managerMembershipId ?? null,
           assignedBranches,
@@ -217,18 +248,28 @@ export class Phase10AccountabilityService {
       const role = await this.prisma.jobRole.findFirst({
         where: { id: dto.primaryJobRoleId, shopId, active: true },
       });
-      if (!role) throw new BadRequestException('Job role does not belong to this venue.');
+      if (!role) {
+        throw new BadRequestException('Job role does not belong to this venue.');
+      }
     }
     if (dto.managerMembershipId) {
       if (dto.managerMembershipId === membershipId) {
-        throw new BadRequestException('Employee cannot manage their own employment profile.');
+        throw new BadRequestException(
+          'Employee cannot manage their own employment profile.',
+        );
       }
-      const manager = await this.membershipInShop(shopId, dto.managerMembershipId);
-      if (!manager.isActive) throw new BadRequestException('Manager membership is inactive.');
+      const manager = await this.membershipInShop(
+        shopId,
+        dto.managerMembershipId,
+      );
+      if (!manager.isActive) {
+        throw new BadRequestException('Manager membership is inactive.');
+      }
     }
 
     const employeeNumber =
-      dto.employeeNumber?.trim().toUpperCase() || this.defaultEmployeeNumber(shopId, membershipId);
+      dto.employeeNumber?.trim().toUpperCase() ||
+      this.defaultEmployeeNumber(shopId, membershipId);
     const profile = await this.prisma.$transaction(async (tx) => {
       const row = await tx.staffEmploymentProfile.upsert({
         where: { shopId_membershipId: { shopId, membershipId } },
@@ -244,14 +285,23 @@ export class Phase10AccountabilityService {
         },
         update: {
           ...(dto.employeeNumber !== undefined ? { employeeNumber } : {}),
-          ...(dto.displayName !== undefined ? { displayName: dto.displayName.trim() || null } : {}),
-          ...(dto.primaryJobRoleId !== undefined ? { primaryJobRoleId: dto.primaryJobRoleId || null } : {}),
-          ...(dto.managerMembershipId !== undefined ? { managerMembershipId: dto.managerMembershipId || null } : {}),
+          ...(dto.displayName !== undefined
+            ? { displayName: dto.displayName.trim() || null }
+            : {}),
+          ...(dto.primaryJobRoleId !== undefined
+            ? { primaryJobRoleId: dto.primaryJobRoleId || null }
+            : {}),
+          ...(dto.managerMembershipId !== undefined
+            ? { managerMembershipId: dto.managerMembershipId || null }
+            : {}),
           updatedById: actor.sub,
         },
       });
       if (dto.active !== undefined) {
-        await tx.membership.update({ where: { id: membershipId }, data: { isActive: dto.active } });
+        await tx.membership.update({
+          where: { id: membershipId },
+          data: { isActive: dto.active },
+        });
         if (!dto.active) {
           await tx.staffOperatorCredential.updateMany({
             where: { shopId, membershipId },
@@ -276,7 +326,11 @@ export class Phase10AccountabilityService {
   }
 
   private defaultEmployeeNumber(shopId: string, membershipId: string) {
-    return `EMP-${createHash('sha256').update(`${shopId}:${membershipId}`).digest('hex').slice(0, 8).toUpperCase()}`;
+    return `EMP-${createHash('sha256')
+      .update(`${shopId}:${membershipId}`)
+      .digest('hex')
+      .slice(0, 8)
+      .toUpperCase()}`;
   }
 
   private async branchAssignmentsFor(
@@ -286,7 +340,9 @@ export class Phase10AccountabilityService {
   ) {
     let shopIds = [currentShopId];
     if (actor.shopRole === 'OWNER') {
-      const currentOrg = await this.prisma.organizationShop.findUnique({ where: { shopId: currentShopId } });
+      const currentOrg = await this.prisma.organizationShop.findUnique({
+        where: { shopId: currentShopId },
+      });
       if (currentOrg) {
         const rows = await this.prisma.organizationShop.findMany({
           where: { organizationId: currentOrg.organizationId },
@@ -314,18 +370,25 @@ export class Phase10AccountabilityService {
     }));
   }
 
-  async setOperatorCredential(actor: JwtAccessPayload, dto: SetOperatorCredentialDto) {
+  async setOperatorCredential(
+    actor: JwtAccessPayload,
+    dto: SetOperatorCredentialDto,
+  ) {
     this.assertManage(actor);
     const shopId = requireShopId(actor);
     const membership = await this.membershipInShop(shopId, dto.membershipId);
     if (!membership.isActive && dto.active !== false) {
-      throw new BadRequestException('Cannot enable quick switch for an inactive employee.');
+      throw new BadRequestException(
+        'Cannot enable quick switch for an inactive employee.',
+      );
     }
     const pin = assertOperatorPinFormat(dto.pin);
     const pinHash = await hashPassword(pin);
     const badgeHash = dto.badge ? this.hashSecret(dto.badge.trim()) : null;
     const row = await this.prisma.staffOperatorCredential.upsert({
-      where: { shopId_membershipId: { shopId, membershipId: dto.membershipId } },
+      where: {
+        shopId_membershipId: { shopId, membershipId: dto.membershipId },
+      },
       create: {
         shopId,
         membershipId: dto.membershipId,
@@ -353,82 +416,129 @@ export class Phase10AccountabilityService {
       section: 'team',
       action: 'workforce.operator_credential.rotate',
       summary: `Rotated quick-switch credential for ${membership.user.name ?? membership.user.email}`,
-      meta: { membershipId: dto.membershipId, badgeConfigured: Boolean(badgeHash), active: row.active },
+      meta: {
+        membershipId: dto.membershipId,
+        badgeConfigured: Boolean(badgeHash),
+        active: row.active,
+      },
     });
-    return { membershipId: row.membershipId, active: row.active, badgeConfigured: Boolean(row.badgeHash), rotatedAt: row.rotatedAt };
+    return {
+      membershipId: row.membershipId,
+      active: row.active,
+      badgeConfigured: Boolean(row.badgeHash),
+      rotatedAt: row.rotatedAt,
+    };
   }
 
   async switchOperator(actor: JwtAccessPayload, dto: SwitchOperatorDto) {
     const shopId = requireShopId(actor);
     const target = await this.membershipInShop(shopId, dto.membershipId);
-    if (!target.isActive) throw new ForbiddenException('Employee is inactive.');
-    if (!dto.pin && !dto.badge) throw new BadRequestException('PIN or badge is required.');
+    if (!target.isActive) {
+      throw new ForbiddenException('Employee is inactive.');
+    }
+    if (!dto.pin && !dto.badge) {
+      throw new BadRequestException('PIN or badge is required.');
+    }
     if (dto.pin) assertOperatorPinFormat(dto.pin);
     const policy = await this.workforcePolicy(shopId, actor.sub);
     const lockKey = `phase10:operator:${shopId}:${dto.membershipId}`;
 
-    const result = await this.prisma.$transaction(async (tx) => {
-      await tx.$executeRaw(Prisma.sql`SELECT pg_advisory_xact_lock(hashtext(${lockKey}))`);
-      const credential = await tx.staffOperatorCredential.findUnique({
-        where: { shopId_membershipId: { shopId, membershipId: dto.membershipId } },
-      });
-      if (!credential?.active) throw new UnauthorizedException('Operator credential unavailable.');
-      const now = new Date();
-      if (credential.lockedUntil && credential.lockedUntil > now) {
-        throw new HttpException('Operator credential temporarily locked.', 429);
-      }
-
-      const usingBadge = Boolean(dto.badge);
-      const valid = usingBadge
-        ? Boolean(credential.badgeHash && this.hashSecret(dto.badge!.trim()) === credential.badgeHash)
-        : await verifyPassword(credential.pinHash, dto.pin!);
-      if (!valid) {
-        const nextAttempts = credential.failedAttempts + 1;
-        const shouldLock = nextAttempts >= policy.pinLockoutAttempts;
-        await tx.staffOperatorCredential.update({
-          where: { id: credential.id },
-          data: {
-            failedAttempts: shouldLock ? 0 : nextAttempts,
-            lockedUntil: shouldLock
-              ? new Date(now.getTime() + policy.pinLockoutMinutes * 60_000)
-              : null,
+    const result = await this.prisma.$transaction<OperatorSwitchTxResult>(
+      async (tx) => {
+        await tx.$executeRaw(
+          Prisma.sql`SELECT pg_advisory_xact_lock(hashtext(${lockKey}))`,
+        );
+        const credential = await tx.staffOperatorCredential.findUnique({
+          where: {
+            shopId_membershipId: { shopId, membershipId: dto.membershipId },
           },
         });
-        if (shouldLock) throw new HttpException('Operator credential temporarily locked.', 429);
-        throw new UnauthorizedException('Operator PIN or badge is incorrect.');
-      }
+        if (!credential?.active) return { outcome: 'UNAVAILABLE' };
+        const now = new Date();
+        if (credential.lockedUntil && credential.lockedUntil > now) {
+          return { outcome: 'LOCKED' };
+        }
 
-      await tx.staffOperatorCredential.update({
-        where: { id: credential.id },
-        data: { failedAttempts: 0, lockedUntil: null },
-      });
-      const rawToken = randomBytes(32).toString('base64url');
-      const expiresAt = new Date(now.getTime() + policy.operatorSessionMinutes * 60_000);
-      await tx.staffOperatorSession.create({
-        data: {
-          shopId,
-          membershipId: dto.membershipId,
-          tokenHash: this.hashSecret(rawToken),
-          authStrength: usingBadge ? 'BADGE' : 'PIN',
-          workstation: dto.workstation?.trim() || null,
-          expiresAt,
-          createdById: actor.sub,
-        },
-      });
-      return { rawToken, expiresAt, authStrength: usingBadge ? 'BADGE' : 'PIN' } as const;
-    });
+        const usingBadge = Boolean(dto.badge);
+        const valid = usingBadge
+          ? Boolean(
+              credential.badgeHash &&
+                this.hashSecret(dto.badge!.trim()) === credential.badgeHash,
+            )
+          : await verifyPassword(credential.pinHash, dto.pin!);
+        if (!valid) {
+          const nextAttempts = credential.failedAttempts + 1;
+          const shouldLock = nextAttempts >= policy.pinLockoutAttempts;
+          await tx.staffOperatorCredential.update({
+            where: { id: credential.id },
+            data: {
+              failedAttempts: shouldLock ? 0 : nextAttempts,
+              lockedUntil: shouldLock
+                ? new Date(
+                    now.getTime() + policy.pinLockoutMinutes * 60_000,
+                  )
+                : null,
+            },
+          });
+          return { outcome: 'INVALID', locked: shouldLock };
+        }
+
+        await tx.staffOperatorCredential.update({
+          where: { id: credential.id },
+          data: { failedAttempts: 0, lockedUntil: null },
+        });
+        const rawToken = randomBytes(32).toString('base64url');
+        const expiresAt = new Date(
+          now.getTime() + policy.operatorSessionMinutes * 60_000,
+        );
+        const authStrength: 'PIN' | 'BADGE' = usingBadge ? 'BADGE' : 'PIN';
+        await tx.staffOperatorSession.create({
+          data: {
+            shopId,
+            membershipId: dto.membershipId,
+            tokenHash: this.hashSecret(rawToken),
+            authStrength,
+            workstation: dto.workstation?.trim() || null,
+            expiresAt,
+            createdById: actor.sub,
+          },
+        });
+        return { outcome: 'SUCCESS', rawToken, expiresAt, authStrength };
+      },
+    );
+
+    if (result.outcome === 'UNAVAILABLE') {
+      throw new UnauthorizedException('Operator credential unavailable.');
+    }
+    if (result.outcome === 'LOCKED') {
+      throw new HttpException('Operator credential temporarily locked.', 429);
+    }
+    if (result.outcome === 'INVALID') {
+      if (result.locked) {
+        throw new HttpException('Operator credential temporarily locked.', 429);
+      }
+      throw new UnauthorizedException('Operator PIN or badge is incorrect.');
+    }
 
     await this.audit.record(actor, {
       section: 'team',
       action: 'workforce.operator_switch',
       summary: `Quick-switched operator to ${target.user.name ?? target.user.email}`,
-      meta: { membershipId: target.id, authStrength: result.authStrength, workstation: dto.workstation },
+      meta: {
+        membershipId: target.id,
+        authStrength: result.authStrength,
+        workstation: dto.workstation,
+      },
     });
     return {
       operatorToken: result.rawToken,
       expiresAt: result.expiresAt,
       authStrength: result.authStrength,
-      operator: { membershipId: target.id, displayName: target.user.name ?? target.user.staffHandle ?? target.user.email },
+      operator: {
+        membershipId: target.id,
+        displayName:
+          target.user.name ?? target.user.staffHandle ?? target.user.email,
+      },
     };
   }
 
@@ -439,21 +549,27 @@ export class Phase10AccountabilityService {
   async listApprovalPolicies(actor: JwtAccessPayload) {
     this.assertRead(actor);
     const shopId = requireShopId(actor);
-    const rows = await this.prisma.staffApprovalPolicy.findMany({ where: { shopId } });
+    const rows = await this.prisma.staffApprovalPolicy.findMany({
+      where: { shopId },
+    });
     const byKind = new Map(rows.map((row) => [row.actionKind, row]));
-    return PHASE10_ACTION_KINDS.map((actionKind) =>
-      byKind.get(actionKind) ?? {
-        actionKind,
-        enabled: false,
-        amountThresholdMinor: null,
-        requirePassword: true,
-        notifyOnUse: true,
-        version: 0,
-      },
+    return PHASE10_ACTION_KINDS.map(
+      (actionKind) =>
+        byKind.get(actionKind) ?? {
+          actionKind,
+          enabled: false,
+          amountThresholdMinor: null,
+          requirePassword: true,
+          notifyOnUse: true,
+          version: 0,
+        },
     );
   }
 
-  async updateApprovalPolicy(actor: JwtAccessPayload, dto: UpdateApprovalPolicyDto) {
+  async updateApprovalPolicy(
+    actor: JwtAccessPayload,
+    dto: UpdateApprovalPolicyDto,
+  ) {
     this.assertOwner(actor);
     const shopId = requireShopId(actor);
     const actionKind = assertPhase10ActionKind(dto.actionKind);
@@ -473,8 +589,12 @@ export class Phase10AccountabilityService {
       update: {
         enabled: dto.enabled,
         amountThresholdMinor: dto.amountThresholdMinor ?? null,
-        ...(dto.requirePassword !== undefined ? { requirePassword: dto.requirePassword } : {}),
-        ...(dto.notifyOnUse !== undefined ? { notifyOnUse: dto.notifyOnUse } : {}),
+        ...(dto.requirePassword !== undefined
+          ? { requirePassword: dto.requirePassword }
+          : {}),
+        ...(dto.notifyOnUse !== undefined
+          ? { notifyOnUse: dto.notifyOnUse }
+          : {}),
         version: { increment: 1 },
         updatedById: actor.sub,
       },
@@ -483,7 +603,11 @@ export class Phase10AccountabilityService {
       section: 'team',
       action: 'workforce.approval_policy.update',
       summary: `${actionKind} approval ${row.enabled ? 'enabled' : 'disabled'}`,
-      meta: { actionKind, threshold: row.amountThresholdMinor, version: row.version },
+      meta: {
+        actionKind,
+        threshold: row.amountThresholdMinor,
+        version: row.version,
+      },
     });
     return row;
   }
@@ -509,16 +633,17 @@ export class Phase10AccountabilityService {
       where: { shopId_actionKind: { shopId, actionKind } },
     });
     if (!policy || !this.policyRequiresApproval(policy, dto.amountMinor)) {
-      throw new BadRequestException('This action does not currently require elevated approval.');
+      throw new BadRequestException(
+        'This action does not currently require elevated approval.',
+      );
     }
-    const requestHash = hashIdempotencyRequest(dto);
     return withClientIdempotency(
       this.prisma,
       {
         shopId,
         scope: `workforce.phase10.approval.request.${actionKind}`,
         key: idempotencyKey,
-        requestHash,
+        requestHash: hashIdempotencyRequest(dto),
       },
       async () => {
         const row = await this.prisma.staffApprovalRequestV2.create({
@@ -538,7 +663,11 @@ export class Phase10AccountabilityService {
           section: 'team',
           action: 'workforce.approval.request',
           summary: `Requested ${actionKind} approval`,
-          meta: { approvalRequestId: row.id, sourceType: row.sourceType, sourceId: row.sourceId },
+          meta: {
+            approvalRequestId: row.id,
+            sourceType: row.sourceType,
+            sourceId: row.sourceId,
+          },
         });
         return row;
       },
@@ -549,7 +678,10 @@ export class Phase10AccountabilityService {
     this.assertManage(actor);
     const shopId = requireShopId(actor);
     return this.prisma.staffApprovalRequestV2.findMany({
-      where: { shopId, ...(status ? { status: status.toUpperCase() } : {}) },
+      where: {
+        shopId,
+        ...(status ? { status: status.toUpperCase() } : {}),
+      },
       orderBy: { createdAt: 'desc' },
       take: 200,
     });
@@ -565,18 +697,29 @@ export class Phase10AccountabilityService {
     this.assertManage(actor);
     const shopId = requireShopId(actor);
     const approver = await this.actorMembership(actor);
-    const request = await this.prisma.staffApprovalRequestV2.findFirst({ where: { id, shopId } });
+    const request = await this.prisma.staffApprovalRequestV2.findFirst({
+      where: { id, shopId },
+    });
     if (!request) throw new NotFoundException('Approval request not found.');
     if (request.requesterMembershipId === approver.id) {
-      throw new ForbiddenException('Requester cannot approve their own elevated action.');
+      throw new ForbiddenException(
+        'Requester cannot approve their own elevated action.',
+      );
     }
-    if (request.status !== 'PENDING') throw new ConflictException('Approval request is no longer pending.');
+    if (request.status !== 'PENDING') {
+      throw new ConflictException('Approval request is no longer pending.');
+    }
     if (request.expiresAt <= new Date()) {
-      await this.prisma.staffApprovalRequestV2.update({ where: { id }, data: { status: 'EXPIRED' } });
+      await this.prisma.staffApprovalRequestV2.update({
+        where: { id },
+        data: { status: 'EXPIRED' },
+      });
       throw new ConflictException('Approval request expired.');
     }
     const policy = await this.prisma.staffApprovalPolicy.findUnique({
-      where: { shopId_actionKind: { shopId, actionKind: request.actionKind } },
+      where: {
+        shopId_actionKind: { shopId, actionKind: request.actionKind },
+      },
     });
     if (dto.approve && policy?.requirePassword) {
       const password = requireConfirmPassword(dto.password, headerPassword);
@@ -588,7 +731,10 @@ export class Phase10AccountabilityService {
         shopId,
         scope: `workforce.phase10.approval.decision.${id}`,
         key: idempotencyKey,
-        requestHash: hashIdempotencyRequest({ approve: dto.approve, note: dto.note ?? null }),
+        requestHash: hashIdempotencyRequest({
+          approve: dto.approve,
+          note: dto.note ?? null,
+        }),
       },
       async () => {
         const row = await this.prisma.staffApprovalRequestV2.update({
@@ -602,9 +748,14 @@ export class Phase10AccountabilityService {
         });
         await this.audit.record(actor, {
           section: 'team',
-          action: dto.approve ? 'workforce.approval.approve' : 'workforce.approval.deny',
+          action: dto.approve
+            ? 'workforce.approval.approve'
+            : 'workforce.approval.deny',
           summary: `${dto.approve ? 'Approved' : 'Denied'} ${row.actionKind}`,
-          meta: { approvalRequestId: row.id, requesterMembershipId: row.requesterMembershipId },
+          meta: {
+            approvalRequestId: row.id,
+            requesterMembershipId: row.requesterMembershipId,
+          },
         });
         return row;
       },
@@ -614,23 +765,29 @@ export class Phase10AccountabilityService {
   async listNotificationRules(actor: JwtAccessPayload) {
     this.assertRead(actor);
     const shopId = requireShopId(actor);
-    const rows = await this.prisma.staffNotificationRule.findMany({ where: { shopId } });
+    const rows = await this.prisma.staffNotificationRule.findMany({
+      where: { shopId },
+    });
     const byKind = new Map(rows.map((row) => [row.actionKind, row]));
-    return PHASE10_ACTION_KINDS.map((actionKind) =>
-      byKind.get(actionKind) ?? {
-        actionKind,
-        enabled: false,
-        amountThresholdMinor: null,
-        repeatWindowMinutes: 60,
-        repeatCountThreshold: 3,
-        afterHoursStartHour: null,
-        afterHoursEndHour: null,
-        version: 0,
-      },
+    return PHASE10_ACTION_KINDS.map(
+      (actionKind) =>
+        byKind.get(actionKind) ?? {
+          actionKind,
+          enabled: false,
+          amountThresholdMinor: null,
+          repeatWindowMinutes: 60,
+          repeatCountThreshold: 3,
+          afterHoursStartHour: null,
+          afterHoursEndHour: null,
+          version: 0,
+        },
     );
   }
 
-  async updateNotificationRule(actor: JwtAccessPayload, dto: UpdateStaffNotificationRuleDto) {
+  async updateNotificationRule(
+    actor: JwtAccessPayload,
+    dto: UpdateStaffNotificationRuleDto,
+  ) {
     this.assertOwner(actor);
     const shopId = requireShopId(actor);
     const actionKind = assertPhase10ActionKind(dto.actionKind);
@@ -651,10 +808,18 @@ export class Phase10AccountabilityService {
       update: {
         enabled: dto.enabled,
         amountThresholdMinor: dto.amountThresholdMinor ?? null,
-        ...(dto.repeatWindowMinutes !== undefined ? { repeatWindowMinutes: dto.repeatWindowMinutes } : {}),
-        ...(dto.repeatCountThreshold !== undefined ? { repeatCountThreshold: dto.repeatCountThreshold } : {}),
-        ...(dto.afterHoursStartHour !== undefined ? { afterHoursStartHour: dto.afterHoursStartHour } : {}),
-        ...(dto.afterHoursEndHour !== undefined ? { afterHoursEndHour: dto.afterHoursEndHour } : {}),
+        ...(dto.repeatWindowMinutes !== undefined
+          ? { repeatWindowMinutes: dto.repeatWindowMinutes }
+          : {}),
+        ...(dto.repeatCountThreshold !== undefined
+          ? { repeatCountThreshold: dto.repeatCountThreshold }
+          : {}),
+        ...(dto.afterHoursStartHour !== undefined
+          ? { afterHoursStartHour: dto.afterHoursStartHour }
+          : {}),
+        ...(dto.afterHoursEndHour !== undefined
+          ? { afterHoursEndHour: dto.afterHoursEndHour }
+          : {}),
         version: { increment: 1 },
         updatedById: actor.sub,
       },
@@ -674,7 +839,10 @@ export class Phase10AccountabilityService {
     return this.workforcePolicy(shopId, actor.sub);
   }
 
-  async updateWorkforcePolicy(actor: JwtAccessPayload, dto: UpdateWorkforcePolicyDto) {
+  async updateWorkforcePolicy(
+    actor: JwtAccessPayload,
+    dto: UpdateWorkforcePolicyDto,
+  ) {
     this.assertManage(actor);
     const shopId = requireShopId(actor);
     const row = await this.prisma.workforcePolicy.upsert({
@@ -686,7 +854,7 @@ export class Phase10AccountabilityService {
       section: 'team',
       action: 'workforce.policy.update',
       summary: 'Updated time-clock and scheduling policy',
-      meta: dto,
+      meta: { ...dto },
     });
     return row;
   }
@@ -697,7 +865,9 @@ export class Phase10AccountabilityService {
     const policy = await this.workforcePolicy(shopId, actor.sub);
     if (!policy.enforceSchedule) return;
     const now = new Date();
-    const latestAllowedStart = new Date(now.getTime() + policy.earlyClockInMinutes * 60_000);
+    const latestAllowedStart = new Date(
+      now.getTime() + policy.earlyClockInMinutes * 60_000,
+    );
     const shift = await this.prisma.scheduleEntry.findFirst({
       where: {
         shopId,
@@ -709,22 +879,39 @@ export class Phase10AccountabilityService {
       orderBy: { startsAt: 'asc' },
     });
     if (!shift) {
-      throw new ForbiddenException('Clock-in is outside the configured schedule window.');
+      throw new ForbiddenException(
+        'Clock-in is outside the configured schedule window.',
+      );
     }
   }
 
-  async createShiftSwap(actor: JwtAccessPayload, dto: CreateShiftSwapRequestDto) {
+  async createShiftSwap(
+    actor: JwtAccessPayload,
+    dto: CreateShiftSwapRequestDto,
+  ) {
     const shopId = requireShopId(actor);
     const requester = await this.actorMembership(actor);
-    const schedule = await this.prisma.scheduleEntry.findFirst({ where: { id: dto.scheduleEntryId, shopId } });
+    const schedule = await this.prisma.scheduleEntry.findFirst({
+      where: { id: dto.scheduleEntryId, shopId },
+    });
     if (!schedule) throw new NotFoundException('Scheduled shift not found.');
-    const canManage = actor.shopRole === 'OWNER' || actor.shopRole === 'MANAGER' || hasPermission(actor.perms ?? '', PERMISSIONS.STAFF_WRITE);
+    const canManage =
+      actor.shopRole === 'OWNER' ||
+      actor.shopRole === 'MANAGER' ||
+      hasPermission(actor.perms ?? '', PERMISSIONS.STAFF_WRITE);
     if (schedule.membershipId !== requester.id && !canManage) {
-      throw new ForbiddenException('Employees may request swaps only for their own shifts.');
+      throw new ForbiddenException(
+        'Employees may request swaps only for their own shifts.',
+      );
     }
     if (dto.targetMembershipId) {
-      const target = await this.membershipInShop(shopId, dto.targetMembershipId);
-      if (!target.isActive) throw new BadRequestException('Target employee is inactive.');
+      const target = await this.membershipInShop(
+        shopId,
+        dto.targetMembershipId,
+      );
+      if (!target.isActive) {
+        throw new BadRequestException('Target employee is inactive.');
+      }
     }
     const row = await this.prisma.shiftSwapRequest.create({
       data: {
@@ -739,7 +926,10 @@ export class Phase10AccountabilityService {
       section: 'team',
       action: 'workforce.shift_swap.request',
       summary: 'Requested a scheduled shift swap',
-      meta: { shiftSwapRequestId: row.id, scheduleEntryId: row.scheduleEntryId },
+      meta: {
+        shiftSwapRequestId: row.id,
+        scheduleEntryId: row.scheduleEntryId,
+      },
     });
     return row;
   }
@@ -747,31 +937,59 @@ export class Phase10AccountabilityService {
   async listShiftSwaps(actor: JwtAccessPayload) {
     const shopId = requireShopId(actor);
     const membership = await this.actorMembership(actor);
-    const canManage = actor.shopRole === 'OWNER' || actor.shopRole === 'MANAGER' || hasPermission(actor.perms ?? '', PERMISSIONS.STAFF_READ);
+    const canManage =
+      actor.shopRole === 'OWNER' ||
+      actor.shopRole === 'MANAGER' ||
+      hasPermission(actor.perms ?? '', PERMISSIONS.STAFF_READ);
     return this.prisma.shiftSwapRequest.findMany({
       where: canManage
         ? { shopId }
-        : { shopId, OR: [{ requesterMembershipId: membership.id }, { targetMembershipId: membership.id }] },
+        : {
+            shopId,
+            OR: [
+              { requesterMembershipId: membership.id },
+              { targetMembershipId: membership.id },
+            ],
+          },
       orderBy: { createdAt: 'desc' },
       take: 200,
     });
   }
 
-  async decideShiftSwap(actor: JwtAccessPayload, id: string, dto: DecideShiftSwapRequestDto) {
+  async decideShiftSwap(
+    actor: JwtAccessPayload,
+    id: string,
+    dto: DecideShiftSwapRequestDto,
+  ) {
     this.assertManage(actor);
     const shopId = requireShopId(actor);
     const decider = await this.actorMembership(actor);
-    const request = await this.prisma.shiftSwapRequest.findFirst({ where: { id, shopId } });
+    const request = await this.prisma.shiftSwapRequest.findFirst({
+      where: { id, shopId },
+    });
     if (!request) throw new NotFoundException('Shift swap request not found.');
-    if (request.status !== 'PENDING') throw new ConflictException('Shift swap request is no longer pending.');
-    const schedule = await this.prisma.scheduleEntry.findFirst({ where: { id: request.scheduleEntryId, shopId } });
-    if (!schedule) throw new NotFoundException('Scheduled shift no longer exists.');
+    if (request.status !== 'PENDING') {
+      throw new ConflictException('Shift swap request is no longer pending.');
+    }
+    const schedule = await this.prisma.scheduleEntry.findFirst({
+      where: { id: request.scheduleEntryId, shopId },
+    });
+    if (!schedule) {
+      throw new NotFoundException('Scheduled shift no longer exists.');
+    }
     if (dto.approve && !request.targetMembershipId) {
-      throw new BadRequestException('A target employee is required before approving the swap.');
+      throw new BadRequestException(
+        'A target employee is required before approving the swap.',
+      );
     }
     if (dto.approve && request.targetMembershipId) {
-      const target = await this.membershipInShop(shopId, request.targetMembershipId);
-      if (!target.isActive) throw new BadRequestException('Target employee is inactive.');
+      const target = await this.membershipInShop(
+        shopId,
+        request.targetMembershipId,
+      );
+      if (!target.isActive) {
+        throw new BadRequestException('Target employee is inactive.');
+      }
       const overlap = await this.prisma.scheduleEntry.count({
         where: {
           shopId,
@@ -782,7 +1000,11 @@ export class Phase10AccountabilityService {
           endsAt: { gt: schedule.startsAt },
         },
       });
-      if (overlap) throw new ConflictException('Target employee already has an overlapping shift.');
+      if (overlap) {
+        throw new ConflictException(
+          'Target employee already has an overlapping shift.',
+        );
+      }
     }
     const row = await this.prisma.$transaction(async (tx) => {
       if (dto.approve && request.targetMembershipId) {
@@ -803,9 +1025,14 @@ export class Phase10AccountabilityService {
     });
     await this.audit.record(actor, {
       section: 'team',
-      action: dto.approve ? 'workforce.shift_swap.approve' : 'workforce.shift_swap.deny',
+      action: dto.approve
+        ? 'workforce.shift_swap.approve'
+        : 'workforce.shift_swap.deny',
       summary: `${dto.approve ? 'Approved' : 'Denied'} scheduled shift swap`,
-      meta: { shiftSwapRequestId: row.id, scheduleEntryId: row.scheduleEntryId },
+      meta: {
+        shiftSwapRequestId: row.id,
+        scheduleEntryId: row.scheduleEntryId,
+      },
     });
     return row;
   }
@@ -832,10 +1059,17 @@ export class Phase10AccountabilityService {
         session.revokedAt ||
         session.expiresAt <= new Date()
       ) {
-        throw new UnauthorizedException('Operator session is invalid or expired.');
+        throw new UnauthorizedException(
+          'Operator session is invalid or expired.',
+        );
       }
-      const operatorMembership = await this.membershipInShop(shopId, session.membershipId);
-      if (!operatorMembership.isActive) throw new ForbiddenException('Operator membership is inactive.');
+      const operatorMembership = await this.membershipInShop(
+        shopId,
+        session.membershipId,
+      );
+      if (!operatorMembership.isActive) {
+        throw new ForbiddenException('Operator membership is inactive.');
+      }
       if (
         HIGH_RISK_ACTION_KINDS.has(classification.actionKind) &&
         operatorMembership.id !== authMembership.id
@@ -852,17 +1086,33 @@ export class Phase10AccountabilityService {
     let approvalReserved = false;
     if (actor.shopRole !== 'OWNER') {
       const policy = await this.prisma.staffApprovalPolicy.findUnique({
-        where: { shopId_actionKind: { shopId, actionKind: classification.actionKind } },
+        where: {
+          shopId_actionKind: {
+            shopId,
+            actionKind: classification.actionKind,
+          },
+        },
       });
-      if (policy && this.policyRequiresApproval(policy, classification.amountMinor)) {
+      if (
+        policy &&
+        this.policyRequiresApproval(policy, classification.amountMinor)
+      ) {
         if (!approvalRequestId?.trim()) {
-          throw new ForbiddenException(`Elevated approval required for ${classification.actionKind}.`);
+          throw new ForbiddenException(
+            `Elevated approval required for ${classification.actionKind}.`,
+          );
         }
         const approval = await this.prisma.staffApprovalRequestV2.findFirst({
           where: { id: approvalRequestId.trim(), shopId },
         });
-        if (!approval || approval.status !== 'APPROVED' || approval.expiresAt <= new Date()) {
-          throw new ForbiddenException('Approved, unexpired staff approval is required.');
+        if (
+          !approval ||
+          approval.status !== 'APPROVED' ||
+          approval.expiresAt <= new Date()
+        ) {
+          throw new ForbiddenException(
+            'Approved, unexpired staff approval is required.',
+          );
         }
         if (
           approval.requesterMembershipId !== authMembership.id ||
@@ -875,11 +1125,18 @@ export class Phase10AccountabilityService {
           throw new ForbiddenException('Approval does not match this action.');
         }
         const reserved = await this.prisma.staffApprovalRequestV2.updateMany({
-          where: { id: approval.id, shopId, status: 'APPROVED', consumedAt: null },
+          where: {
+            id: approval.id,
+            shopId,
+            status: 'APPROVED',
+            consumedAt: null,
+          },
           data: { status: 'IN_USE' },
         });
         if (reserved.count !== 1) {
-          throw new ConflictException('Approval has already been reserved or consumed.');
+          throw new ConflictException(
+            'Approval has already been reserved or consumed.',
+          );
         }
         approverMembershipId = approval.decidedByMembershipId ?? undefined;
         approvalReserved = true;
@@ -920,12 +1177,17 @@ export class Phase10AccountabilityService {
     const { classification } = prepared;
     const rule = await this.prisma.staffNotificationRule.findUnique({
       where: {
-        shopId_actionKind: { shopId: prepared.shopId, actionKind: classification.actionKind },
+        shopId_actionKind: {
+          shopId: prepared.shopId,
+          actionKind: classification.actionKind,
+        },
       },
     });
     let suspiciousReasons: string[] = [];
     if (rule?.enabled) {
-      const since = new Date(Date.now() - rule.repeatWindowMinutes * 60_000);
+      const since = new Date(
+        Date.now() - rule.repeatWindowMinutes * 60_000,
+      );
       const recentSameActorCount = await this.prisma.staffActionEvidence.count({
         where: {
           shopId: prepared.shopId,
@@ -980,7 +1242,9 @@ export class Phase10AccountabilityService {
           },
         });
         if (consumed.count !== 1) {
-          throw new ConflictException('Reserved approval could not be consumed exactly once.');
+          throw new ConflictException(
+            'Reserved approval could not be consumed exactly once.',
+          );
         }
       }
       return row;
@@ -997,7 +1261,10 @@ export class Phase10AccountabilityService {
     } else if (prepared.approvalRequestId) {
       const policy = await this.prisma.staffApprovalPolicy.findUnique({
         where: {
-          shopId_actionKind: { shopId: prepared.shopId, actionKind: classification.actionKind },
+          shopId_actionKind: {
+            shopId: prepared.shopId,
+            actionKind: classification.actionKind,
+          },
         },
       });
       if (policy?.notifyOnUse) {
@@ -1035,18 +1302,35 @@ export class Phase10AccountabilityService {
       orderBy: { occurredAt: 'desc' },
       take: Math.min(Math.max(1, take), 500),
     });
-    const ids = [...new Set(rows.flatMap((row) => [row.actorMembershipId, row.approverMembershipId].filter(Boolean) as string[]))];
+    const ids = [
+      ...new Set(
+        rows.flatMap((row) =>
+          [row.actorMembershipId, row.approverMembershipId].filter(
+            Boolean,
+          ) as string[],
+        ),
+      ),
+    ];
     const memberships = await this.prisma.membership.findMany({
       where: { shopId, id: { in: ids } },
-      include: { user: { select: { name: true, email: true, staffHandle: true } } },
+      include: {
+        user: { select: { name: true, email: true, staffHandle: true } },
+      },
     });
     const names = new Map(
-      memberships.map((m) => [m.id, m.user.name ?? m.user.staffHandle ?? m.user.email]),
+      memberships.map((membership) => [
+        membership.id,
+        membership.user.name ??
+          membership.user.staffHandle ??
+          membership.user.email,
+      ]),
     );
     return rows.map((row) => ({
       ...row,
       actorName: names.get(row.actorMembershipId) ?? row.actorMembershipId,
-      approverName: row.approverMembershipId ? names.get(row.approverMembershipId) ?? row.approverMembershipId : null,
+      approverName: row.approverMembershipId
+        ? (names.get(row.approverMembershipId) ?? row.approverMembershipId)
+        : null,
     }));
   }
 
@@ -1054,54 +1338,83 @@ export class Phase10AccountabilityService {
     this.assertRead(actor);
     const shopId = requireShopId(actor);
     const boundedDays = Math.min(Math.max(1, Math.trunc(days)), 366);
-    const since = new Date(Date.now() - boundedDays * 86400_000);
+    const since = new Date(Date.now() - boundedDays * 86_400_000);
     const policy = await this.workforcePolicy(shopId, actor.sub);
     const memberships = await this.prisma.membership.findMany({
       where: { shopId, role: { not: 'OWNER' } },
-      include: { user: { select: { name: true, email: true, staffHandle: true } } },
+      include: {
+        user: { select: { name: true, email: true, staffHandle: true } },
+      },
     });
-    const evidence = await this.prisma.staffActionEvidence.findMany({ where: { shopId, occurredAt: { gte: since } } });
+    const evidence = await this.prisma.staffActionEvidence.findMany({
+      where: { shopId, occurredAt: { gte: since } },
+    });
     const punches = await this.prisma.timePunch.findMany({
       where: { shopId, startedAt: { gte: since } },
       orderBy: { startedAt: 'asc' },
     });
-    const punchIds = punches.map((p) => p.id);
+    const punchIds = punches.map((punch) => punch.id);
     const breaks = punchIds.length
-      ? await this.prisma.breakRecord.findMany({ where: { shopId, timePunchId: { in: punchIds } } })
+      ? await this.prisma.breakRecord.findMany({
+          where: { shopId, timePunchId: { in: punchIds } },
+        })
       : [];
     const schedules = await this.prisma.scheduleEntry.findMany({
       where: { shopId, startsAt: { gte: since } },
     });
-    const scheduleById = new Map(schedules.map((s) => [s.id, s]));
+    const scheduleById = new Map(
+      schedules.map((schedule) => [schedule.id, schedule]),
+    );
     const breaksByPunch = new Map<string, typeof breaks>();
-    for (const br of breaks) {
-      const list = breaksByPunch.get(br.timePunchId) ?? [];
-      list.push(br);
-      breaksByPunch.set(br.timePunchId, list);
+    for (const record of breaks) {
+      const list = breaksByPunch.get(record.timePunchId) ?? [];
+      list.push(record);
+      breaksByPunch.set(record.timePunchId, list);
     }
 
     return memberships.map((membership) => {
-      const mine = evidence.filter((e) => e.actorMembershipId === membership.id);
-      const sales = mine.filter((e) => e.actionKind === 'SALE');
-      const refunds = mine.filter((e) => e.actionKind === 'REFUND');
-      const voids = mine.filter((e) => e.actionKind === 'VOID_AFTER_SEND');
-      const discounts = mine.filter((e) => e.actionKind === 'LARGE_DISCOUNT');
-      const myPunches = punches.filter((p) => p.membershipId === membership.id);
+      const mine = evidence.filter(
+        (row) => row.actorMembershipId === membership.id,
+      );
+      const sales = mine.filter((row) => row.actionKind === 'SALE');
+      const refunds = mine.filter((row) => row.actionKind === 'REFUND');
+      const voids = mine.filter(
+        (row) => row.actionKind === 'VOID_AFTER_SEND',
+      );
+      const discounts = mine.filter(
+        (row) => row.actionKind === 'LARGE_DISCOUNT',
+      );
+      const myPunches = punches.filter(
+        (punch) => punch.membershipId === membership.id,
+      );
       let workedSeconds = 0;
       let lateCount = 0;
       let lateSeconds = 0;
       let breakViolations = 0;
       for (const punch of myPunches) {
         const endedAt = punch.endedAt ?? new Date();
-        const seconds = Math.max(0, Math.floor((endedAt.getTime() - punch.startedAt.getTime()) / 1000));
+        const seconds = Math.max(
+          0,
+          Math.floor(
+            (endedAt.getTime() - punch.startedAt.getTime()) / 1000,
+          ),
+        );
         const unpaidBreakSeconds = (breaksByPunch.get(punch.id) ?? [])
-          .filter((br) => !br.paid)
-          .reduce((sum, br) => {
-            const end = br.endedAt ?? endedAt;
-            return sum + Math.max(0, Math.floor((end.getTime() - br.startedAt.getTime()) / 1000));
+          .filter((record) => !record.paid)
+          .reduce((sum, record) => {
+            const end = record.endedAt ?? endedAt;
+            return (
+              sum +
+              Math.max(
+                0,
+                Math.floor((end.getTime() - record.startedAt.getTime()) / 1000),
+              )
+            );
           }, 0);
         workedSeconds += Math.max(0, seconds - unpaidBreakSeconds);
-        const scheduled = punch.scheduleEntryId ? scheduleById.get(punch.scheduleEntryId) : undefined;
+        const scheduled = punch.scheduleEntryId
+          ? scheduleById.get(punch.scheduleEntryId)
+          : undefined;
         const attendance = scheduleStatus({
           scheduledStart: scheduled?.startsAt,
           actualStart: punch.startedAt,
@@ -1119,15 +1432,23 @@ export class Phase10AccountabilityService {
         });
         if (!compliance.compliant) breakViolations += 1;
       }
-      const saleMinor = sales.reduce((sum, row) => sum + (row.amountMinor ?? 0), 0);
-      const exceptionCount = mine.filter((e) => e.suspicious).length;
+      const saleMinor = sales.reduce(
+        (sum, row) => sum + (row.amountMinor ?? 0),
+        0,
+      );
+      const exceptionCount = mine.filter((row) => row.suspicious).length;
       const denom = Math.max(1, sales.length);
       return {
         membershipId: membership.id,
-        displayName: membership.user.name ?? membership.user.staffHandle ?? membership.user.email,
+        displayName:
+          membership.user.name ??
+          membership.user.staffHandle ??
+          membership.user.email,
         salesCount: sales.length,
         salesMinor: saleMinor,
-        averageCheckMinor: sales.length ? Math.round(saleMinor / sales.length) : 0,
+        averageCheckMinor: sales.length
+          ? Math.round(saleMinor / sales.length)
+          : 0,
         refundCount: refunds.length,
         refundRate: refunds.length / denom,
         voidCount: voids.length,
@@ -1135,7 +1456,11 @@ export class Phase10AccountabilityService {
         discountCount: discounts.length,
         discountRate: discounts.length / denom,
         workedHours: workedSeconds / 3600,
-        overtimeSeconds: overtimeSeconds(workedSeconds, policy.overtimeWeeklySeconds * Math.max(1, Math.ceil(boundedDays / 7))),
+        overtimeSeconds: overtimeSeconds(
+          workedSeconds,
+          policy.overtimeWeeklySeconds *
+            Math.max(1, Math.ceil(boundedDays / 7)),
+        ),
         lateCount,
         lateSeconds,
         breakComplianceViolations: breakViolations,
