@@ -117,10 +117,14 @@ export class CloudClient {
   async pullSnapshot() {
     if (!this.baseUrl || !this.registeredDeviceId || !this.continuity) return { pulled: false, skipped: true };
     const cursor = this.store.getMeta('snapshotCursor');
-    const response = await this.signedPost('/edge-hub/cloud/snapshot', { cursor });
+    const body = { cursor };
+    const response = await this.signedPost('/edge-hub/cloud/snapshot', body);
     const data = await response.json().catch(() => ({}));
     if (!response.ok) throw new Error(data?.message ?? `Snapshot pull failed (${response.status})`);
-    this.continuity.applySnapshot(data);
+    const operatorResponse = await this.signedPost('/edge-hub/cloud/operators', body);
+    const operatorData = await operatorResponse.json().catch(() => ({}));
+    if (!operatorResponse.ok) throw new Error(operatorData?.message ?? `Operator snapshot pull failed (${operatorResponse.status})`);
+    this.continuity.applySnapshot({ ...data, operators: Array.isArray(operatorData.operators) ? operatorData.operators : [] });
     return { pulled: true, cursor: data.cursor, generatedAt: data.generatedAt };
   }
 
