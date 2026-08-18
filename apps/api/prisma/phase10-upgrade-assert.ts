@@ -30,6 +30,11 @@ async function main() {
   const policy = await prisma.workforcePolicy.findUnique({ where: { shopId } });
   assert(policy && !policy.enforceSchedule, 'upgrade unexpectedly enabled schedule enforcement');
   assert(policy.pinLockoutAttempts === 5, 'safe PIN lockout default was not seeded');
+  assert(!policy.clockInDeviceRequired, 'upgrade unexpectedly required a clock-in device');
+  assert(policy.clockInAllowedDeviceIds.length === 0, 'upgrade unexpectedly restricted clock-in devices');
+  assert(!policy.clockInLocationRequired, 'upgrade unexpectedly required location evidence');
+  assert(policy.clockInLatitude == null && policy.clockInLongitude == null, 'upgrade invented a venue geofence');
+  assert(policy.clockInRadiusMeters === 100, 'safe clock-in radius default was not seeded');
 
   const rls = await prisma.$queryRaw<Array<{ tablename: string; rowsecurity: boolean; forcerowsecurity: boolean }>>`
     SELECT c.relname AS tablename, c.relrowsecurity AS rowsecurity, c.relforcerowsecurity AS forcerowsecurity
@@ -43,7 +48,16 @@ async function main() {
   assert(rls.length === 9, 'not all Phase 10 tables exist after upgrade');
   assert(rls.every((row) => row.rowsecurity && row.forcerowsecurity), 'Phase 10 RLS is not enabled and forced');
 
-  console.log(JSON.stringify({ ok: true, shopId, legacyRatePreserved: true, legacySchedulePreserved: true, profileBackfilled: true, safePolicyDefault: true, rlsForced: true }, null, 2));
+  console.log(JSON.stringify({
+    ok: true,
+    shopId,
+    legacyRatePreserved: true,
+    legacySchedulePreserved: true,
+    profileBackfilled: true,
+    safePolicyDefault: true,
+    clockInRestrictionsDefaultOff: true,
+    rlsForced: true,
+  }, null, 2));
   await prisma.$disconnect();
 }
 
