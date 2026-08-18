@@ -11,10 +11,15 @@ function errorMessage(error) {
   return String(error?.message ?? error ?? 'Unknown cloud transport error').slice(0, 500);
 }
 
+function domainCode(data) {
+  return data?.code ?? data?.error?.code ?? data?.details?.code ?? null;
+}
+
 export class CloudClient {
-  constructor({ baseUrl, store, privateKeyPem, publicKeyPem, fetchImpl = fetch }) {
+  constructor({ baseUrl, store, continuity, privateKeyPem, publicKeyPem, fetchImpl = fetch }) {
     this.baseUrl = normalizeApiBase(baseUrl);
     this.store = store;
+    this.continuity = continuity;
     this.privateKeyPem = privateKeyPem;
     this.publicKeyPem = publicKeyPem;
     this.fetch = fetchImpl;
@@ -38,12 +43,7 @@ export class CloudClient {
 
   connectivityStatus() {
     if (!this.registeredDeviceId) {
-      return {
-        state: 'UNREGISTERED',
-        lastSuccessAt: null,
-        lastFailureAt: null,
-        lastError: null,
-      };
+      return { state: 'UNREGISTERED', lastSuccessAt: null, lastFailureAt: null, lastError: null };
     }
     const lastError = this.store.getMeta('cloudLastError');
     return {
@@ -57,8 +57,6 @@ export class CloudClient {
   async fetchWithHealth(url, options) {
     try {
       const response = await this.fetch(url, options);
-      // Any HTTP response proves WAN/cloud reachability. Domain-level 4xx/5xx
-      // responses are handled by the caller without falsely reporting outage.
       this.markCloudReachable();
       return response;
     } catch (error) {
@@ -106,22 +104,68 @@ export class CloudClient {
     return data;
   }
 
-  async claimPrintJob() {
-    return this.signedJsonPost('/hardware/edge/print-jobs/claim', {});
-  }
-
-  async markPrintJobPrinting(jobId) {
-    return this.signedJsonPost(`/hardware/edge/print-jobs/${encodeURIComponent(jobId)}/printing`, {});
-  }
-
-  async completePrintJob(jobId, result) {
-    return this.signedJsonPost(`/hardware/edge/print-jobs/${encodeURIComponent(jobId)}/complete`, result);
-  }
+  claimPrintJob() { return this.signedJsonPost('/hardware/edge/print-jobs/claim', {}); }
+  markPrintJobPrinting(jobId) { return this.signedJsonPost(`/hardware/edge/print-jobs/${encodeURIComponent(jobId)}/printing`, {}); }
+  completePrintJob(jobId, result) { return this.signedJsonPost(`/hardware/edge/print-jobs/${encodeURIComponent(jobId)}/complete`, result); }
 
   async heartbeat(version) {
     const response = await this.signedPost('/edge-hub/cloud/heartbeat', { version });
     if (!response.ok) throw new Error(`Cloud heartbeat failed (${response.status})`);
     return response.json();
+  }
+
+  async pullSnapshot() {
+    if (!this.baseUrl || !this.registeredDeviceId || !this.continuity) return { pulled: false, skipped: true };
+    const cursor = this.store.getMeta('snapshotCursor');
+    const response = await this.signedPost('/edge-hub/cloud/snapshot', { cursor });
+    const data = await response.json().catch(() => ({}));
+    if (!response.ok) throw new Error(data?.message ?? `Snapshot pull failed (${response.status})`);
+    this.continuity.applySnapshot(data);
+    return { pulled: true, cursor: data.cursor, generatedAt: data.generatedAt };
+  }
+
+  async syncContinuityPending(limit = 100) {
+    if (!this.baseUrl || !this.registeredDeviceId || !this.continuity) return { synced: 0, conflicts: 0, skipped: true };
+    let synced = 0;
+    let conflicts = 0;
+    for (const command of this.continuity.pendingCommands(limit)) {
+      const body = {
+        operationId: command.operationId,
+        deviceId: command.deviceId,
+        venueId: command.venueId,
+        localSequence: command.localSequence,
+        idempotencyKey: command.idempotencyKey,
+        operationType: command.operationType,
+        aggregateType: command.aggregateType,
+        entityId: command.aggregateId,
+        ...(command.aggregateVersion === undefined ? {} : { expectedVersion: command.aggregateVersion }),
+        occurredAt: command.occurredAt,
+        correlationId: command.correlationId,
+        payloadHash: command.payloadHash,
+        payload: command.payload,
+      };
+      try {
+        const response = await this.signedPost('/edge-hub/cloud/replay', body);
+        const data = await response.json().catch(() => ({}));
+        if (response.ok) {
+          this.continuity.markSynced(command.operationId, data);
+          synced += 1;
+          continue;
+        }
+        if ([400, 409, 422].includes(response.status)) {
+          const code = domainCode(data);
+          this.continuity.markConflict(command.operationId, command.operationType, code, data?.message ?? `Cloud rejected command (${response.status})`, data?.details ?? data?.error?.details);
+          conflicts += 1;
+          continue;
+        }
+        this.continuity.markRetry(command.operationId, data?.message ?? `HTTP ${response.status}`);
+        break;
+      } catch (error) {
+        this.continuity.markRetry(command.operationId, error?.message ?? error);
+        break;
+      }
+    }
+    return { synced, conflicts, pending: this.continuity.pendingCommands(limit).length };
   }
 
   async syncPending(limit = 100) {
@@ -147,11 +191,8 @@ export class CloudClient {
           synced += 1;
           continue;
         }
-        if (response.status === 409 || response.status === 400 || response.status === 422) {
-          this.store.markCloudConflict(
-            event.eventId,
-            data?.message ?? `Cloud permanently rejected event (HTTP ${response.status})`,
-          );
+        if ([400, 409, 422].includes(response.status)) {
+          this.store.markCloudConflict(event.eventId, data?.message ?? `Cloud permanently rejected event (HTTP ${response.status})`);
           conflicts += 1;
           continue;
         }

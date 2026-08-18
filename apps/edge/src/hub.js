@@ -6,8 +6,10 @@ import { EdgeStore } from './store.js';
 import { CloudClient } from './cloud-client.js';
 import { cloudConnectivityStatus } from './status-health.js';
 import { executePrintJob } from './printer.js';
+import { ContinuityEngine } from './continuity.js';
+import { OFFLINE_POLICY } from './offline-policy.js';
 
-export const EDGE_VERSION = '0.1.0';
+export const EDGE_VERSION = '0.2.0';
 const MAX_CLOCK_SKEW_MS = 5 * 60_000;
 
 export class EdgeHub {
@@ -15,6 +17,7 @@ export class EdgeHub {
     const resolvedDb = dbPath ?? process.env.EDGE_DB_PATH ?? join(process.cwd(), 'data', 'edge.db');
     const resolvedKey = keyPath ?? process.env.EDGE_KEY_PATH ?? join(dirname(resolvedDb), 'edge-master.key');
     this.store = new EdgeStore(resolvedDb);
+    this.continuity = new ContinuityEngine(this.store);
     this.masterKey = loadOrCreateMasterKey(resolvedKey);
     this.pairToken = pairToken ?? process.env.EDGE_PAIR_TOKEN ?? randomBytes(24).toString('base64url');
     this.listeners = new Set();
@@ -33,6 +36,7 @@ export class EdgeHub {
     this.cloud = new CloudClient({
       baseUrl: cloudUrl ?? process.env.EDGE_CLOUD_URL,
       store: this.store,
+      continuity: this.continuity,
       privateKeyPem: decryptSecret(encryptedPrivate, this.masterKey),
       publicKeyPem,
       fetchImpl,
@@ -41,6 +45,7 @@ export class EdgeHub {
 
   close() { this.store.close(); }
   publicKeyPem() { return this.store.getMeta('cloudPublicKey'); }
+  offlinePolicy() { return OFFLINE_POLICY; }
 
   registerLanClient(token, label = 'POS') {
     if (!token || token !== this.pairToken) throw new Error('Invalid Edge pairing token');
@@ -69,10 +74,19 @@ export class EdgeHub {
     return saved;
   }
 
+  appendCommand(command) {
+    const saved = this.continuity.createCommand(command);
+    if (!saved.duplicate) {
+      for (const listener of this.listeners) listener({ sequence: saved.localSequence, kind: 'continuity-command', ...saved });
+    }
+    return saved;
+  }
+
   subscribe(listener) { this.listeners.add(listener); return () => this.listeners.delete(listener); }
 
   status() {
     const diagnostics = this.store.diagnostics();
+    const continuity = this.continuity.diagnostics();
     return {
       service: 'gospots-edge', version: EDGE_VERSION,
       cloudRegistered: Boolean(this.cloud.registeredDeviceId),
@@ -80,6 +94,9 @@ export class EdgeHub {
       cloudConnectivity: cloudConnectivityStatus(this.cloud),
       shopId: this.store.getMeta('shopId'),
       pendingEvents: diagnostics.events.pending,
+      pendingCommands: continuity.commands.pending,
+      unresolvedConflicts: continuity.unresolvedConflicts,
+      snapshotCursor: continuity.snapshotCursor,
       lastSequence: diagnostics.events.lastSequence,
       printWorkerRunning: this.printWorkerRunning,
     };
@@ -88,12 +105,22 @@ export class EdgeHub {
   diagnostics() {
     return {
       ...this.status(),
-      ...this.store.diagnostics(),
+      legacyReplay: this.store.diagnostics(),
+      continuity: this.continuity.diagnostics(),
     };
   }
 
   async registerCloud(provisioningToken) {
-    return this.cloud.register(provisioningToken, EDGE_VERSION, hostname());
+    const result = await this.cloud.register(provisioningToken, EDGE_VERSION, hostname());
+    try { await this.cloud.pullSnapshot(); } catch { /* first bootstrap will retry on sync timer */ }
+    return result;
+  }
+
+  async syncAll(limit = 100) {
+    const legacy = await this.cloud.syncPending(limit);
+    const commands = await this.cloud.syncContinuityPending(limit);
+    const snapshot = await this.cloud.pullSnapshot().catch((error) => ({ pulled: false, error: error?.message ?? String(error) }));
+    return { legacy, commands, snapshot };
   }
 
   async processPrintQueue() {
