@@ -370,7 +370,7 @@ async function main() {
         sourceId: `${prefix}-promo-2`,
       });
     } catch (error) {
-      promoLimitBlocked = String(error).includes('usage limit');
+      promoLimitBlocked = String(error).includes('TOTAL_USAGE_LIMIT_REACHED');
     }
     assert(promoLimitBlocked, 'promotion usage limit did not block a second redemption');
 
