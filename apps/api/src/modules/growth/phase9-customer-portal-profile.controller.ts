@@ -1,6 +1,5 @@
-import { Body, Controller, Put } from '@nestjs/common';
+import { Body, Controller, Param, Put } from '@nestjs/common';
 import { ApiTags } from '@nestjs/swagger';
-import { Param } from '@nestjs/common';
 import {
   Phase9CustomerPortalProfileService,
   type PortalProfileUpdate,
