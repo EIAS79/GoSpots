@@ -289,6 +289,23 @@ async function main() {
     prisma.ledgerEntry.count({ where: { shopId: otherShop.id } }),
   ]);
 
+  const cardinality = {
+    ledgerEntries: ledgerCount,
+    guestChecks: checkCount,
+    settlements: settlementCount,
+    payments: paymentCount,
+    otherTenantLedgerEntries: otherTenantLedgerCount,
+    totalRows: ledgerCount + checkCount + settlementCount + paymentCount + otherTenantLedgerCount,
+  };
+  const expectedCardinality = {
+    ledgerEntries: LEDGER_ROWS,
+    guestChecks: CHECK_ROWS,
+    settlements: CHECK_ROWS,
+    payments: CHECK_ROWS,
+    otherTenantLedgerEntries: OTHER_TENANT_LEDGER_ROWS,
+    totalRows: LEDGER_ROWS + CHECK_ROWS * 3 + OTHER_TENANT_LEDGER_ROWS,
+  };
+
   if (
     ledgerCount !== LEDGER_ROWS ||
     checkCount !== CHECK_ROWS ||
@@ -296,7 +313,9 @@ async function main() {
     paymentCount !== CHECK_ROWS ||
     otherTenantLedgerCount !== OTHER_TENANT_LEDGER_ROWS
   ) {
-    throw new Error('Phase 14 production-like database cardinality assertion failed');
+    throw new Error(
+      `Phase 14 production-like database cardinality assertion failed: ${JSON.stringify({ expected: expectedCardinality, actual: cardinality })}`,
+    );
   }
 
   console.log(
@@ -307,14 +326,7 @@ async function main() {
       workspaceMs: Number(workspaceMs.toFixed(1)),
       workspaceBudgetMs: WORKSPACE_BUDGET_MS,
       seedBudgetMs: SEED_BUDGET_MS,
-      cardinality: {
-        ledgerEntries: ledgerCount,
-        guestChecks: checkCount,
-        settlements: settlementCount,
-        payments: paymentCount,
-        otherTenantLedgerEntries: otherTenantLedgerCount,
-        totalRows: ledgerCount + checkCount + settlementCount + paymentCount + otherTenantLedgerCount,
-      },
+      cardinality,
       indexCoverage,
       correctness,
     }),
