@@ -63,7 +63,7 @@ export class AutomationService extends Phase15AutomationService {
   }
 
   @Interval(60_000)
-  override async processScheduledRules() {
+  async processScheduledRules() {
     if (this.phase15SchedulerRunning) return;
     this.phase15SchedulerRunning = true;
     try {
