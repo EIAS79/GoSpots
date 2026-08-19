@@ -4,7 +4,7 @@
 **Source:** GoSpots Master Product & Engineering Execution Plan v2 — Phase 17.  
 **Initial Phase 17 merge:** `fe00ea5e4155ce79dd909903abfc7e094540795d` via PR #82.  
 **Continuation branch:** `phase-17-adyen-certification`, PR #83.  
-**Verified Adyen implementation head:** `5c1bd0290e882651b9e7e25df4516d4228f895a3`.
+**Verified Adyen implementation head:** `c5c8d3dc7ff126a551d93805dfbd45daa982cf7c`.
 
 ## Phase objective
 
@@ -41,7 +41,7 @@ The Phase 17 continuation after the payment-provider decision adds:
 - support for `CANCEL_OR_REFUND`, `REFUND_FAILED` and `REFUNDED_REVERSED`, including reconciliation-only backward net-refund corrections when the provider invalidates a previously successful refund;
 - permanent Adyen adapter/webhook/payment-state tests in the Phase 17 release gate;
 - removal of the legacy Stripe Terminal connector from the runtime venue-payment module so **Stripe Billing remains SaaS subscription/features billing only**;
-- a no-flake E2E registration/session race fix discovered by the strengthened release gate.
+- no-flake E2E hardening for both registration/session setup and Offline Lite conflict isolation.
 
 No Prisma schema change or new Phase 17 database migration is required. Existing canonical GuestCheck, PaymentOperation, Refund, settlement, ledger and cash authorities remain in place.
 
@@ -65,7 +65,7 @@ These are release-candidate software simulations. They are not represented as ev
 
 Phase 17 adds no Prisma schema change and no migration.
 
-Verified on Adyen implementation head `5c1bd0290e882651b9e7e25df4516d4228f895a3`:
+Verified on Adyen implementation head `c5c8d3dc7ff126a551d93805dfbd45daa982cf7c`:
 
 - all 115 migrations deployed successfully to clean PostgreSQL 17;
 - Prisma generate/validate passed;
@@ -88,22 +88,32 @@ Verified on Adyen implementation head `5c1bd0290e882651b9e7e25df4516d4228f895a3`
 
 ## Exact-head implementation evidence
 
-Every workflow triggered on verified Adyen implementation head `5c1bd0290e882651b9e7e25df4516d4228f895a3` completed successfully:
+Every workflow triggered on verified Adyen implementation head `c5c8d3dc7ff126a551d93805dfbd45daa982cf7c` completed successfully:
 
-- Repository CI — run `32296331984` — **SUCCESS**;
-- Phase 17 pilot certification and release gate — run `32296331982` — **SUCCESS**;
-- Standalone product boundary — run `32296331952` — **SUCCESS**;
-- Edge hard-outage validation — run `32296331969` — **SUCCESS**;
-- Phase 3 live-operations validation — run `32296331975` — **SUCCESS**;
-- Phase 4 commercial-core validation — run `32296331972` — **SUCCESS**;
-- Phase 7 inventory validation — run `32296331962` — **SUCCESS**;
-- Phase 16 production hardening validation — run `32296331971` — **SUCCESS**.
+- Repository CI — run `32299655323` — **SUCCESS**;
+- Phase 17 pilot certification and release gate — run `32299655310` — **SUCCESS**;
+- Standalone product boundary — run `32299655399` — **SUCCESS**;
+- Edge hard-outage validation — run `32299655444` — **SUCCESS**;
+- Phase 3 live-operations validation — run `32299655425` — **SUCCESS**;
+- Phase 4 commercial-core validation — run `32299655409` — **SUCCESS**;
+- Phase 7 inventory validation — run `32299655404` — **SUCCESS**;
+- Phase 8 reservation validation — run `32299655428` — **SUCCESS**;
+- Phase 9 customer value validation — run `32299655301` — **SUCCESS**;
+- Phase 10 workforce accountability validation — run `32299655299` — **SUCCESS**;
+- Phase 11 access entitlement validation — run `32299655307` — **SUCCESS**;
+- Phase 13 multi-location SaaS integration validation — run `32299655431` — **SUCCESS**;
+- Phase 16 production hardening validation — run `32299655402` — **SUCCESS**.
 
 Within the Phase 17 run, release policy completeness, security/migrations/reconciliation/DR, and the full permanent no-flake browser suite all passed. The browser gate then passed canonical persisted-state assertions.
 
-## No-flake defect found and fixed
+## No-flake defects found and fixed
 
-A preceding exact-head run correctly failed because the Phase 2 empty-venue readiness E2E passed only on retry after an intermittent `SESSION_REVOKED` response. The test had mounted the interactive registration page while registering through the same browser request context, allowing registration-page auth probes to race the newly-issued owner cookies. The setup now performs registration only through the shared request context and mounts the UI after authenticated setup. The exact implementation head passed `--fail-on-flaky-tests` after this fix.
+The strengthened Phase 17 release gate exposed two pre-existing E2E nondeterminism issues instead of masking them with retries:
+
+1. the Phase 2 empty-venue readiness registration flow could race newly-issued authentication cookies; registration setup now happens through the shared browser request context before the authenticated UI is mounted;
+2. the Phase 3 Offline Lite cloud-conflict test reused the same venue/resource as the preceding offline replay test; it now uses the dedicated `e2e-conflict` venue and `e2e-resource-conflict-1`, eliminating cross-test resource state contamination.
+
+The exact implementation head passed `--fail-on-flaky-tests` after both fixes.
 
 ## Production and release boundary
 
@@ -137,7 +147,7 @@ These gates cannot be replaced by mocks, simulators or prose. Fake venue data re
 - [x] Phase 17 full permanent no-flake browser release suite green on verified implementation head.
 - [x] Phase 17 release-contract job green on verified implementation head.
 - [x] Repository CI API/web/Edge/clean migration/upgrade migration/browser jobs green on verified implementation head.
-- [x] Triggered Phase 3/4/7/16, Edge and standalone regressions green on verified implementation head.
+- [x] Triggered Phase 3/4/7/8/9/10/11/13/16, Edge and standalone regressions green on verified implementation head.
 - [ ] Final documentation-only PR head green.
 - [ ] PR #83 merged with expected-head protection.
 - [ ] Resulting `main` revision verified.
