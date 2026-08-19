@@ -1,5 +1,7 @@
 import { DataImportKind, SubscriptionStatus, SubscriptionTier } from '@prisma/client';
 import {
+  IsArray,
+  IsBoolean,
   IsEnum,
   IsInt,
   IsOptional,
@@ -8,7 +10,9 @@ import {
   MaxLength,
   Min,
   MinLength,
+  ValidateNested,
 } from 'class-validator';
+import { Type } from 'class-transformer';
 
 export class CreateOrganizationInventoryTransferDto {
   @IsString() @MinLength(1) sourceShopId!: string;
@@ -29,6 +33,21 @@ export class ReceiveOrganizationInventoryTransferDto {
   @IsOptional() @IsString() @MaxLength(1000) note?: string;
 }
 
+export class CentralPurchaseOrderLineDto {
+  @IsString() @MinLength(1) stockItemId!: string;
+  @IsInt() @Min(1) orderedMilli!: number;
+  @IsInt() @Min(0) unitCostMinor!: number;
+}
+
+export class CreateCentralPurchaseOrderDto {
+  @IsString() @MinLength(1) destinationShopId!: string;
+  @IsString() @MinLength(1) supplierId!: string;
+  @IsString() @MinLength(1) locationId!: string;
+  @IsArray() @ValidateNested({ each: true }) @Type(() => CentralPurchaseOrderLineDto)
+  lines!: CentralPurchaseOrderLineDto[];
+  @IsOptional() @IsString() @MaxLength(500) documentRef?: string;
+}
+
 export class ImportPreviewDto {
   @IsEnum(DataImportKind) kind!: DataImportKind;
   @IsString() @MinLength(1) @MaxLength(1_500_000) csv!: string;
@@ -45,7 +64,7 @@ export class SystemSubscriptionUpdateDto {
 
 export class SystemFeatureFlagUpdateDto {
   @IsString() @MinLength(1) @MaxLength(120) key!: string;
-  enabled!: boolean;
+  @IsBoolean() enabled!: boolean;
 }
 
 export class RotateWebhookSecretDto {
