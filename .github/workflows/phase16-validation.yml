@@ -166,7 +166,7 @@ jobs:
         run: |
           set -euo pipefail
           client=(docker run --rm --network host -e PGPASSWORD=ci postgres:17)
-          count_sql='SELECT concat_ws('"'|'"', (SELECT count(*) FROM "User"), (SELECT count(*) FROM "Shop"), (SELECT count(*) FROM "Reservation"), (SELECT count(*) FROM "_prisma_migrations"));'
+          count_sql="SELECT concat_ws('|', (SELECT count(*) FROM \"User\"), (SELECT count(*) FROM \"Shop\"), (SELECT count(*) FROM \"Reservation\"), (SELECT count(*) FROM \"_prisma_migrations\"));"
           source_counts="$(${client[@]} psql -h 127.0.0.1 -U ci -d gospots_p16 -Atc "$count_sql")"
           started=$(date +%s)
           ${client[@]} pg_dump -h 127.0.0.1 -U ci -d gospots_p16 -Fc > /tmp/gospots-phase16.dump
