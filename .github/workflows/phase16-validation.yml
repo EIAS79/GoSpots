@@ -166,14 +166,13 @@ jobs:
         run: |
           set -euo pipefail
           client=(docker run --rm --network host -e PGPASSWORD=ci postgres:17)
-          source_counts="$(${client[@]} psql -h 127.0.0.1 -U ci -d gospots_p16 -Atc \
-            'SELECT (SELECT count(*) FROM "User") || '"'|'"' || (SELECT count(*) FROM "Shop") || '"'|'"' || (SELECT count(*) FROM "Reservation") || '"'|'"' || (SELECT count(*) FROM "_prisma_migrations");')"
+          count_sql='SELECT concat_ws('"'|'"', (SELECT count(*) FROM "User"), (SELECT count(*) FROM "Shop"), (SELECT count(*) FROM "Reservation"), (SELECT count(*) FROM "_prisma_migrations"));'
+          source_counts="$(${client[@]} psql -h 127.0.0.1 -U ci -d gospots_p16 -Atc "$count_sql")"
           started=$(date +%s)
           ${client[@]} pg_dump -h 127.0.0.1 -U ci -d gospots_p16 -Fc > /tmp/gospots-phase16.dump
           ${client[@]} createdb -h 127.0.0.1 -U ci gospots_p16_restore
           cat /tmp/gospots-phase16.dump | ${client[@]} pg_restore -h 127.0.0.1 -U ci -d gospots_p16_restore --no-owner --no-privileges
-          restored_counts="$(${client[@]} psql -h 127.0.0.1 -U ci -d gospots_p16_restore -Atc \
-            'SELECT (SELECT count(*) FROM "User") || '"'|'"' || (SELECT count(*) FROM "Shop") || '"'|'"' || (SELECT count(*) FROM "Reservation") || '"'|'"' || (SELECT count(*) FROM "_prisma_migrations");')"
+          restored_counts="$(${client[@]} psql -h 127.0.0.1 -U ci -d gospots_p16_restore -Atc "$count_sql")"
           test "$source_counts" = "$restored_counts"
           restore_seconds=$(( $(date +%s) - started ))
           test "$restore_seconds" -lt 7200
