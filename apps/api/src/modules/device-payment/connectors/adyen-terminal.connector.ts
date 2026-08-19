@@ -99,9 +99,7 @@ function encodePaymentReference(reference: AdyenPaymentReference): string {
 
 export function decodeAdyenPaymentReference(value: string): AdyenPaymentReference {
   const prefix = 'adyen:v1:';
-  if (!value.startsWith(prefix)) {
-    throw new Error('Invalid Adyen payment reference');
-  }
+  if (!value.startsWith(prefix)) throw new Error('Invalid Adyen payment reference');
   let decoded: unknown;
   try {
     decoded = JSON.parse(Buffer.from(value.slice(prefix.length), 'base64url').toString('utf8'));
@@ -120,14 +118,14 @@ export function decodeAdyenPaymentReference(value: string): AdyenPaymentReferenc
   return candidate as AdyenPaymentReference;
 }
 
-function transactionIdentity(paymentResponse: JsonObject | null): {
+function transactionIdentity(messageBody: JsonObject | null): {
   transactionId: string | null;
   transactionTime: string | null;
   pspReference: string | null;
 } {
-  const poiData = object(field(paymentResponse, 'POIData'));
+  const poiData = object(field(messageBody, 'POIData'));
   const poiTransactionId = object(field(poiData, 'POITransactionID'));
-  const response = object(field(paymentResponse, 'Response'));
+  const response = object(field(messageBody, 'Response'));
   const transactionId = stringField(poiTransactionId, 'TransactionID');
   const transactionTime = stringField(poiTransactionId, 'TimeStamp');
   const additional = parseAdditionalResponse(stringField(response, 'AdditionalResponse'));
@@ -152,8 +150,7 @@ function paymentResultFromResponse(
   const response = object(field(paymentResponse, 'Response'));
   const result = stringField(response, 'Result');
   const errorCondition = stringField(response, 'ErrorCondition');
-  const additionalResponse = stringField(response, 'AdditionalResponse');
-  const additional = parseAdditionalResponse(additionalResponse);
+  const additional = parseAdditionalResponse(stringField(response, 'AdditionalResponse'));
   const identity = transactionIdentity(paymentResponse);
   const updatedReference: AdyenPaymentReference = {
     ...reference,
@@ -421,10 +418,9 @@ export class AdyenTerminalConnector implements PaymentConnector, OnModuleInit {
         errorMessage: error instanceof Error ? error.message : 'Invalid Adyen payment reference',
       };
     }
-    const statusServiceId = serviceId();
     const payload: JsonObject = {
       SaleToPOIRequest: {
-        MessageHeader: this.header('TransactionStatus', reference.poiId, statusServiceId),
+        MessageHeader: this.header('TransactionStatus', reference.poiId, serviceId()),
         TransactionStatusRequest: {
           MessageReference: {
             MessageCategory: 'Payment',
@@ -544,6 +540,7 @@ export class AdyenTerminalConnector implements PaymentConnector, OnModuleInit {
         errorMessage: 'Adyen Terminal currency must be a three-letter ISO code',
       };
     }
+
     const refundServiceId = serviceId(`refund:${request.refundId}:${request.idempotencyKey}`);
     const payload: JsonObject = {
       SaleToPOIRequest: {
@@ -554,19 +551,20 @@ export class AdyenTerminalConnector implements PaymentConnector, OnModuleInit {
               TransactionID: reference.transactionId,
               TimeStamp: reference.transactionTime,
             },
-            ReversalReason: 'MerchantCancel',
           },
+          ReversalReason: 'MerchantCancel',
           ReversedAmount: reversedAmount,
           SaleData: {
             SaleTransactionID: {
               TransactionID: request.refundId,
               TimeStamp: new Date().toISOString(),
             },
-            SaleToAcquirerData: `currency=${encodeURIComponent(currency)}`,
+            SaleToAcquirerData: `currency=${currency}`,
           },
         },
       },
     };
+
     try {
       const body = object(await this.terminalRequest(reference.poiId, payload));
       const root = object(field(body, 'SaleToPOIResponse'));
