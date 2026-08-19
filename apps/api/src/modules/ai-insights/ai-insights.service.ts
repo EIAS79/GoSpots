@@ -1,4 +1,4 @@
-import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
+import { BadRequestException, HttpException, HttpStatus, Injectable, NotFoundException } from '@nestjs/common';
 import type { JwtAccessPayload } from '../auth/auth.service';
 import { PrismaService } from '../../prisma/prisma.service';
 import { redactProviderInput, sha256, stableJson } from '../../common/platform-security.util';
@@ -9,6 +9,9 @@ import {
   type InsightCandidate,
   type InsightSnapshotMetrics,
 } from './ai-insights.provider';
+
+const AI_RUNS_PER_HOUR_LIMIT = 30;
+const EXTERNAL_AI_RUNS_PER_DAY_LIMIT = 50;
 
 @Injectable()
 export class AiInsightsService {
@@ -25,9 +28,7 @@ export class AiInsightsService {
 
   private resolveWindow(dto: RunAiInsightsDto) {
     const end = dto.windowEnd ? new Date(dto.windowEnd) : new Date();
-    const start = dto.windowStart
-      ? new Date(dto.windowStart)
-      : new Date(end.getTime() - 7 * 86_400_000);
+    const start = dto.windowStart ? new Date(dto.windowStart) : new Date(end.getTime() - 7 * 86_400_000);
     if (Number.isNaN(start.getTime()) || Number.isNaN(end.getTime()) || start >= end) {
       throw new BadRequestException('Insight window is invalid.');
     }
@@ -35,6 +36,31 @@ export class AiInsightsService {
       throw new BadRequestException('Insight window cannot exceed 93 days.');
     }
     return { start, end };
+  }
+
+  private async assertGenerationBudget(shopId: string, external: boolean) {
+    const now = new Date();
+    const hourStart = new Date(now.getTime() - 3_600_000);
+    const hourlyRuns = await this.prisma.aiInsightRun.count({
+      where: { shopId, createdAt: { gte: hourStart } },
+    });
+    if ((hourlyRuns ?? 0) >= AI_RUNS_PER_HOUR_LIMIT) {
+      throw new HttpException(
+        `AI insight generation is limited to ${AI_RUNS_PER_HOUR_LIMIT} new runs per venue per rolling hour. Idempotent replays remain available.`,
+        HttpStatus.TOO_MANY_REQUESTS,
+      );
+    }
+    if (!external) return;
+    const dayStart = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate()));
+    const externalRuns = await this.prisma.aiInsightRun.count({
+      where: { shopId, provider: this.external.name, createdAt: { gte: dayStart } },
+    });
+    if ((externalRuns ?? 0) >= EXTERNAL_AI_RUNS_PER_DAY_LIMIT) {
+      throw new HttpException(
+        `External AI generation is limited to ${EXTERNAL_AI_RUNS_PER_DAY_LIMIT} new runs per venue per UTC day to bound provider cost. Deterministic insights remain available.`,
+        HttpStatus.TOO_MANY_REQUESTS,
+      );
+    }
   }
 
   private async collectMetrics(shopId: string, start: Date, end: Date): Promise<InsightSnapshotMetrics> {
@@ -45,23 +71,9 @@ export class AiInsightsService {
         take: 250,
         select: { factKind: true, bucketStart: true, bucketEnd: true, dimensionKey: true, currency: true, measures: true },
       }),
-      this.prisma.ticketScan.groupBy({
-        by: ['result'],
-        where: { shopId, scannedAt: { gte: start, lt: end } },
-        _count: { _all: true },
-      }),
-      this.prisma.rfidWallet.aggregate({
-        where: { shopId, active: true },
-        _count: { _all: true },
-        _sum: { balanceMinor: true },
-      }),
-      this.prisma.automationExecution.count({
-        where: {
-          shopId,
-          status: { in: ['FAILED', 'DEAD_LETTER'] },
-          createdAt: { gte: new Date(Date.now() - 86_400_000) },
-        },
-      }),
+      this.prisma.ticketScan.groupBy({ by: ['result'], where: { shopId, scannedAt: { gte: start, lt: end } }, _count: { _all: true } }),
+      this.prisma.rfidWallet.aggregate({ where: { shopId, active: true }, _count: { _all: true }, _sum: { balanceMinor: true } }),
+      this.prisma.automationExecution.count({ where: { shopId, status: { in: ['FAILED', 'DEAD_LETTER'] }, createdAt: { gte: new Date(Date.now() - 86_400_000) } } }),
       this.prisma.automationDeadLetter.count({ where: { shopId, resolvedAt: null } }),
     ]);
 
@@ -74,10 +86,7 @@ export class AiInsightsService {
       ticketScans: [...scans.values()].reduce((a, b) => a + b, 0),
       ticketAccepted: scans.get('ACCEPTED') ?? 0,
       ticketDuplicate: scans.get('DUPLICATE') ?? 0,
-      ticketRejected:
-        (scans.get('REJECTED') ?? 0) +
-        (scans.get('EXPIRED') ?? 0) +
-        (scans.get('VOIDED') ?? 0),
+      ticketRejected: (scans.get('REJECTED') ?? 0) + (scans.get('EXPIRED') ?? 0) + (scans.get('VOIDED') ?? 0),
       activeRfidWallets: wallets._count._all,
       storedValueLiabilityMinor: wallets._sum.balanceMinor ?? 0,
       automationFailures24h,
@@ -115,19 +124,10 @@ export class AiInsightsService {
     const metricsJson = stableJson(metrics);
     const metricsHash = sha256(metricsJson);
     let snapshot = await this.prisma.insightSnapshot.findUnique({
-      where: {
-        shopId_windowStart_windowEnd_metricsHash: {
-          shopId,
-          windowStart: start,
-          windowEnd: end,
-          metricsHash,
-        },
-      },
+      where: { shopId_windowStart_windowEnd_metricsHash: { shopId, windowStart: start, windowEnd: end, metricsHash } },
     });
     if (!snapshot) {
-      snapshot = await this.prisma.insightSnapshot.create({
-        data: { shopId, windowStart: start, windowEnd: end, metricsJson, metricsHash },
-      });
+      snapshot = await this.prisma.insightSnapshot.create({ data: { shopId, windowStart: start, windowEnd: end, metricsJson, metricsHash } });
     }
 
     const requested = dto.provider ?? 'AUTO';
@@ -135,26 +135,15 @@ export class AiInsightsService {
     const providerName = useExternal ? this.external.name : this.deterministic.name;
     const inputHash = sha256(stableJson({ snapshot: metricsHash, provider: providerName }));
     const existingRun = await this.prisma.aiInsightRun.findUnique({
-      where: {
-        shopId_snapshotId_provider_inputHash: {
-          shopId,
-          snapshotId: snapshot.id,
-          provider: providerName,
-          inputHash,
-        },
-      },
+      where: { shopId_snapshotId_provider_inputHash: { shopId, snapshotId: snapshot.id, provider: providerName, inputHash } },
     });
     if (existingRun) {
-      const insights = await this.prisma.aiInsight.findMany({
-        where: { shopId, runId: existingRun.id },
-        orderBy: { createdAt: 'asc' },
-      });
+      const insights = await this.prisma.aiInsight.findMany({ where: { shopId, runId: existingRun.id }, orderBy: { createdAt: 'asc' } });
       return { snapshot, run: existingRun, insights, replayed: true };
     }
 
-    const run = await this.prisma.aiInsightRun.create({
-      data: { shopId, snapshotId: snapshot.id, provider: providerName, status: 'RUNNING', inputHash },
-    });
+    await this.assertGenerationBudget(shopId, useExternal);
+    const run = await this.prisma.aiInsightRun.create({ data: { shopId, snapshotId: snapshot.id, provider: providerName, status: 'RUNNING', inputHash } });
     let candidates: InsightCandidate[] = [];
     let status: 'SUCCEEDED' | 'DEGRADED' = 'SUCCEEDED';
     let failureCode: string | null = null;
@@ -183,12 +172,7 @@ export class AiInsightsService {
       const terminalMessage = error instanceof Error ? error.message.slice(0, 500) : 'AI insight generation failed.';
       await this.prisma.aiInsightRun.update({
         where: { id: run.id },
-        data: {
-          status: 'FAILED',
-          failureCode: useExternal ? 'FALLBACK_FAILURE' : 'DETERMINISTIC_PROVIDER_FAILURE',
-          failureMessage: terminalMessage,
-          completedAt: new Date(),
-        },
+        data: { status: 'FAILED', failureCode: useExternal ? 'FALLBACK_FAILURE' : 'DETERMINISTIC_PROVIDER_FAILURE', failureMessage: terminalMessage, completedAt: new Date() },
       });
       throw error;
     }
@@ -197,57 +181,24 @@ export class AiInsightsService {
       const persisted = [];
       for (const candidate of candidates.slice(0, 8)) {
         const evidenceJson = stableJson(redactProviderInput(candidate.evidence));
-        const fingerprint = sha256(
-          stableJson({ type: candidate.type, title: candidate.title, evidence: evidenceJson }),
-        );
-        persisted.push(
-          await this.prisma.aiInsight.upsert({
-            where: { shopId_fingerprint: { shopId, fingerprint } },
-            create: {
-              shopId,
-              runId: run.id,
-              fingerprint,
-              type: candidate.type,
-              severity: candidate.severity,
-              title: candidate.title,
-              body: candidate.body,
-              evidenceJson,
-              actionKey: candidate.actionKey ?? null,
-            },
-            update: {
-              runId: run.id,
-              severity: candidate.severity,
-              title: candidate.title,
-              body: candidate.body,
-              evidenceJson,
-              actionKey: candidate.actionKey ?? null,
-              dismissedAt: null,
-            },
-          }),
-        );
+        const fingerprint = sha256(stableJson({ type: candidate.type, title: candidate.title, evidence: evidenceJson }));
+        persisted.push(await this.prisma.aiInsight.upsert({
+          where: { shopId_fingerprint: { shopId, fingerprint } },
+          create: { shopId, runId: run.id, fingerprint, type: candidate.type, severity: candidate.severity, title: candidate.title, body: candidate.body, evidenceJson, actionKey: candidate.actionKey ?? null },
+          update: { runId: run.id, severity: candidate.severity, title: candidate.title, body: candidate.body, evidenceJson, actionKey: candidate.actionKey ?? null, dismissedAt: null },
+        }));
       }
       const outputHash = sha256(stableJson(persisted.map((row) => row.fingerprint)));
       const completed = await this.prisma.aiInsightRun.update({
         where: { id: run.id },
-        data: {
-          status,
-          outputHash,
-          failureCode,
-          failureMessage,
-          completedAt: new Date(),
-        },
+        data: { status, outputHash, failureCode, failureMessage, completedAt: new Date() },
       });
       return { snapshot, run: completed, insights: persisted, replayed: false };
     } catch (error) {
       const terminalMessage = error instanceof Error ? error.message.slice(0, 500) : 'AI insight persistence failed.';
       await this.prisma.aiInsightRun.update({
         where: { id: run.id },
-        data: {
-          status: 'FAILED',
-          failureCode: 'INSIGHT_PERSISTENCE_FAILURE',
-          failureMessage: terminalMessage,
-          completedAt: new Date(),
-        },
+        data: { status: 'FAILED', failureCode: 'INSIGHT_PERSISTENCE_FAILURE', failureMessage: terminalMessage, completedAt: new Date() },
       }).catch(() => undefined);
       throw error;
     }
@@ -284,6 +235,7 @@ export class AiInsightsService {
       externalProvider: this.external.configured() ? 'ready' : 'optional',
       directMutationAllowed: false,
       piiPolicy: 'metrics-only-redacted',
+      generationBudget: { newRunsPerRollingHour: AI_RUNS_PER_HOUR_LIMIT, externalRunsPerUtcDay: EXTERNAL_AI_RUNS_PER_DAY_LIMIT, idempotentReplayConsumesBudget: false },
       snapshots,
       runs,
       activeInsights,
