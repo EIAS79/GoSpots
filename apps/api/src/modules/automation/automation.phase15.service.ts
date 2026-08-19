@@ -7,11 +7,7 @@ import type { JwtAccessPayload } from '../auth/auth.service';
 import { MailOutboxService } from '../mail/mail-outbox.service';
 import { NotificationsService } from '../notifications/notifications.service';
 import { evaluateAutomationCondition, type AutomationCondition } from './automation-evaluator';
-import {
-  PHASE15_AUTOMATION_TEMPLATES,
-  PHASE15_FORBIDDEN_AUTONOMOUS_ACTIONS,
-  PHASE15_SAFE_ACTION_TYPES,
-} from './automation.phase15.catalog';
+import { PHASE15_AUTOMATION_TEMPLATES, PHASE15_FORBIDDEN_AUTONOMOUS_ACTIONS, PHASE15_SAFE_ACTION_TYPES } from './automation.phase15.catalog';
 import type { CreateAutomationRuleDto, TriggerAutomationDto, UpdateAutomationRuleDto } from './dto/automation.dto';
 
 type SafeAction =
@@ -31,13 +27,11 @@ const FORBIDDEN_TYPES = new Set<string>(PHASE15_FORBIDDEN_AUTONOMOUS_ACTIONS);
 function isUniqueConstraintError(error: unknown): boolean {
   return Boolean(error && typeof error === 'object' && 'code' in error && (error as { code?: unknown }).code === 'P2002');
 }
-
 function requiredString(raw: Record<string, unknown>, key: string, index: number, max: number): string {
   const value = raw[key];
   if (typeof value !== 'string' || !value.trim()) throw new BadRequestException(`Action ${index + 1}: ${key} is required.`);
   return value.trim().slice(0, max);
 }
-
 function escapeHtml(value: string): string {
   const map: Record<string, string> = { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' };
   return value.replace(/[&<>"']/g, (char) => map[char] ?? char);
@@ -45,30 +39,16 @@ function escapeHtml(value: string): string {
 
 @Injectable()
 export class Phase15AutomationService {
-  constructor(
-    protected readonly prisma: PrismaService,
-    private readonly notifications: NotificationsService,
-    private readonly mailOutbox: MailOutboxService,
-  ) {}
+  constructor(protected readonly prisma: PrismaService, private readonly notifications: NotificationsService, private readonly mailOutbox: MailOutboxService) {}
 
   protected shopId(actor: JwtAccessPayload): string {
     if (!actor.shopId) throw new BadRequestException('Venue context is required.');
     return actor.shopId;
   }
-
   templates() {
-    return {
-      templates: PHASE15_AUTOMATION_TEMPLATES,
-      safeActionTypes: [...PHASE15_SAFE_ACTION_TYPES],
-      forbiddenAutonomousActionTypes: [...PHASE15_FORBIDDEN_AUTONOMOUS_ACTIONS],
-      highRiskPolicy: 'HUMAN_APPROVAL_REQUIRED',
-    };
+    return { templates: PHASE15_AUTOMATION_TEMPLATES, safeActionTypes: [...PHASE15_SAFE_ACTION_TYPES], forbiddenAutonomousActionTypes: [...PHASE15_FORBIDDEN_AUTONOMOUS_ACTIONS], highRiskPolicy: 'HUMAN_APPROVAL_REQUIRED' };
   }
-
-  private parseActions(raw: string): SafeAction[] {
-    return safeJsonParse<SafeAction[]>(raw, []);
-  }
-
+  private parseActions(raw: string): SafeAction[] { return safeJsonParse<SafeAction[]>(raw, []); }
   private validateActions(actions: Record<string, unknown>[]): SafeAction[] {
     if (!actions.length) throw new BadRequestException('At least one automation action is required.');
     if (actions.length > 20) throw new BadRequestException('Automation rules are limited to 20 actions.');
@@ -99,7 +79,6 @@ export class Phase15AutomationService {
     ]);
     return { rules: rules.map((rule) => ({ ...rule, triggerConfig: safeJsonParse(rule.triggerConfigJson, null), condition: safeJsonParse(rule.conditionJson, null), actions: this.parseActions(rule.actionsJson) })), executions, deadLetters, phase15: this.templates() };
   }
-
   async createRule(actor: JwtAccessPayload, dto: CreateAutomationRuleDto) {
     const shopId = this.shopId(actor);
     const actions = this.validateActions(dto.actions);
@@ -108,7 +87,6 @@ export class Phase15AutomationService {
     if (dto.triggerType === 'SCHEDULED' && !nextRunAt) throw new BadRequestException('Scheduled rules require nextRunAt.');
     return this.prisma.automationRule.create({ data: { shopId, name: dto.name.trim(), enabled: dto.enabled ?? true, triggerType: dto.triggerType, triggerConfigJson: dto.triggerConfig ? stableJson(dto.triggerConfig) : null, conditionJson: dto.condition ? stableJson(dto.condition) : null, actionsJson: stableJson(actions), nextRunAt, createdById: actor.sub } });
   }
-
   async updateRule(actor: JwtAccessPayload, id: string, dto: UpdateAutomationRuleDto) {
     const shopId = this.shopId(actor);
     const rule = await this.prisma.automationRule.findFirst({ where: { id, shopId } });
@@ -124,7 +102,6 @@ export class Phase15AutomationService {
     }
     return this.prisma.automationRule.findFirstOrThrow({ where: { id, shopId } });
   }
-
   async trigger(actor: JwtAccessPayload, ruleId: string, dto: TriggerAutomationDto) {
     const shopId = this.shopId(actor);
     const existing = await this.prisma.automationExecution.findUnique({ where: { shopId_dedupeKey: { shopId, dedupeKey: dto.dedupeKey } } });
@@ -132,10 +109,9 @@ export class Phase15AutomationService {
     const rule = await this.prisma.automationRule.findFirst({ where: { id: ruleId, shopId, enabled: true } });
     if (!rule) throw new NotFoundException('Enabled automation rule not found.');
     const payload = dto.payload ?? {};
-    const inputHash = sha256(stableJson(payload));
     let execution;
     try {
-      execution = await this.prisma.automationExecution.create({ data: { shopId, ruleId, triggerType: rule.triggerType, triggerRef: dto.triggerRef ?? null, dedupeKey: dto.dedupeKey, status: 'QUEUED', inputHash, inputJson: stableJson(payload) } });
+      execution = await this.prisma.automationExecution.create({ data: { shopId, ruleId, triggerType: rule.triggerType, triggerRef: dto.triggerRef ?? null, dedupeKey: dto.dedupeKey, status: 'QUEUED', inputHash: sha256(stableJson(payload)), inputJson: stableJson(payload) } });
     } catch (error) {
       if (isUniqueConstraintError(error)) {
         const replay = await this.prisma.automationExecution.findUnique({ where: { shopId_dedupeKey: { shopId, dedupeKey: dto.dedupeKey } } });
@@ -150,7 +126,6 @@ export class Phase15AutomationService {
     }
     return { execution: await this.execute(execution.id, rule, payload, actor), replayed: false };
   }
-
   private async execute(executionId: string, rule: { id: string; shopId: string; actionsJson: string }, payload: Record<string, unknown>, actor: JwtAccessPayload) {
     const actions = this.parseActions(rule.actionsJson);
     await this.prisma.automationExecution.update({ where: { id: executionId }, data: { status: 'RUNNING', startedAt: new Date(), errorCode: null, errorMessage: null } });
@@ -175,7 +150,6 @@ export class Phase15AutomationService {
     await this.prisma.automationRule.update({ where: { id: rule.id }, data: { lastTriggeredAt: new Date(), version: { increment: 1 } } });
     return completed;
   }
-
   private async webhook(shopId: string, executionId: string, index: number, endpointId: string, eventType: string, payload: Record<string, unknown>) {
     const endpoint = await this.prisma.webhookEndpoint.findFirst({ where: { id: endpointId, shopId, active: true } });
     if (!endpoint) throw new NotFoundException('Automation webhook endpoint not found or disabled.');
@@ -185,7 +159,6 @@ export class Phase15AutomationService {
     const delivery = await this.prisma.webhookDelivery.upsert({ where: { endpointId_eventId: { endpointId, eventId } }, create: { shopId, endpointId, eventId, eventType, payload: json, payloadHash: sha256(stableJson(json)) }, update: {} });
     return { deliveryId: delivery.id, status: delivery.status };
   }
-
   private async executeAction(shopId: string, executionId: string, index: number, action: SafeAction, payload: Record<string, unknown>, actor: JwtAccessPayload): Promise<unknown> {
     const key = `automation:${executionId}:${index}`;
     if (action.type === 'NOOP') return { ok: true };
@@ -210,9 +183,9 @@ export class Phase15AutomationService {
       const row = await this.prisma.customerPreference.upsert({ where: { shopId_customerId_key: { shopId, customerId: customer.id, key: `tag:${action.tag}` } }, create: { shopId, customerId: customer.id, key: `tag:${action.tag}`, value: { tagged: true, source: 'AUTOMATION', executionId } as Prisma.InputJsonValue, updatedById: actor.sub.startsWith('system:') ? null : actor.sub }, update: { value: { tagged: true, source: 'AUTOMATION', executionId } as Prisma.InputJsonValue, updatedById: actor.sub.startsWith('system:') ? null : actor.sub, version: { increment: 1 } } });
       return { preferenceId: row.id, tag: action.tag };
     }
-    return { reportKey: action.reportKey, executionId, source: 'AUTOMATION_PAYLOAD', payloadHash: sha256(stableJson(payload)), facts: payload, limitations: ['Report contains only facts supplied to this automation execution.'] };
+    if (action.type === 'REPORT') return { reportKey: action.reportKey, executionId, source: 'AUTOMATION_PAYLOAD', payloadHash: sha256(stableJson(payload)), facts: payload, limitations: ['Report contains only facts supplied to this automation execution.'] };
+    throw new BadRequestException('Unsupported automation action.');
   }
-
   async replayDeadLetter(actor: JwtAccessPayload, executionId: string) {
     const shopId = this.shopId(actor);
     const dead = await this.prisma.automationDeadLetter.findUnique({ where: { shopId_executionId: { shopId, executionId } } });
@@ -226,7 +199,6 @@ export class Phase15AutomationService {
     await this.prisma.automationDeadLetter.update({ where: { id: dead.id }, data: { replayCount: { increment: 1 }, lastReplayAt: new Date(), resolvedAt: completed.status === 'SUCCEEDED' ? new Date() : null } });
     return completed;
   }
-
   async readiness(actor: JwtAccessPayload) {
     const shopId = this.shopId(actor);
     const [enabled, due, dead] = await Promise.all([
