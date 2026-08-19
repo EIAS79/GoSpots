@@ -5,6 +5,7 @@ import { AdyenTerminalConnector } from './connectors/adyen-terminal.connector';
 import { FakePaymentConnectorProvider } from './connectors/fake-payment.provider';
 import { PaymentConnectorRegistry } from './connectors/payment-connector.registry';
 import { StripeTerminalConnector } from './connectors/stripe-terminal.connector';
+import { AdyenTerminalWebhookController } from './adyen-terminal-webhook.controller';
 import { PaymentDomainService } from './payment-domain.service';
 import { PaymentOperationStateService } from './payment-operation-state.service';
 import { PaymentController } from './payment.controller';
@@ -17,6 +18,7 @@ import { MoneyOperationsService } from './money-operations.service';
     DeviceController,
     PaymentController,
     MoneyOperationsController,
+    AdyenTerminalWebhookController,
     StripeTerminalWebhookController,
   ],
   providers: [
