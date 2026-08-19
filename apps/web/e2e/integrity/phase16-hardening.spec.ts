@@ -33,6 +33,19 @@ test('@smoke P16 mixed authenticated traffic remains responsive and consistent',
     data: { name: `P16 Load KDS ${runId}`, kind: 'KITCHEN', targetSeconds: 300 },
   });
 
+  // The E2E seed intentionally has no operating-hours rows. Establish a deterministic
+  // open schedule before exercising reservation capacity/conflict transactions.
+  await api(page, 'PUT', '/hours/weekly', {
+    data: {
+      days: Array.from({ length: 7 }, (_, weekday) => ({
+        weekday,
+        isClosed: false,
+        opensAt: '00:00',
+        closesAt: '23:59',
+      })),
+    },
+  });
+
   // Reservation writes exercise capacity/conflict transactions before the mixed read waves.
   const futureBase = Date.now() + 200 * 24 * 60 * 60 * 1000;
   const reservations = await Promise.all(
@@ -93,22 +106,56 @@ test('@smoke P16 operator shell supports keyboard focus and narrow screens', asy
   );
   expect(overflow).toBeLessThanOrEqual(2);
 
-  await page.keyboard.press('Tab');
-  const focused = page.locator(':focus');
-  await expect(focused).toBeVisible();
-  const focusInfo = await focused.evaluate((element) => ({
-    tag: element.tagName,
-    ariaLabel: element.getAttribute('aria-label'),
-    text: (element.textContent ?? '').trim().slice(0, 120),
-    outlineStyle: getComputedStyle(element).outlineStyle,
-    outlineWidth: getComputedStyle(element).outlineWidth,
-    boxShadow: getComputedStyle(element).boxShadow,
-  }));
+  // Traverse by keyboard from the document root. Some browsers keep BODY as the active
+  // element for the first Tab depending on hydration timing, so require a real visible
+  // focus target within a bounded number of keyboard steps instead of assuming step one.
+  let focusInfo:
+    | {
+        tag: string;
+        ariaLabel: string | null;
+        text: string;
+        outlineStyle: string;
+        outlineWidth: string;
+        boxShadow: string;
+      }
+    | null = null;
+
+  for (let attempt = 0; attempt < 12 && !focusInfo; attempt += 1) {
+    await page.keyboard.press('Tab');
+    focusInfo = await page.evaluate(() => {
+      const element = document.activeElement;
+      if (!(element instanceof HTMLElement) || element === document.body) return null;
+      const rect = element.getBoundingClientRect();
+      const style = getComputedStyle(element);
+      const visible =
+        rect.width > 0 &&
+        rect.height > 0 &&
+        style.visibility !== 'hidden' &&
+        style.display !== 'none';
+      if (!visible) return null;
+      return {
+        tag: element.tagName,
+        ariaLabel: element.getAttribute('aria-label'),
+        text: (element.textContent ?? '').trim().slice(0, 120),
+        outlineStyle: style.outlineStyle,
+        outlineWidth: style.outlineWidth,
+        boxShadow: style.boxShadow,
+      };
+    });
+  }
+
+  expect(focusInfo, 'Keyboard Tab navigation never reached a visible focus target').not.toBeNull();
   expect(
-    Boolean(focusInfo.ariaLabel || focusInfo.text || ['INPUT', 'SELECT', 'TEXTAREA'].includes(focusInfo.tag)),
+    Boolean(
+      focusInfo!.ariaLabel ||
+        focusInfo!.text ||
+        ['INPUT', 'SELECT', 'TEXTAREA'].includes(focusInfo!.tag),
+    ),
   ).toBeTruthy();
   expect(
-    focusInfo.outlineStyle !== 'none' || focusInfo.outlineWidth !== '0px' || focusInfo.boxShadow !== 'none',
+    focusInfo!.outlineStyle !== 'none' ||
+      focusInfo!.outlineWidth !== '0px' ||
+      focusInfo!.boxShadow !== 'none',
   ).toBeTruthy();
 
   const undersizedTargets = await page
