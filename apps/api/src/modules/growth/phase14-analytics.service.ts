@@ -209,30 +209,29 @@ export class Phase14AnalyticsService {
 
   private async resources(context: ReportContext, base: any) {
     const { shopId, from, to, timezone } = context;
-    const [sessions, maintenance, windows] = await Promise.all([
+    const [sessions, windows] = await Promise.all([
       this.prisma.operationsSession.findMany({
         where: { shopId, startedAt: { lt: to }, OR: [{ finishedAt: null }, { finishedAt: { gt: from } }] },
         select: { id: true, guestCheckId: true, startedAt: true },
-      }),
-      this.prisma.resourceMaintenancePeriod.findMany({
-        where: { shopId, startsAt: { lt: to }, OR: [{ endsAt: null }, { endsAt: { gt: from } }] },
-        select: { startsAt: true, endsAt: true },
       }),
       listOpeningWindows(this.prisma, shopId, from, to),
     ]);
     const sessionIds = sessions.map((row) => row.id);
     const checkIds = sessions.flatMap((row) => (row.guestCheckId ? [row.guestCheckId] : []));
-    const attachedOrders = sessionIds.length || checkIds.length ? await this.prisma.venueOrder.findMany({
-      where: {
-        shopId,
-        status: 'COMPLETED',
-        OR: [
-          ...(sessionIds.length ? [{ operationsSessionId: { in: sessionIds } }] : []),
-          ...(checkIds.length ? [{ guestCheckId: { in: checkIds } }] : []),
-        ],
-      },
-      select: { operationsSessionId: true, guestCheckId: true },
-    }) : [];
+    const attachedOrders: Array<{ operationsSessionId: string | null; guestCheckId: string | null }> =
+      sessionIds.length || checkIds.length
+        ? await this.prisma.venueOrder.findMany({
+            where: {
+              shopId,
+              status: 'COMPLETED',
+              OR: [
+                ...(sessionIds.length ? [{ operationsSessionId: { in: sessionIds } }] : []),
+                ...(checkIds.length ? [{ guestCheckId: { in: checkIds } }] : []),
+              ],
+            },
+            select: { operationsSessionId: true, guestCheckId: true },
+          })
+        : [];
     const attached = new Set<string>();
     for (const order of attachedOrders) {
       if (order.operationsSessionId) attached.add(order.operationsSessionId);
@@ -244,12 +243,8 @@ export class Phase14AnalyticsService {
       const key = hour.format(row.startedAt);
       peak.set(key, (peak.get(key) ?? 0) + 1);
     }
-    const maintenanceMinutes = maintenance.reduce((outer, period) => outer + windows.reduce((inner, window) => {
-      const start = period.startsAt > window.opensAt ? period.startsAt : window.opensAt;
-      const periodEnd = period.endsAt ?? to;
-      const end = periodEnd < window.closesAt ? periodEnd : window.closesAt;
-      return inner + clipSeconds(start, end, from, to) / 60;
-    }, 0), 0);
+    const openingMinutesPerResource = windows.reduce((sum, window) => sum + clipSeconds(window.opensAt, window.closesAt, from, to) / 60, 0);
+    const theoreticalOpenMinutes = openingMinutesPerResource * base.resources.resourceCount;
     const enriched = base.resources.rows.map((row: any) => ({
       ...row,
       averageSessionDurationMinutes: rounded(average(row.occupiedMinutes, row.sessionCount)),
@@ -259,7 +254,7 @@ export class Phase14AnalyticsService {
     }));
     return {
       ...base.resources,
-      maintenanceDowntimeMinutes: rounded(maintenanceMinutes),
+      maintenanceDowntimeMinutes: rounded(Math.max(0, theoreticalOpenMinutes - base.resources.availableMinutes)),
       averageSessionDurationMinutes: rounded(average(base.resources.occupiedMinutes, sessions.length)),
       revenuePerSessionMinor: rounded(average(base.resources.accruedResourceRevenueMinor, sessions.length)),
       revenuePerOccupiedResourceHourMinor: rounded(base.resources.occupiedMinutes > 0 ? base.resources.accruedResourceRevenueMinor / (base.resources.occupiedMinutes / 60) : null),
@@ -286,18 +281,25 @@ export class Phase14AnalyticsService {
     ]);
     const orderIds = completed.map((row) => row.id);
     const checkIds = [...new Set(completed.flatMap((row) => (row.guestCheckId ? [row.guestCheckId] : [])))];
-    const [lines, checks] = await Promise.all([
-      orderIds.length ? this.prisma.venueOrderLine.findMany({
-        where: { shopId, orderId: { in: orderIds }, canceledAt: null },
-        select: { menuItemId: true, nameSnapshot: true, quantity: true, totalMinor: true },
-      }) : Promise.resolve([]),
-      checkIds.length ? this.prisma.guestCheck.findMany({ where: { shopId, id: { in: checkIds } }, select: { id: true, partySize: true } }) : Promise.resolve([]),
-    ]);
+    const lines: Array<{ menuItemId: string; nameSnapshot: string; quantity: number; totalMinor: number }> = orderIds.length
+      ? await this.prisma.venueOrderLine.findMany({
+          where: { shopId, orderId: { in: orderIds }, canceledAt: null },
+          select: { menuItemId: true, nameSnapshot: true, quantity: true, totalMinor: true },
+        })
+      : [];
+    const checks: Array<{ id: string; partySize: number }> = checkIds.length
+      ? await this.prisma.guestCheck.findMany({
+          where: { shopId, id: { in: checkIds } },
+          select: { id: true, partySize: true },
+        })
+      : [];
     const itemIds = [...new Set(lines.map((row) => row.menuItemId))];
-    const items = itemIds.length ? await this.prisma.menuItem.findMany({
-      where: { shopId, id: { in: itemIds } },
-      select: { id: true, section: { select: { name: true } } },
-    }) : [];
+    const items: Array<{ id: string; section: { name: string } | null }> = itemIds.length
+      ? await this.prisma.menuItem.findMany({
+          where: { shopId, id: { in: itemIds } },
+          select: { id: true, section: { select: { name: true } } },
+        })
+      : [];
     const section = new Map(items.map((row) => [row.id, row.section?.name ?? 'Uncategorised']));
     const itemMix = new Map<string, { quantity: number; salesMinor: number }>();
     const categoryMix = new Map<string, { quantity: number; salesMinor: number }>();
@@ -314,9 +316,9 @@ export class Phase14AnalyticsService {
     }
     const covers = checks.reduce((sum, row) => sum + Math.max(1, row.partySize), 0);
     const profileIds = profiles.map((row) => row.guestCheckId);
-    const settledTables = profileIds.length ? await this.prisma.guestCheck.count({
-      where: { shopId, id: { in: profileIds }, status: 'SETTLED', settledAt: { gte: from, lt: to } },
-    }) : 0;
+    const settledTables = profileIds.length
+      ? await this.prisma.guestCheck.count({ where: { shopId, id: { in: profileIds }, status: 'SETTLED', settledAt: { gte: from, lt: to } } })
+      : 0;
     const servicedTableCount = new Set(profiles.flatMap((row) => (row.resourceId ? [row.resourceId] : []))).size;
     const modes = new Map<string, { orders: number; salesMinor: number }>();
     const servers = new Map<string, number>();
@@ -392,10 +394,16 @@ export class Phase14AnalyticsService {
     const { shopId, from, to } = context;
     const bookings = await this.prisma.reservation.findMany({ where: { shopId, startsAt: { gte: from, lt: to } }, select: { id: true, status: true } });
     const ids = bookings.map((row) => row.id);
-    const [extensions, deposits, applications, waitlist, sessions] = await Promise.all([
-      ids.length ? this.prisma.reservationExtension.findMany({ where: { shopId, reservationId: { in: ids } }, select: { reservationId: true, convertedSessionId: true } }) : Promise.resolve([]),
-      ids.length ? this.prisma.reservationDepositLedgerEntry.findMany({ where: { shopId, reservationId: { in: ids } }, select: { reservationId: true } }) : Promise.resolve([]),
-      ids.length ? this.prisma.reservationDepositApplication.findMany({ where: { shopId, reservationId: { in: ids } }, select: { reservationId: true, amountMinor: true } }) : Promise.resolve([]),
+    const extensions: Array<{ reservationId: string; convertedSessionId: string | null }> = ids.length
+      ? await this.prisma.reservationExtension.findMany({ where: { shopId, reservationId: { in: ids } }, select: { reservationId: true, convertedSessionId: true } })
+      : [];
+    const deposits: Array<{ reservationId: string }> = ids.length
+      ? await this.prisma.reservationDepositLedgerEntry.findMany({ where: { shopId, reservationId: { in: ids } }, select: { reservationId: true } })
+      : [];
+    const applications: Array<{ reservationId: string; amountMinor: number }> = ids.length
+      ? await this.prisma.reservationDepositApplication.findMany({ where: { shopId, reservationId: { in: ids } }, select: { reservationId: true, amountMinor: true } })
+      : [];
+    const [waitlist, sessions] = await Promise.all([
       this.prisma.reservationWaitlistEntry.findMany({ where: { shopId, offeredAt: { gte: from, lt: to } }, select: { createdAt: true, offeredAt: true } }),
       this.prisma.operationsSession.findMany({ where: { shopId, startedAt: { gte: from, lt: to } }, select: { reservationId: true } }),
     ]);
