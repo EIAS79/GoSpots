@@ -22,7 +22,7 @@ test('@smoke P16 mixed authenticated traffic remains responsive and consistent',
   await loginOwner(page);
   await bindVenue(page, E2E.venues.mixed);
   const runId = `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
-  const check = await createGuestCheckFromUi(
+  await createGuestCheckFromUi(
     page,
     E2E.venues.mixed,
     `P16 Load ${runId}`,
@@ -33,7 +33,7 @@ test('@smoke P16 mixed authenticated traffic remains responsive and consistent',
     data: { name: `P16 Load KDS ${runId}`, kind: 'KITCHEN', targetSeconds: 300 },
   });
 
-  // Reservation writes exercise capacity/conflict transactions while reads are in flight.
+  // Reservation writes exercise capacity/conflict transactions before the mixed read waves.
   const futureBase = Date.now() + 200 * 24 * 60 * 60 * 1000;
   const reservations = await Promise.all(
     Array.from({ length: 4 }, (_, index) => {
@@ -61,7 +61,7 @@ test('@smoke P16 mixed authenticated traffic remains responsive and consistent',
     const results = await Promise.all([
       timed(() => api(page, 'GET', '/operations/floor')),
       timed(() => api(page, 'GET', '/guest-checks?status=OPEN')),
-      timed(() => api(page, 'GET', `/checkout/checks/${check.id}/preview`, { expectedStatus: 404 })),
+      timed(() => api(page, 'GET', '/reservations')),
       timed(() => api(page, 'GET', `/kitchen/board?stationId=${station.id}`)),
       timed(() =>
         api(
@@ -98,7 +98,6 @@ test('@smoke P16 operator shell supports keyboard focus and narrow screens', asy
   await expect(focused).toBeVisible();
   const focusInfo = await focused.evaluate((element) => ({
     tag: element.tagName,
-    role: element.getAttribute('role'),
     ariaLabel: element.getAttribute('aria-label'),
     text: (element.textContent ?? '').trim().slice(0, 120),
     outlineStyle: getComputedStyle(element).outlineStyle,
@@ -112,16 +111,26 @@ test('@smoke P16 operator shell supports keyboard focus and narrow screens', asy
     focusInfo.outlineStyle !== 'none' || focusInfo.outlineWidth !== '0px' || focusInfo.boxShadow !== 'none',
   ).toBeTruthy();
 
-  const undersizedTargets = await page.locator('button:visible, a:visible, input:visible, select:visible').evaluateAll(
-    (elements) =>
+  const undersizedTargets = await page
+    .locator('button:visible, a:visible, input:visible, select:visible')
+    .evaluateAll((elements) =>
       elements
         .map((element) => {
           const rect = element.getBoundingClientRect();
-          return { width: rect.width, height: rect.height, text: (element.textContent ?? '').trim().slice(0, 80) };
+          return {
+            width: rect.width,
+            height: rect.height,
+            text: (element.textContent ?? '').trim().slice(0, 80),
+          };
         })
-        .filter((target) => target.width > 0 && target.height > 0 && (target.width < 32 || target.height < 32))
+        .filter(
+          (target) =>
+            target.width > 0 &&
+            target.height > 0 &&
+            (target.width < 32 || target.height < 32),
+        )
         .slice(0, 20),
-  );
+    );
   expect(undersizedTargets, JSON.stringify(undersizedTargets)).toEqual([]);
 
   await page.setViewportSize({ width: 1440, height: 900 });
