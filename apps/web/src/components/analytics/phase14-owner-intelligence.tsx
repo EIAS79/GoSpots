@@ -11,6 +11,7 @@ type Issue = {
   currency: string | null;
   message: string;
   suggestedNextAction: string;
+  evidenceLinks: string[];
 };
 
 type Attention = {
@@ -20,6 +21,7 @@ type Attention = {
   title: string;
   detail: string;
   suggestedNextAction: string;
+  evidenceLinks: string[];
 };
 
 type Workspace = {
@@ -69,6 +71,11 @@ function Card({ label, value, detail }: { label: string; value: string; detail?:
       {detail ? <div className="mt-1 text-xs text-slate-500">{detail}</div> : null}
     </div>
   );
+}
+
+function EvidenceLink({ href }: { href: string | undefined }) {
+  if (!href) return null;
+  return <a href={href} className="mt-2 inline-block text-xs font-medium underline underline-offset-2">Open evidence</a>;
 }
 
 export function Phase14OwnerIntelligence({ venuePath }: { venuePath: string }) {
@@ -143,7 +150,7 @@ export function Phase14OwnerIntelligence({ venuePath }: { venuePath: string }) {
               <div className="flex items-start justify-between gap-3"><div><h2 className="text-lg font-semibold">Reconciliation Center</h2><p className="text-sm text-slate-500">GuestCheck → Settlement → Payment → Ledger → cash/provider/compliance.</p></div><strong className="text-sm">{data.reconciliation.clear ? 'CLEAR' : `${data.reconciliation.issueCount} OPEN`}</strong></div>
               <div className="mt-4 space-y-3">
                 {data.reconciliation.issues.length === 0 ? <p className="text-sm text-slate-500">No unresolved discrepancy in this scope.</p> : data.reconciliation.issues.slice(0, 20).map((issue) => (
-                  <article key={issue.id} className="rounded-lg border border-slate-200 p-3 dark:border-slate-800"><div className="flex flex-wrap items-center gap-2"><span className="rounded-full border px-2 py-0.5 text-[11px] font-semibold">{issue.severity}</span><strong className="text-sm">{issue.type}</strong>{issue.amountMinor != null ? <span className="text-sm">{money(issue.amountMinor, issue.currency ?? currency)}</span> : null}</div><p className="mt-2 text-sm">{issue.message}</p><p className="mt-1 text-xs text-slate-500">Next: {issue.suggestedNextAction}</p></article>
+                  <article key={issue.id} className="rounded-lg border border-slate-200 p-3 dark:border-slate-800"><div className="flex flex-wrap items-center gap-2"><span className="rounded-full border px-2 py-0.5 text-[11px] font-semibold">{issue.severity}</span><strong className="text-sm">{issue.type}</strong>{issue.amountMinor != null ? <span className="text-sm">{money(issue.amountMinor, issue.currency ?? currency)}</span> : null}</div><p className="mt-2 text-sm">{issue.message}</p><p className="mt-1 text-xs text-slate-500">Next: {issue.suggestedNextAction}</p><EvidenceLink href={issue.evidenceLinks[0]} /></article>
                 ))}
               </div>
             </section>
@@ -152,7 +159,7 @@ export function Phase14OwnerIntelligence({ venuePath }: { venuePath: string }) {
               <div className="flex items-start justify-between gap-3"><div><h2 className="text-lg font-semibold">Attention Center</h2><p className="text-sm text-slate-500">Cross-domain exceptions that need an operator decision.</p></div><strong className="text-sm">{data.attention.itemCount}</strong></div>
               <div className="mt-4 space-y-3">
                 {data.attention.items.length === 0 ? <p className="text-sm text-slate-500">Nothing requires attention.</p> : data.attention.items.slice(0, 20).map((item) => (
-                  <article key={item.id} className="rounded-lg border border-slate-200 p-3 dark:border-slate-800"><div className="flex flex-wrap items-center gap-2"><span className="rounded-full border px-2 py-0.5 text-[11px] font-semibold">{item.severity}</span><span className="text-xs text-slate-500">{item.domain}</span><strong className="text-sm">{item.title}</strong></div><p className="mt-2 text-sm">{item.detail}</p><p className="mt-1 text-xs text-slate-500">Next: {item.suggestedNextAction}</p></article>
+                  <article key={item.id} className="rounded-lg border border-slate-200 p-3 dark:border-slate-800"><div className="flex flex-wrap items-center gap-2"><span className="rounded-full border px-2 py-0.5 text-[11px] font-semibold">{item.severity}</span><span className="text-xs text-slate-500">{item.domain}</span><strong className="text-sm">{item.title}</strong></div><p className="mt-2 text-sm">{item.detail}</p><p className="mt-1 text-xs text-slate-500">Next: {item.suggestedNextAction}</p><EvidenceLink href={item.evidenceLinks[0]} /></article>
                 ))}
               </div>
             </section>
