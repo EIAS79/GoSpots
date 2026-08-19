@@ -28,11 +28,11 @@ GoSpots Master Product & Engineering Execution Plan v2 — Phase 14.
 | Reservation KPIs | `reservations()` over Reservation/extension/deposit/waitlist/session facts |
 | Customer KPIs | `customers()` over CustomerVisit, CustomerMembership, loyalty and stored-value ledgers |
 | Workforce KPIs | `workforce()` over TimePunch, StaffActionEvidence, CashSession and operator sales |
-| Reconciliation Center | persisted Phase 5 reconciliation + Phase 14 live invariants with evidence/action metadata |
-| Attention Center | owner UI + cross-domain derived attention items |
+| Reconciliation Center | persisted Phase 5 reconciliation + Phase 14 live invariants with severity/amount/entity/time/action/evidence-link metadata, surfaced in the owner UI |
+| Attention Center | owner UI + cross-domain derived attention items with evidence links when a canonical entity is available |
 | Performance | `phase14-performance-benchmark.ts` CI gate over 370k synthetic facts |
 | DST/business day | `phase14-business-day.spec.ts` proves Warsaw spring/fall DST, 04:00 overnight boundary and different branch settings |
-| Same-event consistency | `phase14-integrity-assert.ts` creates one cash sale and proves checkout=payment=ledger=cash plus tenant isolation |
+| Same-event consistency | `phase14-integrity-assert.ts` creates one cash sale and proves checkout=payment=ledger=cash=finance report=analytics plus tenant isolation |
 | Empty/large range | API supports 1..370 venue business dates; empty datasets return zero/null projections without inventing totals |
 | Tenant scope | every Phase 14 database query derives `shopId` from authenticated `JwtAccessPayload`; integrity fixture proves cross-shop ledger fact exclusion |
 
