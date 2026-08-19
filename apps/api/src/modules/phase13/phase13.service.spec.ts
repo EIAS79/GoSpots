@@ -1,5 +1,6 @@
 import { ConflictException, ForbiddenException } from '@nestjs/common';
 import { DataImportKind, DataImportStatus, OrganizationRole } from '@prisma/client';
+import { clearIdempotencyMemoryCache } from '../../common/idempotency.util';
 import { parseCsv, Phase13Service } from './phase13.service';
 
 describe('Phase13 CSV validation', () => {
@@ -17,13 +18,10 @@ describe('Phase13 CSV validation', () => {
 
 describe('Phase13 service security and replay rules', () => {
   const actor = {
-    sub: 'user-a',
-    sysRole: 'USER',
-    email: 'owner@example.com',
-    shopId: 'shop-a',
-    shopRole: 'OWNER',
-    perms: '*',
+    sub: 'user-a', sysRole: 'USER', email: 'owner@example.com', shopId: 'shop-a', shopRole: 'OWNER', perms: '*',
   } as any;
+
+  beforeEach(() => clearIdempotencyMemoryCache());
 
   function setup() {
     const prisma: any = {
@@ -43,10 +41,11 @@ describe('Phase13 service security and replay rules', () => {
       webhookDelivery: { findFirst: jest.fn(), findMany: jest.fn(), update: jest.fn(), count: jest.fn() },
       membership: { count: jest.fn() },
       integrationJob: { count: jest.fn() },
+      idempotencyReceipt: { findUnique: jest.fn(), create: jest.fn(), update: jest.fn(), delete: jest.fn() },
       $transaction: jest.fn(),
     };
     const flags = { isFeatureEnabled: jest.fn().mockResolvedValue(true) } as any;
-    const audit = { record: jest.fn(), recordForShop: jest.fn() } as any;
+    const audit = { record: jest.fn().mockResolvedValue({}), recordForShop: jest.fn().mockResolvedValue({}) } as any;
     const secretBox = { encrypt: jest.fn() } as any;
     return { prisma, service: new Phase13Service(prisma, audit, flags, secretBox) };
   }
@@ -55,30 +54,32 @@ describe('Phase13 service security and replay rules', () => {
     const { prisma, service } = setup();
     prisma.organizationMembership.findUnique.mockResolvedValue(null);
     await expect(service.createTransfer(actor, 'org-foreign', {
-      sourceShopId: 'shop-a', destinationShopId: 'shop-b', sourceStockItemId: 'item-a',
-      destinationStockItemId: 'item-b', sourceLocationId: 'loc-a', destinationLocationId: 'loc-b',
-      quantityMilli: 1000, idempotencyKey: 'idem-0001',
+      sourceShopId: 'shop-a', destinationShopId: 'shop-b', sourceStockItemId: 'item-a', destinationStockItemId: 'item-b',
+      sourceLocationId: 'loc-a', destinationLocationId: 'loc-b', quantityMilli: 1000, idempotencyKey: 'idem-0001',
     })).rejects.toBeInstanceOf(ForbiddenException);
     expect(prisma.stockItem.findFirst).not.toHaveBeenCalled();
   });
 
-  it('rejects same idempotency key with a changed request', async () => {
+  it('uses canonical idempotency to reject the same key with a changed request', async () => {
     const { prisma, service } = setup();
     prisma.organizationMembership.findUnique.mockResolvedValue({ role: OrganizationRole.OWNER });
-    prisma.organizationInventoryTransfer.findUnique.mockResolvedValue({ requestHash: 'different' });
+    prisma.organizationShop.count.mockResolvedValue(2);
+    prisma.idempotencyReceipt.findUnique.mockResolvedValue({
+      status: 'COMPLETED', requestHash: 'different-request-hash', responseJson: '{"id":"old"}',
+      expiresAt: new Date(Date.now() + 60_000),
+    });
     await expect(service.createTransfer(actor, 'org-a', {
-      sourceShopId: 'shop-a', destinationShopId: 'shop-b', sourceStockItemId: 'item-a',
-      destinationStockItemId: 'item-b', sourceLocationId: 'loc-a', destinationLocationId: 'loc-b',
-      quantityMilli: 1000, idempotencyKey: 'idem-0001',
-    })).rejects.toThrow('IDEMPOTENCY_CONFLICT');
+      sourceShopId: 'shop-a', destinationShopId: 'shop-b', sourceStockItemId: 'item-a', destinationStockItemId: 'item-b',
+      sourceLocationId: 'loc-a', destinationLocationId: 'loc-b', quantityMilli: 1000, idempotencyKey: 'idem-0001',
+    })).rejects.toThrow('Idempotency-Key reused with a different request payload');
+    expect(prisma.$transaction).not.toHaveBeenCalled();
   });
 
   it('prevents system admin from bypassing provider-managed subscription lifecycle', async () => {
     const { prisma, service } = setup();
     const systemActor = { ...actor, sysRole: 'SUPER_ADMIN' } as any;
     prisma.subscription.findUnique.mockResolvedValue({ billingSubscriptionId: 'bill-sub-1' });
-    await expect(service.updateSystemSubscription(systemActor, 'shop-a', { status: 'PAUSED' as any }))
-      .rejects.toBeInstanceOf(ConflictException);
+    await expect(service.updateSystemSubscription(systemActor, 'shop-a', { status: 'PAUSED' as any })).rejects.toBeInstanceOf(ConflictException);
     expect(prisma.subscription.update).not.toHaveBeenCalled();
   });
 
@@ -86,10 +87,7 @@ describe('Phase13 service security and replay rules', () => {
     const { prisma, service } = setup();
     prisma.dataImportJob.findUnique.mockResolvedValue(null);
     prisma.dataImportJob.create.mockImplementation(({ data }: any) => Promise.resolve({ id: 'job-1', ...data }));
-    const result: any = await service.previewImport(actor, {
-      kind: DataImportKind.PRODUCTS,
-      csv: 'name,price\nBroken,not-a-number',
-    });
+    const result: any = await service.previewImport(actor, { kind: DataImportKind.PRODUCTS, csv: 'name,price\nBroken,not-a-number' });
     expect(result.status).toBe(DataImportStatus.REJECTED);
     expect(result.preview.valid).toBe(false);
   });
