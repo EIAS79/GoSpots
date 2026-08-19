@@ -65,6 +65,12 @@ const VENUES: VenueSeed[] = [
     resources: [
       { name: 'Billiard 1', type: ResourceType.BILLIARD, hourlyRate: '30.00' },
       { name: 'Billiard 2', type: ResourceType.BILLIARD, hourlyRate: '30.00' },
+      { name: 'Billiard 3', type: ResourceType.BILLIARD, hourlyRate: '30.00' },
+      { name: 'Billiard 4', type: ResourceType.BILLIARD, hourlyRate: '30.00' },
+      { name: 'Billiard 5', type: ResourceType.BILLIARD, hourlyRate: '32.00' },
+      { name: 'Billiard 6', type: ResourceType.BILLIARD, hourlyRate: '32.00' },
+      { name: 'Billiard 7', type: ResourceType.BILLIARD, hourlyRate: '32.00' },
+      { name: 'Billiard 8', type: ResourceType.BILLIARD, hourlyRate: '32.00' },
     ],
   },
   {
