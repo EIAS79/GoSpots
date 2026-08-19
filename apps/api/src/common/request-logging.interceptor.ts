@@ -292,7 +292,7 @@ export class RequestLoggingInterceptor implements NestInterceptor {
   ) {
     if (this.shouldSkip(path)) return;
 
-    recordHttpRequest(method, statusCode, Date.now() - started);
+    recordHttpRequest(method, path, statusCode, Date.now() - started);
     this.logger.log(
       JSON.stringify(
         this.basePayload(method, path, statusCode, started, requestId, req),
@@ -311,7 +311,7 @@ export class RequestLoggingInterceptor implements NestInterceptor {
   ) {
     if (this.shouldSkip(path)) return;
 
-    recordHttpRequest(method, statusCode, Date.now() - started);
+    recordHttpRequest(method, path, statusCode, Date.now() - started);
     const payload = {
       ...this.basePayload(method, path, statusCode, started, requestId, req),
       ...this.errorDiagnostic(err),
