@@ -1,6 +1,7 @@
 import { Module } from '@nestjs/common';
 import { DeviceController } from './device.controller';
 import { DeviceRegistryService } from './device-registry.service';
+import { AdyenTerminalConnector } from './connectors/adyen-terminal.connector';
 import { FakePaymentConnectorProvider } from './connectors/fake-payment.provider';
 import { PaymentConnectorRegistry } from './connectors/payment-connector.registry';
 import { StripeTerminalConnector } from './connectors/stripe-terminal.connector';
@@ -21,6 +22,7 @@ import { MoneyOperationsService } from './money-operations.service';
   providers: [
     DeviceRegistryService,
     PaymentConnectorRegistry,
+    AdyenTerminalConnector,
     StripeTerminalConnector,
     FakePaymentConnectorProvider,
     PaymentOperationStateService,
@@ -30,6 +32,7 @@ import { MoneyOperationsService } from './money-operations.service';
   exports: [
     DeviceRegistryService,
     PaymentConnectorRegistry,
+    AdyenTerminalConnector,
     StripeTerminalConnector,
     PaymentOperationStateService,
     PaymentDomainService,
