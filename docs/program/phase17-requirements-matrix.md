@@ -1,8 +1,8 @@
 # Phase 17 — Pilot, Certification, Go-Live and Release Requirements Matrix
 
 **Source:** GoSpots Master Product & Engineering Execution Plan v2 — Phase 17  
-**Baseline main:** `fe00ea5e4155ce79dd909903abfc7e094540795d` (Phase 17 software release-gate merge)  
-**Continuation branch:** `phase-17-adyen-certification`
+**Phase 17 software merge:** `25047e58f19ad311671cda2282faab0db39a837f` (PR #83)  
+**Production closeout merge:** `3082ac9223c3704db3152015e69255e8581999dc` (PR #84)
 
 Phase 17 is a release-certification phase. It reuses the canonical operational and financial authorities from Phases 1–16; it must not create a pilot-only transaction path.
 
@@ -16,7 +16,7 @@ Phase 17 is a release-certification phase. It reuses the canonical operational a
 
 - **Adyen Terminal API** is the Phase 17 venue/customer card-present certification target.
 - **Stripe Billing** remains the separate GoSpots SaaS subscription/features billing provider. Stripe subscription state is not a GuestCheck, checkout, venue-payment, settlement or ledger authority.
-- Existing provider-neutral `PaymentConnector`/`PaymentOperation` contracts remain canonical, so future venue-payment providers can be added without replacing checkout authority.
+- Existing provider-neutral `PaymentConnector` / `PaymentOperation` contracts remain canonical, so future venue-payment providers can be added without replacing checkout authority.
 
 ## Step 17.1 — Pilot profiles
 
@@ -34,9 +34,9 @@ Phase 17 is a release-certification phase. It reuses the canonical operational a
 | Floor / resources / rates | AUTOMATED_GATE | Existing Phase 2/3 implementation and pilot fixtures. |
 | Menu / inventory opening state | AUTOMATED_GATE + BLOCKED_EXTERNAL | Software state represented; physical stock count requires venue drill. |
 | Devices / printers / KDS / terminal | AUTOMATED_GATE + BLOCKED_EXTERNAL | Durable device/print/KDS contracts and Adyen adapter tests exist; marketed physical models must be certified. |
-| Adyen provider readiness | AUTOMATED_GATE + BLOCKED_EXTERNAL | Connector readiness validates configuration and Cloud Device API reachability; test merchant/API key/HMAC/test terminal remain external until provisioned. |
+| Adyen provider readiness | AUTOMATED_GATE + BLOCKED_EXTERNAL | Connector readiness validates configuration and Cloud Device API behavior; test merchant/API key/HMAC/test terminal remain external until provisioned. |
 | Opening float / cash controls | AUTOMATED_GATE | Cash service and cash-close tests included in Phase 17 gate. |
-| Backup verified | AUTOMATED_GATE | Independent PostgreSQL 17 `pg_dump`/`pg_restore` drill rerun on the exact Phase 17 head. |
+| Backup verified | AUTOMATED_GATE | Independent PostgreSQL 17 `pg_dump` / `pg_restore` drill rerun on the exact Phase 17 head. |
 
 ## Step 17.3 — Busy-shift simulation
 
@@ -79,8 +79,23 @@ All applicable items below remain `BLOCKED_EXTERNAL` until evidence exists:
 6. physical KDS screen and printer routing drill;
 7. physical inventory receiving/sale/waste/stocktake reconciliation drill;
 8. Polish accountant/tax/legal validation of the marketed fiscal/KSeF scope;
-9. design-partner/pilot venue full-day operation without a shadow spreadsheet or POS;
-10. exact merged web revision deployed and smoke/runtime verified in production.
+9. design-partner/pilot venue full-day operation without a shadow spreadsheet or POS.
+
+The exact merged production deployment is no longer an external blocker: it passed under Step 17.6/production evidence below.
+
+## Production deployment gate — PASS
+
+PR #84 final head `2b798f06dc3219e14eb31af3ff65022a660ec837` passed repository CI, Phase 17 release certification, standalone boundary, Edge hard-outage, and Phase 3/4/7 validation, then merged as `3082ac9223c3704db3152015e69255e8581999dc`.
+
+Production proof:
+
+- Vercel deployment `dpl_51W5xjRk6JrQuPbAr49HbKBMDE2Y` is **READY**, Git-sourced from `main` at exact SHA `3082ac9223c3704db3152015e69255e8581999dc`;
+- Vercel build used the real `apps/web` Next.js monorepo path;
+- `www.gospots.eu/` and `/login` returned HTTP 200;
+- Vercel post-release runtime error query returned no errors;
+- Render deployment `dep-da33t83m8hqs739febk0` is **LIVE** at the same exact SHA;
+- Render post-deploy error/fatal query returned no matching records;
+- `www.gospots.eu/api/v1/ready` returned HTTP 200 with API status `ok`, database `up`, web app `ready`, and billing `ready`.
 
 ## Step 17.6 — Release tiers
 
@@ -101,22 +116,22 @@ Every release must have:
 
 ## Gate P17
 
-| Gate item | Proof owner |
+| Gate item | Proof owner / state |
 | --- | --- |
-| Critical E2E green | Phase 17 + repository CI |
-| Clean and representative-upgrade migrations green | repository CI; revalidated by exact-head CI |
-| Multi-tenant/security tests green | repository full API/security CI |
-| Money reconciliation green | Phase 17 canonical integrity assertion |
-| Adyen software adapter semantics | Phase 17 permanent connector/webhook tests |
-| Real Adyen account/terminal evidence | BLOCKED_EXTERNAL |
-| Offline-certified software workflows green | Phase 17 Edge + browser outage tests |
-| Hardware evidence | BLOCKED_EXTERNAL |
-| Fiscal/KSeF marketed-scope evidence | BLOCKED_EXTERNAL |
-| DR restore drill | Phase 17 independent logical restore |
-| Performance target | Phase 17 Phase-14 benchmark rerun + Phase 16 regression |
-| Runbook complete | Phase 17 release-contract job |
-| No unresolved critical/high production dependency issue | Phase 17 production dependency audit |
-| Exact merged production deployment | PRODUCTION_GATE / currently unresolved |
-| Full pilot day without shadow spreadsheet/POS | BLOCKED_EXTERNAL |
+| Critical E2E green | **PASS** — Phase 17 + repository CI |
+| Clean and representative-upgrade migrations green | **PASS** — repository CI / Phase 17 gate |
+| Multi-tenant/security tests green | **PASS** — repository full API/security CI |
+| Money reconciliation green | **PASS** — Phase 17 canonical integrity assertion |
+| Adyen software adapter semantics | **PASS** — permanent connector/webhook tests |
+| Real Adyen account/terminal evidence | `BLOCKED_EXTERNAL` |
+| Offline-certified software workflows green | **PASS** — Phase 17 Edge + browser outage tests |
+| Hardware evidence | `BLOCKED_EXTERNAL` |
+| Fiscal/KSeF marketed-scope evidence | `BLOCKED_EXTERNAL` |
+| DR restore drill | **PASS** — independent logical restore |
+| Performance target | **PASS** — Phase 14 benchmark rerun + Phase 16 regression |
+| Runbook complete | **PASS** — Phase 17 release-contract job |
+| No unresolved critical/high production dependency issue | **PASS** — production dependency audit |
+| Exact merged production deployment | **PASS** — Vercel + Render exact SHA `3082ac9223c3704db3152015e69255e8581999dc` |
+| Full pilot day without shadow spreadsheet/POS | `BLOCKED_EXTERNAL` |
 
-**Acceptance rule:** Phase 17 may reach `SOFTWARE_DONE / BLOCKED_EXTERNAL` when every executable software gate is green. It may reach `ACCEPTED` only after all applicable physical/provider/legal/pilot and production evidence above is recorded.
+**Acceptance rule:** every executable software and production gate is now green. Phase 17 remains `SOFTWARE_DONE / BLOCKED_EXTERNAL` until all applicable physical/provider/legal/pilot evidence is recorded. Only then may it reach `ACCEPTED`.
