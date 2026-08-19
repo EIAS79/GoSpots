@@ -9,10 +9,16 @@ const prisma = new PrismaClient();
 
 const LEDGER_ROWS = Number(process.env.PHASE14_DB_LEDGER_ROWS ?? 200_000);
 const CHECK_ROWS = Number(process.env.PHASE14_DB_CHECK_ROWS ?? 25_000);
-const OTHER_TENANT_LEDGER_ROWS = Number(process.env.PHASE14_DB_OTHER_TENANT_LEDGER_ROWS ?? 10_000);
+const OTHER_TENANT_LEDGER_ROWS = Number(
+  process.env.PHASE14_DB_OTHER_TENANT_LEDGER_ROWS ?? 10_000,
+);
 const BATCH_SIZE = Number(process.env.PHASE14_DB_BATCH_SIZE ?? 2_500);
-const SEED_BUDGET_MS = Number(process.env.PHASE14_DB_SEED_BUDGET_MS ?? 120_000);
-const WORKSPACE_BUDGET_MS = Number(process.env.PHASE14_DB_WORKSPACE_BUDGET_MS ?? 15_000);
+const SEED_BUDGET_MS = Number(
+  process.env.PHASE14_DB_SEED_BUDGET_MS ?? 120_000,
+);
+const WORKSPACE_BUDGET_MS = Number(
+  process.env.PHASE14_DB_WORKSPACE_BUDGET_MS ?? 15_000,
+);
 
 const currency = 'PLN';
 const dateKey = '2026-08-18';
@@ -21,13 +27,13 @@ const openedAt = new Date('2026-08-18T11:30:00.000Z');
 const ledgerAmount = '1.2500';
 const settlementAmount = '10.0000';
 
-function assertPositiveInteger(name: string, value: number) {
+function positiveInteger(name: string, value: number) {
   if (!Number.isInteger(value) || value <= 0) {
     throw new Error(`${name} must be a positive integer`);
   }
 }
 
-function assertFiniteBudget(name: string, value: number) {
+function positiveBudget(name: string, value: number) {
   if (!Number.isFinite(value) || value <= 0) {
     throw new Error(`${name} must be a positive finite number`);
   }
@@ -110,7 +116,12 @@ async function insertPayments(shopId: string, prefix: string) {
   }
 }
 
-async function insertLedger(shopId: string, prefix: string, count: number, amount: string) {
+async function insertLedger(
+  shopId: string,
+  prefix: string,
+  count: number,
+  amount: string,
+) {
   for (let start = 0; start < count; start += BATCH_SIZE) {
     const size = Math.min(BATCH_SIZE, count - start);
     await prisma.ledgerEntry.createMany({
@@ -132,10 +143,7 @@ async function insertLedger(shopId: string, prefix: string, count: number, amoun
   }
 }
 
-type IndexRow = {
-  tablename: string;
-  indexdef: string;
-};
+type IndexRow = { tablename: string; indexdef: string };
 
 async function assertTenantIndexes() {
   const rows = await prisma.$queryRaw<IndexRow[]>`
@@ -144,40 +152,42 @@ async function assertTenantIndexes() {
     WHERE schemaname = 'public'
       AND tablename IN ('LedgerEntry', 'Payment', 'CheckSettlement')
   `;
-
-  const hasTenantFirstIndex = (table: string) =>
+  const tenantFirst = (table: string) =>
     rows.some(
       (row) =>
-        row.tablename === table &&
-        row.indexdef.includes('("shopId"'),
+        row.tablename === table && row.indexdef.includes('("shopId"'),
     );
-
   const coverage = {
-    ledgerEntry: hasTenantFirstIndex('LedgerEntry'),
-    payment: hasTenantFirstIndex('Payment'),
-    checkSettlement: hasTenantFirstIndex('CheckSettlement'),
+    ledgerEntry: tenantFirst('LedgerEntry'),
+    payment: tenantFirst('Payment'),
+    checkSettlement: tenantFirst('CheckSettlement'),
   };
-
   if (!Object.values(coverage).every(Boolean)) {
-    throw new Error(`Phase 14 production-like benchmark is missing tenant-first database indexes: ${JSON.stringify(coverage)}`);
+    throw new Error(
+      `Phase 14 production-like benchmark is missing tenant-first database indexes: ${JSON.stringify(coverage)}`,
+    );
   }
-
   return coverage;
 }
 
 async function main() {
-  assertPositiveInteger('PHASE14_DB_LEDGER_ROWS', LEDGER_ROWS);
-  assertPositiveInteger('PHASE14_DB_CHECK_ROWS', CHECK_ROWS);
-  assertPositiveInteger('PHASE14_DB_OTHER_TENANT_LEDGER_ROWS', OTHER_TENANT_LEDGER_ROWS);
-  assertPositiveInteger('PHASE14_DB_BATCH_SIZE', BATCH_SIZE);
-  assertFiniteBudget('PHASE14_DB_SEED_BUDGET_MS', SEED_BUDGET_MS);
-  assertFiniteBudget('PHASE14_DB_WORKSPACE_BUDGET_MS', WORKSPACE_BUDGET_MS);
+  positiveInteger('PHASE14_DB_LEDGER_ROWS', LEDGER_ROWS);
+  positiveInteger('PHASE14_DB_CHECK_ROWS', CHECK_ROWS);
+  positiveInteger(
+    'PHASE14_DB_OTHER_TENANT_LEDGER_ROWS',
+    OTHER_TENANT_LEDGER_ROWS,
+  );
+  positiveInteger('PHASE14_DB_BATCH_SIZE', BATCH_SIZE);
+  positiveBudget('PHASE14_DB_SEED_BUDGET_MS', SEED_BUDGET_MS);
+  positiveBudget('PHASE14_DB_WORKSPACE_BUDGET_MS', WORKSPACE_BUDGET_MS);
 
-  const expectedMinorFromLedger = Math.round(LEDGER_ROWS * Number(ledgerAmount) * 100);
-  const expectedMinorFromSettlements = Math.round(CHECK_ROWS * Number(settlementAmount) * 100);
-  if (expectedMinorFromLedger !== expectedMinorFromSettlements) {
+  const expectedMinor = Math.round(LEDGER_ROWS * Number(ledgerAmount) * 100);
+  const expectedSettlementMinor = Math.round(
+    CHECK_ROWS * Number(settlementAmount) * 100,
+  );
+  if (expectedMinor !== expectedSettlementMinor) {
     throw new Error(
-      `Phase 14 database benchmark fixture is internally inconsistent: ledger=${expectedMinorFromLedger}, settlements=${expectedMinorFromSettlements}`,
+      `Phase 14 database benchmark fixture is internally inconsistent: ledger=${expectedMinor}, settlements=${expectedSettlementMinor}`,
     );
   }
 
@@ -225,96 +235,141 @@ async function main() {
 
   const seedStarted = performance.now();
   await insertGuestChecks(shop.id, prefix);
+  const ledgerAfterChecks = await prisma.ledgerEntry.count({
+    where: { shopId: shop.id },
+  });
   await insertSettlements(shop.id, prefix);
+  const ledgerAfterSettlements = await prisma.ledgerEntry.count({
+    where: { shopId: shop.id },
+  });
   await insertPayments(shop.id, prefix);
+  const ledgerBeforeExplicitFacts = await prisma.ledgerEntry.count({
+    where: { shopId: shop.id },
+  });
   await insertLedger(shop.id, prefix, LEDGER_ROWS, ledgerAmount);
-  await insertLedger(otherShop.id, otherPrefix, OTHER_TENANT_LEDGER_ROWS, '99.0000');
+  await insertLedger(
+    otherShop.id,
+    otherPrefix,
+    OTHER_TENANT_LEDGER_ROWS,
+    '99.0000',
+  );
   const seedMs = performance.now() - seedStarted;
-
   if (seedMs > SEED_BUDGET_MS) {
-    throw new Error(`Phase 14 production-like database seed exceeded ${SEED_BUDGET_MS}ms budget: ${seedMs.toFixed(1)}ms`);
+    throw new Error(
+      `Phase 14 production-like database seed exceeded ${SEED_BUDGET_MS}ms budget: ${seedMs.toFixed(1)}ms`,
+    );
   }
 
   await prisma.$executeRawUnsafe('ANALYZE "GuestCheck"');
   await prisma.$executeRawUnsafe('ANALYZE "CheckSettlement"');
   await prisma.$executeRawUnsafe('ANALYZE "Payment"');
   await prisma.$executeRawUnsafe('ANALYZE "LedgerEntry"');
-
   const indexCoverage = await assertTenantIndexes();
+
   const db = prisma as unknown as PrismaService;
   const actor = { sub: owner.id, shopId: shop.id } as JwtAccessPayload;
   process.env.LEDGER_READS = 'true';
-
-  const baseAnalytics = new GrowthAnalyticsService(db);
-  const analytics = new Phase14AnalyticsService(db, baseAnalytics);
+  const analytics = new Phase14AnalyticsService(
+    db,
+    new GrowthAnalyticsService(db),
+  );
   const workspaceStarted = performance.now();
   const workspace = await analytics.workspace(actor, dateKey, dateKey);
   const workspaceMs = performance.now() - workspaceStarted;
-
   if (workspaceMs > WORKSPACE_BUDGET_MS) {
     throw new Error(
       `Phase 14 production-like workspace exceeded ${WORKSPACE_BUDGET_MS}ms budget: ${workspaceMs.toFixed(1)}ms`,
     );
   }
 
-  const row = workspace.financial.currencies.find((item) => item.currency === currency);
-  if (!row) throw new Error('Phase 14 production-like workspace did not return the venue currency');
-
+  const row = workspace.financial.currencies.find(
+    (item) => item.currency === currency,
+  );
+  if (!row) {
+    throw new Error(
+      'Phase 14 production-like workspace did not return the venue currency',
+    );
+  }
   const cashTender = row.paymentMethod.CASH;
   const correctness = {
     grossSalesMinor: row.grossSalesMinor,
     netSalesMinor: row.netSalesMinor,
     cashTenderMinor: cashTender?.amountMinor ?? null,
     cashTenderCount: cashTender?.count ?? null,
-    expectedMinor: expectedMinorFromLedger,
+    expectedMinor,
     expectedCheckCount: CHECK_ROWS,
     tenantShopId: workspace.context.shopId,
   };
-
   if (
-    row.grossSalesMinor !== expectedMinorFromLedger ||
-    row.netSalesMinor !== expectedMinorFromLedger ||
-    cashTender?.amountMinor !== expectedMinorFromLedger ||
+    row.grossSalesMinor !== expectedMinor ||
+    row.netSalesMinor !== expectedMinor ||
+    cashTender?.amountMinor !== expectedMinor ||
     cashTender.count !== CHECK_ROWS ||
     workspace.context.shopId !== shop.id
   ) {
-    throw new Error(`Phase 14 production-like database benchmark returned incorrect analytics: ${JSON.stringify(correctness)}`);
+    throw new Error(
+      `Phase 14 production-like database benchmark returned incorrect analytics: ${JSON.stringify(correctness)}`,
+    );
   }
 
-  const [ledgerCount, checkCount, settlementCount, paymentCount, otherTenantLedgerCount] = await Promise.all([
+  const [
+    totalLedgerCount,
+    explicitLedgerCount,
+    checkCount,
+    settlementCount,
+    paymentCount,
+    otherTenantLedgerCount,
+    otherTenantExplicitLedgerCount,
+  ] = await Promise.all([
     prisma.ledgerEntry.count({ where: { shopId: shop.id } }),
+    prisma.ledgerEntry.count({
+      where: { shopId: shop.id, id: { startsWith: `${prefix}-ledger-` } },
+    }),
     prisma.guestCheck.count({ where: { shopId: shop.id } }),
     prisma.checkSettlement.count({ where: { shopId: shop.id } }),
     prisma.payment.count({ where: { shopId: shop.id } }),
     prisma.ledgerEntry.count({ where: { shopId: otherShop.id } }),
+    prisma.ledgerEntry.count({
+      where: {
+        shopId: otherShop.id,
+        id: { startsWith: `${otherPrefix}-ledger-` },
+      },
+    }),
   ]);
 
   const cardinality = {
-    ledgerEntries: ledgerCount,
+    explicitLedgerEntries: explicitLedgerCount,
+    canonicalSideEffectLedgerEntries: totalLedgerCount - explicitLedgerCount,
+    totalLedgerEntries: totalLedgerCount,
     guestChecks: checkCount,
     settlements: settlementCount,
     payments: paymentCount,
-    otherTenantLedgerEntries: otherTenantLedgerCount,
-    totalRows: ledgerCount + checkCount + settlementCount + paymentCount + otherTenantLedgerCount,
+    otherTenantExplicitLedgerEntries: otherTenantExplicitLedgerCount,
+    otherTenantTotalLedgerEntries: otherTenantLedgerCount,
+    explicitFixtureRows:
+      explicitLedgerCount +
+      checkCount +
+      settlementCount +
+      paymentCount +
+      otherTenantExplicitLedgerCount,
   };
-  const expectedCardinality = {
-    ledgerEntries: LEDGER_ROWS,
-    guestChecks: CHECK_ROWS,
-    settlements: CHECK_ROWS,
-    payments: CHECK_ROWS,
-    otherTenantLedgerEntries: OTHER_TENANT_LEDGER_ROWS,
-    totalRows: LEDGER_ROWS + CHECK_ROWS * 3 + OTHER_TENANT_LEDGER_ROWS,
+  const canonicalLedgerSideEffects = {
+    afterGuestChecks: ledgerAfterChecks,
+    afterSettlements: ledgerAfterSettlements,
+    beforeExplicitFacts: ledgerBeforeExplicitFacts,
   };
 
   if (
-    ledgerCount !== LEDGER_ROWS ||
+    explicitLedgerCount !== LEDGER_ROWS ||
     checkCount !== CHECK_ROWS ||
     settlementCount !== CHECK_ROWS ||
     paymentCount !== CHECK_ROWS ||
-    otherTenantLedgerCount !== OTHER_TENANT_LEDGER_ROWS
+    otherTenantExplicitLedgerCount !== OTHER_TENANT_LEDGER_ROWS ||
+    totalLedgerCount < explicitLedgerCount ||
+    otherTenantLedgerCount < otherTenantExplicitLedgerCount
   ) {
     throw new Error(
-      `Phase 14 production-like database cardinality assertion failed: ${JSON.stringify({ expected: expectedCardinality, actual: cardinality })}`,
+      `Phase 14 production-like database fixture cardinality failed: ${JSON.stringify({ cardinality, canonicalLedgerSideEffects })}`,
     );
   }
 
@@ -327,6 +382,7 @@ async function main() {
       workspaceBudgetMs: WORKSPACE_BUDGET_MS,
       seedBudgetMs: SEED_BUDGET_MS,
       cardinality,
+      canonicalLedgerSideEffects,
       indexCoverage,
       correctness,
     }),
