@@ -47,6 +47,7 @@ jobs:
           --health-retries 20
     env:
       DATABASE_URL: postgresql://ci:ci@127.0.0.1:5432/gospots_p17?schema=public
+      GOSPOTS_E2E_DB: 'true'
       JWT_ACCESS_SECRET: phase17-ci-access-secret-not-production
       NODE_ENV: test
       TENANT_RLS: 'off'
