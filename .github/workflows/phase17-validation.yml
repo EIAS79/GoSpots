@@ -73,6 +73,16 @@ jobs:
           pnpm --dir apps/api exec prisma migrate status
       - name: Seed release-certification data
         run: pnpm --dir apps/api exec tsx prisma/e2e-seed.ts > /tmp/phase17-seed.json
+      - name: Assert realistic billiard pilot profile
+        shell: bash
+        run: |
+          set -euo pipefail
+          count=$(docker run --rm --network host -e PGPASSWORD=ci postgres:17 \
+            psql -h 127.0.0.1 -U ci -d gospots_p17 -Atc \
+            "SELECT count(*) FROM \"Resource\" WHERE \"shopId\" = 'e2e-shop-gaming' AND \"type\" = 'BILLIARD';")
+          test "$count" -ge 8
+          test "$count" -le 20
+          echo "Pilot A billiard resources: $count" >> "$GITHUB_STEP_SUMMARY"
       - name: Prove money reconciliation authority
         run: pnpm --dir apps/api exec tsx prisma/phase14-integrity-assert.ts
       - name: Re-run production-sized analytics performance target
@@ -205,6 +215,7 @@ jobs:
           offline/phase3-conflict.spec.ts
           offline/phase3-finance-ready.spec.ts
           integrity/phase3-checkout.spec.ts
+          integrity/phase9-customer-portal.spec.ts
           integrity/phase10-workforce-accountability.spec.ts
           integrity/phase14-analytics.spec.ts
           integrity/phase16-hardening.spec.ts
