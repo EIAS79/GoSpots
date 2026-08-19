@@ -1,4 +1,5 @@
 import { AnalyticsWorkspace } from '@/components/analytics/analytics-workspace';
+import { Phase14OwnerIntelligence } from '@/components/analytics/phase14-owner-intelligence';
 
 export default async function AnalyticsPage({
   params,
@@ -6,5 +7,10 @@ export default async function AnalyticsPage({
   params: Promise<{ venuePath: string }>;
 }) {
   const { venuePath } = await params;
-  return <AnalyticsWorkspace venuePath={venuePath} />;
+  return (
+    <div className="space-y-8">
+      <Phase14OwnerIntelligence venuePath={venuePath} />
+      <AnalyticsWorkspace venuePath={venuePath} />
+    </div>
+  );
 }

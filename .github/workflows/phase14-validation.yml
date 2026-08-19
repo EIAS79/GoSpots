@@ -1,0 +1,98 @@
+name: Phase 14 analytics reconciliation validation
+
+on:
+  pull_request:
+    paths:
+      - 'apps/api/src/modules/growth/phase14-**'
+      - 'apps/api/src/modules/growth/growth.module.ts'
+      - 'apps/api/prisma/phase14-**'
+      - 'apps/web/src/components/analytics/phase14-**'
+      - 'apps/web/src/app/(tenant)/dashboard/[venuePath]/analytics/page.tsx'
+      - 'docs/analytics/**'
+      - 'docs/program/PHASE14_*'
+      - '.github/workflows/phase14-validation.yml'
+  push:
+    branches: [main]
+    paths:
+      - 'apps/api/src/modules/growth/phase14-**'
+      - 'apps/api/src/modules/growth/growth.module.ts'
+      - 'apps/api/prisma/phase14-**'
+      - 'apps/web/src/components/analytics/phase14-**'
+      - 'apps/web/src/app/(tenant)/dashboard/[venuePath]/analytics/page.tsx'
+      - 'docs/analytics/**'
+      - 'docs/program/PHASE14_*'
+      - '.github/workflows/phase14-validation.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  phase14:
+    name: Phase 14 gate · analytics reconciliation intelligence
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    services:
+      postgres:
+        image: postgres:17
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: gospots_phase14
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres -d gospots_phase14"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 20
+    env:
+      DATABASE_URL: postgresql://postgres:postgres@127.0.0.1:5432/gospots_phase14?schema=public
+      JWT_SECRET: phase14-ci-only-jwt-secret
+      INTEGRATION_SECRET_ENCRYPTION_KEY: 0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef
+      NODE_ENV: test
+
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 10.12.1
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: pnpm
+          cache-dependency-path: pnpm-lock.yaml
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+      - name: Generate and validate Prisma
+        working-directory: apps/api
+        run: |
+          pnpm prisma:generate
+          pnpm exec prisma validate
+      - name: Deploy clean migration chain
+        working-directory: apps/api
+        run: |
+          pnpm migrate:deploy
+          pnpm exec prisma migrate status
+      - name: Run focused Phase 14 semantic tests
+        working-directory: apps/api
+        run: >-
+          pnpm exec jest --config jest.config.cjs --runInBand
+          src/modules/growth/phase14-metric-dictionary.spec.ts
+          src/modules/growth/phase14-business-day.spec.ts
+          src/modules/growth/phase14-analytics.service.spec.ts
+          src/modules/growth/growth-analytics.service.spec.ts
+      - name: Prove canonical event reconciles across checkout payment ledger and cash
+        working-directory: apps/api
+        run: pnpm exec tsx prisma/phase14-integrity-assert.ts
+      - name: Run production-sized analytics calculation benchmark
+        working-directory: apps/api
+        run: pnpm exec tsx prisma/phase14-performance-benchmark.ts
+      - name: Build API
+        working-directory: apps/api
+        run: pnpm build
+      - name: Typecheck web
+        working-directory: apps/web
+        run: pnpm typecheck
+      - name: Build web
+        working-directory: apps/web
+        run: pnpm build

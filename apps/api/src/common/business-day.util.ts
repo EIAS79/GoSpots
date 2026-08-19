@@ -9,6 +9,12 @@ export type BusinessDayContext = {
   startMinutes: number;
 };
 
+export type BusinessDayBoundsInput = {
+  dateKey: string;
+  timeZone: string;
+  startMinutes: number;
+};
+
 export function assertBusinessDayStartMinutes(value: number): number {
   if (!Number.isInteger(value) || value < 0 || value >= 1440) {
     throw new RangeError('Business day start must be an integer from 0 to 1439');
@@ -49,17 +55,51 @@ export function businessDayKeyAt(at: Date, context: BusinessDayContext): string 
     : local.dateKey;
 }
 
-/** UTC half-open range [start, end) for one venue business day. */
+/**
+ * UTC half-open range [start, end) for one venue business day.
+ *
+ * The object overload makes analytics/report call sites explicit about the
+ * business-date key and IANA time zone while preserving the original
+ * `(businessDayKey, context)` kernel API for existing modules.
+ */
 export function businessDayBounds(
   businessDayKey: string,
   context: BusinessDayContext,
+): { start: Date; end: Date };
+export function businessDayBounds(input: BusinessDayBoundsInput): {
+  start: Date;
+  end: Date;
+};
+export function businessDayBounds(
+  businessDayKeyOrInput: string | BusinessDayBoundsInput,
+  context?: BusinessDayContext,
 ): { start: Date; end: Date } {
-  const timezone = isValidIanaTimeZone(context.timezone) ? context.timezone : 'UTC';
-  const startMinutes = assertBusinessDayStartMinutes(context.startMinutes);
+  const businessDayKey =
+    typeof businessDayKeyOrInput === 'string'
+      ? businessDayKeyOrInput
+      : businessDayKeyOrInput.dateKey;
+  const resolvedContext: BusinessDayContext =
+    typeof businessDayKeyOrInput === 'string'
+      ? (context as BusinessDayContext)
+      : {
+          timezone: businessDayKeyOrInput.timeZone,
+          startMinutes: businessDayKeyOrInput.startMinutes,
+        };
+
+  const timezone = isValidIanaTimeZone(resolvedContext.timezone)
+    ? resolvedContext.timezone
+    : 'UTC';
+  const startMinutes = assertBusinessDayStartMinutes(
+    resolvedContext.startMinutes,
+  );
   const time = `${String(Math.floor(startMinutes / 60)).padStart(2, '0')}:${String(
     startMinutes % 60,
   ).padStart(2, '0')}`;
   const start = zonedWallTimeToUtc(businessDayKey, time, timezone);
-  const end = zonedWallTimeToUtc(addDateKeyDays(businessDayKey, 1), time, timezone);
+  const end = zonedWallTimeToUtc(
+    addDateKeyDays(businessDayKey, 1),
+    time,
+    timezone,
+  );
   return { start, end };
 }
