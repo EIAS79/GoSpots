@@ -1,10 +1,10 @@
 # GoSpots Phase 17 — Pilot, Certification, Go-Live and Release
 
-**Status:** `SOFTWARE_DONE / BLOCKED_EXTERNAL` — all executable Phase 17 software certification gates have passed; real provider/hardware/legal/pilot evidence is still required for Gate P17 acceptance.  
+**Status:** `SOFTWARE_DONE / BLOCKED_EXTERNAL` — all executable Phase 17 software, CI, merge and production deployment gates have passed; real provider/hardware/legal/pilot evidence is still required for Gate P17 acceptance.  
 **Source:** GoSpots Master Product & Engineering Execution Plan v2 — Phase 17.  
 **Initial Phase 17 merge:** `fe00ea5e4155ce79dd909903abfc7e094540795d` via PR #82.  
-**Adyen continuation:** PR #83 merged to `main` as `25047e58f19ad311671cda2282faab0db39a837f`.  
-**Final PR #83 head:** `a9304d13d56f74f1d8e3b97f550e7fb453d2779c`.
+**Adyen continuation:** PR #83 merged as `25047e58f19ad311671cda2282faab0db39a837f`.  
+**Production closeout:** PR #84 merged as `3082ac9223c3704db3152015e69255e8581999dc`.
 
 ## Phase objective
 
@@ -23,11 +23,11 @@ Phase 17 delivered:
 - cash-close/high-risk financial contract rerun;
 - Edge hard-outage, replay and printing continuity rerun;
 - independent PostgreSQL 17 logical backup/restore drill;
-- permanent Playwright release gate covering the complete E2E suite with `--fail-on-flaky-tests`;
+- permanent Playwright release gate over the complete E2E suite with `--fail-on-flaky-tests`;
 - canonical persisted-state assertions after browser E2E;
 - Pilot A seed expanded to eight billiard tables with a permanent 8–20 table assertion;
 - release-tier, opening/day-close, external-evidence and rollback runbook;
-- Adyen Terminal API as the active venue/card-present provider behind canonical GoSpots payment authority;
+- Adyen Terminal API behind canonical GoSpots `PaymentConnector` / `PaymentOperation` authority;
 - deterministic Adyen PaymentRequest identity;
 - explicit payment `UNKNOWN` plus TransactionStatus recovery instead of blind retry;
 - AbortRequest plus status verification;
@@ -36,7 +36,8 @@ Phase 17 delivered:
 - `CANCEL_OR_REFUND`, `REFUND_FAILED` and `REFUNDED_REVERSED` reconciliation;
 - permanent Adyen adapter/webhook/payment-state tests;
 - Stripe Terminal removed from runtime venue payments while Stripe Billing remains SaaS subscription/features billing only;
-- no-flake E2E hardening for authentication setup and Offline Lite conflict isolation.
+- no-flake E2E hardening for authentication setup and Offline Lite conflict isolation;
+- guarded Git-backed Vercel release flow from the real `apps/web` Next.js root.
 
 No Phase 17 Prisma schema change or migration was required. GuestCheck, PaymentOperation, Refund, settlement, ledger and cash remain GoSpots canonical state.
 
@@ -54,7 +55,7 @@ Automated proof covers floor/check operation, variants/modifiers, KDS routing an
 
 Automated proof covers timed usage + F&B + reservation on one GuestCheck, split settlement, Offline Lite/conflict paths, Edge outage/reconnect/printing continuity and canonical post-run assertions.
 
-These are release-candidate software simulations. They are not represented as evidence that a physical venue completed an actual full operating day.
+These are release-candidate software simulations. They are not evidence that a physical venue completed an actual full operating day.
 
 ## Database and integrity evidence
 
@@ -71,49 +72,62 @@ Verified during Phase 17 exact-head certification:
 - duplicate and late Adyen refund events remain reconciliation-safe;
 - Edge/offline replay and hard-outage regressions passed.
 
-## Exact final PR #83 evidence
+## Exact-head CI evidence
 
-Final PR #83 head `a9304d13d56f74f1d8e3b97f550e7fb453d2779c` passed every triggered workflow:
+### PR #83 — Adyen continuation
 
-- CI `32300277490` — **SUCCESS**;
-- Phase 17 pilot certification and release gate `32300277394` — **SUCCESS**;
-- Standalone product boundary `32300277473` — **SUCCESS**;
-- Edge hard-outage validation `32300277383` — **SUCCESS**;
-- Phase 3 `32300277316` — **SUCCESS**;
-- Phase 4 `32300277381` — **SUCCESS**;
-- Phase 7 `32300277403` — **SUCCESS**;
-- Phase 8 `32300277324` — **SUCCESS**;
-- Phase 9 `32300277672` — **SUCCESS**;
-- Phase 10 `32300277299` — **SUCCESS**;
-- Phase 11 `32300277315` — **SUCCESS**;
-- Phase 13 `32300277377` — **SUCCESS**;
-- Phase 16 `32300277429` — **SUCCESS**.
+Final head `a9304d13d56f74f1d8e3b97f550e7fb453d2779c` passed every triggered workflow, including repository CI, Phase 17 release certification, standalone product boundary, Edge hard-outage and Phase 3/4/7/8/9/10/11/13/16 validations. PR #83 merged as `25047e58f19ad311671cda2282faab0db39a837f`.
 
-PR #83 then merged to `main` as `25047e58f19ad311671cda2282faab0db39a837f`.
+### PR #84 — production release closeout
+
+Final head `2b798f06dc3219e14eb31af3ff65022a660ec837` passed:
+
+- repository CI `32313820547` — **SUCCESS**;
+- Phase 17 pilot certification and release gate `32313820558` — **SUCCESS**;
+- standalone product boundary `32313820544` — **SUCCESS**;
+- Edge hard-outage validation `32313820537` — **SUCCESS**;
+- Phase 3 validation `32313820536` — **SUCCESS**;
+- Phase 4 validation `32313820525` — **SUCCESS**;
+- Phase 7 validation `32313820531` — **SUCCESS**.
+
+PR #84 then squash-merged with expected-head protection as `3082ac9223c3704db3152015e69255e8581999dc`.
 
 ## Production evidence
 
-### API / Render
+### Web / Vercel — PASS
 
-The active Frankfurt Render service auto-deployed exact Phase 17 merge `25047e58f19ad311671cda2282faab0db39a837f` as deployment `dep-da31eknavr4c7394ri60`; status is **LIVE**. Immediate post-deploy error/fatal log inspection returned no matching records.
+The former `NEXT_NO_VERSION` failures were caused by a manual synthetic-package deployment path that did not preserve the real monorepo application root. PR #84 removed that release path from the canonical process and restored guarded Git-backed deployment from `apps/web`.
 
-### Web / Vercel
+Production deployment evidence:
 
-The latest known source-traceable READY Vercel production deployment still predates the Phase 16/17 merges. The failed manual/direct deployment attempts were not valid production evidence: they uploaded a small synthetic bundle and evaluated it outside the real `apps/web` Next.js root, producing `NEXT_NO_VERSION`.
+- Vercel project: `gospots`;
+- deployment: `dpl_51W5xjRk6JrQuPbAr49HbKBMDE2Y`;
+- source: Git;
+- branch: `main`;
+- exact source SHA: `3082ac9223c3704db3152015e69255e8581999dc`;
+- state: **READY**;
+- production aliases include `gospots.eu`, `www.gospots.eu`, `gospots.pl` and `www.gospots.pl`;
+- build output confirms the real repository/`apps/web` Next.js path and completed successfully;
+- `https://www.gospots.eu/` returned HTTP **200**;
+- `https://www.gospots.eu/login` returned HTTP **200**;
+- Vercel post-release runtime error query returned **no runtime errors**.
 
-PR #84 (`phase-17-vercel-production-closeout`) replaces that fragile path with a guarded Git-backed release:
+The release policy now permits Git deployment only from `main` and uses `apps/web/.vercel-release` as the explicit release marker. Routine commits that do not change the marker are skipped by Vercel.
 
-- canonical Vercel root remains `apps/web`;
-- feature-branch Git deployments are disabled;
-- only `main` may deploy;
-- `ignoreCommand` skips normal `main` commits unless `apps/web/.vercel-release` changed;
-- the Phase 17 closeout marker deliberately requests the exact production build after PR #84 is green and merged.
+### API / Render — PASS
 
-Until that merge produces and verifies a source-traceable production deployment, web production proof remains open.
+The Frankfurt Render service deployed exact release SHA `3082ac9223c3704db3152015e69255e8581999dc` as `dep-da33t83m8hqs739febk0`; status is **LIVE**. Post-deploy error/fatal log inspection returned no matching records.
+
+End-to-end readiness through the production web origin also passed:
+
+- `https://www.gospots.eu/api/v1/ready` returned HTTP **200**;
+- API readiness reported `status=ok`, database `up`, web app `ready` and billing `ready`.
+
+The prior Phase 17 API deployment `dep-da31eknavr4c7394ri60` at `25047e58f19ad311671cda2282faab0db39a837f` was correctly deactivated after the exact PR #84 release revision became live.
 
 ## BLOCKED_EXTERNAL — required before Gate P17 acceptance
 
-Phase 17 cannot be `ACCEPTED` until all applicable marketed-scope evidence exists:
+The production deployment gate is now closed. Phase 17 still cannot be `ACCEPTED` until all applicable marketed-scope external evidence exists:
 
 1. **Adyen provider/terminal certification:** real test merchant/API credential/HMAC/boarded terminal; success, decline, timeout/UNKNOWN, TransactionStatus recovery, cancel, referenced refund, duplicate webhook and final reconciliation;
 2. real fiscal printer/provider certification: issue, outage, retry and reconciliation;
@@ -123,25 +137,25 @@ Phase 17 cannot be `ACCEPTED` until all applicable marketed-scope evidence exist
 6. physical KDS/printer workflow;
 7. physical inventory receipt/sale/waste/stocktake reconciliation drill;
 8. Polish accountant/tax/legal validation;
-9. a design-partner/pilot venue completing a full operating day without a shadow spreadsheet/POS for core GoSpots workflows;
-10. source-traceable exact-revision Vercel production deployment and runtime verification.
+9. a design-partner/pilot venue completing a full operating day without a shadow spreadsheet/POS for core GoSpots workflows.
 
-Mocks, simulators and fake venue data remain valid software rehearsal evidence only; they are not substituted for physical/provider/legal acceptance.
+Mocks, simulators and fake venue data remain valid software rehearsal evidence only; they are not substitutes for physical/provider/legal acceptance.
 
 ## Acceptance checklist
 
-- [x] Phase 17 release-integrity job green on final PR #83 head.
-- [x] Adyen payment/refund/webhook/reconciliation contracts green on final PR #83 head.
-- [x] Full permanent no-flake browser release suite green on final PR #83 head.
-- [x] Repository CI API/web/Edge/clean migration/upgrade migration/browser jobs green on final PR #83 head.
-- [x] Triggered Phase 3/4/7/8/9/10/11/13/16, Edge and standalone regressions green on final PR #83 head.
+- [x] Phase 17 release-integrity job green.
+- [x] Adyen payment/refund/webhook/reconciliation software contracts green.
+- [x] Full permanent no-flake browser release suite green.
+- [x] Repository CI API/web/Edge/clean migration/upgrade migration/browser jobs green.
+- [x] Triggered Phase 3/4/7/8/9/10/11/13/16, Edge and standalone regressions green for the Phase 17 implementation head.
 - [x] PR #83 merged with expected-head protection.
-- [x] Resulting Phase 17 `main` revision identified and verified as `25047e58f19ad311671cda2282faab0db39a837f`.
-- [x] Exact Phase 17 API revision deployed and verified on Render.
-- [x] Immediate Render production error/fatal log check clean.
-- [ ] PR #84 Vercel production-closeout head green and merged.
-- [ ] Source-traceable Vercel production deployment verified on the resulting release revision.
-- [ ] Immediate Vercel production runtime errors checked on that deployment.
+- [x] PR #84 exact head green and merged with expected-head protection.
+- [x] Source-traceable exact-revision Vercel production deployment verified.
+- [x] Production homepage and login smoke checks passed.
+- [x] Immediate Vercel runtime error check clean.
+- [x] Exact release revision deployed and verified on Render.
+- [x] Immediate Render error/fatal log check clean.
+- [x] End-to-end production readiness endpoint returned HTTP 200.
 - [ ] Real Adyen terminal/provider evidence complete.
 - [ ] Fiscal/KSeF/legal evidence complete for marketed Polish scope.
 - [ ] Marketed hardware/physical Edge/KDS/inventory evidence complete.
