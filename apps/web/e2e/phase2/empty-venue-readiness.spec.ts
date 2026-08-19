@@ -6,7 +6,10 @@ test('@smoke P2 empty venue reaches operational floor without database edits', a
   const slug = `p2-empty-${suffix}`.slice(0, 60);
   const password = 'GoSpots-P2-E2E-Only-2026!';
 
-  await page.goto('/register');
+  // Register through the same browser request context without mounting the
+  // interactive registration page. Keeping that page alive while the API
+  // registration replaces auth cookies can race its anonymous/auth probes
+  // against the freshly-issued owner session and intermittently revoke it.
   await page.request.get('/api/v1/auth/csrf');
   const registered = await api<{ venuePath: string }>(page, 'POST', '/auth/register', {
     data: {
