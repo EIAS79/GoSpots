@@ -126,7 +126,7 @@ jobs:
             /tmp/gospots-phase17.dump
 
   pilot-e2e:
-    name: Phase 17 gate · billiard · restaurant · mixed · offline
+    name: Phase 17 gate · full permanent browser release suite
     runs-on: ubuntu-latest
     timeout-minutes: 40
     services:
@@ -204,21 +204,9 @@ jobs:
             sleep 1
           done
           curl -fsS http://127.0.0.1:3000/login >/dev/null
-      - name: Run three pilot archetypes and outage/conflict paths
+      - name: Run permanent pilot and integrity browser suite without flaky acceptance
         working-directory: apps/web/e2e
-        run: >-
-          npx playwright test
-          gaming/golden-path.spec.ts
-          restaurant/restaurant-path.spec.ts
-          mixed/mixed-path.spec.ts
-          offline/offline-lite.spec.ts
-          offline/phase3-conflict.spec.ts
-          offline/phase3-finance-ready.spec.ts
-          integrity/phase3-checkout.spec.ts
-          integrity/phase9-customer-portal.spec.ts
-          integrity/phase10-workforce-accountability.spec.ts
-          integrity/phase14-analytics.spec.ts
-          integrity/phase16-hardening.spec.ts
+        run: npx playwright test --fail-on-flaky-tests
       - name: Assert persisted canonical results
         run: pnpm --dir apps/api exec tsx prisma/e2e-assert.ts
       - name: Upload pilot diagnostics
