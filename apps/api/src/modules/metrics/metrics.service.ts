@@ -71,6 +71,8 @@ export class MetricsService {
         collectionErrors += 1;
       }
     };
+    const ageSeconds = (date: Date | null | undefined) =>
+      date ? Math.max(0, Math.floor((Date.now() - date.getTime()) / 1000)) : 0;
 
     await Promise.all([
       collect('gospots_db_query_latency_ms', async () => {
@@ -86,6 +88,17 @@ export class MetricsService {
           },
         }),
       ),
+      collect('gospots_payment_oldest_unknown_age_seconds', async () => {
+        const oldest = await this.prisma.paymentOperation.findFirst({
+          where: {
+            state: PaymentOperationState.UNKNOWN,
+            reconciliationRequired: true,
+          },
+          orderBy: { updatedAt: 'asc' },
+          select: { updatedAt: true },
+        });
+        return ageSeconds(oldest?.updatedAt);
+      }),
       collect('gospots_provider_failures_24h', () =>
         this.prisma.paymentOperation.count({
           where: {
@@ -121,6 +134,23 @@ export class MetricsService {
           },
         }),
       ),
+      collect('gospots_ksef_oldest_backlog_age_seconds', async () => {
+        const oldest = await this.prisma.complianceDocument.findFirst({
+          where: {
+            kind: ComplianceDocumentKind.INVOICE,
+            state: {
+              in: [
+                ComplianceDocumentState.PENDING,
+                ComplianceDocumentState.SUBMITTED,
+                ComplianceDocumentState.UNKNOWN,
+              ],
+            },
+          },
+          orderBy: { updatedAt: 'asc' },
+          select: { updatedAt: true },
+        });
+        return ageSeconds(oldest?.updatedAt);
+      }),
       collect('gospots_edge_sync_backlog', () =>
         this.prisma.idempotencyReceipt.count({
           where: {
@@ -129,6 +159,17 @@ export class MetricsService {
           },
         }),
       ),
+      collect('gospots_edge_oldest_pending_age_seconds', async () => {
+        const oldest = await this.prisma.idempotencyReceipt.findFirst({
+          where: {
+            scope: { in: ['offline.edge.phase12.v1', 'offline.edge.cash.v1'] },
+            status: 'PENDING',
+          },
+          orderBy: { createdAt: 'asc' },
+          select: { createdAt: true },
+        });
+        return ageSeconds(oldest?.createdAt);
+      }),
       collect('gospots_print_failures', () =>
         this.prisma.printJob.count({ where: { status: PrintJobStatus.FAILED } }),
       ),
@@ -138,9 +179,7 @@ export class MetricsService {
           orderBy: { openedAt: 'asc' },
           select: { openedAt: true },
         });
-        return oldest
-          ? Math.max(0, Math.floor((Date.now() - oldest.openedAt.getTime()) / 1000))
-          : 0;
+        return ageSeconds(oldest?.openedAt);
       }),
       collect('gospots_login_failures_current', async () => {
         const result = await this.prisma.user.aggregate({
