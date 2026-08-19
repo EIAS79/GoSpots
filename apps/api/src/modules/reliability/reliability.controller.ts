@@ -6,6 +6,7 @@ import { CurrentUser } from '../auth/decorators/current-user.decorator';
 import { RequirePermissions } from '../auth/decorators/roles.decorator';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { ReliabilityService } from './reliability.service';
+import { PHASE16_SLOS } from './slo.catalog';
 
 @ApiTags('reliability')
 @Controller('reliability')
@@ -17,5 +18,10 @@ export class ReliabilityController {
   @Get('readiness')
   readiness(@CurrentUser() user: JwtAccessPayload) {
     return this.reliability.readiness(user);
+  }
+
+  @Get('slos')
+  slos() {
+    return { version: 'phase16-v1', slos: PHASE16_SLOS };
   }
 }
