@@ -11,6 +11,10 @@ import { phase14MetricDictionary } from './phase14-metric-dictionary';
 const SOURCE_VERSION = 'phase14-owner-intelligence-v1-2026-08-19';
 const DATE_KEY = /^\d{4}-\d{2}-\d{2}$/;
 
+type BaseFinance = Awaited<ReturnType<GrowthAnalyticsService['finance']>>;
+type BaseOperations = Awaited<ReturnType<GrowthAnalyticsService['operations']>>;
+type BaseGuests = Awaited<ReturnType<GrowthAnalyticsService['guests']>>;
+
 type ReportContext = {
   shopId: string;
   slug: string;
@@ -21,6 +25,38 @@ type ReportContext = {
   from: Date;
   to: Date;
   dayCount: number;
+};
+
+type LowStockRisk = {
+  stockItemId: string;
+  name: string;
+  quantityMilli: number;
+  reorderLevelMilli: number;
+};
+
+type ReconciliationIssueView = {
+  id: string;
+  type: string;
+  severity: string;
+  amountMinor: number | null;
+  currency: string | null;
+  affectedEntities: Array<{ type: string; id: string | null }>;
+  firstSeenAt: Date;
+  lastCheckedAt: Date;
+  message: string;
+  suggestedNextAction: string;
+  evidenceLinks: string[];
+  source: string;
+};
+
+type AttentionItem = {
+  id: string;
+  domain: string;
+  severity: string;
+  title: string;
+  detail: string;
+  suggestedNextAction: string;
+  evidenceLinks: string[];
 };
 
 function minor(value: { toString(): string } | number | null | undefined) {
@@ -138,7 +174,7 @@ export class Phase14AnalyticsService {
     return { shopId, ...shop, from: first.start, to: last.end, dayCount };
   }
 
-  private async financial(context: ReportContext, base: any) {
+  private async financial(context: ReportContext, base: BaseFinance) {
     const { shopId, from, to } = context;
     const [settlements, adjustments, serviceLines, payments, shifts] = await Promise.all([
       this.prisma.checkSettlement.findMany({
@@ -167,7 +203,7 @@ export class Phase14AnalyticsService {
       }),
     ]);
     const elapsedHours = (to.getTime() - from.getTime()) / 3_600_000;
-    const rows = base.currencies.map((baseRow: any) => {
+    const rows = base.currencies.map((baseRow) => {
       const currency = baseRow.currency;
       const paid = settlements.filter((row) => row.currency === currency);
       const tender = new Map<string, { count: number; amountMinor: number }>();
@@ -203,11 +239,11 @@ export class Phase14AnalyticsService {
     return {
       sourceOfTruth: 'LedgerEntry with immutable settlement projections',
       currencies: rows,
-      revenueByBranch: rows.map((row: any) => ({ shopId, branchCode: context.branchCode, currency: row.currency, netSalesMinor: row.netSalesMinor })),
+      revenueByBranch: rows.map((row) => ({ shopId, branchCode: context.branchCode, currency: row.currency, netSalesMinor: row.netSalesMinor })),
     };
   }
 
-  private async resources(context: ReportContext, base: any) {
+  private async resources(context: ReportContext, base: BaseOperations) {
     const { shopId, from, to, timezone } = context;
     const [sessions, windows] = await Promise.all([
       this.prisma.operationsSession.findMany({
@@ -245,7 +281,7 @@ export class Phase14AnalyticsService {
     }
     const openingMinutesPerResource = windows.reduce((sum, window) => sum + clipSeconds(window.opensAt, window.closesAt, from, to) / 60, 0);
     const theoreticalOpenMinutes = openingMinutesPerResource * base.resources.resourceCount;
-    const enriched = base.resources.rows.map((row: any) => ({
+    const enriched = base.resources.rows.map((row) => ({
       ...row,
       averageSessionDurationMinutes: rounded(average(row.occupiedMinutes, row.sessionCount)),
       revenuePerSessionMinor: rounded(average(row.accruedResourceRevenueMinor, row.sessionCount)),
@@ -261,11 +297,11 @@ export class Phase14AnalyticsService {
       revenuePerAvailableResourceHourMinor: rounded(base.resources.availableMinutes > 0 ? base.resources.accruedResourceRevenueMinor / (base.resources.availableMinutes / 60) : null),
       fbAttachRatePct: rounded(ratio(attached.size, sessions.length)),
       peakHours: [...peak.entries()].map(([localHour, sessionStarts]) => ({ localHour: Number(localHour), sessionStarts })).sort((a, b) => b.sessionStarts - a.sessionStarts || a.localHour - b.localHour),
-      profitability: enriched.sort((a: any, b: any) => (b.revenuePerAvailableHourMinor ?? -1) - (a.revenuePerAvailableHourMinor ?? -1)),
+      profitability: enriched.sort((a, b) => (b.revenuePerAvailableHourMinor ?? -1) - (a.revenuePerAvailableHourMinor ?? -1)),
     };
   }
 
-  private async restaurant(context: ReportContext, baseOperations: any) {
+  private async restaurant(context: ReportContext, baseOperations: BaseOperations) {
     const { shopId, from, to } = context;
     const [completed, cancelled, profiles, comps] = await Promise.all([
       this.prisma.venueOrder.findMany({
@@ -288,17 +324,11 @@ export class Phase14AnalyticsService {
         })
       : [];
     const checks: Array<{ id: string; partySize: number }> = checkIds.length
-      ? await this.prisma.guestCheck.findMany({
-          where: { shopId, id: { in: checkIds } },
-          select: { id: true, partySize: true },
-        })
+      ? await this.prisma.guestCheck.findMany({ where: { shopId, id: { in: checkIds } }, select: { id: true, partySize: true } })
       : [];
     const itemIds = [...new Set(lines.map((row) => row.menuItemId))];
     const items: Array<{ id: string; section: { name: string } | null }> = itemIds.length
-      ? await this.prisma.menuItem.findMany({
-          where: { shopId, id: { in: itemIds } },
-          select: { id: true, section: { select: { name: true } } },
-        })
+      ? await this.prisma.menuItem.findMany({ where: { shopId, id: { in: itemIds } }, select: { id: true, section: { select: { name: true } } } })
       : [];
     const section = new Map(items.map((row) => [row.id, row.section?.name ?? 'Uncategorised']));
     const itemMix = new Map<string, { quantity: number; salesMinor: number }>();
@@ -344,7 +374,7 @@ export class Phase14AnalyticsService {
     };
   }
 
-  private async inventory(context: ReportContext, baseFinance: any) {
+  private async inventory(context: ReportContext, baseFinance: BaseFinance) {
     const { shopId, from, to, dayCount, currency } = context;
     const [window, history, items] = await Promise.all([
       this.prisma.stockMovement.findMany({ where: { shopId, occurredAt: { gte: from, lt: to } }, orderBy: { occurredAt: 'asc' } }),
@@ -358,14 +388,14 @@ export class Phase14AnalyticsService {
     const cogsMinor = theoretical.reduce((sum, row) => sum + Math.abs(row.totalCostMinor), 0) - reversal.reduce((sum, row) => sum + Math.abs(row.totalCostMinor), 0);
     const current = new Map<string, number>();
     for (const row of history) current.set(row.stockItemId, (current.get(row.stockItemId) ?? 0) + row.quantityMilli);
-    const lowStockRisk = items.filter((item) => (current.get(item.id) ?? 0) <= item.reorderLevelMilli).map((item) => ({
+    const lowStockRisk: LowStockRisk[] = items.filter((item) => (current.get(item.id) ?? 0) <= item.reorderLevelMilli).map((item) => ({
       stockItemId: item.id,
       name: item.name,
       quantityMilli: current.get(item.id) ?? 0,
       reorderLevelMilli: item.reorderLevelMilli,
     }));
     const currentInventoryValueMinor = items.reduce((sum, item) => sum + Math.round(((current.get(item.id) ?? 0) / 1000) * item.weightedAverageCostMinor), 0);
-    const finance = baseFinance.currencies.find((row: any) => row.currency === currency) ?? baseFinance.currencies[0];
+    const finance = baseFinance.currencies.find((row) => row.currency === currency) ?? baseFinance.currencies[0];
     const netSalesMinor = finance?.netSettledRevenueMinor ?? 0;
     const purchasePriceTrend = items.flatMap((item) => {
       const purchases = window.filter((row) => row.stockItemId === item.id && /PURCHASE|RECEIPT/i.test(row.kind));
@@ -425,7 +455,7 @@ export class Phase14AnalyticsService {
     };
   }
 
-  private async customers(context: ReportContext, baseGuests: any) {
+  private async customers(context: ReportContext, baseGuests: BaseGuests) {
     const { shopId, from, to } = context;
     const [visits, memberships, loyalty, history] = await Promise.all([
       this.prisma.customerVisit.findMany({ where: { shopId, completedAt: { gte: from, lt: to } }, select: { customerId: true, settledAmountMinor: true } }),
@@ -450,7 +480,7 @@ export class Phase14AnalyticsService {
     };
   }
 
-  private async workforce(context: ReportContext, baseFinance: any) {
+  private async workforce(context: ReportContext, baseFinance: BaseFinance) {
     const { shopId, from, to, currency } = context;
     const [orders, evidence, shifts, punches, memberships] = await Promise.all([
       this.prisma.venueOrder.findMany({ where: { shopId, status: 'COMPLETED', completedAt: { gte: from, lt: to } }, select: { createdById: true, totalMinor: true } }),
@@ -459,7 +489,7 @@ export class Phase14AnalyticsService {
       this.prisma.timePunch.findMany({ where: { shopId, startedAt: { lt: to }, OR: [{ endedAt: null }, { endedAt: { gt: from } }] }, select: { membershipId: true, startedAt: true, endedAt: true } }),
       this.prisma.membership.findMany({ where: { shopId }, select: { id: true, userId: true } }),
     ]);
-    const finance = baseFinance.currencies.find((row: any) => row.currency === currency) ?? baseFinance.currencies[0];
+    const finance = baseFinance.currencies.find((row) => row.currency === currency) ?? baseFinance.currencies[0];
     const sales = new Map<string, number>();
     for (const row of orders) sales.set(row.createdById, (sales.get(row.createdById) ?? 0) + row.totalMinor);
     const worked = new Map<string, number>();
@@ -490,7 +520,12 @@ export class Phase14AnalyticsService {
     };
   }
 
-  private async reconciliation(context: ReportContext, baseFinance: any, baseGuests: any, inventory: any) {
+  private async reconciliation(
+    context: ReportContext,
+    baseFinance: BaseFinance,
+    baseGuests: BaseGuests,
+    inventory: { lowStockRisk: LowStockRisk[] },
+  ) {
     const { shopId, from, to, slug, currency } = context;
     const [persisted, settledChecks, offline] = await Promise.all([
       this.prisma.financialReconciliationIssue.findMany({
@@ -517,7 +552,7 @@ export class Phase14AnalyticsService {
       }),
     ]);
     const now = new Date();
-    const issues: any[] = persisted.map((row) => ({
+    const issues: ReconciliationIssueView[] = persisted.map((row) => ({
       id: row.id,
       type: String(row.type),
       severity: row.severity,
@@ -547,25 +582,30 @@ export class Phase14AnalyticsService {
         source: 'Phase14 live invariant',
       });
     }
-    for (const row of baseFinance.currencies.filter((item: any) => item.reconciliationVarianceMinor !== 0)) {
+    for (const row of baseFinance.currencies.filter((item) => item.reconciliationVarianceMinor !== 0)) {
       issues.push({ id: `provider:${row.currency}`, type: 'PAYMENT_PROVIDER_MISMATCH', severity: 'HIGH', amountMinor: Math.abs(row.reconciliationVarianceMinor), currency: row.currency, affectedEntities: [], firstSeenAt: now, lastCheckedAt: now, message: 'Canonical ledger net does not equal successful payment/refund net.', suggestedNextAction: actionFor('PAYMENT_PROVIDER_MISMATCH'), evidenceLinks: [`/dashboard/${slug}/analytics?view=finance`], source: 'GrowthAnalyticsService reconciliation' });
     }
-    for (const [liabilityCurrency, liability] of Object.entries(baseGuests.storedValue.liabilityByCurrency as Record<string, number>)) {
+    for (const [liabilityCurrency, liability] of Object.entries(baseGuests.storedValue.liabilityByCurrency)) {
       if (liability < 0) issues.push({ id: `stored:${liabilityCurrency}`, type: 'STORED_VALUE_LIABILITY_MISMATCH', severity: 'CRITICAL', amountMinor: Math.abs(liability), currency: liabilityCurrency, affectedEntities: [], firstSeenAt: now, lastCheckedAt: now, message: 'Stored-value ledger liability is negative.', suggestedNextAction: actionFor('STORED_VALUE_LIABILITY_MISMATCH'), evidenceLinks: [`/dashboard/${slug}/analytics?view=guests`], source: 'StoredValueLedgerEntry' });
     }
-    for (const row of inventory.lowStockRisk.filter((item: any) => item.quantityMilli < 0)) {
+    for (const row of inventory.lowStockRisk.filter((item) => item.quantityMilli < 0)) {
       issues.push({ id: `inventory:${row.stockItemId}`, type: 'INVENTORY_ANOMALY', severity: 'MEDIUM', amountMinor: null, currency, affectedEntities: [{ type: 'STOCK_ITEM', id: row.stockItemId }], firstSeenAt: now, lastCheckedAt: now, message: `${row.name} has negative stock (${row.quantityMilli}/1000).`, suggestedNextAction: actionFor('INVENTORY_ANOMALY'), evidenceLinks: [`/dashboard/${slug}/analytics?evidence=STOCK_ITEM:${encodeURIComponent(row.stockItemId)}`], source: 'StockMovement ledger' });
     }
     for (const row of offline) {
       issues.push({ id: `offline:${row.id}`, type: 'OFFLINE_SYNC_UNRESOLVED', severity: row.status === 'DEAD' ? 'HIGH' : 'MEDIUM', amountMinor: null, currency, affectedEntities: [{ type: row.aggregateType, id: row.aggregateId }], firstSeenAt: row.createdAt, lastCheckedAt: row.updatedAt, message: `${row.eventType} is ${row.status}${row.lastError ? `: ${row.lastError}` : ''}`, suggestedNextAction: actionFor('OFFLINE_SYNC_UNRESOLVED'), evidenceLinks: [`/dashboard/${slug}/analytics?evidence=DOMAIN_EVENT:${encodeURIComponent(row.id)}`], source: 'DomainEventOutbox' });
     }
     const severity: Record<string, number> = { CRITICAL: 4, HIGH: 3, MEDIUM: 2, LOW: 1 };
-    issues.sort((a, b) => (severity[b.severity] ?? 0) - (severity[a.severity] ?? 0) || new Date(a.firstSeenAt).getTime() - new Date(b.firstSeenAt).getTime());
+    issues.sort((a, b) => (severity[b.severity] ?? 0) - (severity[a.severity] ?? 0) || a.firstSeenAt.getTime() - b.firstSeenAt.getTime());
     return { checkedAt: now, clear: issues.length === 0, issueCount: issues.length, issues };
   }
 
-  private attention(reconciliation: any, inventory: any, reservations: any, baseOperations: any) {
-    const items = reconciliation.issues.map((issue: any) => ({
+  private attention(
+    reconciliation: { issues: ReconciliationIssueView[] },
+    inventory: { lowStockRisk: LowStockRisk[] },
+    reservations: { noShowRatePct: number | null },
+    baseOperations: BaseOperations,
+  ) {
+    const items: AttentionItem[] = reconciliation.issues.map((issue) => ({
       id: `reconciliation:${issue.id}`,
       domain: 'RECONCILIATION',
       severity: issue.severity,
