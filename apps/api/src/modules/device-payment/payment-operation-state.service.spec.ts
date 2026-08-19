@@ -53,6 +53,36 @@ describe('PaymentOperationStateService', () => {
     ).not.toThrow();
   });
 
+  it('requires provider reconciliation before a failed/reversed refund restores net payment state', () => {
+    expect(() =>
+      service.assertTransition(
+        PaymentOperationState.REFUNDED,
+        PaymentOperationState.CAPTURED,
+      ),
+    ).toThrow(/provider reconciliation/i);
+    expect(() =>
+      service.assertTransition(
+        PaymentOperationState.REFUNDED,
+        PaymentOperationState.CAPTURED,
+        { reconciliation: true },
+      ),
+    ).not.toThrow();
+    expect(() =>
+      service.assertTransition(
+        PaymentOperationState.REFUNDED,
+        PaymentOperationState.PARTIALLY_REFUNDED,
+        { reconciliation: true },
+      ),
+    ).not.toThrow();
+    expect(() =>
+      service.assertTransition(
+        PaymentOperationState.PARTIALLY_REFUNDED,
+        PaymentOperationState.CAPTURED,
+        { reconciliation: true },
+      ),
+    ).not.toThrow();
+  });
+
   it('does not allow a terminal failure to be retried as processing', () => {
     expect(() =>
       service.assertTransition(

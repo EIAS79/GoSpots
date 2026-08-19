@@ -24,9 +24,21 @@ const ALLOWED: Record<PaymentOperationState, ReadonlySet<PaymentOperationState>>
   FAILED: new Set(),
   CANCELED: new Set(),
   UNKNOWN: new Set(['PROCESSING', 'AUTHORIZED', 'CAPTURED', 'FAILED', 'CANCELED']),
-  PARTIALLY_REFUNDED: new Set(['PARTIALLY_REFUNDED', 'REFUNDED']),
-  REFUNDED: new Set(),
+  PARTIALLY_REFUNDED: new Set(['CAPTURED', 'PARTIALLY_REFUNDED', 'REFUNDED']),
+  REFUNDED: new Set(['CAPTURED', 'PARTIALLY_REFUNDED']),
 };
+
+function isRefundCorrection(
+  from: PaymentOperationState,
+  to: PaymentOperationState,
+): boolean {
+  return (
+    (from === PaymentOperationState.PARTIALLY_REFUNDED ||
+      from === PaymentOperationState.REFUNDED) &&
+    (to === PaymentOperationState.CAPTURED ||
+      to === PaymentOperationState.PARTIALLY_REFUNDED)
+  );
+}
 
 @Injectable()
 export class PaymentOperationStateService {
@@ -39,6 +51,11 @@ export class PaymentOperationStateService {
     if (from === PaymentOperationState.UNKNOWN && !options.reconciliation) {
       throw new ConflictException(
         'Payment status is UNKNOWN. Reconcile with the provider before any retry or state change.',
+      );
+    }
+    if (isRefundCorrection(from, to) && !options.reconciliation) {
+      throw new ConflictException(
+        'A refunded payment can move backwards only after provider reconciliation confirms a failed or reversed refund.',
       );
     }
     if (!ALLOWED[from].has(to)) {

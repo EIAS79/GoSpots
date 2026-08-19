@@ -18,15 +18,18 @@ async function countConflicts(page: import('@playwright/test').Page) {
 }
 
 test('@smoke Phase 3 Offline Lite shows a cloud conflict for review', async ({ page, context, browser }) => {
+  const venuePath = E2E.venues.conflict;
+  const resourceId = 'e2e-resource-conflict-1';
+
   await loginOwner(page);
-  await bindVenue(page, E2E.venues.offline);
-  await page.goto(`/dashboard/${E2E.venues.offline}/operations`);
-  await expect(page.getByText('Offline Table', { exact: true })).toBeVisible();
+  await bindVenue(page, venuePath);
+  await page.goto(`/dashboard/${venuePath}/operations`);
+  await expect(page.getByText('Conflict Table', { exact: true })).toBeVisible();
   await page.evaluate(async () => { if ('serviceWorker' in navigator) await navigator.serviceWorker.ready; });
   await page.reload();
 
   await context.setOffline(true);
-  const card = page.locator('article').filter({ hasText: 'Offline Table' });
+  const card = page.locator('article').filter({ hasText: 'Conflict Table' });
   await card.getByRole('button', { name: 'Start' }).click();
   await expect(card.getByRole('button', { name: 'Finish' })).toBeVisible({ timeout: 15_000 });
 
@@ -36,9 +39,12 @@ test('@smoke Phase 3 Offline Lite shows a cloud conflict for review', async ({ p
   let cloudSessionVersion: number | null = null;
   try {
     await loginOwner(second);
-    await bindVenue(second, E2E.venues.offline);
+    await bindVenue(second, venuePath);
+    const floor = await api<any>(second, 'GET', '/operations/floor');
+    expect(floor.resources.some((row: any) => row.id === resourceId)).toBeTruthy();
+
     const cloudSession = await api<any>(second, 'POST', '/operations/sessions/start', {
-      data: { resourceId: 'e2e-resource-offline-1' },
+      data: { resourceId },
     });
     cloudSessionId = cloudSession.id;
     cloudSessionVersion = cloudSession.version;
@@ -47,7 +53,7 @@ test('@smoke Phase 3 Offline Lite shows a cloud conflict for review', async ({ p
     await page.evaluate(() => window.dispatchEvent(new Event('online')));
     await expect.poll(() => countConflicts(page), { timeout: 30_000, intervals: [250, 500, 1000, 2000] }).toBe(1);
 
-    await page.goto(`/dashboard/${E2E.venues.offline}/offline-sync`);
+    await page.goto(`/dashboard/${venuePath}/offline-sync`);
     await expect(page.getByText('CONFLICT', { exact: true })).toBeVisible();
     await expect(page.getByText(/RESOURCE_CONFLICT/)).toBeVisible();
     await expect(page.getByRole('button', { name: 'Retry same operation' })).toBeVisible();

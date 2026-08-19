@@ -94,7 +94,12 @@ const VENUES: VenueSeed[] = [
     venueType: 'gaming',
     resources: [{ name: 'Offline Table', type: ResourceType.BILLIARD, hourlyRate: '18.00' }],
   },
-  { key: 'conflict', name: 'E2E Conflict Venue', venueType: 'gaming' },
+  {
+    key: 'conflict',
+    name: 'E2E Conflict Venue',
+    venueType: 'gaming',
+    resources: [{ name: 'Conflict Table', type: ResourceType.BILLIARD, hourlyRate: '18.00' }],
+  },
   { key: 'payment', name: 'E2E Payment Venue', venueType: 'mixed' },
   {
     key: 'cash',
