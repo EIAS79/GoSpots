@@ -26,8 +26,34 @@ type AdyenWebhookEnvelope = {
   notificationItems?: Array<{ NotificationRequestItem?: AdyenStandardWebhookItem }>;
 };
 
+const REFUND_EVENT_CODES = new Set([
+  'CANCEL_OR_REFUND',
+  'REFUND_FAILED',
+  'REFUNDED_REVERSED',
+]);
+
 function uniqueViolation(error: unknown): boolean {
   return error instanceof Prisma.PrismaClientKnownRequestError && error.code === 'P2002';
+}
+
+function isLateRefundCorrection(eventCode: string): boolean {
+  return eventCode === 'REFUND_FAILED' || eventCode === 'REFUNDED_REVERSED';
+}
+
+function refundFailureCode(eventCode: string): string {
+  if (eventCode === 'REFUNDED_REVERSED') return 'ADYEN_REFUNDED_REVERSED';
+  if (eventCode === 'REFUND_FAILED') return 'ADYEN_REFUND_FAILED';
+  return 'ADYEN_CANCEL_OR_REFUND_FAILED';
+}
+
+function paymentStateForSuccessfulRefundTotal(
+  totalRefunded: Prisma.Decimal,
+  paymentAmount: Prisma.Decimal,
+): PaymentOperationState {
+  if (totalRefunded.isZero()) return PaymentOperationState.CAPTURED;
+  if (totalRefunded.eq(paymentAmount)) return PaymentOperationState.REFUNDED;
+  if (totalRefunded.lt(paymentAmount)) return PaymentOperationState.PARTIALLY_REFUNDED;
+  throw new BadRequestException('Successful refund total exceeds captured payment amount');
 }
 
 @ApiTags('payments')
@@ -64,18 +90,22 @@ export class AdyenTerminalWebhookController {
         throw new BadRequestException('Adyen merchant account does not match GoSpots configuration');
       }
 
-      if (item.eventCode !== 'CANCEL_OR_REFUND') {
+      const eventCode = item.eventCode ?? '';
+      if (!REFUND_EVENT_CODES.has(eventCode)) {
         ignored += 1;
         continue;
       }
-      if (!item.merchantReference || !item.pspReference || !item.originalReference) {
+      if (!item.pspReference || !item.originalReference) {
         throw new BadRequestException('Adyen refund webhook references are incomplete');
       }
 
       const refund = await this.prisma.refund.findFirst({
         where: {
-          id: item.merchantReference,
           paymentOperation: { provider: 'adyen' },
+          OR: [
+            { providerRefundId: item.pspReference },
+            ...(item.merchantReference ? [{ id: item.merchantReference }] : []),
+          ],
         },
         include: { paymentOperation: true },
       });
@@ -101,7 +131,7 @@ export class AdyenTerminalWebhookController {
         throw new BadRequestException('Adyen refund webhook original payment does not match');
       }
 
-      const eventId = `${item.eventCode}:${item.pspReference}`;
+      const eventId = `${eventCode}:${item.pspReference}`;
       const eventKey = {
         shopId_provider_eventId: {
           shopId: refund.shopId,
@@ -117,10 +147,12 @@ export class AdyenTerminalWebhookController {
         continue;
       }
 
-      const nextRefundState =
-        String(item.success).toLowerCase() === 'true'
-          ? RefundState.SUCCEEDED
-          : RefundState.FAILED;
+      const lateCorrection = isLateRefundCorrection(eventCode);
+      const successfulValidation =
+        eventCode === 'CANCEL_OR_REFUND' && String(item.success).toLowerCase() === 'true';
+      const nextRefundState = successfulValidation
+        ? RefundState.SUCCEEDED
+        : RefundState.FAILED;
       const payloadHash = createHash('sha256')
         .update(JSON.stringify(item))
         .digest('hex');
@@ -133,7 +165,7 @@ export class AdyenTerminalWebhookController {
               shopId: refund.shopId,
               provider: 'adyen',
               eventId,
-              eventType: item.eventCode,
+              eventType: eventCode,
               payloadHash,
               paymentOperationId: refund.paymentOperationId,
               status: PaymentWebhookStatus.APPLIED,
@@ -148,11 +180,14 @@ export class AdyenTerminalWebhookController {
               state: nextRefundState,
               errorCode:
                 nextRefundState === RefundState.FAILED
-                  ? 'ADYEN_CANCEL_OR_REFUND_FAILED'
+                  ? refundFailureCode(eventCode)
                   : null,
               errorMessage:
                 nextRefundState === RefundState.FAILED
-                  ? item.reason?.trim() || 'Adyen rejected the refund request'
+                  ? item.reason?.trim() ||
+                    (eventCode === 'REFUNDED_REVERSED'
+                      ? 'Adyen reported that the previously refunded amount was reversed'
+                      : 'Adyen reported that the refund did not complete')
                   : null,
               succeededAt:
                 nextRefundState === RefundState.SUCCEEDED ? now : refund.succeededAt,
@@ -162,35 +197,41 @@ export class AdyenTerminalWebhookController {
             },
           });
 
-          if (nextRefundState === RefundState.SUCCEEDED) {
-            const currentOperation = await tx.paymentOperation.findUnique({
-              where: { id: refund.paymentOperationId },
-            });
-            if (!currentOperation) {
-              throw new BadRequestException('Payment operation disappeared during refund reconciliation');
-            }
-            const successfulRefunds = await tx.refund.findMany({
-              where: {
-                paymentOperationId: refund.paymentOperationId,
-                state: RefundState.SUCCEEDED,
-              },
-              select: { amount: true },
-            });
-            const totalRefunded = sumMoneyDecimal(
-              ...successfulRefunds.map((row) => row.amount),
-            );
-            const nextPaymentState = totalRefunded.eq(currentOperation.amount)
-              ? PaymentOperationState.REFUNDED
-              : PaymentOperationState.PARTIALLY_REFUNDED;
-            this.states.assertTransition(currentOperation.state, nextPaymentState);
-            await tx.paymentOperation.update({
-              where: { id: currentOperation.id },
-              data: {
-                state: nextPaymentState,
-                lastReconciledAt: now,
-              },
+          const currentOperation = await tx.paymentOperation.findUnique({
+            where: { id: refund.paymentOperationId },
+          });
+          if (!currentOperation) {
+            throw new BadRequestException('Payment operation disappeared during refund reconciliation');
+          }
+
+          const successfulRefunds = await tx.refund.findMany({
+            where: {
+              paymentOperationId: refund.paymentOperationId,
+              state: RefundState.SUCCEEDED,
+            },
+            select: { amount: true },
+          });
+          const totalRefunded = sumMoneyDecimal(
+            ...successfulRefunds.map((row) => row.amount),
+          );
+          const nextPaymentState = paymentStateForSuccessfulRefundTotal(
+            totalRefunded,
+            currentOperation.amount,
+          );
+
+          if (currentOperation.state !== nextPaymentState) {
+            this.states.assertTransition(currentOperation.state, nextPaymentState, {
+              reconciliation: lateCorrection,
             });
           }
+          await tx.paymentOperation.update({
+            where: { id: currentOperation.id },
+            data: {
+              state: nextPaymentState,
+              reconciliationRequired: false,
+              lastReconciledAt: now,
+            },
+          });
         });
         applied += 1;
       } catch (error) {
