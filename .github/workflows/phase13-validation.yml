@@ -1,0 +1,119 @@
+name: Phase 13 multi-location SaaS integration validation
+
+on:
+  pull_request:
+    paths:
+      - 'apps/api/src/modules/phase13/**'
+      - 'apps/api/src/modules/organizations/**'
+      - 'apps/api/src/modules/integrations/**'
+      - 'apps/api/prisma/**'
+      - 'apps/web/src/app/(system-admin)/**'
+      - 'apps/web/src/components/admin/system-saas-admin-panel.tsx'
+      - 'apps/web/src/lib/phase13-admin-client.ts'
+      - '.github/workflows/phase13-validation.yml'
+  push:
+    branches: [main]
+    paths:
+      - 'apps/api/src/modules/phase13/**'
+      - 'apps/api/src/modules/organizations/**'
+      - 'apps/api/src/modules/integrations/**'
+      - 'apps/api/prisma/**'
+      - 'apps/web/src/app/(system-admin)/**'
+      - 'apps/web/src/components/admin/system-saas-admin-panel.tsx'
+      - 'apps/web/src/lib/phase13-admin-client.ts'
+      - '.github/workflows/phase13-validation.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  phase13:
+    name: Phase 13 gate · multi-location SaaS API integrations
+    runs-on: ubuntu-latest
+    timeout-minutes: 40
+    services:
+      postgres:
+        image: postgres:17
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: gospots_phase13
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres -d gospots_phase13"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 20
+    env:
+      DATABASE_URL: postgresql://postgres:postgres@127.0.0.1:5432/gospots_phase13?schema=public
+      JWT_SECRET: phase13-ci-only-jwt-secret
+      INTEGRATION_SECRET_ENCRYPTION_KEY: 0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef
+      NODE_ENV: test
+
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 10.12.1
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: pnpm
+          cache-dependency-path: pnpm-lock.yaml
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Generate and validate Prisma
+        working-directory: apps/api
+        run: |
+          pnpm prisma:generate
+          pnpm exec prisma validate
+
+      - name: Deploy clean migration chain
+        working-directory: apps/api
+        run: |
+          pnpm migrate:deploy
+          pnpm exec prisma migrate status
+
+      - name: Run focused Phase 13 tests
+        working-directory: apps/api
+        run: >-
+          pnpm exec jest --config jest.config.cjs --runInBand
+          src/modules/organizations/organizations.service.spec.ts
+          src/modules/integrations/integrations.service.spec.ts
+          src/modules/integrations/integration-recovery.service.spec.ts
+          src/modules/integrations/integration-api-key.guard.spec.ts
+          src/modules/integrations/phase13-webhook.spec.ts
+          src/modules/phase13/phase13.service.spec.ts
+
+      - name: Prove Phase 13 database invariants
+        working-directory: apps/api
+        run: pnpm exec tsx prisma/phase13-integrity-assert.ts
+
+      - name: Build API
+        working-directory: apps/api
+        run: pnpm build
+
+      - name: Verify representative pre-Phase-13 upgrade
+        env:
+          UPGRADE_DATABASE_URL: postgresql://postgres:postgres@127.0.0.1:5432/gospots_phase13_upgrade?schema=public
+          PGPASSWORD: postgres
+        run: |
+          createdb -h 127.0.0.1 -U postgres gospots_phase13_upgrade
+          mkdir -p /tmp/phase13_migrations
+          mv apps/api/prisma/migrations/20260819034000_phase13_multilocation_saas_api /tmp/phase13_migrations/
+          DATABASE_URL="$UPGRADE_DATABASE_URL" pnpm --filter @gospots/api migrate:deploy
+          DATABASE_URL="$UPGRADE_DATABASE_URL" pnpm --filter @gospots/api exec tsx prisma/phase13-upgrade-fixture.ts
+          mv /tmp/phase13_migrations/20260819034000_phase13_multilocation_saas_api apps/api/prisma/migrations/
+          DATABASE_URL="$UPGRADE_DATABASE_URL" pnpm --filter @gospots/api migrate:deploy
+          DATABASE_URL="$UPGRADE_DATABASE_URL" pnpm --filter @gospots/api exec tsx prisma/phase13-upgrade-assert.ts
+
+      - name: Typecheck web
+        working-directory: apps/web
+        run: pnpm typecheck
+
+      - name: Build web
+        working-directory: apps/web
+        run: pnpm build

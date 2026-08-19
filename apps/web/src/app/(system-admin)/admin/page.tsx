@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { SystemMailOutboxPanel } from "@/components/admin/system-mail-outbox-panel";
+import { SystemSaasAdminPanel } from "@/components/admin/system-saas-admin-panel";
 import { translate } from "@/lib/i18n";
 import { usePublicPrefs } from "@/lib/public-prefs-context";
 import { useAuth } from "@/lib/use-auth";
@@ -13,7 +14,7 @@ export default function SystemAdminPage() {
 
   if (state.status === "loading") {
     return (
-      <main className="mx-auto max-w-4xl px-8 py-10 text-sm text-zinc-400">
+      <main className="mx-auto max-w-6xl px-8 py-10 text-sm text-zinc-400">
         {t("mailSystemOutbox.authLoading")}
       </main>
     );
@@ -21,7 +22,7 @@ export default function SystemAdminPage() {
 
   if (state.status !== "authed") {
     return (
-      <main className="mx-auto max-w-4xl px-8 py-10">
+      <main className="mx-auto max-w-6xl px-8 py-10">
         <h1 className="text-lg font-semibold text-white">
           {t("mailSystemOutbox.pageTitle")}
         </h1>
@@ -40,7 +41,7 @@ export default function SystemAdminPage() {
 
   if (state.user.systemRole !== "SUPER_ADMIN") {
     return (
-      <main className="mx-auto max-w-4xl px-8 py-10">
+      <main className="mx-auto max-w-6xl px-8 py-10">
         <h1 className="text-lg font-semibold text-white">
           {t("mailSystemOutbox.pageTitle")}
         </h1>
@@ -52,15 +53,16 @@ export default function SystemAdminPage() {
   }
 
   return (
-    <main className="mx-auto max-w-4xl space-y-8 px-8 py-10">
+    <main className="mx-auto max-w-6xl space-y-8 px-8 py-10">
       <div>
         <h1 className="text-lg font-semibold text-white">
           {t("mailSystemOutbox.pageTitle")}
         </h1>
         <p className="mt-1 text-sm text-zinc-500">
-          {t("mailSystemOutbox.pageHint")}
+          SaaS operations, safe tenant diagnostics, entitlements, and platform delivery queues.
         </p>
       </div>
+      <SystemSaasAdminPanel />
       <SystemMailOutboxPanel />
     </main>
   );

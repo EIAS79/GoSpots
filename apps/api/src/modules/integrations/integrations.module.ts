@@ -26,6 +26,6 @@ import { IntegrationsService } from './integrations.service';
     IntegrationConnectorRegistry,
     IntegrationApiKeyGuard,
   ],
-  exports: [IntegrationsService],
+  exports: [IntegrationsService, IntegrationSecretBoxService],
 })
 export class IntegrationsModule {}

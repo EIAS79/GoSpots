@@ -1,0 +1,77 @@
+// Phase 13 — Multi-Location, SaaS Admin, Public API and Optional Integrations.
+// These models are additive orchestration records. Existing Shop, inventory, billing,
+// organization and integration domains remain canonical authorities.
+
+enum OrganizationInventoryTransferStatus {
+  IN_TRANSIT
+  RECEIVED
+  CANCELLED
+}
+
+enum DataImportKind {
+  PRODUCTS
+  CUSTOMERS
+  OPENING_STOCK
+  RESOURCES
+  MEMBERS
+}
+
+enum DataImportStatus {
+  PREVIEW_READY
+  COMMITTED
+  REJECTED
+}
+
+/// Cross-Shop inventory transfer inside one Organization. Stock truth remains StockMovement.
+model OrganizationInventoryTransfer {
+  id                     String   @id @default(cuid())
+  organizationId         String
+  sourceShopId           String
+  destinationShopId      String
+  sourceStockItemId      String
+  destinationStockItemId String
+  sourceLocationId       String
+  destinationLocationId  String
+  quantityMilli          Int
+  unitCostMinor          Int      @default(0)
+  receivedMilli          Int      @default(0)
+  damagedMilli           Int      @default(0)
+  missingMilli           Int      @default(0)
+  status                 OrganizationInventoryTransferStatus @default(IN_TRANSIT)
+  idempotencyKey         String
+  requestHash            String
+  requestedById          String
+  receivedById           String?
+  transferredAt          DateTime @default(now())
+  receivedAt             DateTime?
+  note                    String?
+  createdAt               DateTime @default(now())
+  updatedAt               DateTime @updatedAt
+
+  @@unique([organizationId, idempotencyKey])
+  @@index([organizationId, status, transferredAt])
+  @@index([sourceShopId, status, transferredAt])
+  @@index([destinationShopId, status, transferredAt])
+}
+
+/// Validation-first CSV import job. Raw uploaded bytes are not retained: rows are parsed
+/// into bounded JSON after validation and commit is a separate audited operation.
+model DataImportJob {
+  id             String   @id @default(cuid())
+  shopId         String
+  kind           DataImportKind
+  status         DataImportStatus @default(PREVIEW_READY)
+  sourceHash     String
+  rowCount       Int
+  rows           Json
+  preview        Json
+  result         Json?
+  createdById    String
+  committedById  String?
+  committedAt    DateTime?
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  @@unique([shopId, kind, sourceHash])
+  @@index([shopId, status, createdAt])
+}
