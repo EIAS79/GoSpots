@@ -22,7 +22,7 @@ export class CreateOrganizationInventoryTransferDto {
   @IsString() @MinLength(1) sourceLocationId!: string;
   @IsString() @MinLength(1) destinationLocationId!: string;
   @IsInt() @Min(1) quantityMilli!: number;
-  @IsString() @MinLength(8) @MaxLength(160) idempotencyKey!: string;
+  @IsString() @MinLength(8) @MaxLength(128) idempotencyKey!: string;
   @IsOptional() @IsString() @MaxLength(1000) note?: string;
 }
 
@@ -45,6 +45,7 @@ export class CreateCentralPurchaseOrderDto {
   @IsString() @MinLength(1) locationId!: string;
   @IsArray() @ValidateNested({ each: true }) @Type(() => CentralPurchaseOrderLineDto)
   lines!: CentralPurchaseOrderLineDto[];
+  @IsString() @MinLength(8) @MaxLength(128) idempotencyKey!: string;
   @IsOptional() @IsString() @MaxLength(500) documentRef?: string;
 }
 
