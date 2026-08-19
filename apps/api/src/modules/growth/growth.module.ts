@@ -14,6 +14,8 @@ import { GrowthPrivacyService } from './growth-privacy.service';
 import { GrowthPublicController } from './growth-public.controller';
 import { GrowthPublicDepositService } from './growth-public-deposit.service';
 import { GrowthController } from './growth.controller';
+import { Phase14AnalyticsController } from './phase14-analytics.controller';
+import { Phase14AnalyticsService } from './phase14-analytics.service';
 import { Phase9CustomerPortalProfileController } from './phase9-customer-portal-profile.controller';
 import { Phase9CustomerPortalProfileService } from './phase9-customer-portal-profile.service';
 import {
@@ -44,6 +46,7 @@ import { ReservationStripeWebhookRoutingInterceptor } from './reservation-stripe
     Phase9CustomerPortalController,
     Phase9CustomerPortalProfileController,
     Phase9ReconciliationController,
+    Phase14AnalyticsController,
   ],
   providers: [
     ReservationGrowthService,
@@ -63,6 +66,7 @@ import { ReservationStripeWebhookRoutingInterceptor } from './reservation-stripe
     Phase9GuardrailsService,
     Phase9LoyaltyExpiryService,
     Phase9ReconciliationService,
+    Phase14AnalyticsService,
     {
       provide: APP_INTERCEPTOR,
       useClass: ReservationStripeWebhookRoutingInterceptor,
@@ -83,6 +87,7 @@ import { ReservationStripeWebhookRoutingInterceptor } from './reservation-stripe
     Phase9CustomerValueService,
     Phase9GuardrailsService,
     Phase9ReconciliationService,
+    Phase14AnalyticsService,
   ],
 })
 export class GrowthModule {}
