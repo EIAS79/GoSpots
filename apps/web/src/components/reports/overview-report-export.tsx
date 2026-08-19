@@ -70,7 +70,7 @@ export function OverviewReportExport({ data }: { data: DashboardOverview }) {
           <button
             type="button"
             onClick={handlePrint}
-            className="inline-flex items-center gap-1.5 rounded-lg border border-white/15 px-3 py-1.5 text-xs font-medium text-zinc-300 transition hover:bg-white/5"
+            className="inline-flex min-h-9 items-center gap-1.5 rounded-lg border border-white/15 px-3 py-1.5 text-xs font-medium text-zinc-300 transition hover:bg-white/5"
           >
             <Printer size={14} />
             PDF
@@ -79,7 +79,7 @@ export function OverviewReportExport({ data }: { data: DashboardOverview }) {
             type="button"
             onClick={handleDownloadExcel}
             title={labels.excelHint}
-            className="inline-flex items-center gap-1.5 rounded-lg border border-emerald-400/30 bg-emerald-500/10 px-3 py-1.5 text-xs font-medium text-emerald-200 transition hover:bg-emerald-500/15"
+            className="inline-flex min-h-9 items-center gap-1.5 rounded-lg border border-emerald-400/30 bg-emerald-500/10 px-3 py-1.5 text-xs font-medium text-emerald-200 transition hover:bg-emerald-500/15"
           >
             <Download size={14} />
             Excel
@@ -88,7 +88,7 @@ export function OverviewReportExport({ data }: { data: DashboardOverview }) {
             type="button"
             onClick={handleDownloadCsv}
             title={labels.csvHint}
-            className="inline-flex items-center gap-1.5 rounded-lg border border-white/15 px-3 py-1.5 text-xs font-medium text-zinc-400 transition hover:bg-white/5 hover:text-zinc-200"
+            className="inline-flex min-h-9 items-center gap-1.5 rounded-lg border border-white/15 px-3 py-1.5 text-xs font-medium text-zinc-400 transition hover:bg-white/5 hover:text-zinc-200"
           >
             <Download size={14} />
             Raw CSV

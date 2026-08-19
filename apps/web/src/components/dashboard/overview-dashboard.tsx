@@ -80,13 +80,13 @@ export function OverviewDashboard({
         <div className="flex gap-2 text-xs">
           <Link
             href={links.subscription}
-            className="rounded-lg border border-white/10 px-2.5 py-1.5 text-zinc-400 hover:bg-white/5"
+            className="inline-flex min-h-9 items-center rounded-lg border border-white/10 px-2.5 py-1.5 text-zinc-400 hover:bg-white/5"
           >
             {t("dashOverview.planLink")}
           </Link>
           <Link
             href={links.reports}
-            className="rounded-lg border border-emerald-400/30 bg-emerald-500/10 px-2.5 py-1.5 text-emerald-200"
+            className="inline-flex min-h-9 items-center rounded-lg border border-emerald-400/30 bg-emerald-500/10 px-2.5 py-1.5 text-emerald-200"
           >
             {t("dashOverview.reportsLink")}
           </Link>
@@ -203,7 +203,10 @@ export function OverviewDashboard({
               {t("dashOverview.lossesWeekMessage", {
                 amount: formatMoney(kpis.lossesWeek),
               })}{" "}
-              <Link href={links.losses} className="underline">
+              <Link
+                href={links.losses}
+                className="inline-flex min-h-9 items-center underline"
+              >
                 {t("dashOverview.reviewLossesLink")}
               </Link>
             </p>
@@ -402,7 +405,7 @@ function MiniChartCard({
       {href && linkLabel ? (
         <Link
           href={href}
-          className="mt-3 inline-block text-[11px] text-emerald-400 hover:underline"
+          className="mt-3 inline-flex min-h-9 items-center text-[11px] text-emerald-400 hover:underline"
         >
           {linkLabel} →
         </Link>

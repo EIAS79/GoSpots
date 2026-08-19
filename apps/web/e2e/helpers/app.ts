@@ -54,14 +54,24 @@ async function dismissCookiePreferences(page: Page) {
   await expect(preferences).toBeHidden();
 }
 
+async function csrfToken(page: Page) {
+  let cookies = await page.context().cookies();
+  let csrf = cookies.find((cookie) => cookie.name === 'csrf_token')?.value;
+  if (csrf) return csrf;
+
+  const bootstrap = await page.request.get('/api/v1/auth/csrf', { failOnStatusCode: false });
+  expect(bootstrap.ok(), `GET /auth/csrf: ${await bootstrap.text()}`).toBeTruthy();
+  cookies = await page.context().cookies();
+  csrf = cookies.find((cookie) => cookie.name === 'csrf_token')?.value;
+  if (!csrf) throw new Error('Missing csrf_token after CSRF bootstrap');
+  return csrf;
+}
+
 async function mutationHeaders(page: Page, options: ApiOptions) {
   const headers: Record<string, string> = {
     ...(options.headers ?? {}),
   };
-  const cookies = await page.context().cookies();
-  const csrf = cookies.find((cookie) => cookie.name === 'csrf_token')?.value;
-  if (!csrf) throw new Error('Missing csrf_token before mutation request');
-  headers['x-csrf-token'] = csrf;
+  headers['x-csrf-token'] = await csrfToken(page);
   if (options.idempotencyKey) headers['Idempotency-Key'] = options.idempotencyKey;
   return headers;
 }
