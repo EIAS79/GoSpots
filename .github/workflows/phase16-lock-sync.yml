@@ -1,17 +1,19 @@
 name: Phase 16 dependency lock sync
 
 on:
-  push:
-    branches: [phase-16/production-hardening-v2]
+  pull_request:
+    branches: [main]
     paths:
       - 'apps/api/package.json'
       - 'apps/web/package.json'
+      - '.github/workflows/phase16-lock-sync.yml'
 
 permissions:
   contents: write
 
 jobs:
   sync:
+    if: github.head_ref == 'phase-16/production-hardening-v2'
     runs-on: ubuntu-latest
     timeout-minutes: 10
     steps:
