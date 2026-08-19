@@ -82,7 +82,17 @@ function requiredHeaders(kind: DataImportKind): string[] {
 }
 
 function csvEscape(value: unknown) {
-  const text = value == null ? '' : String(value);
+  let text = '';
+  if (value == null) text = '';
+  else if (typeof value === 'string') text = value;
+  else if (
+    typeof value === 'number' ||
+    typeof value === 'boolean' ||
+    typeof value === 'bigint'
+  ) text = String(value);
+  else if (value instanceof Date) text = value.toISOString();
+  else if (value instanceof Prisma.Decimal) text = value.toString();
+  else text = JSON.stringify(value) ?? '';
   return /[",\n\r]/.test(text) ? `"${text.replace(/"/g, '""')}"` : text;
 }
 
