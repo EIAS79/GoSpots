@@ -33,16 +33,31 @@ function paymentReference(pspReference = '9912345678901234'): string {
   ).toString('base64url')}`;
 }
 
+type RefundFixture = {
+  id: string;
+  shopId: string;
+  paymentOperationId: string;
+  providerRefundId: string | null;
+  state: RefundState;
+  succeededAt: Date | null;
+  failedAt: Date | null;
+  paymentOperation: {
+    id: string;
+    provider: string;
+    providerPaymentId: string;
+  };
+};
+
 function harness(options: {
   validHmac?: boolean;
   merchantMatches?: boolean;
   existingEvent?: unknown;
-  refund?: any;
+  refund?: RefundFixture | null;
   successfulRefunds?: Array<{ amount: string }>;
   operationAmount?: string;
   operationState?: PaymentOperationState;
 } = {}) {
-  const refund =
+  const refund: RefundFixture | null =
     options.refund === undefined
       ? {
           id: 'refund_1',
@@ -133,7 +148,7 @@ describe('AdyenTerminalWebhookController', () => {
     expect(transaction.refund.update).not.toHaveBeenCalled();
   });
 
-  test('deduplicates a repeated CANCEL_OR_REFUND event before any money mutation', async () => {
+  test('deduplicates a repeated refund event before any money mutation', async () => {
     const { controller, transaction } = harness({ existingEvent: { id: 'already_applied' } });
     await expect(
       controller.ingest({ notificationItems: [{ NotificationRequestItem: item() }] }),
@@ -193,8 +208,8 @@ describe('AdyenTerminalWebhookController', () => {
     );
   });
 
-  test('failed refund records provider failure without moving captured payment money state', async () => {
-    const { controller, transaction } = harness();
+  test('failed validation records provider failure and keeps the captured net payment state', async () => {
+    const { controller, transaction } = harness({ successfulRefunds: [] });
     await controller.ingest({
       notificationItems: [
         {
@@ -214,6 +229,70 @@ describe('AdyenTerminalWebhookController', () => {
         }),
       }),
     );
-    expect(transaction.paymentOperation.update).not.toHaveBeenCalled();
+    expect(transaction.paymentOperation.update).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({ state: PaymentOperationState.CAPTURED }),
+      }),
+    );
   });
+
+  test.each(['REFUND_FAILED', 'REFUNDED_REVERSED'])(
+    '%s reverses prior refund certainty and restores captured net state',
+    async (eventCode) => {
+      const previousSuccess = new Date('2026-08-19T18:06:00.000Z');
+      const { controller, transaction } = harness({
+        refund: {
+          id: 'refund_1',
+          shopId: 'shop_1',
+          paymentOperationId: 'op_1',
+          providerRefundId: '8812345678901234',
+          state: RefundState.SUCCEEDED,
+          succeededAt: previousSuccess,
+          failedAt: null,
+          paymentOperation: {
+            id: 'op_1',
+            provider: 'adyen',
+            providerPaymentId: paymentReference(),
+          },
+        },
+        successfulRefunds: [],
+        operationAmount: '10.5000',
+        operationState: PaymentOperationState.REFUNDED,
+      });
+
+      await expect(
+        controller.ingest({
+          notificationItems: [
+            {
+              NotificationRequestItem: item({
+                eventCode,
+                merchantReference: undefined,
+                reason: eventCode === 'REFUND_FAILED' ? 'Scheme rejected refund' : '',
+              }),
+            },
+          ],
+        }),
+      ).resolves.toEqual({ received: true, applied: 1, duplicates: 0, ignored: 0 });
+
+      expect(transaction.refund.update).toHaveBeenCalledWith(
+        expect.objectContaining({
+          data: expect.objectContaining({
+            state: RefundState.FAILED,
+            errorCode:
+              eventCode === 'REFUND_FAILED'
+                ? 'ADYEN_REFUND_FAILED'
+                : 'ADYEN_REFUNDED_REVERSED',
+          }),
+        }),
+      );
+      expect(transaction.paymentOperation.update).toHaveBeenCalledWith(
+        expect.objectContaining({
+          data: expect.objectContaining({
+            state: PaymentOperationState.CAPTURED,
+            reconciliationRequired: false,
+          }),
+        }),
+      );
+    },
+  );
 });
