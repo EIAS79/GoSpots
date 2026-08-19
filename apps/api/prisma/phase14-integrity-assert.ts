@@ -172,4 +172,11 @@ async function main() {
   console.log(JSON.stringify({ ok: true, values, tenantIsolation: true }));
 }
 
-main().finally(async () => prisma.$disconnect());
+void main()
+  .catch((error: unknown) => {
+    console.error(error);
+    process.exitCode = 1;
+  })
+  .finally(async () => {
+    await prisma.$disconnect();
+  });
