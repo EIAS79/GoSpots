@@ -29,26 +29,36 @@ No Prisma schema change or Phase 17 migration was required. Existing GuestCheck,
 
 ## Verified implementation head
 
-Implementation head: `5c1bd0290e882651b9e7e25df4516d4228f895a3`.
+Implementation head: `c5c8d3dc7ff126a551d93805dfbd45daa982cf7c`.
 
 Every workflow triggered on this exact implementation head completed successfully:
 
-- Repository CI — run `32296331984` — **SUCCESS**;
-- Phase 17 pilot certification and release gate — run `32296331982` — **SUCCESS**;
-- Standalone product boundary — run `32296331952` — **SUCCESS**;
-- Edge hard-outage validation — run `32296331969` — **SUCCESS**;
-- Phase 3 live-operations validation — run `32296331975` — **SUCCESS**;
-- Phase 4 commercial-core validation — run `32296331972` — **SUCCESS**;
-- Phase 7 inventory validation — run `32296331962` — **SUCCESS**;
-- Phase 16 production hardening validation — run `32296331971` — **SUCCESS**.
+- Repository CI — run `32299655323` — **SUCCESS**;
+- Phase 17 pilot certification and release gate — run `32299655310` — **SUCCESS**;
+- Standalone product boundary — run `32299655399` — **SUCCESS**;
+- Edge hard-outage validation — run `32299655444` — **SUCCESS**;
+- Phase 3 live-operations validation — run `32299655425` — **SUCCESS**;
+- Phase 4 commercial-core validation — run `32299655409` — **SUCCESS**;
+- Phase 7 inventory validation — run `32299655404` — **SUCCESS**;
+- Phase 8 reservation validation — run `32299655428` — **SUCCESS**;
+- Phase 9 customer value validation — run `32299655301` — **SUCCESS**;
+- Phase 10 workforce accountability validation — run `32299655299` — **SUCCESS**;
+- Phase 11 access entitlement validation — run `32299655307` — **SUCCESS**;
+- Phase 13 multi-location SaaS integration validation — run `32299655431` — **SUCCESS**;
+- Phase 16 production hardening validation — run `32299655402` — **SUCCESS**.
 
 The Phase 17 release-integrity job passed the production dependency audit, all 115 clean PostgreSQL migrations, Prisma validation, Adyen payment/refund adapter tests, realistic 8-table pilot assertion, canonical money reconciliation, performance benchmark, cash-close contracts, Edge outage/printing tests and independent logical backup/restore drill.
 
 The Phase 17 browser job passed the complete permanent Playwright suite with `--fail-on-flaky-tests` and then passed canonical persisted-state assertions.
 
-### No-flake defect found and fixed
+### No-flake defects found and fixed
 
-A prior exact-head run exposed an intermittent Phase 2 readiness E2E race: the interactive registration page could keep anonymous/auth probes alive while API registration replaced the browser-context auth cookies, intermittently revoking the freshly-created owner session before the first settings mutation. The test was corrected to perform registration exclusively through the shared browser request context and mount the UI only after the authenticated setup is complete. The exact implementation head above passed the no-flake release suite after this correction.
+The strengthened Phase 17 gate exposed two pre-existing E2E nondeterminism issues instead of masking them with retries:
+
+1. the Phase 2 empty-venue readiness registration flow could race newly-issued authentication cookies; registration setup is now performed only through the shared browser request context before mounting the authenticated UI;
+2. the Phase 3 Offline Lite cloud-conflict scenario reused the same seeded venue/resource as the preceding offline replay test; it now uses the dedicated `e2e-conflict` venue and `e2e-resource-conflict-1`, eliminating cross-test resource state contamination.
+
+The exact implementation head above passed the no-flake release suite after both corrections.
 
 ## Required external configuration
 
