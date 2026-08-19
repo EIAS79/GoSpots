@@ -52,6 +52,7 @@ import { OnboardingModule } from './modules/onboarding/onboarding.module';
 import { OperationsModule } from './modules/operations/operations.module';
 import { OrderingModule } from './modules/ordering/ordering.module';
 import { OrganizationsModule } from './modules/organizations/organizations.module';
+import { Phase13Module } from './modules/phase13/phase13.module';
 import { PublicModule } from './modules/public/public.module';
 import { ReliabilityModule } from './modules/reliability/reliability.module';
 import { ReservationsModule } from './modules/reservations/reservations.module';
@@ -117,6 +118,7 @@ import { WorkforceModule } from './modules/workforce/workforce.module';
     GrowthModule,
     OrganizationsModule,
     IntegrationsModule,
+    Phase13Module,
     HardwareModule,
     TicketingModule,
     AutomationModule,
