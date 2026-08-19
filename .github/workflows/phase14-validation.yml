@@ -87,6 +87,9 @@ jobs:
       - name: Run production-sized analytics calculation benchmark
         working-directory: apps/api
         run: pnpm exec tsx prisma/phase14-performance-benchmark.ts
+      - name: Run production-like PostgreSQL owner-workspace benchmark
+        working-directory: apps/api
+        run: pnpm exec tsx prisma/phase14-database-performance-benchmark.ts
       - name: Build API
         working-directory: apps/api
         run: pnpm build
