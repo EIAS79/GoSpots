@@ -51,6 +51,7 @@ jobs:
       JWT_ACCESS_SECRET: phase17-ci-access-secret-not-production
       NODE_ENV: test
       TENANT_RLS: 'off'
+      ADYEN_TERMINAL_ENABLED: 'false'
     steps:
       - uses: actions/checkout@v4
       - uses: pnpm/action-setup@v4
@@ -71,6 +72,13 @@ jobs:
           pnpm --dir apps/api exec prisma validate
           pnpm --dir apps/api exec prisma migrate deploy
           pnpm --dir apps/api exec prisma migrate status
+      - name: Certify Adyen terminal payment and refund adapter semantics
+        run: >-
+          pnpm --dir apps/api exec jest --config jest.config.cjs --runInBand
+          src/modules/device-payment/connectors/adyen-terminal.connector.spec.ts
+          src/modules/device-payment/adyen-terminal-webhook.controller.spec.ts
+          src/modules/device-payment/payment-domain.service.spec.ts
+          src/modules/device-payment/payment-operation-state.service.spec.ts
       - name: Seed release-certification data
         run: pnpm --dir apps/api exec tsx prisma/e2e-seed.ts > /tmp/phase17-seed.json
       - name: Assert realistic billiard pilot profile
@@ -156,6 +164,7 @@ jobs:
       LEGACY_UPLOADS_STATIC: 'false'
       TENANT_RLS: 'off'
       E2E_FAKE_PAYMENT_ENABLED: 'true'
+      ADYEN_TERMINAL_ENABLED: 'false'
       STRIPE_TERMINAL_ENABLED: 'false'
       NEXT_PUBLIC_SITE_URL: http://127.0.0.1:3000
       NEXT_PUBLIC_API_BASE_URL: /api/v1
@@ -228,12 +237,13 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - name: Require pilot, opening, external, tiers and rollback contracts
+      - name: Require pilot, opening, external, provider, tiers and rollback contracts
         shell: bash
         run: |
           set -euo pipefail
           test -s docs/program/phase17-requirements-matrix.md
           test -s docs/acceptance/phase-17-pilot-certification-go-live-v2.md
+          test -s docs/acceptance/phase-17-adyen-terminal-certification.md
           test -s docs/operations/PHASE17_GO_LIVE_RUNBOOK.md
           grep -q 'Pilot A' docs/program/phase17-requirements-matrix.md
           grep -q 'Pilot B' docs/program/phase17-requirements-matrix.md
@@ -242,4 +252,5 @@ jobs:
           grep -q 'Design partner' docs/operations/PHASE17_GO_LIVE_RUNBOOK.md
           grep -q 'General availability' docs/operations/PHASE17_GO_LIVE_RUNBOOK.md
           grep -q 'Rollback' docs/operations/PHASE17_GO_LIVE_RUNBOOK.md
+          grep -q 'Adyen Terminal API' docs/acceptance/phase-17-adyen-terminal-certification.md
           grep -q 'BLOCKED_EXTERNAL' docs/acceptance/phase-17-pilot-certification-go-live-v2.md
