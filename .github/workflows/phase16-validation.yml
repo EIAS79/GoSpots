@@ -1,0 +1,198 @@
+name: Phase 16 production hardening validation
+
+on:
+  pull_request:
+    paths:
+      - 'apps/api/src/common/metrics.util.ts'
+      - 'apps/api/src/common/metrics.util.spec.ts'
+      - 'apps/api/src/common/request-logging.interceptor.ts'
+      - 'apps/api/src/modules/metrics/**'
+      - 'apps/api/src/modules/reliability/**'
+      - 'apps/web/e2e/integrity/phase16-hardening.spec.ts'
+      - 'docs/operations/**'
+      - 'docs/privacy/**'
+      - 'docs/security/**'
+      - 'docs/acceptance/phase-16-**'
+      - '.github/workflows/phase16-validation.yml'
+  push:
+    branches: [main]
+    paths:
+      - 'apps/api/src/common/metrics.util.ts'
+      - 'apps/api/src/common/metrics.util.spec.ts'
+      - 'apps/api/src/common/request-logging.interceptor.ts'
+      - 'apps/api/src/modules/metrics/**'
+      - 'apps/api/src/modules/reliability/**'
+      - 'apps/web/e2e/integrity/phase16-hardening.spec.ts'
+      - 'docs/operations/**'
+      - 'docs/privacy/**'
+      - 'docs/security/**'
+      - 'docs/acceptance/phase-16-**'
+      - '.github/workflows/phase16-validation.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  hardening:
+    name: Phase 16 gate · metrics · security · DR · faults
+    runs-on: ubuntu-latest
+    timeout-minutes: 35
+    services:
+      postgres:
+        image: postgres:17
+        env:
+          POSTGRES_USER: ci
+          POSTGRES_PASSWORD: ci
+          POSTGRES_DB: gospots_p16
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U ci -d gospots_p16"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 20
+    env:
+      DATABASE_URL: postgresql://ci:ci@127.0.0.1:5432/gospots_p16?schema=public
+      GOSPOTS_E2E_DB: 'true'
+      JWT_ACCESS_SECRET: phase16-ci-access-secret-not-production
+      COOKIE_SECURE: 'false'
+      COOKIE_SAME_SITE: lax
+      WEB_APP_URL: http://127.0.0.1:3000
+      WEB_ORIGIN: http://127.0.0.1:3000
+      CORS_ORIGINS: http://127.0.0.1:3000
+      THROTTLE_DISABLED: 'true'
+      LEGACY_UPLOADS_STATIC: 'false'
+      TENANT_RLS: 'off'
+      E2E_FAKE_PAYMENT_ENABLED: 'true'
+      STRIPE_TERMINAL_ENABLED: 'false'
+      METRICS_ENDPOINT: 'on'
+
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 10.12.1
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+          cache: pnpm
+          cache-dependency-path: pnpm-lock.yaml
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+      - name: Reject high and critical production dependency advisories
+        run: pnpm audit --prod --audit-level high
+      - name: Generate validate migrate and seed PostgreSQL 17
+        shell: bash
+        run: |
+          set -euo pipefail
+          pnpm --dir apps/api exec prisma generate
+          pnpm --dir apps/api exec prisma validate
+          pnpm --dir apps/api exec prisma migrate deploy
+          pnpm --dir apps/api exec prisma migrate status
+          pnpm --dir apps/api exec tsx prisma/e2e-seed.ts > /tmp/phase16-seed.json
+      - name: Run focused Phase 16 metric and SLO tests
+        run: >-
+          pnpm --dir apps/api exec jest --config jest.config.cjs --runInBand
+          src/common/metrics.util.spec.ts
+          src/modules/reliability/slo.catalog.spec.ts
+      - name: Run security and fault regression contracts
+        shell: bash
+        run: |
+          set -euo pipefail
+          pnpm --dir apps/api exec jest --config jest.config.cjs --runInBand \
+            src/modules/growth/growth-public-policy.spec.ts \
+            src/modules/growth/growth-public-auth-boundary.spec.ts \
+            src/modules/growth/reservation-stripe-webhook-routing.interceptor.spec.ts \
+            src/modules/growth/growth-privacy.service.spec.ts
+          node --test apps/edge/test/phase12-continuity.test.js apps/edge/test/phase12-full-outage-drill.test.js apps/edge/test/printing.test.js
+      - name: Build API
+        run: pnpm --dir apps/api run build
+      - name: Start compiled API
+        shell: bash
+        run: |
+          set -euo pipefail
+          nohup env NODE_ENV=test PORT=4000 pnpm --dir apps/api run start:prod > /tmp/phase16-api.log 2>&1 &
+          echo $! > /tmp/phase16-api.pid
+          for i in {1..60}; do
+            if curl -fsS http://127.0.0.1:4000/api/v1/ready >/dev/null; then exit 0; fi
+            sleep 1
+          done
+          cat /tmp/phase16-api.log
+          exit 1
+      - name: Verify Phase 16 telemetry collectors
+        shell: bash
+        run: |
+          set -euo pipefail
+          curl -fsS http://127.0.0.1:4000/api/v1/metrics > /tmp/phase16-metrics.txt
+          grep -q '^gospots_db_query_latency_ms ' /tmp/phase16-metrics.txt
+          grep -q '^gospots_payment_unknown ' /tmp/phase16-metrics.txt
+          grep -q '^gospots_provider_failures_24h ' /tmp/phase16-metrics.txt
+          grep -q '^gospots_fiscal_failures ' /tmp/phase16-metrics.txt
+          grep -q '^gospots_ksef_backlog ' /tmp/phase16-metrics.txt
+          grep -q '^gospots_edge_sync_backlog ' /tmp/phase16-metrics.txt
+          grep -q '^gospots_print_failures ' /tmp/phase16-metrics.txt
+          grep -q '^gospots_kds_oldest_live_ticket_age_seconds ' /tmp/phase16-metrics.txt
+          grep -q '^gospots_inventory_negative_balances ' /tmp/phase16-metrics.txt
+          grep -q '^gospots_login_failures_current ' /tmp/phase16-metrics.txt
+          grep -q '^gospots_metrics_collection_errors 0$' /tmp/phase16-metrics.txt
+      - name: Inject database outage and prove readiness recovery
+        shell: bash
+        run: |
+          set -euo pipefail
+          pg_container=$(docker ps --filter ancestor=postgres:17 --format '{{.ID}}' | head -n1)
+          test -n "$pg_container"
+          cleanup() { docker unpause "$pg_container" >/dev/null 2>&1 || true; }
+          trap cleanup EXIT
+          curl -fsS http://127.0.0.1:4000/api/v1/live >/dev/null
+          curl -fsS http://127.0.0.1:4000/api/v1/ready >/dev/null
+          docker pause "$pg_container" >/dev/null
+          sleep 2
+          curl -fsS --max-time 3 http://127.0.0.1:4000/api/v1/live >/dev/null
+          if curl -fsS --max-time 5 http://127.0.0.1:4000/api/v1/ready >/dev/null; then
+            echo 'readiness incorrectly remained healthy while PostgreSQL was paused'
+            exit 1
+          fi
+          docker unpause "$pg_container" >/dev/null
+          trap - EXIT
+          for i in {1..30}; do
+            if curl -fsS --max-time 5 http://127.0.0.1:4000/api/v1/ready >/dev/null; then exit 0; fi
+            sleep 1
+          done
+          echo 'readiness did not recover after PostgreSQL resumed'
+          exit 1
+      - name: Perform real logical backup and restore drill
+        id: restore
+        shell: bash
+        run: |
+          set -euo pipefail
+          client=(docker run --rm --network host -i -e PGPASSWORD=ci postgres:17)
+          count_sql="SELECT concat_ws('|', (SELECT count(*) FROM \"User\"), (SELECT count(*) FROM \"Shop\"), (SELECT count(*) FROM \"Reservation\"), (SELECT count(*) FROM \"_prisma_migrations\"));"
+          source_counts="$(${client[@]} psql -h 127.0.0.1 -U ci -d gospots_p16 -Atc "$count_sql")"
+          started=$(date +%s)
+          ${client[@]} pg_dump -h 127.0.0.1 -U ci -d gospots_p16 -Fc > /tmp/gospots-phase16.dump
+          ${client[@]} createdb -h 127.0.0.1 -U ci gospots_p16_restore
+          cat /tmp/gospots-phase16.dump | ${client[@]} pg_restore -h 127.0.0.1 -U ci -d gospots_p16_restore --no-owner --no-privileges
+          restored_counts="$(${client[@]} psql -h 127.0.0.1 -U ci -d gospots_p16_restore -Atc "$count_sql")"
+          test "$source_counts" = "$restored_counts"
+          restore_seconds=$(( $(date +%s) - started ))
+          test "$restore_seconds" -lt 7200
+          echo "restore_seconds=$restore_seconds" >> "$GITHUB_OUTPUT"
+          {
+            echo '### Phase 16 restore drill'
+            echo "- Source counts (User|Shop|Reservation|migrations): $source_counts"
+            echo "- Restored counts: $restored_counts"
+            echo "- Logical dump + restore seconds: $restore_seconds"
+            echo '- RTO objective: <= 7200 seconds'
+          } >> "$GITHUB_STEP_SUMMARY"
+      - name: Upload Phase 16 diagnostics
+        if: ${{ always() }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: phase16-hardening-${{ github.run_id }}
+          if-no-files-found: ignore
+          retention-days: 30
+          path: |
+            /tmp/phase16-api.log
+            /tmp/phase16-metrics.txt
+            /tmp/phase16-seed.json
+            /tmp/gospots-phase16.dump

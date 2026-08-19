@@ -357,7 +357,10 @@ jobs:
         working-directory: apps/web/e2e
         run: |
           npm install --no-package-lock --ignore-scripts
-          npx playwright install --with-deps chromium
+          # GitHub's Ubuntu image already contains Chromium runtime libraries. Avoid
+          # Playwright --with-deps here because the hosted-runner Azure apt mirror can
+          # stall independently of the application and consume the entire CI timeout.
+          npx playwright install chromium
       - name: Start API and web
         shell: bash
         run: |
