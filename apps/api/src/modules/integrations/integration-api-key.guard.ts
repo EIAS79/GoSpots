@@ -10,11 +10,13 @@ import {
 import { Reflector } from '@nestjs/core';
 import { createHash } from 'crypto';
 import { PrismaService } from '../../prisma/prisma.service';
+import { AuditService } from '../audit/audit.service';
 
 const INTEGRATION_SCOPES_KEY = 'gospots:integration-scopes';
 
 export type IntegrationApiAuth = {
   credentialId: string;
+  credentialName: string;
   shopId: string;
   scopes: string[];
 };
@@ -33,10 +35,14 @@ export class IntegrationApiKeyGuard implements CanActivate {
   constructor(
     private readonly prisma: PrismaService,
     private readonly reflector: Reflector,
+    private readonly audit: AuditService,
   ) {}
 
   async canActivate(context: ExecutionContext) {
     const req = context.switchToHttp().getRequest<{
+      method?: string;
+      url?: string;
+      originalUrl?: string;
       headers: Record<string, string | string[] | undefined>;
       integrationAuth?: IntegrationApiAuth;
     }>();
@@ -68,12 +74,29 @@ export class IntegrationApiKeyGuard implements CanActivate {
     }
     req.integrationAuth = {
       credentialId: credential.id,
+      credentialName: credential.name,
       shopId: credential.shopId,
       scopes,
     };
     await this.prisma.integrationCredential.update({
       where: { id: credential.id },
       data: { lastUsedAt: new Date() },
+    });
+    const correlation = req.headers['x-correlation-id'];
+    const userAgent = req.headers['user-agent'];
+    await this.audit.recordForShop(credential.shopId, {
+      section: 'system',
+      action: 'public_api.request',
+      summary: `Public API ${String(req.method ?? 'REQUEST').toUpperCase()} request by ${credential.name}`,
+      actorName: `Service account: ${credential.name}`,
+      correlationId: Array.isArray(correlation) ? correlation[0] : correlation,
+      sourceDevice: Array.isArray(userAgent) ? userAgent[0] : userAgent,
+      meta: {
+        credentialId: credential.id,
+        method: String(req.method ?? '').toUpperCase(),
+        path: String(req.originalUrl ?? req.url ?? '').split('?')[0],
+        requiredScopes: required,
+      },
     });
     return true;
   }
