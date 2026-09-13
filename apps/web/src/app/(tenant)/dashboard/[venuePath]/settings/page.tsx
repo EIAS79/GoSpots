@@ -7,6 +7,7 @@ import { AuthSessionsPanel } from "@/components/settings/auth-sessions-panel";
 import { DeviceSettingsPanel } from "@/components/settings/device-settings-panel";
 import { MailOutboxPanel } from "@/components/settings/mail-outbox-panel";
 import { OpsOutageRunbookPanel } from "@/components/settings/ops-outage-runbook-panel";
+import { PaymentTerminalCertificationPanel } from "@/components/settings/payment-terminal-certification-panel";
 import { ShopSettingsPanel } from "@/components/settings/shop-settings-panel";
 import { hasPermission } from "@/lib/auth-client";
 import {
@@ -53,6 +54,7 @@ export default function SettingsPage() {
         <ShopSettingsPanel canWrite={canWrite} />
         {canWrite ? <EnterpriseEcosystemPanel /> : null}
         <DeviceSettingsPanel canWrite={canWrite} />
+        {canWrite ? <PaymentTerminalCertificationPanel canWrite /> : null}
         {showOwnerMfa || showStaffMfa ? <AuthMfaPanel /> : null}
         {state.status === "authed" ? <AuthSessionsPanel /> : null}
         {state.status === "authed" && isOwner ? <MailOutboxPanel /> : null}
