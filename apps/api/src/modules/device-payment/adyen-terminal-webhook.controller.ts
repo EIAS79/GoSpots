@@ -15,6 +15,7 @@ import {
 import { createHash } from 'crypto';
 import { sumMoneyDecimal } from '../../common/money.util';
 import { PrismaService } from '../../prisma/prisma.service';
+import { Public } from '../auth/decorators/public.decorator';
 import {
   AdyenTerminalConnector,
   type AdyenStandardWebhookItem,
@@ -65,6 +66,7 @@ export class AdyenTerminalWebhookController {
     private readonly states: PaymentOperationStateService,
   ) {}
 
+  @Public()
   @Post()
   @HttpCode(202)
   async ingest(@Body() body: AdyenWebhookEnvelope) {
