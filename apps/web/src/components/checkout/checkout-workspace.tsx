@@ -9,6 +9,7 @@ import {
 } from "@/lib/guest-check-client";
 import { CheckoutDrawer } from "./checkout-drawer";
 import { CommercialControls } from "./commercial-controls";
+import { ProviderRefundPanel } from "./provider-refund-panel";
 import { SettlementStatus } from "./settlement-status";
 
 function sourceCount(check: GuestCheck) {
@@ -300,6 +301,12 @@ export function CheckoutWorkspace({
           canWrite={canWrite}
           locale={locale}
           onCheckChanged={loadChecks}
+        />
+        <ProviderRefundPanel
+          key={`provider-refunds-${selected.id}-${selected.currentSettlementId ?? "none"}`}
+          settlementId={selected.currentSettlementId}
+          canWrite={canWrite}
+          locale={locale}
         />
       </div>
     </div>
