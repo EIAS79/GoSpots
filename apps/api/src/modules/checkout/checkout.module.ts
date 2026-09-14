@@ -4,6 +4,7 @@ import { CashModule } from '../cash/cash.module';
 import { DevicePaymentModule } from '../device-payment/device-payment.module';
 import { CheckoutController } from './checkout.controller';
 import { ProviderCheckoutPaymentController } from './provider-checkout-payment.controller';
+import { ProviderCheckoutRecoveryController } from './provider-checkout-recovery.controller';
 import { CommercialCoreController } from './commercial-core.controller';
 import { CheckoutService } from './checkout.service';
 import { ChargeCalculatorService } from './charge-calculator.service';
@@ -22,6 +23,7 @@ import { CommercialDayCloseService } from './commercial-day-close.service';
   controllers: [
     CheckoutController,
     ProviderCheckoutPaymentController,
+    ProviderCheckoutRecoveryController,
     CommercialCoreController,
   ],
   providers: [
