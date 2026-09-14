@@ -19,11 +19,10 @@ function object(value: unknown): Record<string, unknown> | null {
 
 function checkoutIntent(providerPayload: unknown) {
   const envelope = object(providerPayload);
-  const metadata = object(envelope?.requestMetadata);
-  if (metadata?.source !== 'checkout') return null;
+  const metadata = object(envelope?.checkoutIntent);
   const allocationKind =
-    typeof metadata.allocationKind === 'string' ? metadata.allocationKind : null;
-  const rawAllocations = Array.isArray(metadata.allocations)
+    typeof metadata?.allocationKind === 'string' ? metadata.allocationKind : null;
+  const rawAllocations = Array.isArray(metadata?.allocations)
     ? metadata.allocations
     : [];
   const allocations = rawAllocations.flatMap((raw) => {
@@ -85,10 +84,11 @@ export class ProviderCheckoutRecoveryController {
     });
     if (!row) return null;
 
-    const [operation, paymentState] = await Promise.all([
-      this.providerPayments.getOperation(user, row.id),
-      this.checkoutPayments.getPaymentState(user, settlementId),
-    ]);
+    const operation = await this.providerPayments.getOperation(user, row.id);
+    const paymentState = await this.checkoutPayments.getPaymentState(
+      user,
+      settlementId,
+    );
     return {
       operation,
       paymentState,
