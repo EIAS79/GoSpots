@@ -15,12 +15,14 @@ export class HealthService {
       status: 'ok' as const,
       check: 'live',
       service: 'GoSpots-api',
+      revision: this.deploymentRevision(),
       timestamp: new Date().toISOString(),
     };
   }
 
   async ready() {
     const started = Date.now();
+    const revision = this.deploymentRevision();
 
     try {
       await this.prisma.$queryRaw`SELECT 1`;
@@ -31,6 +33,7 @@ export class HealthService {
         status: 'error' as const,
         check: 'ready',
         service: 'GoSpots-api',
+        revision,
         database: 'down' as const,
         latencyMs: Date.now() - started,
         error: message,
@@ -60,6 +63,7 @@ export class HealthService {
           status: 'error' as const,
           check: 'ready',
           service: 'GoSpots-api',
+          revision,
           database: 'up' as const,
           webApp: 'misconfigured' as const,
           latencyMs: Date.now() - started,
@@ -83,6 +87,7 @@ export class HealthService {
           status: 'error' as const,
           check: 'ready',
           service: 'GoSpots-api',
+          revision,
           database: 'up' as const,
           billing: 'schema_error' as const,
           latencyMs: Date.now() - started,
@@ -110,6 +115,7 @@ export class HealthService {
           status: 'error' as const,
           check: 'ready',
           service: 'GoSpots-api',
+          revision,
           database: 'up' as const,
           billing: 'misconfigured' as const,
           defaultProvider: billing.defaultProvider,
@@ -125,6 +131,7 @@ export class HealthService {
       status: 'ok' as const,
       check: 'ready',
       service: 'GoSpots-api',
+      revision,
       database: 'up' as const,
       webApp: webApp ? ('ready' as const) : ('not_required' as const),
       billing: billing.enabled ? ('ready' as const) : ('disabled' as const),
@@ -132,5 +139,13 @@ export class HealthService {
       latencyMs: Date.now() - started,
       timestamp: new Date().toISOString(),
     };
+  }
+
+  private deploymentRevision() {
+    return (
+      this.config.get<string>('RENDER_GIT_COMMIT') ??
+      this.config.get<string>('GIT_COMMIT_SHA') ??
+      ''
+    ).trim() || 'unknown';
   }
 }
