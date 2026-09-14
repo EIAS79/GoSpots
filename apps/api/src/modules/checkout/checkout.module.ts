@@ -12,6 +12,7 @@ import { SettlementStateService } from './settlement-state.service';
 import { PaymentAllocationService } from './payment-allocation.service';
 import { CheckoutPaymentService } from './checkout-payment.service';
 import { ProviderCheckoutPaymentService } from './provider-checkout-payment.service';
+import { ProviderCheckoutRefundService } from './provider-checkout-refund.service';
 import { GuestCheckMergeService } from './guest-check-merge.service';
 import { CommercialMergeService } from './commercial-merge.service';
 import { CommercialSettlementService } from './commercial-settlement.service';
@@ -33,6 +34,7 @@ import { CommercialDayCloseService } from './commercial-day-close.service';
     PaymentAllocationService,
     CheckoutPaymentService,
     ProviderCheckoutPaymentService,
+    ProviderCheckoutRefundService,
     GuestCheckMergeService,
     CommercialMergeService,
     CommercialSettlementService,
@@ -46,6 +48,7 @@ import { CommercialDayCloseService } from './commercial-day-close.service';
     PaymentAllocationService,
     CheckoutPaymentService,
     ProviderCheckoutPaymentService,
+    ProviderCheckoutRefundService,
     GuestCheckMergeService,
     CommercialMergeService,
     CommercialSettlementService,
