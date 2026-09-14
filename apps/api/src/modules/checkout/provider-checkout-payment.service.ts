@@ -43,6 +43,12 @@ type ProviderPaymentOperation = Awaited<
   ReturnType<PaymentDomainService['startPayment']>
 >;
 
+function jsonObject(value: Prisma.JsonValue | null): Record<string, Prisma.JsonValue> | null {
+  return value !== null && typeof value === 'object' && !Array.isArray(value)
+    ? (value as Record<string, Prisma.JsonValue>)
+    : null;
+}
+
 @Injectable()
 export class ProviderCheckoutPaymentService {
   constructor(
@@ -72,6 +78,43 @@ export class ProviderCheckoutPaymentService {
       throw new BadRequestException('Payment allocations must be greater than zero');
     }
     return sumMoneyDecimal(...amounts);
+  }
+
+  private providerPayloadForCheckout(
+    currentPayload: Prisma.JsonValue | null,
+    input: ProviderCheckoutInput,
+  ): Prisma.InputJsonValue {
+    const currentObject = jsonObject(currentPayload);
+    const providerPayload =
+      currentObject && 'checkoutIntent' in currentObject && 'provider' in currentObject
+        ? currentObject.provider
+        : currentPayload;
+    return {
+      provider: providerPayload,
+      checkoutIntent: {
+        allocationKind: input.allocationKind,
+        allocations: input.allocations.map((row) => ({
+          snapshotId: row.snapshotId,
+          amount: serializeMoney(roundMoneyDecimal(row.amount, 4)),
+        })),
+        note: input.note?.trim() || null,
+      },
+    } as Prisma.InputJsonValue;
+  }
+
+  private async persistCheckoutIntent(
+    operation: ProviderPaymentOperation,
+    input: ProviderCheckoutInput,
+  ) {
+    await this.prisma.paymentOperation.update({
+      where: { id: operation.id },
+      data: {
+        providerPayload: this.providerPayloadForCheckout(
+          operation.providerPayload,
+          input,
+        ),
+      },
+    });
   }
 
   private async settlementForProviderPayment(
@@ -458,6 +501,7 @@ export class ProviderCheckoutPaymentService {
         providerRequest,
         idempotencyKey,
       );
+      await this.persistCheckoutIntent(replayed, input);
       if (replayed.state === PaymentOperationState.CAPTURED) {
         return this.finalizeCaptured(actor, replayed, {
           expectedCheckVersion: input.expectedCheckVersion + 1,
@@ -493,6 +537,7 @@ export class ProviderCheckoutPaymentService {
       providerRequest,
       idempotencyKey,
     );
+    await this.persistCheckoutIntent(operation, input);
 
     if (operation.state === PaymentOperationState.CAPTURED) {
       return this.finalizeCaptured(actor, operation, {
@@ -523,6 +568,7 @@ export class ProviderCheckoutPaymentService {
       current.state === PaymentOperationState.UNKNOWN
         ? await this.providerPayments.reconcile(actor, operationId)
         : current;
+    await this.persistCheckoutIntent(operation, input);
 
     if (operation.state === PaymentOperationState.CAPTURED) {
       return this.finalizeCaptured(actor, operation, input);
