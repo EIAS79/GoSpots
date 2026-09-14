@@ -16,7 +16,7 @@ test('@smoke offline financial controls require connectivity', async ({ page, co
   await page.goto(`/dashboard/${E2E.venues.offline}/checkout`);
   await page.getByRole('button', { name: new RegExp(label) }).click();
   await expect(page.getByText('Bill final', { exact: true })).toBeVisible({ timeout: 15_000 });
-  const names = ['Cash', 'Card · external terminal', 'Split payment', 'Other received'];
+  const names = ['Cash', 'Card · terminal', 'Split payment', 'Other received'];
   for (const name of names) await expect(page.getByRole('button', { name })).toBeEnabled();
   await context.setOffline(true);
   try {
