@@ -1,3 +1,4 @@
+import { Type } from 'class-transformer';
 import {
   ArrayMinSize,
   IsArray,
@@ -5,12 +6,12 @@ import {
   IsInt,
   IsOptional,
   IsString,
+  Matches,
   MaxLength,
   Min,
   MinLength,
   ValidateNested,
 } from 'class-validator';
-import { Type } from 'class-transformer';
 import { PaymentAllocationKind } from '@prisma/client';
 
 const MONEY_PATTERN = /^\d+(?:\.\d{1,4})?$/;
@@ -21,6 +22,7 @@ export class ProviderCheckoutAllocationDto {
   snapshotId!: string;
 
   @IsString()
+  @Matches(MONEY_PATTERN)
   @MaxLength(40)
   amount!: string;
 }
