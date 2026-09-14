@@ -1,4 +1,4 @@
 phase=17
-source_main=40bafafd09f6452c0d70379ad3b481b6646355c9
-release_reason=adyen-decline-certification-ui
+source_main=8bd7a01ac01301697160216b4417010360d6aad7
+release_reason=adyen-checkout-authority-closure
 release_date=2026-09-14
