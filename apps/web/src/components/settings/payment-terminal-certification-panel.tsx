@@ -29,6 +29,10 @@ type PaymentOperation = {
   capturedAt: string | null;
 };
 
+function isTerminalState(state: PaymentOperationState) {
+  return state === "CAPTURED" || state === "FAILED" || state === "CANCELED";
+}
+
 function operationMessage(operation: PaymentOperation) {
   if (operation.state === "CAPTURED") {
     return "Adyen captured the €1.00 test payment on the physical terminal.";
@@ -41,6 +45,9 @@ function operationMessage(operation: PaymentOperation) {
   }
   if (operation.state === "UNKNOWN") {
     return "The provider outcome is uncertain. Reconcile this operation before trying another payment.";
+  }
+  if (operation.state === "PROCESSING") {
+    return "The same Adyen payment is still processing. Do not start another payment.";
   }
   return `Terminal payment state: ${operation.state}.`;
 }
@@ -82,9 +89,15 @@ export function PaymentTerminalCertificationPanel({
       device.terminal?.enabled &&
       Boolean(device.terminal.id),
   );
+  const hasActiveAttempt = Boolean(operation && !isTerminalState(operation.state));
+
+  function applyOperation(result: PaymentOperation) {
+    setOperation(result);
+    if (isTerminalState(result.state)) attemptKey.current = null;
+  }
 
   async function startTestPayment() {
-    if (!terminal?.terminal?.id || busy) return;
+    if (!terminal?.terminal?.id || busy || hasActiveAttempt) return;
     setBusy(true);
     setError(null);
     try {
@@ -104,12 +117,23 @@ export function PaymentTerminalCertificationPanel({
           },
         }),
       });
-      setOperation(result);
-      if (result.state === "CAPTURED" || result.state === "FAILED" || result.state === "CANCELED") {
-        attemptKey.current = null;
-      }
+      applyOperation(result);
     } catch (testError) {
       setError(testError instanceof Error ? testError.message : "Could not start the Adyen terminal payment.");
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function refreshOperation() {
+    if (!operation || busy) return;
+    setBusy(true);
+    setError(null);
+    try {
+      const result = await api<PaymentOperation>(`/payments/operations/${operation.id}`);
+      applyOperation(result);
+    } catch (refreshError) {
+      setError(refreshError instanceof Error ? refreshError.message : "Could not refresh the terminal payment.");
     } finally {
       setBusy(false);
     }
@@ -123,8 +147,7 @@ export function PaymentTerminalCertificationPanel({
       const result = await api<PaymentOperation>(`/payments/operations/${operation.id}/reconcile`, {
         method: "POST",
       });
-      setOperation(result);
-      if (result.state !== "UNKNOWN") attemptKey.current = null;
+      applyOperation(result);
     } catch (reconcileError) {
       setError(reconcileError instanceof Error ? reconcileError.message : "Could not reconcile the terminal payment.");
     } finally {
@@ -153,7 +176,7 @@ export function PaymentTerminalCertificationPanel({
           className="inline-flex min-h-9 items-center gap-2 rounded-lg border border-white/10 px-3 text-xs font-semibold text-zinc-300 hover:bg-white/[0.05] disabled:opacity-40"
         >
           <RefreshCw className={`h-3.5 w-3.5 ${loading ? "animate-spin" : ""}`} />
-          Refresh
+          Refresh terminal
         </button>
       </div>
 
@@ -174,11 +197,11 @@ export function PaymentTerminalCertificationPanel({
               <button
                 type="button"
                 onClick={() => void startTestPayment()}
-                disabled={busy}
+                disabled={busy || hasActiveAttempt}
                 className="inline-flex min-h-10 items-center gap-2 rounded-lg bg-emerald-400 px-4 text-xs font-bold text-zinc-950 hover:bg-emerald-300 disabled:opacity-40"
               >
                 {busy ? <Loader2 className="h-4 w-4 animate-spin" /> : <CreditCard className="h-4 w-4" />}
-                Send €1.00 test payment
+                {hasActiveAttempt ? "Payment already in progress" : "Send €1.00 test payment"}
               </button>
             ) : null}
           </div>
@@ -216,6 +239,16 @@ export function PaymentTerminalCertificationPanel({
                   className="mt-2 rounded-lg border border-current/20 px-3 py-1.5 font-semibold disabled:opacity-40"
                 >
                   Reconcile outcome
+                </button>
+              ) : null}
+              {operation.state !== "UNKNOWN" && !isTerminalState(operation.state) ? (
+                <button
+                  type="button"
+                  onClick={() => void refreshOperation()}
+                  disabled={busy}
+                  className="mt-2 rounded-lg border border-current/20 px-3 py-1.5 font-semibold disabled:opacity-40"
+                >
+                  Check current payment
                 </button>
               ) : null}
             </div>
