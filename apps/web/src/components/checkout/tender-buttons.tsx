@@ -2,7 +2,7 @@
 
 import { useConnectivityOptional } from "@/lib/connectivity-context";
 
-export type CheckoutTender = "Cash" | "ManualCard" | "Split" | "Other";
+export type CheckoutTender = "Cash" | "Card" | "Split" | "Other";
 
 const TENDERS: Array<{
   key: CheckoutTender;
@@ -11,9 +11,9 @@ const TENDERS: Array<{
 }> = [
   { key: "Cash", label: "Cash", hint: "Customer pays the remaining balance in cash" },
   {
-    key: "ManualCard",
-    label: "Card · external terminal",
-    hint: "The card was approved on a separate terminal; record it in GoSpots",
+    key: "Card",
+    label: "Card · terminal",
+    hint: "Charge the remaining balance on the venue payment terminal",
   },
   { key: "Split", label: "Split payment", hint: "Use more than one payment method or split the amount" },
   { key: "Other", label: "Other received", hint: "Record another payment method that was already received" },
@@ -45,7 +45,7 @@ export function TenderButtons({
           <p className="text-xs font-semibold uppercase tracking-[0.16em] text-zinc-500">
             Take payment
           </p>
-          <p className="mt-1 text-[11px] text-zinc-600">Choose how the customer actually paid.</p>
+          <p className="mt-1 text-[11px] text-zinc-600">Choose how the customer actually pays.</p>
         </div>
         {paymentsEnabled && onlineForFinance ? (
           <span className="rounded-full bg-emerald-400/10 px-2 py-1 text-[10px] font-semibold uppercase tracking-wide text-emerald-300">
@@ -75,7 +75,7 @@ export function TenderButtons({
         {!onlineForFinance
           ? "Payments and final checkout are disabled offline. Reconnect before taking money."
           : paymentsEnabled
-            ? "Cash posts to the open cash shift. Card · external terminal only records a card payment that was already approved elsewhere; GoSpots does not charge the card itself."
+            ? "Cash posts to the open cash shift. Card sends the charge through the configured venue payment terminal and only records payment after provider capture."
             : "Payment unlocks only when the check has a non-zero charge and every open order or standalone play timer has been finalized."}
       </p>
     </section>

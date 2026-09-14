@@ -16,10 +16,10 @@ function methodCopy(method: CheckoutPaymentMethod) {
   }
   if (method === "MANUAL_CARD") {
     return {
-      label: "Card · external terminal",
-      action: "Record approved card payment",
+      label: "Card · payment terminal",
+      action: "Send to terminal",
       detail:
-        "Only continue after the separate card terminal or processor says the payment is approved. GoSpots records that result; it does not charge the card from this button.",
+        "GoSpots will send this amount to the selected venue terminal. The bill is recorded as paid only after the payment provider confirms capture. If the outcome is uncertain, reconcile it before trying another charge.",
       icon: CreditCard,
     };
   }
@@ -38,6 +38,10 @@ export function PaymentConfirmation({
   currency,
   locale = "en",
   busy = false,
+  terminalOptions = [],
+  selectedTerminalId = "",
+  terminalError = null,
+  onTerminalChange,
   onConfirm,
   onCancel,
 }: {
@@ -46,11 +50,17 @@ export function PaymentConfirmation({
   currency: string;
   locale?: string;
   busy?: boolean;
+  terminalOptions?: Array<{ id: string; label: string }>;
+  selectedTerminalId?: string;
+  terminalError?: string | null;
+  onTerminalChange?: (terminalId: string) => void;
   onConfirm: () => void;
   onCancel: () => void;
 }) {
   const copy = methodCopy(method);
   const Icon = copy.icon;
+  const isCard = method === "MANUAL_CARD";
+  const cardReady = !isCard || Boolean(selectedTerminalId);
 
   return (
     <section className="rounded-2xl border border-emerald-400/30 bg-emerald-400/[0.065] p-4">
@@ -67,8 +77,35 @@ export function PaymentConfirmation({
             {formatCheckoutMoney(amount, currency, locale)}
           </p>
           <p className="mt-2 text-xs leading-5 text-zinc-400">{copy.detail}</p>
+
+          {isCard ? (
+            <div className="mt-3">
+              <label className="text-[11px] font-semibold uppercase tracking-[0.14em] text-zinc-500">
+                Payment terminal
+              </label>
+              <select
+                value={selectedTerminalId}
+                onChange={(event) => onTerminalChange?.(event.target.value)}
+                disabled={busy || terminalOptions.length === 0}
+                className="mt-1 h-10 w-full rounded-lg border border-white/10 bg-zinc-950 px-3 text-sm text-zinc-100 outline-none focus:border-emerald-400/50 disabled:opacity-50"
+              >
+                <option value="">Select terminal</option>
+                {terminalOptions.map((terminal) => (
+                  <option key={terminal.id} value={terminal.id}>
+                    {terminal.label}
+                  </option>
+                ))}
+              </select>
+              {terminalError ? (
+                <p className="mt-2 text-xs leading-5 text-red-200">
+                  {terminalError}
+                </p>
+              ) : null}
+            </div>
+          ) : null}
+
           <p className="mt-2 rounded-lg border border-white/7 bg-black/15 px-2.5 py-2 text-[11px] leading-4 text-zinc-500">
-            Recording payment changes the GoSpots balance. It does not automatically end an active play session or open order.
+            Payment changes the GoSpots balance only after the tender is authoritative. It does not automatically end an active play session or open order.
           </p>
         </div>
       </div>
@@ -84,11 +121,11 @@ export function PaymentConfirmation({
         </button>
         <button
           type="button"
-          disabled={busy}
+          disabled={busy || !cardReady}
           onClick={onConfirm}
           className="min-h-11 rounded-xl bg-emerald-400 px-3 text-sm font-bold text-emerald-950 transition hover:bg-emerald-300 disabled:opacity-50"
         >
-          {busy ? "Recording…" : copy.action}
+          {busy ? (isCard ? "Waiting for terminal…" : "Recording…") : copy.action}
         </button>
       </div>
     </section>

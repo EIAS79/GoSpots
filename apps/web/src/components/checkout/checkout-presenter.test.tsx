@@ -147,18 +147,19 @@ test("unauthorized staff is read/write denied and payment controls stay disabled
   assert.match(html, /Payment unlocks only when/);
 });
 
-test("payment choices make manual/external boundaries explicit", () => {
+test("payment choices make provider-backed terminal authority explicit", () => {
   const html = renderToStaticMarkup(
     <TenderButtons canWrite paymentsEnabled />,
   );
   assert.match(html, /Cash/);
-  assert.match(html, /Card · external terminal/);
+  assert.match(html, /Card · terminal/);
   assert.match(html, /Split payment/);
   assert.match(html, /Other received/);
-  assert.match(html, /does not charge the card itself/);
+  assert.match(html, /sends the charge through the configured venue payment terminal/i);
+  assert.match(html, /only records payment after provider capture/i);
 });
 
-test("external-terminal card confirmation cannot be mistaken for charging a card", () => {
+test("terminal card confirmation makes provider capture and uncertainty explicit", () => {
   const html = renderToStaticMarkup(
     <PaymentConfirmation
       method="MANUAL_CARD"
@@ -170,9 +171,11 @@ test("external-terminal card confirmation cannot be mistaken for charging a card
   );
   assert.match(html, /Confirm payment/);
   assert.match(html, /200\.00/);
-  assert.match(html, /separate card terminal or processor/i);
-  assert.match(html, /does not charge the card/i);
-  assert.match(html, /Record approved card payment/);
+  assert.match(html, /Card · payment terminal/);
+  assert.match(html, /send this amount to the selected venue terminal/i);
+  assert.match(html, /provider confirms capture/i);
+  assert.match(html, /reconcile it before trying another charge/i);
+  assert.match(html, /Send to terminal/);
   assert.match(html, /Cancel/);
 });
 

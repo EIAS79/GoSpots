@@ -11,6 +11,7 @@ import {
   PaymentWebhookStatus,
   Prisma,
 } from '@prisma/client';
+import type { PaymentOperation } from '@prisma/client';
 import {
   hashIdempotencyRequest,
 } from '../../common/idempotency.util';
@@ -19,7 +20,6 @@ import {
   roundMoneyDecimal,
   serializeMoney,
   sumMoneyDecimal,
-  toPrismaDecimal,
 } from '../../common/money.util';
 import { requireShopId } from '../../common/tenant';
 import { PrismaService } from '../../prisma/prisma.service';
@@ -97,11 +97,12 @@ export class PaymentDomainService {
     return result.state as PaymentOperationState;
   }
 
-  private serializeOperation(operation: any) {
+  private serializeOperation<T extends PaymentOperation>(operation: T) {
+    const { amount, reconciliationRequired, ...rest } = operation;
     return {
-      ...operation,
-      amount: serializeMoney(operation.amount),
-      reconciliationRequired: Boolean(operation.reconciliationRequired),
+      ...rest,
+      amount: serializeMoney(amount),
+      reconciliationRequired: Boolean(reconciliationRequired),
     };
   }
 
@@ -168,7 +169,7 @@ export class PaymentDomainService {
       terminalExternalId = terminal.externalTerminalId;
     }
 
-    let operation: any;
+    let operation: PaymentOperation;
     try {
       operation = await this.prisma.paymentOperation.create({
         data: {

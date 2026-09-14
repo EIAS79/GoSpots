@@ -18,6 +18,16 @@ import {
   type CheckoutPaymentState,
   type CheckoutPreview,
 } from "@/lib/checkout-client";
+import { fetchDevices } from "@/lib/device-client";
+import {
+  cancelProviderCheckoutPayment,
+  collectProviderCheckoutPayment,
+  fetchActiveProviderCheckoutPayment,
+  reconcileProviderCheckoutPayment,
+  type ProviderCheckoutIntent,
+  type ProviderCheckoutPaymentOperation,
+  type ProviderCheckoutResult,
+} from "@/lib/provider-checkout-client";
 import {
   updateGuestCheck,
   voidGuestCheck,
@@ -39,6 +49,7 @@ import {
   type CheckoutIssueKind,
 } from "./checkout-presenter";
 import { PaymentConfirmation } from "./payment-confirmation";
+import { ProviderPaymentRecoveryPanel } from "./provider-payment-recovery";
 import { SettlementStatus } from "./settlement-status";
 import { SplitPaymentPanel } from "./split-payment-panel";
 import {
@@ -64,16 +75,43 @@ function isZeroAmount(value: string | undefined | null) {
 
 function tenderMethod(tender: CheckoutTender): CheckoutPaymentMethod | null {
   if (tender === "Cash") return "CASH";
-  if (tender === "ManualCard") return "MANUAL_CARD";
+  if (tender === "Card") return "MANUAL_CARD";
   if (tender === "Other") return "OTHER";
   return null;
 }
 
 function paymentMethodLabel(method: string) {
   if (method === "CASH") return "Cash";
-  if (method === "MANUAL_CARD") return "Card · external terminal";
+  if (method === "MANUAL_CARD") return "Card";
   if (method === "OTHER") return "Other recorded payment";
   return method.replaceAll("_", " ").toLowerCase();
+}
+
+type ProviderAttempt = {
+  operation: ProviderCheckoutPaymentOperation;
+  intent: ProviderCheckoutIntent | null;
+};
+
+type TerminalOption = { id: string; label: string };
+
+function providerNeedsRecovery(operation: ProviderCheckoutPaymentOperation) {
+  return (
+    operation.reconciliationRequired ||
+    operation.state === "CREATED" ||
+    operation.state === "PROCESSING" ||
+    operation.state === "REQUIRES_ACTION" ||
+    operation.state === "AUTHORIZED" ||
+    (operation.state === "CAPTURED" && !operation.checkoutPaymentId)
+  );
+}
+
+function providerCanCancel(operation: ProviderCheckoutPaymentOperation) {
+  return (
+    operation.state === "CREATED" ||
+    operation.state === "PROCESSING" ||
+    operation.state === "REQUIRES_ACTION" ||
+    operation.state === "AUTHORIZED"
+  );
 }
 
 export function CheckoutDrawer({
@@ -101,6 +139,12 @@ export function CheckoutDrawer({
   const [issue, setIssue] = useState<CheckoutIssueKind | null>(null);
   const [detail, setDetail] = useState<string | null>(null);
   const [paymentError, setPaymentError] = useState<string | null>(null);
+  const [providerAttempt, setProviderAttempt] = useState<ProviderAttempt | null>(
+    null,
+  );
+  const [terminalOptions, setTerminalOptions] = useState<TerminalOption[]>([]);
+  const [selectedTerminalId, setSelectedTerminalId] = useState("");
+  const [terminalError, setTerminalError] = useState<string | null>(null);
 
   const loadPreview = useCallback(
     async (useExpectedVersion: boolean): Promise<CheckoutPreview | null> => {
@@ -153,7 +197,6 @@ export function CheckoutDrawer({
       try {
         const next = await fetchCheckoutPaymentState(settlementId);
         setPaymentState(next);
-        setPaymentError(null);
         return next;
       } catch (error) {
         setPaymentState(null);
@@ -166,6 +209,70 @@ export function CheckoutDrawer({
     [],
   );
 
+  const loadProviderAttempt = useCallback(async (settlementId: string) => {
+    try {
+      const active = await fetchActiveProviderCheckoutPayment(settlementId);
+      if (!active) {
+        setProviderAttempt(null);
+        return null;
+      }
+      setPaymentState(active.paymentState);
+      setProviderAttempt({
+        operation: active.operation,
+        intent: active.intent,
+      });
+      return active;
+    } catch (error) {
+      setPaymentError(
+        checkoutErrorMessage(
+          error,
+          "Could not load the active terminal payment. Do not retry the card until the payment state is known.",
+        ),
+      );
+      return null;
+    }
+  }, []);
+
+  const loadTerminals = useCallback(async () => {
+    try {
+      const result = await fetchDevices();
+      const options = result.devices
+        .filter(
+          (device) =>
+            device.type === "PAYMENT_TERMINAL" &&
+            device.status === "ACTIVE" &&
+            device.claimState === "CLAIMED" &&
+            device.terminal?.enabled === true &&
+            device.terminal.provider.trim().toLowerCase() === "adyen" &&
+            Boolean(device.terminal.externalTerminalId?.trim()),
+        )
+        .map((device) => ({
+          id: device.terminal!.id,
+          label: device.label,
+        }));
+      setTerminalOptions(options);
+      setSelectedTerminalId((current) => {
+        if (current && options.some((option) => option.id === current)) {
+          return current;
+        }
+        return options.length === 1 ? options[0].id : "";
+      });
+      setTerminalError(
+        options.length === 0
+          ? "No claimed, enabled Adyen terminal is available. Configure the terminal under Settings → Devices before taking card payment."
+          : null,
+      );
+      return options;
+    } catch (error) {
+      setTerminalOptions([]);
+      setSelectedTerminalId("");
+      setTerminalError(
+        checkoutErrorMessage(error, "Could not load payment terminals."),
+      );
+      return [];
+    }
+  }, []);
+
   useEffect(() => {
     setPreview(null);
     setIssue(null);
@@ -177,14 +284,23 @@ export function CheckoutDrawer({
     setSplitOpen(false);
     setMergeOpen(false);
     setPendingTender(null);
+    setProviderAttempt(null);
     setPaymentError(null);
     setCloseError(null);
     if (check.currentSettlementId) {
-      void loadPaymentState(check.currentSettlementId);
+      void Promise.all([
+        loadPaymentState(check.currentSettlementId),
+        loadProviderAttempt(check.currentSettlementId),
+      ]);
     } else {
       setPaymentState(null);
     }
-  }, [check.id, check.currentSettlementId, loadPaymentState]);
+  }, [
+    check.id,
+    check.currentSettlementId,
+    loadPaymentState,
+    loadProviderAttempt,
+  ]);
 
   async function handleSourceChanged() {
     setPaymentState(null);
@@ -219,7 +335,8 @@ export function CheckoutDrawer({
       error.code !== "VERSION_CONFLICT" ||
       !check.currentSettlementId ||
       !paymentState ||
-      hasPositiveAmount(paymentState.paidAmount)
+      hasPositiveAmount(paymentState.paidAmount) ||
+      providerAttempt
     ) {
       return false;
     }
@@ -240,7 +357,7 @@ export function CheckoutDrawer({
   }
 
   async function handleTender(tender: CheckoutTender) {
-    if (!preview || paymentBusy) return;
+    if (!preview || paymentBusy || providerAttempt) return;
     if (billBlockers.length > 0) {
       setPaymentError(
         "Payment is locked until every open order is handed off and every running standalone play timer is ended.",
@@ -249,6 +366,12 @@ export function CheckoutDrawer({
     }
     setPaymentError(null);
     setCloseError(null);
+
+    if (tender === "Card") {
+      setPaymentBusy(true);
+      await loadTerminals();
+      setPaymentBusy(false);
+    }
 
     if (tender !== "Split") {
       setPendingTender(tender);
@@ -274,8 +397,61 @@ export function CheckoutDrawer({
     }
   }
 
+  async function applyProviderResult(
+    result: ProviderCheckoutResult,
+    intent: ProviderCheckoutIntent,
+  ) {
+    if (result.paymentState) setPaymentState(result.paymentState);
+
+    if (
+      result.operation.state === "CAPTURED" &&
+      result.operation.checkoutPaymentId &&
+      !result.checkoutFinalizationRequired
+    ) {
+      setProviderAttempt(null);
+      setPendingTender(null);
+      setPaymentError(null);
+      await onCheckChanged();
+      await loadPreview(false);
+      return;
+    }
+
+    if (
+      result.operation.state === "FAILED" ||
+      result.operation.state === "CANCELED"
+    ) {
+      setProviderAttempt(null);
+      setPendingTender(null);
+      setPaymentError(
+        result.operation.errorMessage ||
+          (result.operation.state === "FAILED"
+            ? "The card payment was declined or failed. No checkout payment was recorded."
+            : "The terminal payment was canceled. No checkout payment was recorded."),
+      );
+      await onCheckChanged();
+      await loadPreview(false);
+      return;
+    }
+
+    if (
+      providerNeedsRecovery(result.operation) ||
+      result.checkoutFinalizationRequired
+    ) {
+      setProviderAttempt({ operation: result.operation, intent });
+      setPendingTender(null);
+      setPaymentError(null);
+      if (result.paymentState) setPaymentState(result.paymentState);
+      await onCheckChanged();
+      return;
+    }
+
+    setPaymentError(
+      `Terminal payment returned ${result.operation.state}. Refresh the payment state before another card attempt.`,
+    );
+  }
+
   async function confirmPendingTender() {
-    if (!pendingTender || !preview || paymentBusy) return;
+    if (!pendingTender || !preview || paymentBusy || providerAttempt) return;
     const method = tenderMethod(pendingTender);
     if (!method) return;
 
@@ -294,15 +470,35 @@ export function CheckoutDrawer({
       });
       const group = groups.groups[0];
       if (!group) throw new Error("No remaining payment group was returned.");
+      const allocations = group.allocations.map((allocation) => ({
+        snapshotId: allocation.snapshotId,
+        amount: allocation.amount,
+      }));
+
+      if (method === "MANUAL_CARD") {
+        if (!selectedTerminalId) {
+          throw new Error("Select an Adyen payment terminal before continuing.");
+        }
+        const intent: ProviderCheckoutIntent = {
+          allocationKind: "REMAINING",
+          allocations,
+        };
+        const result = await collectProviderCheckoutPayment(state.settlementId, {
+          expectedCheckVersion: state.guestCheckVersion,
+          provider: "adyen",
+          terminalId: selectedTerminalId,
+          allocationKind: intent.allocationKind,
+          allocations: intent.allocations,
+        });
+        await applyProviderResult(result, intent);
+        return;
+      }
 
       const next = await createCheckoutPayment(state.settlementId, {
         expectedCheckVersion: state.guestCheckVersion,
         method,
         allocationKind: "REMAINING",
-        allocations: group.allocations.map((allocation) => ({
-          snapshotId: allocation.snapshotId,
-          amount: allocation.amount,
-        })),
+        allocations,
       });
       setPaymentState(next);
       setPendingTender(null);
@@ -311,7 +507,72 @@ export function CheckoutDrawer({
     } catch (error) {
       if (await recoverStaleUnpaidSettlement(error)) return;
       setPaymentError(
-        checkoutErrorMessage(error, "Unable to record payment."),
+        checkoutErrorMessage(error, "Unable to complete payment."),
+      );
+    } finally {
+      setPaymentBusy(false);
+    }
+  }
+
+  async function reconcileProviderAttempt() {
+    if (!providerAttempt || paymentBusy) return;
+    if (!providerAttempt.intent) {
+      setPaymentError(
+        "This terminal attempt predates recoverable checkout allocation metadata. Do not retry the card; resolve the provider payment manually before continuing.",
+      );
+      return;
+    }
+    const currentVersion = paymentState?.guestCheckVersion;
+    if (!currentVersion) {
+      setPaymentError("Reload checkout payment state before reconciliation.");
+      return;
+    }
+
+    setPaymentBusy(true);
+    setPaymentError(null);
+    try {
+      const result = await reconcileProviderCheckoutPayment(
+        providerAttempt.operation.id,
+        {
+          expectedCheckVersion: currentVersion,
+          allocationKind: providerAttempt.intent.allocationKind,
+          allocations: providerAttempt.intent.allocations,
+        },
+      );
+      await applyProviderResult(result, providerAttempt.intent);
+    } catch (error) {
+      setPaymentError(
+        checkoutErrorMessage(
+          error,
+          "Could not reconcile the terminal payment. Do not retry the card.",
+        ),
+      );
+    } finally {
+      setPaymentBusy(false);
+    }
+  }
+
+  async function cancelProviderAttempt() {
+    if (!providerAttempt || paymentBusy) return;
+    setPaymentBusy(true);
+    setPaymentError(null);
+    try {
+      const result = await cancelProviderCheckoutPayment(
+        providerAttempt.operation.id,
+      );
+      await applyProviderResult(
+        result,
+        providerAttempt.intent ?? {
+          allocationKind: "REMAINING",
+          allocations: [],
+        },
+      );
+    } catch (error) {
+      setPaymentError(
+        checkoutErrorMessage(
+          error,
+          "Could not cancel the terminal payment. Check its provider status before retrying.",
+        ),
       );
     } finally {
       setPaymentBusy(false);
@@ -341,6 +602,12 @@ export function CheckoutDrawer({
     setPaymentError(null);
     await onCheckChanged();
     await loadPreview(false);
+    if (check.currentSettlementId) {
+      await Promise.all([
+        loadPaymentState(check.currentSettlementId),
+        loadProviderAttempt(check.currentSettlementId),
+      ]);
+    }
   }
 
   const blockingIssue =
@@ -361,11 +628,14 @@ export function CheckoutDrawer({
     : zeroValueBill;
   const billBlockers = checkoutBillBlockers(check);
   const blockers = checkoutOperationalBlockers(check);
-  const billEditable = canWrite && !paymentStarted && !fullyPaid;
+  const providerBlocking = providerAttempt !== null;
+  const billEditable =
+    canWrite && !paymentStarted && !fullyPaid && !providerBlocking;
   const paymentsEnabled =
     canWrite &&
     !blockingIssue &&
     !fullyPaid &&
+    !providerBlocking &&
     billBlockers.length === 0 &&
     hasPositiveAmount(paymentState?.amountDue ?? preview?.amountDue);
   const pendingMethod = pendingTender ? tenderMethod(pendingTender) : null;
@@ -374,7 +644,7 @@ export function CheckoutDrawer({
     paymentState?.currency ?? preview?.currency ?? check.currency ?? "PLN";
 
   async function finishCheck() {
-    if (!fullyPaid || closingCheck) return;
+    if (!fullyPaid || closingCheck || providerBlocking) return;
     if (blockers.length > 0) {
       setCloseError(
         "Payment is complete, but a live order or play session is still open. Finish it first; do not charge the customer again.",
@@ -396,7 +666,15 @@ export function CheckoutDrawer({
   }
 
   async function handleVoidCheck() {
-    if (!canWrite || paymentStarted || fullyPaid || voidingCheck) return;
+    if (
+      !canWrite ||
+      paymentStarted ||
+      fullyPaid ||
+      voidingCheck ||
+      providerBlocking
+    ) {
+      return;
+    }
     const confirmed = window.confirm(
       "Void this unpaid guest check? Its linked activity will be detached, not canceled.",
     );
@@ -447,7 +725,7 @@ export function CheckoutDrawer({
               Merge / move
             </button>
           ) : null}
-          {!paymentStarted && !fullyPaid && canWrite ? (
+          {!paymentStarted && !fullyPaid && canWrite && !providerBlocking ? (
             <button
               type="button"
               onClick={() => void handleVoidCheck()}
@@ -487,7 +765,7 @@ export function CheckoutDrawer({
           {mergeOpen ? (
             <CheckMergePanel
               currentCheck={check}
-              locked={paymentStarted || fullyPaid}
+              locked={paymentStarted || fullyPaid || providerBlocking}
               locale={locale}
               onChanged={handleMergeChanged}
               onClose={() => setMergeOpen(false)}
@@ -593,17 +871,32 @@ export function CheckoutDrawer({
               </section>
             ) : null}
 
-            {pendingMethod && preview && !fullyPaid ? (
+            {providerAttempt ? (
+              <ProviderPaymentRecoveryPanel
+                operation={providerAttempt.operation}
+                locale={locale}
+                busy={paymentBusy}
+                canCancel={providerCanCancel(providerAttempt.operation)}
+                onReconcile={() => void reconcileProviderAttempt()}
+                onCancel={() => void cancelProviderAttempt()}
+              />
+            ) : null}
+
+            {!providerAttempt && pendingMethod && preview && !fullyPaid ? (
               <PaymentConfirmation
                 method={pendingMethod}
                 amount={pendingAmount}
                 currency={paymentCurrency}
                 locale={locale}
                 busy={paymentBusy}
+                terminalOptions={terminalOptions}
+                selectedTerminalId={selectedTerminalId}
+                terminalError={terminalError}
+                onTerminalChange={setSelectedTerminalId}
                 onCancel={() => setPendingTender(null)}
                 onConfirm={() => void confirmPendingTender()}
               />
-            ) : preview && !blockingIssue && !fullyPaid ? (
+            ) : !providerAttempt && preview && !blockingIssue && !fullyPaid ? (
               <TenderButtons
                 canWrite={canWrite}
                 busy={loading || paymentBusy}
@@ -650,7 +943,7 @@ export function CheckoutDrawer({
                   ) : null}
                   <button
                     type="button"
-                    disabled={!canWrite || closingCheck}
+                    disabled={!canWrite || closingCheck || providerBlocking}
                     onClick={() => void finishCheck()}
                     className="mt-3 min-h-11 w-full rounded-xl bg-emerald-400 px-3 text-sm font-bold text-emerald-950 transition hover:bg-emerald-300 disabled:opacity-45"
                   >
