@@ -1,4 +1,4 @@
 phase=17
-source_main=84092509e1f7c1cebbf15e057a4c3ddbfa8192fe
-release_reason=phase17-adyen-terminal-certification
+source_main=40bafafd09f6452c0d70379ad3b481b6646355c9
+release_reason=adyen-decline-certification-ui
 release_date=2026-09-14
