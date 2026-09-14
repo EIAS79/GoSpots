@@ -16,10 +16,10 @@ function methodCopy(method: CheckoutPaymentMethod) {
   }
   if (method === "MANUAL_CARD") {
     return {
-      label: "Card · external terminal",
-      action: "Record approved card payment",
+      label: "Card · payment terminal",
+      action: "Send to terminal",
       detail:
-        "Only continue after the separate card terminal or processor says the payment is approved. GoSpots records that result; it does not charge the card from this button.",
+        "GoSpots will send this amount to the selected venue terminal. The bill is recorded as paid only after the payment provider confirms capture. If the outcome is uncertain, reconcile it before trying another charge.",
       icon: CreditCard,
     };
   }
@@ -68,7 +68,7 @@ export function PaymentConfirmation({
           </p>
           <p className="mt-2 text-xs leading-5 text-zinc-400">{copy.detail}</p>
           <p className="mt-2 rounded-lg border border-white/7 bg-black/15 px-2.5 py-2 text-[11px] leading-4 text-zinc-500">
-            Recording payment changes the GoSpots balance. It does not automatically end an active play session or open order.
+            Payment changes the GoSpots balance only after the tender is authoritative. It does not automatically end an active play session or open order.
           </p>
         </div>
       </div>
@@ -88,7 +88,7 @@ export function PaymentConfirmation({
           onClick={onConfirm}
           className="min-h-11 rounded-xl bg-emerald-400 px-3 text-sm font-bold text-emerald-950 transition hover:bg-emerald-300 disabled:opacity-50"
         >
-          {busy ? "Recording…" : copy.action}
+          {busy ? (method === "MANUAL_CARD" ? "Waiting for terminal…" : "Recording…") : copy.action}
         </button>
       </div>
     </section>
