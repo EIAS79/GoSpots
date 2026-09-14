@@ -35,10 +35,11 @@ function isTerminalState(state: PaymentOperationState) {
 
 function operationMessage(operation: PaymentOperation) {
   if (operation.state === "CAPTURED") {
-    return "Adyen captured the €1.00 test payment on the physical terminal.";
+    return "Adyen unexpectedly captured the €1.23 decline-test payment.";
   }
   if (operation.state === "FAILED") {
-    return operation.errorMessage || "Adyen rejected the test payment.";
+    const detail = operation.errorMessage || "Adyen rejected the test payment.";
+    return `Decline test returned ${operation.errorCode || "failure"}: ${detail}`;
   }
   if (operation.state === "CANCELED") {
     return "The terminal payment was canceled.";
@@ -109,10 +110,10 @@ export function PaymentTerminalCertificationPanel({
         body: JSON.stringify({
           provider: "adyen",
           terminalId: terminal.terminal.id,
-          amount: "1.00",
+          amount: "1.23",
           currency: "EUR",
           metadata: {
-            purpose: "phase17_terminal_certification",
+            purpose: "phase17_terminal_certification_decline",
             deviceId: terminal.id,
           },
         }),
@@ -165,7 +166,7 @@ export function PaymentTerminalCertificationPanel({
           <div>
             <h2 className="font-bold text-white">Payment terminal certification</h2>
             <p className="mt-1 max-w-2xl text-xs leading-5 text-zinc-500">
-              Phase 17 provider test. Sends a real €1.00 TEST transaction from GoSpots to the registered Adyen terminal.
+              Phase 17 decline test. Sends a real €1.23 TEST transaction that Adyen should refuse.
             </p>
           </div>
         </div>
@@ -198,10 +199,10 @@ export function PaymentTerminalCertificationPanel({
                 type="button"
                 onClick={() => void startTestPayment()}
                 disabled={busy || hasActiveAttempt}
-                className="inline-flex min-h-10 items-center gap-2 rounded-lg bg-emerald-400 px-4 text-xs font-bold text-zinc-950 hover:bg-emerald-300 disabled:opacity-40"
+                className="inline-flex min-h-10 items-center gap-2 rounded-lg bg-amber-300 px-4 text-xs font-bold text-zinc-950 hover:bg-amber-200 disabled:opacity-40"
               >
                 {busy ? <Loader2 className="h-4 w-4 animate-spin" /> : <CreditCard className="h-4 w-4" />}
-                {hasActiveAttempt ? "Payment already in progress" : "Send €1.00 test payment"}
+                {hasActiveAttempt ? "Payment already in progress" : "Send €1.23 decline test"}
               </button>
             ) : null}
           </div>
@@ -213,17 +214,17 @@ export function PaymentTerminalCertificationPanel({
       {operation ? (
         <div
           className={`mt-3 rounded-xl border px-3 py-3 text-xs leading-5 ${
-            operation.state === "CAPTURED"
+            operation.state === "FAILED" && operation.errorCode === "Refusal"
               ? "border-emerald-400/20 bg-emerald-400/[0.06] text-emerald-200"
-              : operation.state === "FAILED" || operation.state === "CANCELED"
+              : operation.state === "CAPTURED" || operation.state === "FAILED" || operation.state === "CANCELED"
                 ? "border-rose-400/20 bg-rose-400/[0.06] text-rose-200"
                 : "border-amber-400/20 bg-amber-400/[0.06] text-amber-200"
           }`}
         >
           <div className="flex items-start gap-2">
-            {operation.state === "CAPTURED" ? (
+            {operation.state === "FAILED" && operation.errorCode === "Refusal" ? (
               <CheckCircle2 className="mt-0.5 h-4 w-4 shrink-0" />
-            ) : operation.state === "FAILED" || operation.state === "CANCELED" ? (
+            ) : operation.state === "CAPTURED" || operation.state === "FAILED" || operation.state === "CANCELED" ? (
               <XCircle className="mt-0.5 h-4 w-4 shrink-0" />
             ) : (
               <Loader2 className="mt-0.5 h-4 w-4 shrink-0" />
