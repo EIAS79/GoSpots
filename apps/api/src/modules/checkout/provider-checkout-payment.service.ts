@@ -39,6 +39,10 @@ type ProviderCheckoutInput =
   | CreateProviderCheckoutPaymentDto
   | ReconcileProviderCheckoutPaymentDto;
 
+type ProviderPaymentOperation = Awaited<
+  ReturnType<PaymentDomainService['startPayment']>
+>;
+
 @Injectable()
 export class ProviderCheckoutPaymentService {
   constructor(
@@ -279,7 +283,7 @@ export class ProviderCheckoutPaymentService {
 
   private async finalizeCaptured(
     actor: JwtAccessPayload,
-    operation: any,
+    operation: ProviderPaymentOperation,
     input: ReconcileProviderCheckoutPaymentDto,
   ) {
     if (operation.state !== PaymentOperationState.CAPTURED) {
