@@ -1,0 +1,50 @@
+name: Phase 17 production API revision probe
+
+on:
+  push:
+    branches:
+      - phase17/render-revision-readiness
+    paths:
+      - .github/workflows/phase17-production-api-probe.yml
+
+permissions:
+  contents: read
+
+jobs:
+  verify-production-api-revision:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Require exact GoSpots production API revision
+        env:
+          EXPECTED_REVISION: fc60bb98612a89eeb5aa10af1922cdf7dc16a4cd
+          READY_URL: https://www.gospots.eu/api/v1/ready
+        shell: bash
+        run: |
+          set -euo pipefail
+          for attempt in $(seq 1 24); do
+            echo "Attempt ${attempt}/24"
+            body="$(curl --fail --silent --show-error --max-time 20 "${READY_URL}" || true)"
+            echo "${body}"
+            if BODY="${body}" node <<'NODE'
+          const body = process.env.BODY || '';
+          const expected = process.env.EXPECTED_REVISION;
+          try {
+            const parsed = JSON.parse(body);
+            if (parsed.status === 'ok' && parsed.revision === expected) {
+              console.log(`Production API revision verified: ${parsed.revision}`);
+              process.exit(0);
+            }
+            console.log(`Not ready yet: status=${parsed.status ?? 'missing'} revision=${parsed.revision ?? 'missing'} expected=${expected}`);
+          } catch (error) {
+            console.log(`Non-JSON/empty readiness response: ${error.message}`);
+          }
+          process.exit(1);
+          NODE
+            then
+              exit 0
+            fi
+            sleep 15
+          done
+          echo "Production API never reported expected revision ${EXPECTED_REVISION}" >&2
+          exit 1
