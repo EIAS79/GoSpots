@@ -20,6 +20,14 @@ export type ProviderPaymentOperationState =
   | "PARTIALLY_REFUNDED"
   | "REFUNDED";
 
+export type ProviderRefundState =
+  | "CREATED"
+  | "PROCESSING"
+  | "SUCCEEDED"
+  | "FAILED"
+  | "CANCELED"
+  | "UNKNOWN";
+
 export type ProviderCheckoutPaymentOperation = {
   id: string;
   settlementId: string | null;
@@ -59,6 +67,32 @@ export type ActiveProviderCheckout = {
   intent: ProviderCheckoutIntent | null;
 };
 
+export type ProviderCheckoutRefund = {
+  id: string;
+  state: ProviderRefundState;
+  amount: string;
+  currency: string;
+  providerRefundId: string | null;
+  errorCode: string | null;
+  errorMessage: string | null;
+  createdAt: string;
+  updatedAt: string;
+};
+
+export type ProviderCheckoutPaymentSummary = {
+  id: string;
+  checkoutPaymentId: string | null;
+  provider: string;
+  state: ProviderPaymentOperationState;
+  amount: string;
+  currency: string;
+  refundedAmount: string;
+  refundableAmount: string;
+  pendingRefund: boolean;
+  canRefund: boolean;
+  refunds: ProviderCheckoutRefund[];
+};
+
 export type ProviderCheckoutBody = {
   expectedCheckVersion: number;
   provider: string;
@@ -94,6 +128,12 @@ export function fetchActiveProviderCheckoutPayment(settlementId: string) {
   );
 }
 
+export function fetchProviderCheckoutPayments(settlementId: string) {
+  return api<ProviderCheckoutPaymentSummary[]>(
+    `/checkout/settlements/${settlementId}/provider-payments`,
+  );
+}
+
 export function reconcileProviderCheckoutPayment(
   operationId: string,
   body: Omit<ProviderCheckoutBody, "provider" | "terminalId">,
@@ -111,5 +151,25 @@ export function cancelProviderCheckoutPayment(operationId: string) {
   return api<ProviderCheckoutResult>(
     `/checkout/provider-payments/${operationId}/cancel`,
     { method: "POST" },
+  );
+}
+
+export function refundRemainingProviderCheckoutPayment(
+  operationId: string,
+  reason = "Checkout card refund",
+) {
+  const actionKey = idempotencyActionKey("checkout.provider-payment.refund", {
+    operationId,
+    reason,
+  });
+  return withIdempotentFinanceCall(actionKey, (idempotencyKey) =>
+    api<ProviderCheckoutRefund>(
+      `/checkout/provider-payments/${operationId}/refund-remaining`,
+      {
+        method: "POST",
+        headers: { "Idempotency-Key": idempotencyKey },
+        body: JSON.stringify({ reason }),
+      },
+    ),
   );
 }
