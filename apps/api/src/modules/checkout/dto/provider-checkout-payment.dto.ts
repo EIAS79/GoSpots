@@ -76,3 +76,10 @@ export class ReconcileProviderCheckoutPaymentDto {
   @MaxLength(500)
   note?: string;
 }
+
+export class RefundProviderCheckoutPaymentDto {
+  @IsOptional()
+  @IsString()
+  @MaxLength(500)
+  reason?: string;
+}
