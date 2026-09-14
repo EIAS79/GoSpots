@@ -48,6 +48,17 @@ export type ProviderCheckoutAllocation = {
   amount: string;
 };
 
+export type ProviderCheckoutIntent = {
+  allocationKind: PaymentAllocationKind;
+  allocations: ProviderCheckoutAllocation[];
+};
+
+export type ActiveProviderCheckout = {
+  operation: ProviderCheckoutPaymentOperation;
+  paymentState: CheckoutPaymentState;
+  intent: ProviderCheckoutIntent | null;
+};
+
 export type ProviderCheckoutBody = {
   expectedCheckVersion: number;
   provider: string;
@@ -74,6 +85,12 @@ export function collectProviderCheckoutPayment(
         body: JSON.stringify(body),
       },
     ),
+  );
+}
+
+export function fetchActiveProviderCheckoutPayment(settlementId: string) {
+  return api<ActiveProviderCheckout | null>(
+    `/checkout/settlements/${settlementId}/provider-payment-active`,
   );
 }
 
