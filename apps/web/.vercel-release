@@ -1,4 +1,4 @@
 phase=17
-source_main=7da4abfb60959d93ee7c5828ce5da377ccf62b44
-release_reason=checkout-command-center-redesign
+source_main=fe4aa6e059cac083eb4f4bed1a15e1fee1055c9b
+release_reason=checkout-vertical-scroll-fix
 release_date=2026-09-16
