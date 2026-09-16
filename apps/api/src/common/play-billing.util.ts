@@ -35,7 +35,7 @@ export function applyBillingDiscount(
 
 /**
  * Price from Gaming setup: category rates pro-rated by actual duration
- * (e.g. 60 min @ $30 → 30 min = $15), picking the cheapest applicable rate.
+ * (e.g. 60 min @$30 → 30 min = $15), picking the cheapest applicable rate.
  * Falls back to unit hourlyRate × hours when no block rates exist.
  */
 export function computePlayBillingAmount(
@@ -121,10 +121,16 @@ export function classifyWalkInBillingRow(
   completedAt: Date | null,
   startedAt: Date,
   endedAt: Date | null,
-  _durationMinutes: number | null,
-  _now: Date,
+  durationMinutes: number | null,
+  now: Date,
 ): PlayBillingBucket | null {
   if (status === 'CANCELED') return null;
+
+  // Preserve the public classifier signature used by callers while intentionally
+  // ignoring planned duration/time for operational state classification.
+  void startedAt;
+  void durationMinutes;
+  void now;
 
   const paid = status === 'COMPLETED' || completedAt != null;
   if (paid) return 'paid';
