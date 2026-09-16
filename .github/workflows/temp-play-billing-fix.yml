@@ -1,0 +1,131 @@
+name: Temporary play billing bug fix
+
+on:
+  push:
+    branches:
+      - fix/play-billing-tabs-resource-labels
+
+permissions:
+  contents: write
+
+jobs:
+  patch:
+    if: github.event.head_commit.message != 'Fix play billing tab counts and resource labels'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: fix/play-billing-tabs-resource-labels
+          fetch-depth: 0
+      - name: Patch play billing UI
+        shell: python
+        run: |
+          from pathlib import Path
+
+          path = Path('apps/web/src/components/finance/game-billing-panel.tsx')
+          text = path.read_text()
+
+          old = '''function formatSchedule(startsAt: string, endsAt: string) {
+            return formatEventWindow(startsAt, endsAt) ?? "—";
+          }
+
+          export function GameBillingPanel'''
+          new = '''function formatSchedule(startsAt: string, endsAt: string) {
+            return formatEventWindow(startsAt, endsAt) ?? "—";
+          }
+
+          function walkInUnitLabel(unit: {
+            name: string;
+            category: string;
+            section: { name: string; floor: number; isVip: boolean } | null;
+          }) {
+            const location = unit.section
+              ? [
+                  `Floor ${unit.section.floor}`,
+                  unit.section.name,
+                  unit.section.isVip ? "VIP" : null,
+                ].filter(Boolean)
+              : [];
+            return [...location, unit.name, unit.category].join(" · ");
+          }
+
+          export function GameBillingPanel'''
+          assert old in text, 'formatSchedule anchor not found'
+          text = text.replace(old, new, 1)
+
+          old = '''  const [data, setData] = useState<PlayBillingResponse | null>(null);
+            const [loading, setLoading] = useState(true);'''
+          new = '''  const [data, setData] = useState<PlayBillingResponse | null>(null);
+            const [tabSummary, setTabSummary] = useState<PlayBillingResponse["summary"]>({
+              inProgress: 0,
+              awaitingPayment: 0,
+              paid: 0,
+              unpaidTotal: "0.0000",
+              paidTotal: "0.0000",
+            });
+            const [loading, setLoading] = useState(true);'''
+          assert old in text, 'data state anchor not found'
+          text = text.replace(old, new, 1)
+
+          old = '''        setData(
+                  await fetchPlayBilling({
+                    tab,
+                    from: tab === "in_progress" ? undefined : from,
+                    to: tab === "in_progress" ? undefined : to,
+                    page,
+                    pageSize: PAGE_SIZE,
+                  }),
+                );
+                return true;'''
+          new = '''        const [selected, inProgress, awaitingPayment, paid] = await Promise.all([
+                  fetchPlayBilling({
+                    tab,
+                    from: tab === "in_progress" ? undefined : from,
+                    to: tab === "in_progress" ? undefined : to,
+                    page,
+                    pageSize: PAGE_SIZE,
+                  }),
+                  fetchPlayBilling({ tab: "in_progress", page: 1, pageSize: 1 }),
+                  fetchPlayBilling({
+                    tab: "awaiting_payment",
+                    from,
+                    to,
+                    page: 1,
+                    pageSize: 1,
+                  }),
+                  fetchPlayBilling({ tab: "paid", from, to, page: 1, pageSize: 1 }),
+                ]);
+                setData(selected);
+                setTabSummary({
+                  inProgress: inProgress.total,
+                  awaitingPayment: awaitingPayment.total,
+                  paid: paid.total,
+                  unpaidTotal: awaitingPayment.summary.unpaidTotal,
+                  paidTotal: paid.summary.paidTotal,
+                });
+                return true;'''
+          assert old in text, 'load anchor not found'
+          text = text.replace(old, new, 1)
+
+          replacements = {
+            'n: data.summary.inProgress,': 'n: tabSummary.inProgress,',
+            'n: data.summary.awaitingPayment,': 'n: tabSummary.awaitingPayment,',
+            't("finance.playSummaryPaid", { n: data.summary.paid })': 't("finance.playSummaryPaid", { n: tabSummary.paid })',
+            'due: formatMoney(data.summary.unpaidTotal),': 'due: formatMoney(tabSummary.unpaidTotal),',
+            'collected: formatMoney(data.summary.paidTotal),': 'collected: formatMoney(tabSummary.paidTotal),',
+            '{u.name} · {u.category}': '{walkInUnitLabel(u)}',
+          }
+          for old, new in replacements.items():
+            assert old in text, f'replacement anchor not found: {old}'
+            text = text.replace(old, new)
+
+          path.write_text(text)
+
+      - name: Remove temporary workflow and commit fix
+        run: |
+          rm .github/workflows/temp-play-billing-fix.yml
+          git config user.name "EIAS79"
+          git config user.email "147754375+EIAS79@users.noreply.github.com"
+          git add apps/web/src/components/finance/game-billing-panel.tsx .github/workflows/temp-play-billing-fix.yml
+          git commit -m "Fix play billing tab counts and resource labels"
+          git push origin HEAD:fix/play-billing-tabs-resource-labels
