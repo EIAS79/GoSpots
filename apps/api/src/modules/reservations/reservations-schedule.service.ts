@@ -237,7 +237,13 @@ export class ReservationsScheduleService {
           where: {
             shopId,
             resourceId: { in: resourceIds },
-            status: { in: ACTIVE_RESERVATION },
+            OR: [
+              { status: { in: ACTIVE_RESERVATION } },
+              {
+                status: ReservationStatus.COMPLETED,
+                billedAt: null,
+              },
+            ],
             startsAt: { lte: dayEnd },
             endsAt: { gte: dayStart },
           },
