@@ -126,19 +126,15 @@ export function classifyWalkInBillingRow(
 ): PlayBillingBucket | null {
   if (status === 'CANCELED') return null;
 
-  const effectiveEnd =
-    endedAt ??
-    (durationMinutes != null && durationMinutes > 0
-      ? new Date(startedAt.getTime() + durationMinutes * 60_000)
-      : null);
-
   const paid = status === 'COMPLETED' || completedAt != null;
+  if (paid) return 'paid';
 
+  // A planned duration is an estimate, not an operational stop. An ACTIVE
+  // walk-in remains in progress until staff explicitly ends it, which stamps
+  // endedAt and freezes the final amount for Checkout.
   if (status === 'ACTIVE') {
-    if (!effectiveEnd || effectiveEnd > now) return 'in_progress';
-    return paid ? 'paid' : 'awaiting_payment';
+    return endedAt ? 'awaiting_payment' : 'in_progress';
   }
 
-  if (paid) return 'paid';
   return 'awaiting_payment';
 }
