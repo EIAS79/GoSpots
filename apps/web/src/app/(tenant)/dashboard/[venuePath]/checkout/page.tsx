@@ -1,6 +1,6 @@
 "use client";
 
-import { Loader2 } from "lucide-react";
+import { CheckCircle2, Loader2, ShieldCheck } from "lucide-react";
 import { CheckoutWorkspace } from "@/components/checkout/checkout-workspace";
 import { TenantPage } from "@/components/layout/tenant-page";
 import { checkoutAccess } from "@/components/checkout/checkout-presenter";
@@ -54,34 +54,43 @@ export default function CheckoutPage() {
       title={polish ? "Kasa" : "Checkout"}
       description={
         polish
-          ? "Jeden rachunek gościa: zbuduj rachunek, ustal końcową kwotę, przyjmij płatność i zamknij rachunek."
-          : "One guest bill: build it, finalize the amount, take payment, then close the check."
+          ? "Szybkie centrum obsługi rachunku: aktywność, płatność, fiskalizacja i zamknięcie."
+          : "Operator command center for the full guest-check lifecycle: activity, payment, compliance and close."
       }
-      capabilities={[
-        "One bill across session time, orders, services and booking charges",
-        "Authorized discounts, comps, overrides, service charge and gratuity",
-        "Cash, external-terminal card, split, partial and mixed recorded payments",
-        "Immutable commercial receipt and canonical ledger reconciliation",
-      ]}
       className="bg-zinc-950/30 p-2 sm:p-3 md:p-4 lg:p-4"
     >
       <section
-        className="mb-3 shrink-0 rounded-2xl border border-sky-400/15 bg-sky-400/[0.045] px-3 py-2.5 sm:px-4"
+        className="mb-3 grid gap-2 rounded-2xl border border-white/8 bg-black/20 p-3 sm:grid-cols-[auto_1fr] sm:items-center sm:gap-4 sm:px-4"
         data-testid="checkout-flow-guide"
       >
-        <p className="text-xs leading-5 text-zinc-400">
-          <span className="font-bold text-sky-200">
-            {polish ? "Najważniejsza zasada: " : "The important rule: "}
+        <div className="flex items-center gap-2 text-emerald-300">
+          <span className="grid h-9 w-9 place-items-center rounded-xl bg-emerald-400/10">
+            <ShieldCheck className="h-4 w-4" />
           </span>
-          {polish
-            ? "najpierw zakończ otwarte zamówienia i aktywne sesje, aby kwota była ostateczna. Dopiero potem przyjmij płatność. Po zapisaniu płatności nie pobieraj jej drugi raz — zamknięcie rachunku finalizuje tylko rozliczenie i stan operacyjny."
-            : "finalize open orders and active sessions first so the amount is stable. Only then take payment. Once payment is recorded, never take it again — closing the check only finalizes settlement and operational state."}
-        </p>
-        <p className="mt-1 text-[11px] leading-4 text-zinc-600">
-          {polish
-            ? "Pokwitowanie komercyjne nie jest dokumentem fiskalnym. Paragon fiskalny lub faktura to osobny etap zgodności."
-            : "The commercial receipt is non-fiscal. Fiscal receipt or invoice is a separate compliance step."}
-        </p>
+          <div>
+            <p className="text-xs font-bold uppercase tracking-[0.14em]">
+              {polish ? "Bezpieczna kasa" : "Safe checkout"}
+            </p>
+            <p className="text-[11px] text-zinc-500">
+              {polish ? "Jedna płatność, jeden stan prawdy" : "One payment, one source of truth"}
+            </p>
+          </div>
+        </div>
+
+        <div className="grid gap-1.5 text-[11px] leading-4 text-zinc-400 sm:grid-cols-3">
+          <p className="flex items-start gap-1.5">
+            <CheckCircle2 className="mt-0.5 h-3.5 w-3.5 shrink-0 text-zinc-500" />
+            {polish ? "Najpierw zakończ aktywne zamówienia i sesje." : "Finalize active orders and sessions first."}
+          </p>
+          <p className="flex items-start gap-1.5">
+            <CheckCircle2 className="mt-0.5 h-3.5 w-3.5 shrink-0 text-zinc-500" />
+            {polish ? "Pobierz płatność tylko raz i poczekaj na wynik terminala." : "Take payment once and wait for the terminal result."}
+          </p>
+          <p className="flex items-start gap-1.5">
+            <CheckCircle2 className="mt-0.5 h-3.5 w-3.5 shrink-0 text-zinc-500" />
+            {polish ? "Zamknij rachunek dopiero po rozliczeniu aktywności i zgodności." : "Close only after activity and compliance are resolved."}
+          </p>
+        </div>
       </section>
 
       <CheckoutWorkspace
