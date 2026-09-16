@@ -204,7 +204,7 @@ export function CheckoutWorkspace({
   const selectedSources = sourceCount(selected);
 
   return (
-    <div className="grid min-h-[34rem] min-w-0 overflow-hidden rounded-2xl border border-white/10 bg-zinc-950/45 lg:grid-cols-[18.5rem_minmax(0,1fr)]">
+    <div className="grid min-h-[34rem] min-w-0 shrink-0 overflow-hidden rounded-2xl border border-white/10 bg-zinc-950/45 lg:grid-cols-[18.5rem_minmax(0,1fr)]">
       <aside className="min-w-0 border-b border-white/8 bg-black/20 p-3 lg:sticky lg:top-3 lg:max-h-[calc(100dvh-8rem)] lg:self-start lg:border-b-0 lg:border-r">
         <div className="flex items-start justify-between gap-2 px-1">
           <div>

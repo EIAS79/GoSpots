@@ -18,6 +18,11 @@ test('@smoke offline financial controls require connectivity', async ({ page, co
   await expect(page.getByText('Bill final', { exact: true })).toBeVisible({ timeout: 15_000 });
   const names = ['Cash', 'Card · terminal', 'Split payment', 'Other received'];
   for (const name of names) await expect(page.getByRole('button', { name, exact: true })).toBeEnabled();
+
+  const cash = page.getByRole('button', { name: 'Cash', exact: true });
+  await cash.scrollIntoViewIfNeeded();
+  await expect(cash).toBeVisible();
+
   await context.setOffline(true);
   try {
     await page.evaluate(() => window.dispatchEvent(new Event('offline')));
