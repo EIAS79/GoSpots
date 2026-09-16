@@ -91,6 +91,7 @@ export function TenderButtons({
             <button
               key={tender.key}
               type="button"
+              aria-label={tender.label}
               disabled={!enabled}
               onClick={() => onSelect?.(tender.key)}
               title={
