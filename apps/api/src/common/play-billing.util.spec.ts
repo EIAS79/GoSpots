@@ -1,4 +1,7 @@
-import { computePlayBillingAmount } from './play-billing.util';
+import {
+  classifyWalkInBillingRow,
+  computePlayBillingAmount,
+} from './play-billing.util';
 
 describe('computePlayBillingAmount proportional rates', () => {
   const start = new Date('2026-08-03T14:00:00.000Z');
@@ -58,5 +61,55 @@ describe('computePlayBillingAmount proportional rates', () => {
       categoryRates: [],
     });
     expect(result.amount).toBe(15);
+  });
+});
+
+describe('classifyWalkInBillingRow', () => {
+  const now = new Date('2026-09-16T14:00:00.000Z');
+  const startedAt = new Date('2026-09-16T12:00:00.000Z');
+
+  it('keeps ACTIVE walk-ins in progress after planned duration until explicitly ended', () => {
+    expect(
+      classifyWalkInBillingRow(
+        'ACTIVE',
+        null,
+        startedAt,
+        null,
+        60,
+        now,
+      ),
+    ).toBe('in_progress');
+  });
+
+  it('moves an explicitly ended ACTIVE walk-in to awaiting payment', () => {
+    expect(
+      classifyWalkInBillingRow(
+        'ACTIVE',
+        null,
+        startedAt,
+        new Date('2026-09-16T13:15:00.000Z'),
+        60,
+        now,
+      ),
+    ).toBe('awaiting_payment');
+  });
+
+  it('classifies completed walk-ins as paid', () => {
+    expect(
+      classifyWalkInBillingRow(
+        'COMPLETED',
+        new Date('2026-09-16T13:20:00.000Z'),
+        startedAt,
+        new Date('2026-09-16T13:15:00.000Z'),
+        60,
+        now,
+      ),
+    ).toBe('paid');
+  });
+
+  it('ignores canceled walk-ins', () => {
+    expect(
+      classifyWalkInBillingRow('CANCELED', null, startedAt, null, 60, now),
+    ).toBeNull();
   });
 });

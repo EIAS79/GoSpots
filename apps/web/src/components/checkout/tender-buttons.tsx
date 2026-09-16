@@ -65,7 +65,9 @@ export function TenderButtons({
             Take payment
           </p>
           <p className="mt-1 text-[11px] leading-4 text-zinc-600">
-            Choose the method the guest is using now.
+            {enabled
+              ? "Choose the method the guest is using now."
+              : "Finalize all charge-changing activity before choosing a payment method."}
           </p>
         </div>
         {paymentsEnabled && onlineForFinance ? (
@@ -86,7 +88,7 @@ export function TenderButtons({
       <div className="grid gap-2 sm:grid-cols-2 xl:grid-cols-1 2xl:grid-cols-2">
         {TENDERS.map((tender) => {
           const Icon = tender.icon;
-          const primary = tender.key === "Card";
+          const primary = enabled && tender.key === "Card";
           return (
             <button
               key={tender.key}
@@ -97,12 +99,16 @@ export function TenderButtons({
               title={
                 !onlineForFinance
                   ? "Payments are disabled while Offline Lite is active."
-                  : tender.detail
+                  : !enabled
+                    ? "Finalize the bill before choosing a payment method."
+                    : tender.detail
               }
-              className={`group min-h-[4.75rem] rounded-xl border px-3 py-3 text-left transition disabled:cursor-not-allowed disabled:opacity-40 ${
-                primary
-                  ? "border-emerald-400/20 bg-emerald-400/[0.055] hover:border-emerald-400/40 hover:bg-emerald-400/[0.09]"
-                  : "border-white/8 bg-white/[0.025] hover:border-white/15 hover:bg-white/[0.05]"
+              className={`group min-h-[4.75rem] rounded-xl border px-3 py-3 text-left transition disabled:cursor-not-allowed ${
+                enabled
+                  ? primary
+                    ? "border-emerald-400/20 bg-emerald-400/[0.055] hover:border-emerald-400/40 hover:bg-emerald-400/[0.09]"
+                    : "border-white/8 bg-white/[0.025] hover:border-white/15 hover:bg-white/[0.05]"
+                  : "border-white/[0.05] bg-white/[0.012] opacity-35"
               }`}
             >
               <div className="flex items-start gap-2.5">
@@ -110,16 +116,18 @@ export function TenderButtons({
                   className={`grid h-8 w-8 shrink-0 place-items-center rounded-lg ${
                     primary
                       ? "bg-emerald-400/12 text-emerald-300"
-                      : "bg-white/[0.05] text-zinc-400"
+                      : "bg-white/[0.04] text-zinc-500"
                   }`}
                 >
                   <Icon className="h-4 w-4" />
                 </span>
                 <span className="min-w-0">
-                  <span className="block text-sm font-bold text-zinc-100">
+                  <span
+                    className={`block text-sm font-bold ${enabled ? "text-zinc-100" : "text-zinc-500"}`}
+                  >
                     {tender.label}
                   </span>
-                  <span className="mt-1 block text-[11px] leading-4 text-zinc-500">
+                  <span className="mt-1 block text-[11px] leading-4 text-zinc-600">
                     {tender.detail}
                   </span>
                 </span>

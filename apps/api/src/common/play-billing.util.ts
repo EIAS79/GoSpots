@@ -35,7 +35,7 @@ export function applyBillingDiscount(
 
 /**
  * Price from Gaming setup: category rates pro-rated by actual duration
- * (e.g. 60 min @ $30 → 30 min = $15), picking the cheapest applicable rate.
+ * (e.g. 60 min @$30 → 30 min = $15), picking the cheapest applicable rate.
  * Falls back to unit hourlyRate × hours when no block rates exist.
  */
 export function computePlayBillingAmount(
@@ -126,19 +126,21 @@ export function classifyWalkInBillingRow(
 ): PlayBillingBucket | null {
   if (status === 'CANCELED') return null;
 
-  const effectiveEnd =
-    endedAt ??
-    (durationMinutes != null && durationMinutes > 0
-      ? new Date(startedAt.getTime() + durationMinutes * 60_000)
-      : null);
+  // Preserve the public classifier signature used by callers while intentionally
+  // ignoring planned duration/time for operational state classification.
+  void startedAt;
+  void durationMinutes;
+  void now;
 
   const paid = status === 'COMPLETED' || completedAt != null;
+  if (paid) return 'paid';
 
+  // A planned duration is an estimate, not an operational stop. An ACTIVE
+  // walk-in remains in progress until staff explicitly ends it, which stamps
+  // endedAt and freezes the final amount for Checkout.
   if (status === 'ACTIVE') {
-    if (!effectiveEnd || effectiveEnd > now) return 'in_progress';
-    return paid ? 'paid' : 'awaiting_payment';
+    return endedAt ? 'awaiting_payment' : 'in_progress';
   }
 
-  if (paid) return 'paid';
   return 'awaiting_payment';
 }
