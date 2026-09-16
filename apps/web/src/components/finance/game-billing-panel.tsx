@@ -93,6 +93,21 @@ function formatSchedule(startsAt: string, endsAt: string) {
   return formatEventWindow(startsAt, endsAt) ?? "—";
 }
 
+function walkInUnitLabel(unit: {
+  name: string;
+  category: string;
+  section: { name: string; floor: number; isVip: boolean } | null;
+}) {
+  const location = unit.section
+    ? [
+        `Floor ${unit.section.floor}`,
+        unit.section.name,
+        unit.section.isVip ? "VIP" : null,
+      ].filter(Boolean)
+    : [];
+  return [...location, unit.name, unit.category].join(" · ");
+}
+
 export function GameBillingPanel({ canWrite }: { canWrite: boolean }) {
   const searchParams = useSearchParams();
   const focusReservationId = searchParams.get("reservationId");
@@ -112,6 +127,13 @@ export function GameBillingPanel({ canWrite }: { canWrite: boolean }) {
   const [from, setFrom] = useState(defaultRange.from);
   const [to, setTo] = useState(defaultRange.to);
   const [data, setData] = useState<PlayBillingResponse | null>(null);
+  const [tabSummary, setTabSummary] = useState<PlayBillingResponse["summary"]>({
+    inProgress: 0,
+    awaitingPayment: 0,
+    paid: 0,
+    unpaidTotal: "0.0000",
+    paidTotal: "0.0000",
+  });
   const [loading, setLoading] = useState(true);
   const [busyId, setBusyId] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -135,16 +157,33 @@ export function GameBillingPanel({ canWrite }: { canWrite: boolean }) {
       if (!opts?.silent) setLoading(true);
       setError(null);
       try {
-        setData(
-          await fetchPlayBilling({
-            tab,
-            from: tab === "in_progress" ? undefined : from,
-            to: tab === "in_progress" ? undefined : to,
-            page,
-            pageSize: PAGE_SIZE,
-          }),
-        );
-        return true;
+        const [selected, inProgress, awaitingPayment, paid] = await Promise.all([
+        fetchPlayBilling({
+          tab,
+          from: tab === "in_progress" ? undefined : from,
+          to: tab === "in_progress" ? undefined : to,
+          page,
+          pageSize: PAGE_SIZE,
+        }),
+        fetchPlayBilling({ tab: "in_progress", page: 1, pageSize: 1 }),
+        fetchPlayBilling({
+          tab: "awaiting_payment",
+          from,
+          to,
+          page: 1,
+          pageSize: 1,
+        }),
+        fetchPlayBilling({ tab: "paid", from, to, page: 1, pageSize: 1 }),
+      ]);
+      setData(selected);
+      setTabSummary({
+        inProgress: inProgress.total,
+        awaitingPayment: awaitingPayment.total,
+        paid: paid.total,
+        unpaidTotal: awaitingPayment.summary.unpaidTotal,
+        paidTotal: paid.summary.paidTotal,
+      });
+      return true;
       } catch (e) {
         if (!opts?.silent) {
           setError(
@@ -498,7 +537,7 @@ export function GameBillingPanel({ canWrite }: { canWrite: boolean }) {
                     <option value="">{t("finance.playPickLater")}</option>
                     {walkInUnits.map((u) => (
                       <option key={u.id} value={u.id}>
-                        {u.name} · {u.category}
+                        {walkInUnitLabel(u)}
                       </option>
                     ))}
                   </select>
@@ -606,7 +645,7 @@ export function GameBillingPanel({ canWrite }: { canWrite: boolean }) {
             )}
           >
             {t("finance.playSummaryInProgress", {
-              n: data.summary.inProgress,
+              n: tabSummary.inProgress,
             })}
           </button>
           <button
@@ -620,7 +659,7 @@ export function GameBillingPanel({ canWrite }: { canWrite: boolean }) {
             )}
           >
             {t("finance.playSummaryAwaiting", {
-              n: data.summary.awaitingPayment,
+              n: tabSummary.awaitingPayment,
             })}
           </button>
           <button
@@ -634,13 +673,13 @@ export function GameBillingPanel({ canWrite }: { canWrite: boolean }) {
             )}
           >
             <span className="block">
-              {t("finance.playSummaryPaid", { n: data.summary.paid })}
+              {t("finance.playSummaryPaid", { n: tabSummary.paid })}
             </span>
             {tab !== "in_progress" ? (
               <span className="mt-0.5 block text-[10px] opacity-70">
                 {t("finance.playSummaryTotals", {
-                  due: formatMoney(data.summary.unpaidTotal),
-                  collected: formatMoney(data.summary.paidTotal),
+                  due: formatMoney(tabSummary.unpaidTotal),
+                  collected: formatMoney(tabSummary.paidTotal),
                 })}
               </span>
             ) : null}
