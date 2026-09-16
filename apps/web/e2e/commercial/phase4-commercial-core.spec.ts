@@ -23,6 +23,8 @@ test('@smoke P4 commercial core exposes one controlled tab and settlement flow',
 
   await page.goto(`/dashboard/${E2E.venues.mixed}/checkout`);
   await page.getByText('E2E Phase 4 Commercial', { exact: true }).first().click();
+  const advancedControls = page.getByTestId('checkout-advanced-controls');
+  await advancedControls.locator('summary').click();
   const controls = page.getByTestId('phase4-commercial-controls');
   await expect(controls).toBeVisible();
   await expect(controls.getByText('Commercial core', { exact: true })).toBeVisible();
