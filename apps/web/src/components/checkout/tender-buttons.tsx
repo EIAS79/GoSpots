@@ -14,7 +14,8 @@ const TENDERS = [
   {
     key: "Card" as const,
     label: "Card · terminal",
-    detail: "Send the exact balance to the configured Adyen terminal.",
+    detail:
+      "Sends the charge through the configured venue payment terminal (Adyen). GoSpots only records payment after provider capture.",
     icon: CreditCard,
   },
   {
@@ -69,7 +70,7 @@ export function TenderButtons({
         </div>
         {paymentsEnabled && onlineForFinance ? (
           <span className="rounded-full border border-emerald-400/15 bg-emerald-400/10 px-2 py-1 text-[10px] font-bold uppercase tracking-wide text-emerald-300">
-            Ready
+            Bill final
           </span>
         ) : !onlineForFinance ? (
           <span className="rounded-full border border-amber-400/15 bg-amber-400/10 px-2 py-1 text-[10px] font-bold uppercase tracking-wide text-amber-300">
@@ -131,7 +132,7 @@ export function TenderButtons({
         <p className="mt-3 rounded-lg border border-white/7 bg-black/20 px-2.5 py-2 text-[11px] leading-4 text-zinc-500">
           {!onlineForFinance
             ? "Reconnect before taking payment."
-            : "Payment unlocks when the bill has a positive balance and all charge-changing activity is final."}
+            : "Payment unlocks only when the bill has a positive balance and all charge-changing activity is final."}
         </p>
       ) : null}
     </section>
