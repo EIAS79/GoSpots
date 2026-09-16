@@ -1,4 +1,4 @@
 phase=17
-source_main=64ece4724f75187210079c9b91ec8cee81144de1
-release_reason=play-billing-tabs-resource-labels-fix
+source_main=4bdf10afe614b1117273b8b33d99f2cc87a2ab5c
+release_reason=checkout-detach-mistaken-sources
 release_date=2026-09-16
