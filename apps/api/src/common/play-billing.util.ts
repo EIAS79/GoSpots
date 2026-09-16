@@ -121,8 +121,8 @@ export function classifyWalkInBillingRow(
   completedAt: Date | null,
   startedAt: Date,
   endedAt: Date | null,
-  durationMinutes: number | null,
-  now: Date,
+  _durationMinutes: number | null,
+  _now: Date,
 ): PlayBillingBucket | null {
   if (status === 'CANCELED') return null;
 
