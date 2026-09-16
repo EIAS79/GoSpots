@@ -1,4 +1,4 @@
 phase=17
-source_main=4bdf10afe614b1117273b8b33d99f2cc87a2ab5c
-release_reason=checkout-detach-mistaken-sources
+source_main=5489433333ce578f57d13a502ab1f880f0819cf4
+release_reason=checkout-session-finalization-consistency
 release_date=2026-09-16
