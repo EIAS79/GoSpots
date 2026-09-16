@@ -21,6 +21,7 @@ jobs:
         shell: python
         run: |
           from pathlib import Path
+          import re
 
           path = Path('apps/web/src/components/finance/game-billing-panel.tsx')
           text = path.read_text()
@@ -67,17 +68,10 @@ jobs:
           assert old in text, 'data state anchor not found'
           text = text.replace(old, new, 1)
 
-          old = '''        setData(
-                  await fetchPlayBilling({
-                    tab,
-                    from: tab === "in_progress" ? undefined : from,
-                    to: tab === "in_progress" ? undefined : to,
-                    page,
-                    pageSize: PAGE_SIZE,
-                  }),
-                );
-                return true;'''
-          new = '''        const [selected, inProgress, awaitingPayment, paid] = await Promise.all([
+          pattern = re.compile(
+            r'''        setData\(\n\s+await fetchPlayBilling\(\{\n\s+tab,\n\s+from: tab === "in_progress" \? undefined : from,\n\s+to: tab === "in_progress" \? undefined : to,\n\s+page,\n\s+pageSize: PAGE_SIZE,\n\s+\}\),\n\s+\);\n\s+return true;'''
+          )
+          replacement = '''        const [selected, inProgress, awaitingPayment, paid] = await Promise.all([
                   fetchPlayBilling({
                     tab,
                     from: tab === "in_progress" ? undefined : from,
@@ -104,8 +98,8 @@ jobs:
                   paidTotal: paid.summary.paidTotal,
                 });
                 return true;'''
-          assert old in text, 'load anchor not found'
-          text = text.replace(old, new, 1)
+          text, count = pattern.subn(replacement, text, count=1)
+          assert count == 1, f'load anchor replacements: {count}'
 
           replacements = {
             'n: data.summary.inProgress,': 'n: tabSummary.inProgress,',
