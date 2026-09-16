@@ -8,10 +8,12 @@ import {
   Search,
   ShoppingBag,
   Utensils,
+  X,
 } from "lucide-react";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import {
   attachToGuestCheck,
+  detachFromGuestCheck,
   type GuestCheck,
 } from "@/lib/guest-check-client";
 import {
@@ -27,6 +29,12 @@ import { fetchReservations, type Reservation } from "@/lib/reservations-client";
 import { formatCheckoutMoney } from "./checkout-presenter";
 
 type SourceTab = "menu" | "orders" | "reservations" | "play";
+type AttachedSource = {
+  id: string;
+  kind: "ORDER" | "RESERVATION" | "PLAY_SESSION";
+  title: string;
+  subtitle: string;
+};
 
 const TABS: Array<{
   id: SourceTab;
@@ -77,6 +85,30 @@ export function CheckoutSourcePicker({
   const attachedPlayIds = useMemo(
     () => new Set(check.playSessions.map((session) => session.id)),
     [check.playSessions],
+  );
+
+  const attachedSources = useMemo<AttachedSource[]>(
+    () => [
+      ...check.shopOrders.map((order) => ({
+        id: order.id,
+        kind: "ORDER" as const,
+        title: order.label?.trim() || `Order ${order.id.slice(0, 8)}`,
+        subtitle: `Order · ${order.status.replaceAll("_", " ").toLowerCase()}`,
+      })),
+      ...check.reservations.map((reservation) => ({
+        id: reservation.id,
+        kind: "RESERVATION" as const,
+        title: reservation.guestName || `Reservation ${reservation.id.slice(0, 8)}`,
+        subtitle: `Reservation · ${reservation.status.replaceAll("_", " ").toLowerCase()}`,
+      })),
+      ...check.playSessions.map((session) => ({
+        id: session.id,
+        kind: "PLAY_SESSION" as const,
+        title: session.label?.trim() || `Play session ${session.id.slice(0, 8)}`,
+        subtitle: `Play session · ${session.status.replaceAll("_", " ").toLowerCase()}`,
+      })),
+    ],
+    [check.playSessions, check.reservations, check.shopOrders],
   );
 
   const loadTab = useCallback(async () => {
@@ -238,6 +270,30 @@ export function CheckoutSourcePicker({
     }
   }
 
+  async function detachSource(source: AttachedSource) {
+    if (!canWrite || busyId) return;
+    const confirmed = window.confirm(
+      `Remove ${source.title} from this Guest Check? This only detaches it from the bill; it does not cancel or delete the underlying ${source.kind === "PLAY_SESSION" ? "play session" : source.kind === "RESERVATION" ? "reservation" : "order"}.`,
+    );
+    if (!confirmed) return;
+
+    setBusyId(`detach:${source.kind}:${source.id}`);
+    setError(null);
+    try {
+      await detachFromGuestCheck(check.id, {
+        ...(source.kind === "ORDER" ? { shopOrderId: source.id } : {}),
+        ...(source.kind === "RESERVATION" ? { reservationId: source.id } : {}),
+        ...(source.kind === "PLAY_SESSION" ? { playSessionId: source.id } : {}),
+      });
+      await onChanged();
+      await loadTab();
+    } catch (actionError) {
+      setError(sourceErrorMessage(actionError));
+    } finally {
+      setBusyId(null);
+    }
+  }
+
   const currency = check.currency ?? "PLN";
 
   return (
@@ -260,6 +316,63 @@ export function CheckoutSourcePicker({
             />
           </div>
         </div>
+
+        {attachedSources.length > 0 ? (
+          <div className="mt-3 rounded-xl border border-sky-400/15 bg-sky-400/[0.035] p-2.5" data-testid="checkout-attached-sources">
+            <div className="mb-2 flex items-center justify-between gap-3 px-1">
+              <div>
+                <p className="text-[11px] font-bold uppercase tracking-[0.14em] text-sky-200">
+                  Attached sources
+                </p>
+                <p className="mt-0.5 text-[11px] text-zinc-500">
+                  Remove a mistaken attachment without voiding the whole Guest Check.
+                </p>
+              </div>
+              <span className="rounded-full bg-white/[0.05] px-2 py-1 text-[10px] font-semibold text-zinc-500">
+                {attachedSources.length}
+              </span>
+            </div>
+            <div className="space-y-1.5">
+              {attachedSources.map((source) => {
+                const detachKey = `detach:${source.kind}:${source.id}`;
+                const detaching = busyId === detachKey;
+                return (
+                  <div
+                    key={`${source.kind}:${source.id}`}
+                    className="flex items-center justify-between gap-3 rounded-lg border border-white/7 bg-black/15 px-2.5 py-2"
+                  >
+                    <div className="min-w-0">
+                      <p className="truncate text-xs font-semibold text-zinc-200">
+                        {source.title}
+                      </p>
+                      <p className="mt-0.5 text-[10px] text-zinc-600">
+                        {source.subtitle}
+                      </p>
+                    </div>
+                    <button
+                      type="button"
+                      disabled={!canWrite || busyId !== null}
+                      onClick={() => void detachSource(source)}
+                      className="inline-flex min-h-8 shrink-0 items-center gap-1.5 rounded-lg border border-rose-400/15 bg-rose-400/[0.045] px-2.5 text-[11px] font-semibold text-rose-200 transition hover:border-rose-400/30 hover:bg-rose-400/[0.09] disabled:cursor-not-allowed disabled:opacity-40"
+                    >
+                      {detaching ? (
+                        <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                      ) : (
+                        <X className="h-3.5 w-3.5" />
+                      )}
+                      {detaching ? "Removing…" : "Remove"}
+                    </button>
+                  </div>
+                );
+              })}
+            </div>
+            {!canWrite ? (
+              <p className="mt-2 px-1 text-[10px] leading-4 text-zinc-600">
+                Attachments are locked after payment starts or while a provider payment requires recovery.
+              </p>
+            ) : null}
+          </div>
+        ) : null}
 
         <div className="mt-3 flex gap-1 overflow-x-auto pb-3">
           {TABS.map((item) => {
