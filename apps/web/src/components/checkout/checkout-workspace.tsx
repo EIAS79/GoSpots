@@ -1,7 +1,15 @@
 "use client";
 
-import { Loader2, Plus, RefreshCw, X } from "lucide-react";
-import { FormEvent, useCallback, useEffect, useState } from "react";
+import {
+  ChevronDown,
+  Loader2,
+  Plus,
+  RefreshCw,
+  Search,
+  Settings2,
+  X,
+} from "lucide-react";
+import { FormEvent, useCallback, useEffect, useMemo, useState } from "react";
 import {
   createGuestCheck,
   fetchGuestChecks,
@@ -15,6 +23,14 @@ import { SettlementStatus } from "./settlement-status";
 function sourceCount(check: GuestCheck) {
   return (
     check.shopOrders.length + check.playSessions.length + check.reservations.length
+  );
+}
+
+function checkTitle(check: GuestCheck) {
+  return (
+    check.label?.trim() ||
+    check.guestName?.trim() ||
+    `Check #${check.id.slice(0, 8)}`
   );
 }
 
@@ -40,6 +56,7 @@ export function CheckoutWorkspace({
   const [loadError, setLoadError] = useState<string | null>(null);
   const [actionError, setActionError] = useState<string | null>(null);
   const [newCheckOpen, setNewCheckOpen] = useState(false);
+  const [query, setQuery] = useState("");
   const [guestName, setGuestName] = useState("");
   const [label, setLabel] = useState("");
   const [partySize, setPartySize] = useState(1);
@@ -72,6 +89,17 @@ export function CheckoutWorkspace({
     void loadChecks();
   }, [loadChecks]);
 
+  const visibleChecks = useMemo(() => {
+    const normalized = query.trim().toLowerCase();
+    if (!normalized) return checks;
+    return checks.filter((check) =>
+      [checkTitle(check), check.guestName ?? "", check.id]
+        .join(" ")
+        .toLowerCase()
+        .includes(normalized),
+    );
+  }, [checks, query]);
+
   async function onCreateCheck(event?: FormEvent) {
     event?.preventDefault();
     if (!canWrite || creating) return;
@@ -87,6 +115,7 @@ export function CheckoutWorkspace({
       setLabel("");
       setPartySize(1);
       setNewCheckOpen(false);
+      setQuery("");
       await loadChecks();
       setSelectedId(created.id);
     } catch (createError) {
@@ -132,8 +161,8 @@ export function CheckoutWorkspace({
       <div className="rounded-2xl border border-dashed border-white/10 bg-zinc-950/45 px-5 py-14 text-center">
         <p className="text-lg font-semibold text-zinc-100">No open checks</p>
         <p className="mx-auto mt-2 max-w-lg text-sm leading-6 text-zinc-500">
-          A guest check is one customer or group bill. Create it, attach their play,
-          orders, or booking, finalize the amount, then take payment.
+          Start one guest check, attach the guest&apos;s activity, finalize the bill,
+          then take payment. Checkout stays intentionally empty until there is work to do.
         </p>
         {canWrite ? (
           <div className="mx-auto mt-6 max-w-xl text-left">
@@ -172,17 +201,18 @@ export function CheckoutWorkspace({
   }
 
   const selected = checks.find((check) => check.id === selectedId) ?? checks[0];
+  const selectedSources = sourceCount(selected);
 
   return (
-    <div className="grid min-h-[32rem] min-w-0 rounded-2xl border border-white/10 bg-zinc-950/45 lg:grid-cols-[16rem_minmax(0,1fr)]">
-      <aside className="min-w-0 border-b border-white/8 bg-black/15 p-3 lg:sticky lg:top-4 lg:max-h-[calc(100dvh-9rem)] lg:self-start lg:border-b-0 lg:border-r">
-        <div className="flex items-center justify-between gap-2 px-1">
+    <div className="grid min-h-[34rem] min-w-0 overflow-hidden rounded-2xl border border-white/10 bg-zinc-950/45 lg:grid-cols-[18.5rem_minmax(0,1fr)]">
+      <aside className="min-w-0 border-b border-white/8 bg-black/20 p-3 lg:sticky lg:top-3 lg:max-h-[calc(100dvh-8rem)] lg:self-start lg:border-b-0 lg:border-r">
+        <div className="flex items-start justify-between gap-2 px-1">
           <div>
-            <p className="text-xs font-semibold uppercase tracking-[0.16em] text-zinc-500">
+            <p className="text-xs font-bold uppercase tracking-[0.16em] text-zinc-400">
               Open checks
             </p>
-            <p className="mt-1 text-xs text-zinc-600">
-              {checks.length} active · one bill per guest/group
+            <p className="mt-1 text-[11px] text-zinc-600">
+              {checks.length} active · select one to work on
             </p>
           </div>
           <div className="flex items-center gap-1">
@@ -208,12 +238,20 @@ export function CheckoutWorkspace({
               disabled={loading}
               className="grid h-9 w-9 place-items-center rounded-lg text-zinc-500 transition hover:bg-white/5 hover:text-zinc-200 disabled:opacity-40"
             >
-              <RefreshCw
-                className={`h-4 w-4 ${loading ? "animate-spin" : ""}`}
-              />
+              <RefreshCw className={`h-4 w-4 ${loading ? "animate-spin" : ""}`} />
             </button>
           </div>
         </div>
+
+        <label className="relative mt-3 block">
+          <Search className="pointer-events-none absolute left-3 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-zinc-600" />
+          <input
+            value={query}
+            onChange={(event) => setQuery(event.target.value)}
+            placeholder="Find guest or check…"
+            className="h-9 w-full rounded-lg border border-white/8 bg-zinc-950/70 pl-9 pr-3 text-xs text-zinc-200 outline-none transition placeholder:text-zinc-700 focus:border-emerald-400/30"
+          />
+        </label>
 
         {newCheckOpen && canWrite ? (
           <div className="mt-3">
@@ -242,39 +280,48 @@ export function CheckoutWorkspace({
           </div>
         ) : null}
 
-        <ul className="mt-3 flex gap-2 overflow-x-auto pb-1 lg:max-h-[calc(100dvh-18rem)] lg:flex-col lg:overflow-y-auto lg:overflow-x-hidden lg:overscroll-contain lg:pr-1">
-          {checks.map((check) => {
+        <ul className="mt-3 flex gap-2 overflow-x-auto pb-1 lg:max-h-[calc(100dvh-17rem)] lg:flex-col lg:overflow-y-auto lg:overflow-x-hidden lg:overscroll-contain lg:pr-1">
+          {visibleChecks.length === 0 ? (
+            <li className="rounded-xl border border-dashed border-white/8 px-3 py-6 text-center text-xs text-zinc-600">
+              No checks match this search.
+            </li>
+          ) : null}
+          {visibleChecks.map((check) => {
             const active = check.id === selected.id;
             const sources = sourceCount(check);
             return (
-              <li key={check.id} className="min-w-[13rem] lg:min-w-0">
+              <li key={check.id} className="min-w-[14rem] lg:min-w-0">
                 <button
                   type="button"
                   onClick={() => setSelectedId(check.id)}
                   className={`w-full rounded-xl border px-3 py-3 text-left transition ${
                     active
-                      ? "border-emerald-400/35 bg-emerald-400/10 shadow-[inset_3px_0_0_rgba(52,211,153,0.8)]"
-                      : "border-white/5 bg-white/[0.025] hover:border-white/10 hover:bg-white/[0.05]"
+                      ? "border-emerald-400/35 bg-emerald-400/[0.09] shadow-[inset_3px_0_0_rgba(52,211,153,0.8)]"
+                      : "border-white/6 bg-white/[0.02] hover:border-white/12 hover:bg-white/[0.045]"
                   }`}
                 >
-                  <p
-                    className={`truncate text-sm font-semibold ${
-                      active ? "text-emerald-100" : "text-zinc-200"
-                    }`}
-                  >
-                    {check.label?.trim() ||
-                      check.guestName?.trim() ||
-                      `Check #${check.id.slice(0, 8)}`}
-                  </p>
+                  <div className="flex items-start justify-between gap-2">
+                    <p
+                      className={`truncate text-sm font-bold ${
+                        active ? "text-emerald-100" : "text-zinc-200"
+                      }`}
+                    >
+                      {checkTitle(check)}
+                    </p>
+                    <span
+                      className={`mt-0.5 h-2 w-2 shrink-0 rounded-full ${
+                        active ? "bg-emerald-400" : "bg-zinc-700"
+                      }`}
+                    />
+                  </div>
                   <p className="mt-1 truncate text-xs text-zinc-500">
                     {check.guestName?.trim() || "Walk-in / unnamed guest"}
                   </p>
-                  <div className="mt-2 flex flex-wrap items-center gap-x-2 gap-y-1 text-[11px] text-zinc-500">
-                    <span>
+                  <div className="mt-2 flex flex-wrap items-center gap-1.5 text-[10px] font-medium text-zinc-500">
+                    <span className="rounded-md bg-white/[0.04] px-1.5 py-1">
                       {check.partySize} guest{check.partySize === 1 ? "" : "s"}
                     </span>
-                    <span>·</span>
-                    <span>
+                    <span className="rounded-md bg-white/[0.04] px-1.5 py-1">
                       {sources} source{sources === 1 ? "" : "s"}
                     </span>
                   </div>
@@ -286,15 +333,40 @@ export function CheckoutWorkspace({
       </aside>
 
       <div className="min-w-0">
-        <CommercialControls
-          key={`commercial-${selected.id}`}
-          check={selected}
-          canWrite={canWrite}
-          canDiscount={canDiscount}
-          canComp={canComp}
-          canPriceOverride={canPriceOverride}
-          onChanged={loadChecks}
-        />
+        <div className="flex flex-wrap items-center justify-between gap-3 border-b border-white/8 bg-black/10 px-4 py-3 sm:px-5">
+          <div className="min-w-0">
+            <p className="truncate text-sm font-bold text-zinc-100">{checkTitle(selected)}</p>
+            <p className="mt-0.5 text-[11px] text-zinc-600">
+              {selected.partySize} guest{selected.partySize === 1 ? "" : "s"} · {selectedSources} attached source{selectedSources === 1 ? "" : "s"}
+            </p>
+          </div>
+          <span className="rounded-full border border-white/8 bg-white/[0.03] px-2.5 py-1 text-[10px] font-bold uppercase tracking-[0.12em] text-zinc-500">
+            Operator workspace
+          </span>
+        </div>
+
+        <details className="group border-b border-white/8 bg-zinc-950/35" data-testid="checkout-advanced-controls">
+          <summary className="flex cursor-pointer list-none items-center justify-between gap-3 px-4 py-2.5 text-xs font-semibold text-zinc-400 transition hover:bg-white/[0.025] hover:text-zinc-200 sm:px-5">
+            <span className="flex items-center gap-2">
+              <Settings2 className="h-3.5 w-3.5" />
+              Advanced bill controls
+              <span className="hidden font-normal text-zinc-600 sm:inline">
+                · context, discounts, service charge, gratuity and transfers
+              </span>
+            </span>
+            <ChevronDown className="h-4 w-4 transition group-open:rotate-180" />
+          </summary>
+          <CommercialControls
+            key={`commercial-${selected.id}`}
+            check={selected}
+            canWrite={canWrite}
+            canDiscount={canDiscount}
+            canComp={canComp}
+            canPriceOverride={canPriceOverride}
+            onChanged={loadChecks}
+          />
+        </details>
+
         <CheckoutDrawer
           key={selected.id}
           check={selected}
@@ -302,12 +374,21 @@ export function CheckoutWorkspace({
           locale={locale}
           onCheckChanged={loadChecks}
         />
-        <ProviderRefundPanel
-          key={`provider-refunds-${selected.id}-${selected.currentSettlementId ?? "none"}`}
-          settlementId={selected.currentSettlementId}
-          canWrite={canWrite}
-          locale={locale}
-        />
+
+        {selected.currentSettlementId ? (
+          <details className="group border-t border-white/8 bg-black/10">
+            <summary className="flex cursor-pointer list-none items-center justify-between gap-3 px-4 py-3 text-xs font-semibold text-zinc-500 transition hover:bg-white/[0.025] hover:text-zinc-300 sm:px-5">
+              <span>Payment history & refunds</span>
+              <ChevronDown className="h-4 w-4 transition group-open:rotate-180" />
+            </summary>
+            <ProviderRefundPanel
+              key={`provider-refunds-${selected.id}-${selected.currentSettlementId}`}
+              settlementId={selected.currentSettlementId}
+              canWrite={canWrite}
+              locale={locale}
+            />
+          </details>
+        ) : null}
       </div>
     </div>
   );
@@ -382,9 +463,7 @@ function NewCheckForm({
           />
         </label>
       </div>
-      {error ? (
-        <p className="mt-2 text-xs leading-5 text-rose-300">{error}</p>
-      ) : null}
+      {error ? <p className="mt-2 text-xs leading-5 text-rose-300">{error}</p> : null}
       <div className="mt-3 flex flex-wrap justify-end gap-2">
         <button
           type="button"
