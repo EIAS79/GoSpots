@@ -1,22 +1,40 @@
 "use client";
 
+import {
+  Banknote,
+  CreditCard,
+  SplitSquareHorizontal,
+  WalletCards,
+} from "lucide-react";
 import { useConnectivityOptional } from "@/lib/connectivity-context";
 
 export type CheckoutTender = "Cash" | "Card" | "Split" | "Other";
 
-const TENDERS: Array<{
-  key: CheckoutTender;
-  label: string;
-  hint: string;
-}> = [
-  { key: "Cash", label: "Cash", hint: "Customer pays the remaining balance in cash" },
+const TENDERS = [
   {
-    key: "Card",
+    key: "Card" as const,
     label: "Card · terminal",
-    hint: "Charge the remaining balance on the venue payment terminal",
+    detail: "Send the exact balance to the configured Adyen terminal.",
+    icon: CreditCard,
   },
-  { key: "Split", label: "Split payment", hint: "Use more than one payment method or split the amount" },
-  { key: "Other", label: "Other received", hint: "Record another payment method that was already received" },
+  {
+    key: "Cash" as const,
+    label: "Cash",
+    detail: "Receive cash and post it to the active cash shift.",
+    icon: Banknote,
+  },
+  {
+    key: "Split" as const,
+    label: "Split payment",
+    detail: "Combine card, cash or other tenders across one bill.",
+    icon: SplitSquareHorizontal,
+  },
+  {
+    key: "Other" as const,
+    label: "Other received",
+    detail: "Record money already received through another channel.",
+    icon: WalletCards,
+  },
 ];
 
 export function TenderButtons({
@@ -39,45 +57,83 @@ export function TenderButtons({
   const enabled = canWrite && !busy && paymentsEnabled && onlineForFinance;
 
   return (
-    <section className="rounded-2xl border border-white/8 bg-white/[0.025] p-3">
-      <div className="mb-2 flex items-center justify-between gap-2">
+    <section className="rounded-2xl border border-white/8 bg-zinc-950/65 p-3">
+      <div className="mb-3 flex items-center justify-between gap-3">
         <div>
-          <p className="text-xs font-semibold uppercase tracking-[0.16em] text-zinc-500">
+          <p className="text-xs font-bold uppercase tracking-[0.16em] text-zinc-400">
             Take payment
           </p>
-          <p className="mt-1 text-[11px] text-zinc-600">Choose how the customer actually pays.</p>
+          <p className="mt-1 text-[11px] leading-4 text-zinc-600">
+            Choose the method the guest is using now.
+          </p>
         </div>
         {paymentsEnabled && onlineForFinance ? (
-          <span className="rounded-full bg-emerald-400/10 px-2 py-1 text-[10px] font-semibold uppercase tracking-wide text-emerald-300">
-            Bill final
+          <span className="rounded-full border border-emerald-400/15 bg-emerald-400/10 px-2 py-1 text-[10px] font-bold uppercase tracking-wide text-emerald-300">
+            Ready
           </span>
         ) : !onlineForFinance ? (
-          <span className="rounded-full bg-amber-400/10 px-2 py-1 text-[10px] font-semibold uppercase tracking-wide text-amber-300">
+          <span className="rounded-full border border-amber-400/15 bg-amber-400/10 px-2 py-1 text-[10px] font-bold uppercase tracking-wide text-amber-300">
             Online only
           </span>
-        ) : null}
+        ) : (
+          <span className="rounded-full border border-white/8 bg-white/[0.03] px-2 py-1 text-[10px] font-bold uppercase tracking-wide text-zinc-500">
+            Locked
+          </span>
+        )}
       </div>
-      <div className="grid grid-cols-2 gap-2">
-        {TENDERS.map((tender) => (
-          <button
-            key={tender.key}
-            type="button"
-            disabled={!enabled}
-            onClick={() => onSelect?.(tender.key)}
-            title={!onlineForFinance ? "Payments are disabled while Offline Lite is active." : tender.hint}
-            className="min-h-12 rounded-xl border border-white/10 bg-white/[0.04] px-3 py-2.5 text-sm font-semibold text-zinc-200 transition hover:border-emerald-400/40 hover:bg-emerald-400/10 disabled:cursor-not-allowed disabled:text-zinc-600 disabled:opacity-50"
-          >
-            {tender.label}
-          </button>
-        ))}
+
+      <div className="grid gap-2 sm:grid-cols-2 xl:grid-cols-1 2xl:grid-cols-2">
+        {TENDERS.map((tender) => {
+          const Icon = tender.icon;
+          const primary = tender.key === "Card";
+          return (
+            <button
+              key={tender.key}
+              type="button"
+              disabled={!enabled}
+              onClick={() => onSelect?.(tender.key)}
+              title={
+                !onlineForFinance
+                  ? "Payments are disabled while Offline Lite is active."
+                  : tender.detail
+              }
+              className={`group min-h-[4.75rem] rounded-xl border px-3 py-3 text-left transition disabled:cursor-not-allowed disabled:opacity-40 ${
+                primary
+                  ? "border-emerald-400/20 bg-emerald-400/[0.055] hover:border-emerald-400/40 hover:bg-emerald-400/[0.09]"
+                  : "border-white/8 bg-white/[0.025] hover:border-white/15 hover:bg-white/[0.05]"
+              }`}
+            >
+              <div className="flex items-start gap-2.5">
+                <span
+                  className={`grid h-8 w-8 shrink-0 place-items-center rounded-lg ${
+                    primary
+                      ? "bg-emerald-400/12 text-emerald-300"
+                      : "bg-white/[0.05] text-zinc-400"
+                  }`}
+                >
+                  <Icon className="h-4 w-4" />
+                </span>
+                <span className="min-w-0">
+                  <span className="block text-sm font-bold text-zinc-100">
+                    {tender.label}
+                  </span>
+                  <span className="mt-1 block text-[11px] leading-4 text-zinc-500">
+                    {tender.detail}
+                  </span>
+                </span>
+              </div>
+            </button>
+          );
+        })}
       </div>
-      <p className="mt-3 text-xs leading-5 text-zinc-600">
-        {!onlineForFinance
-          ? "Payments and final checkout are disabled offline. Reconnect before taking money."
-          : paymentsEnabled
-            ? "Cash posts to the open cash shift. Card sends the charge through the configured venue payment terminal and only records payment after provider capture."
-            : "Payment unlocks only when the check has a non-zero charge and every open order or standalone play timer has been finalized."}
-      </p>
+
+      {!enabled ? (
+        <p className="mt-3 rounded-lg border border-white/7 bg-black/20 px-2.5 py-2 text-[11px] leading-4 text-zinc-500">
+          {!onlineForFinance
+            ? "Reconnect before taking payment."
+            : "Payment unlocks when the bill has a positive balance and all charge-changing activity is final."}
+        </p>
+      ) : null}
     </section>
   );
 }
