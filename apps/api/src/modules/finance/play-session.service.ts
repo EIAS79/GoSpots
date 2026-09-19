@@ -536,12 +536,17 @@ export class PlaySessionService {
               endedAt: lockEndedAt,
               durationMinutes: lockDuration,
             });
-            await assertWithinOpeningHours(
-              tx,
-              shopId,
-              fresh.startedAt,
-              blockEnd,
-            );
+            if (
+              dto.durationMinutes !== undefined ||
+              dto.resourceId !== undefined
+            ) {
+              await assertWithinOpeningHours(
+                tx,
+                shopId,
+                fresh.startedAt,
+                blockEnd,
+              );
+            }
             await assertNoWalkInOverlap(
               tx,
               shopId,
