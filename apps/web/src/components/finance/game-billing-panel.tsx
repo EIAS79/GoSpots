@@ -391,6 +391,24 @@ export function GameBillingPanel({ canWrite }: { canWrite: boolean }) {
     }
   }
 
+  async function onExtendWalkIn(item: PlayBillingItem, minutes: number) {
+    if (!canWrite || item.source !== "walk_in" || item.isPaid) return;
+    setBusyId(item.id);
+    setError(null);
+    try {
+      await updateWalkIn(item.id, {
+        durationMinutes: Math.max(1, item.durationMinutes + minutes),
+      });
+      publishLiveEvent({ section: "finance" });
+      publishLiveEvent({ section: "reservation" });
+      await load({ silent: true });
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Could not extend this session.");
+    } finally {
+      setBusyId(null);
+    }
+  }
+
   async function onCreateWalkIn(e: React.FormEvent) {
     e.preventDefault();
     if (!canWrite) return;
@@ -772,6 +790,7 @@ export function GameBillingPanel({ canWrite }: { canWrite: boolean }) {
                 t={t}
                 onMarkPaid={() => void onMarkPaid(item)}
                 onEdit={() => void openEdit(item)}
+                onExtendWalkIn={(minutes) => void onExtendWalkIn(item, minutes)}
                 onEndWalkIn={() => void onEndWalkIn(item)}
               />
             ))}
@@ -866,6 +885,7 @@ function BillingRow({
   t,
   onMarkPaid,
   onEdit,
+  onExtendWalkIn,
   onEndWalkIn,
 }: {
   item: PlayBillingItem;
@@ -876,6 +896,7 @@ function BillingRow({
   t: (key: MessageKey, vars?: Record<string, string | number>) => string;
   onMarkPaid: () => void;
   onEdit: () => void;
+  onExtendWalkIn: (minutes: number) => void;
   onEndWalkIn: () => void;
 }) {
   const amount = item.isPaid
@@ -966,6 +987,31 @@ function BillingRow({
               <Pencil size={12} />
               {t("finance.playEdit")}
             </button>
+          ) : null}
+          {item.bucket === "in_progress" &&
+          item.source === "walk_in" &&
+          canWrite &&
+          !item.isPaid ? (
+            <>
+              <button
+                type="button"
+                disabled={busy}
+                onClick={() => onExtendWalkIn(15)}
+                className="rounded-lg border border-sky-400/25 px-2 py-1.5 text-xs text-sky-200 hover:bg-sky-500/10 disabled:opacity-50"
+                title="Extend planned end by 15 minutes"
+              >
+                +15 min
+              </button>
+              <button
+                type="button"
+                disabled={busy}
+                onClick={() => onExtendWalkIn(30)}
+                className="rounded-lg border border-sky-400/25 px-2 py-1.5 text-xs text-sky-200 hover:bg-sky-500/10 disabled:opacity-50"
+                title="Extend planned end by 30 minutes"
+              >
+                +30 min
+              </button>
+            </>
           ) : null}
           {item.bucket === "in_progress" &&
           item.source === "walk_in" &&

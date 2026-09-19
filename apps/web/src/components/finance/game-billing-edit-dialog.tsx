@@ -10,6 +10,7 @@ import { FeedbackBanner } from "@/components/ui/feedback-banner";
 import { ModalPortal } from "@/components/ui/modal-portal";
 import {
   combineDateAndTime,
+  isDateTimeBeforeCurrentMinute,
   splitDateAndTime,
   validateBookingWindow,
 } from "@/lib/booking-time";
@@ -133,6 +134,23 @@ export function GameBillingEditDialog({
     if (!isWalkIn && windowErr) {
       setFeedback(windowErr);
       return;
+    }
+    if (!isWalkIn) {
+      const startChanged =
+        date !== startParts.date || startTime !== startParts.time;
+      const endChanged =
+        date !== endParts.date || endTime !== endParts.time;
+      if (
+        startChanged &&
+        isDateTimeBeforeCurrentMinute(date, startTime)
+      ) {
+        setFeedback("Start time cannot be in the past.");
+        return;
+      }
+      if (endChanged && isDateTimeBeforeCurrentMinute(date, endTime)) {
+        setFeedback("End time cannot be in the past.");
+        return;
+      }
     }
 
     setSaving(true);

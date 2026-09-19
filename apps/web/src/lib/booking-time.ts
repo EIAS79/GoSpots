@@ -198,6 +198,25 @@ export function localDateInput(d = new Date()): string {
 
 
 
+export function localTimeInput(d = new Date()): string {
+  const pad = (n: number) => String(n).padStart(2, "0");
+  return `${pad(d.getHours())}:${pad(d.getMinutes())}`;
+}
+
+export function isDateTimeBeforeCurrentMinute(
+  date: string,
+  time: string,
+  now: Date = new Date(),
+): boolean {
+  const candidate = combineDateAndTime(date, time);
+  if (Number.isNaN(candidate.getTime())) return true;
+  const currentMinute = new Date(now);
+  currentMinute.setSeconds(0, 0);
+  return candidate < currentMinute;
+}
+
+
+
 export function combineDateAndTime(date: string, time: string): Date {
 
   return new Date(`${date}T${time}`);

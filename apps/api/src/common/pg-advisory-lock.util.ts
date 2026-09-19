@@ -24,6 +24,10 @@ export const MAIL_OUTBOX_RETENTION_CRON_LOCK_KEY2 = 0x4d52; // 'MR'
 export const BILLING_CRON_LOCK_KEY1 = 0x4753; // 'GS'
 export const BILLING_CRON_LOCK_KEY2 = 0x424c; // 'BL'
 
+/** Timed walk-in lifecycle cron — 'GS' + 'PS'. */
+export const PLAY_SESSION_LIFECYCLE_CRON_LOCK_KEY1 = 0x4753; // 'GS'
+export const PLAY_SESSION_LIFECYCLE_CRON_LOCK_KEY2 = 0x5053; // 'PS'
+
 export type AdvisoryLockOutcome<T> =
   | { acquired: false }
   | { acquired: true; result: T };
@@ -140,6 +144,21 @@ export async function withBillingCronLock<T>(
     prisma,
     BILLING_CRON_LOCK_KEY1,
     BILLING_CRON_LOCK_KEY2,
+    fn,
+    options,
+  );
+}
+
+/** Single-flight wrapper for timed walk-in warning / auto-end ticks. */
+export async function withPlaySessionLifecycleCronLock<T>(
+  prisma: PrismaClient,
+  fn: () => Promise<T>,
+  options?: XactLockOptions,
+): Promise<AdvisoryLockOutcome<T>> {
+  return withPgAdvisoryXactLock(
+    prisma,
+    PLAY_SESSION_LIFECYCLE_CRON_LOCK_KEY1,
+    PLAY_SESSION_LIFECYCLE_CRON_LOCK_KEY2,
     fn,
     options,
   );

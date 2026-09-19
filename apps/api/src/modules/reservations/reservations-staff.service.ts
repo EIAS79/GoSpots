@@ -17,6 +17,10 @@ import { assertBookingSlotFree } from '../../common/booking-overlap.util';
 import { withResourceBookingLock } from '../../common/booking-lock.util';
 import { assertWithinOpeningHours } from '../../common/opening-hours.util';
 import {
+  assertBookingInstantNotPast,
+  assertValidBookingInstant,
+} from '../../common/booking-time-guard.util';
+import {
   CreateReservationDto,
   DeleteReservationDto,
   ReservationQueryDto,
@@ -183,6 +187,11 @@ export class ReservationsStaffService {
     await assertShopFeature(this.prisma, shopId, 'reservation');
     const startsAt = new Date(dto.startsAt);
     let endsAt = new Date(dto.endsAt);
+    const now = new Date();
+    assertValidBookingInstant(startsAt, 'Start');
+    assertValidBookingInstant(endsAt, 'End');
+    assertBookingInstantNotPast(startsAt, 'Start', now);
+    assertBookingInstantNotPast(endsAt, 'End', now);
     let resourceType: string | null = null;
     let offeringConfig: unknown = null;
 
@@ -338,6 +347,21 @@ export class ReservationsStaffService {
       : null;
     const startsAt = dto.startsAt ? new Date(dto.startsAt) : existing.startsAt;
     let endsAt = dto.endsAt ? new Date(dto.endsAt) : existing.endsAt;
+    assertValidBookingInstant(startsAt, 'Start');
+    assertValidBookingInstant(endsAt, 'End');
+    const schedulingNow = new Date();
+    const startChanged =
+      dto.startsAt != null &&
+      startsAt.getTime() !== existing.startsAt.getTime();
+    const endChanged =
+      dto.endsAt != null &&
+      endsAt.getTime() !== existing.endsAt.getTime();
+    if (startChanged) {
+      assertBookingInstantNotPast(startsAt, 'Start', schedulingNow);
+    }
+    if (endChanged) {
+      assertBookingInstantNotPast(endsAt, 'End', schedulingNow);
+    }
     const resourceId =
       dto.resourceId !== undefined ? dto.resourceId : existing.resourceId;
     const nextStatus = dto.status ?? existing.status;

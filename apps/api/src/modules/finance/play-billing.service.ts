@@ -6,6 +6,10 @@ import {
 } from '@nestjs/common';
 import { ACTIVE_RESERVATION } from '../../common/booking-floor-status';
 import {
+  assertBookingInstantNotPast,
+  assertValidBookingInstant,
+} from '../../common/booking-time-guard.util';
+import {
   bookingCollectsPartySize,
   effectiveBillingPartySize,
   parseBowlingChargeFromNotes,
@@ -905,6 +909,20 @@ export class PlayBillingService {
 
     const startsAt = dto.startsAt ? new Date(dto.startsAt) : existing.startsAt;
     const endsAt = dto.endsAt ? new Date(dto.endsAt) : existing.endsAt;
+    assertValidBookingInstant(startsAt, 'Start');
+    assertValidBookingInstant(endsAt, 'End');
+    const startChanged =
+      dto.startsAt != null &&
+      startsAt.getTime() !== existing.startsAt.getTime();
+    const endChanged =
+      dto.endsAt != null &&
+      endsAt.getTime() !== existing.endsAt.getTime();
+    if (startChanged) {
+      assertBookingInstantNotPast(startsAt, 'Start', now);
+    }
+    if (endChanged) {
+      assertBookingInstantNotPast(endsAt, 'End', now);
+    }
     const resourceId =
       dto.resourceId !== undefined ? dto.resourceId : existing.resourceId;
 
