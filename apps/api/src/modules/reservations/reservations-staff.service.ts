@@ -183,6 +183,16 @@ export class ReservationsStaffService {
     await assertShopFeature(this.prisma, shopId, 'reservation');
     const startsAt = new Date(dto.startsAt);
     let endsAt = new Date(dto.endsAt);
+    const now = new Date();
+    if (Number.isNaN(startsAt.getTime()) || Number.isNaN(endsAt.getTime())) {
+      throw new BadRequestException('Invalid start or end date/time.');
+    }
+    if (startsAt < now) {
+      throw new BadRequestException('Start time cannot be in the past.');
+    }
+    if (endsAt <= now) {
+      throw new BadRequestException('End time cannot be in the past.');
+    }
     let resourceType: string | null = null;
     let offeringConfig: unknown = null;
 
@@ -338,6 +348,13 @@ export class ReservationsStaffService {
       : null;
     const startsAt = dto.startsAt ? new Date(dto.startsAt) : existing.startsAt;
     let endsAt = dto.endsAt ? new Date(dto.endsAt) : existing.endsAt;
+    const now = new Date();
+    if (dto.startsAt != null && startsAt < now) {
+      throw new BadRequestException('Start time cannot be in the past.');
+    }
+    if (dto.endsAt != null && endsAt <= now) {
+      throw new BadRequestException('End time cannot be in the past.');
+    }
     const resourceId =
       dto.resourceId !== undefined ? dto.resourceId : existing.resourceId;
     const nextStatus = dto.status ?? existing.status;
