@@ -8,6 +8,7 @@ import { ShopLossService } from './shop-loss.service';
 import { ShopOrderService } from './shop-order.service';
 import { PlayBillingService } from './play-billing.service';
 import { PlaySessionService } from './play-session.service';
+import { PlaySessionLifecycleService } from './play-session-lifecycle.service';
 
 @Module({
   imports: [NotificationsModule],
@@ -19,6 +20,7 @@ import { PlaySessionService } from './play-session.service';
     ShopOrderService,
     PlayBillingService,
     PlaySessionService,
+    PlaySessionLifecycleService,
     FinanceService,
   ],
   exports: [PlayBillingService],
