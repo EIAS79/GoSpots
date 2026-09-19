@@ -452,10 +452,6 @@ export class PlaySessionService {
 
     const nextResourceId =
       dto.resourceId !== undefined ? dto.resourceId : row.resourceId;
-    const nextDurationMinutes =
-      dto.durationMinutes !== undefined
-        ? dto.durationMinutes
-        : row.durationMinutes;
     const nextStatus = dto.status ?? row.status;
     const intervalAffecting =
       dto.resourceId !== undefined ||
