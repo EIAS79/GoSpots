@@ -198,6 +198,34 @@ export function localDateInput(d = new Date()): string {
 
 
 
+export function nextLocalMinuteInput(d = new Date()): string {
+  const next = new Date(d);
+  next.setSeconds(0, 0);
+  if (next.getTime() <= d.getTime()) next.setMinutes(next.getMinutes() + 1);
+  const pad = (n: number) => String(n).padStart(2, "0");
+  return `${pad(next.getHours())}:${pad(next.getMinutes())}`;
+}
+
+
+
+export function validateFutureBookingWindow(
+  date: string,
+  startTime: string,
+  endTime: string,
+  nowMs: number = Date.now(),
+): string | null {
+  const basic = validateBookingWindow(date, startTime, endTime);
+  if (basic) return basic;
+
+  const start = combineDateAndTime(date, startTime);
+  const end = combineDateAndTime(date, endTime);
+  if (start.getTime() < nowMs) return "Start time cannot be in the past.";
+  if (end.getTime() <= nowMs) return "End time cannot be in the past.";
+  return null;
+}
+
+
+
 export function combineDateAndTime(date: string, time: string): Date {
 
   return new Date(`${date}T${time}`);
