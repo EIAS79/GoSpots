@@ -8,6 +8,9 @@ import {
   ACTIVE_BOOKING_STATUSES,
   addMinutesToTime,
   combineDateAndTime,
+  isDateTimeBeforeCurrentMinute,
+  localDateInput,
+  localTimeInput,
   splitDateAndTime,
 } from "@/lib/booking-time";
 import {
@@ -118,14 +121,17 @@ export function ReservationDialog({
     message: string;
   } | null>(null);
 
+  const today = localDateInput();
+  const createDate =
+    defaultDate && defaultDate >= today ? defaultDate : today;
   const initialParts = initial
     ? splitDateAndTime(initial.startsAt)
-    : { date: defaultDate ?? "", time: "14:00" };
+    : { date: createDate, time: "14:00" };
   const initialEnd = initial
     ? splitDateAndTime(initial.endsAt)
-    : { date: defaultDate ?? "", time: "15:00" };
+    : { date: createDate, time: "15:00" };
 
-  const [date, setDate] = useState(initialParts.date || defaultDate || "");
+  const [date, setDate] = useState(initialParts.date || createDate);
   const [startTime, setStartTime] = useState(initialParts.time || "14:00");
   const [endTime, setEndTime] = useState(() => {
     if (initial) return initialEnd.time || "15:00";
@@ -421,6 +427,35 @@ export function ReservationDialog({
                 setFeedback({ variant: "error", message: overlapHint });
                 return;
               }
+              const startChanged =
+                !initial ||
+                date !== initialParts.date ||
+                startTime !== initialParts.time;
+              const endChanged =
+                !initial ||
+                date !== initialEnd.date ||
+                endTime !== initialEnd.time;
+              if (
+                startChanged &&
+                isDateTimeBeforeCurrentMinute(date, startTime)
+              ) {
+                setFeedback({
+                  variant: "error",
+                  message: "Start time cannot be in the past.",
+                });
+                return;
+              }
+              if (
+                !isDining &&
+                endChanged &&
+                isDateTimeBeforeCurrentMinute(date, endTime)
+              ) {
+                setFeedback({
+                  variant: "error",
+                  message: "End time cannot be in the past.",
+                });
+                return;
+              }
               const startsAt = combineDateAndTime(date, startTime).toISOString();
               const endsAt = isDining
                 ? holdEndFromLocal(date, startTime, noShowMinutes)
@@ -537,6 +572,7 @@ export function ReservationDialog({
               <input
                 type="date"
                 required
+                min={initial ? undefined : today}
                 value={date}
                 onChange={(e) => setDate(e.target.value)}
                 className="mt-1 w-full rounded-lg border border-white/10 bg-zinc-900 px-3 py-2 text-sm text-white"
@@ -564,6 +600,9 @@ export function ReservationDialog({
               <input
                 type="time"
                 required
+                min={
+                  !initial && date === today ? localTimeInput() : undefined
+                }
                 value={startTime}
                 onChange={(e) => applyStartTime(e.target.value)}
                 className="mt-1 w-full rounded-lg border border-white/10 bg-zinc-900 px-2 py-2 text-sm text-white"
@@ -576,6 +615,7 @@ export function ReservationDialog({
                   <input
                     type="time"
                     required
+                    min={!initial ? startTime : undefined}
                     value={endTime}
                     onChange={(e) => setEndTime(e.target.value)}
                     className="mt-1 w-full rounded-lg border border-white/10 bg-zinc-900 px-2 py-2 text-sm text-white"
