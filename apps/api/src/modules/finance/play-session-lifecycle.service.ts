@@ -57,6 +57,7 @@ export class PlaySessionLifecycleService {
         label: true,
         startedAt: true,
         durationMinutes: true,
+        completedAt: true,
         resource: { select: { name: true } },
       },
       take: MAX_ROWS_PER_TICK,
@@ -101,15 +102,18 @@ export class PlaySessionLifecycleService {
           },
           actorName: 'System',
         });
-        await this.notifications.recordFinanceEvent(row.shopId, {
-          title: 'Walk-in awaiting payment',
-          body: `${label}${unit} finished automatically — collect payment in Game billing.`,
-          href: '/play-billing?tab=awaiting_payment',
-          dedupeKey: `walkin_awaiting_${row.id}`,
-        });
+        if (row.completedAt == null) {
+          await this.notifications.recordFinanceEvent(row.shopId, {
+            title: 'Walk-in awaiting payment',
+            body: `${label}${unit} finished automatically — collect payment in Game billing.`,
+            href: '/play-billing?tab=awaiting_payment',
+            dedupeKey: `walkin_awaiting_${row.id}`,
+          });
+        }
         continue;
       }
 
+      if (row.completedAt != null) continue;
       const remainingMs = plannedEnd.getTime() - at.getTime();
       if (remainingMs > ENDING_WARNING_MS) continue;
 
