@@ -4,7 +4,6 @@ import {
   Injectable,
   NotFoundException,
 } from '@nestjs/common';
-import { Cron, CronExpression } from '@nestjs/schedule';
 import {
   assertNoReservationOverlap,
   assertNoWalkInOverlap,
@@ -81,96 +80,6 @@ export class PlaySessionService {
         select: { id: true, guestName: true, partySize: true, startsAt: true },
       },
     } as const;
-  }
-
-  /**
-   * Timed walk-ins are operational sessions, not indefinite timers.
-   *
-   * Every minute:
-   * - warn staff shortly before the planned end so they can extend;
-   * - stamp endedAt at the planned end so Checkout/Game billing move the
-   *   session to awaiting payment automatically.
-   *
-   * The status remains ACTIVE until payment is recorded; endedAt is the
-   * authoritative "play stopped" marker used by billing/checkout.
-   */
-  @Cron(CronExpression.EVERY_MINUTE)
-  async maintainTimedWalkIns() {
-    const now = new Date();
-    const rows = await this.prisma.playSession.findMany({
-      where: {
-        status: 'ACTIVE',
-        completedAt: null,
-        endedAt: null,
-        archivedAt: null,
-        reservationId: null,
-        durationMinutes: { not: null },
-      },
-      select: {
-        id: true,
-        shopId: true,
-        label: true,
-        startedAt: true,
-        durationMinutes: true,
-        resource: { select: { name: true } },
-      },
-      take: 500,
-    });
-
-    for (const row of rows) {
-      const durationMinutes = row.durationMinutes ?? 0;
-      if (durationMinutes <= 0) continue;
-
-      const plannedEnd = new Date(
-        row.startedAt.getTime() + durationMinutes * 60_000,
-      );
-      const remainingMs = plannedEnd.getTime() - now.getTime();
-
-      if (remainingMs <= 0) {
-        const ended = await this.prisma.playSession.updateMany({
-          where: {
-            id: row.id,
-            shopId: row.shopId,
-            status: 'ACTIVE',
-            completedAt: null,
-            endedAt: null,
-          },
-          data: { endedAt: plannedEnd },
-        });
-        if (ended.count !== 1) continue;
-
-        const label = row.label?.trim() || 'Walk-in guest';
-        const unit = row.resource?.name ? ` · ${row.resource.name}` : '';
-        await this.audit.recordForShop(row.shopId, {
-          section: 'finance',
-          action: 'finance.play_session.auto_end',
-          summary: `Auto-ended ${label}${unit} at planned session end`,
-          meta: {
-            sessionId: row.id,
-            plannedEnd: plannedEnd.toISOString(),
-          },
-        });
-        await this.notifications.recordFinanceEvent(row.shopId, {
-          title: 'Session ended — payment due',
-          body: `${label}${unit} reached the planned end. Collect payment in Game billing / Checkout.`,
-          href: '/play-billing?tab=awaiting_payment',
-          dedupeKey: `walkin_auto_end:${row.id}:${plannedEnd.toISOString()}`,
-        });
-        continue;
-      }
-
-      if (remainingMs <= 5 * 60_000) {
-        const minutes = Math.max(1, Math.ceil(remainingMs / 60_000));
-        const label = row.label?.trim() || 'Walk-in guest';
-        const unit = row.resource?.name ? ` · ${row.resource.name}` : '';
-        await this.notifications.recordFinanceEvent(row.shopId, {
-          title: `Session ends in ${minutes} min`,
-          body: `${label}${unit} — extend the session now if the guest wants more time.`,
-          href: '/play-billing?tab=in_progress',
-          dedupeKey: `walkin_ending_soon:${row.id}:${plannedEnd.toISOString()}`,
-        });
-      }
-    }
   }
 
   async listPlaySessions(
@@ -543,10 +452,6 @@ export class PlaySessionService {
 
     const nextResourceId =
       dto.resourceId !== undefined ? dto.resourceId : row.resourceId;
-    const nextDurationMinutes =
-      dto.durationMinutes !== undefined
-        ? dto.durationMinutes
-        : row.durationMinutes;
     const nextStatus = dto.status ?? row.status;
     const intervalAffecting =
       dto.resourceId !== undefined ||
@@ -631,6 +536,17 @@ export class PlaySessionService {
               endedAt: lockEndedAt,
               durationMinutes: lockDuration,
             });
+            if (
+              dto.durationMinutes !== undefined ||
+              dto.resourceId !== undefined
+            ) {
+              await assertWithinOpeningHours(
+                tx,
+                shopId,
+                fresh.startedAt,
+                blockEnd,
+              );
+            }
             await assertNoWalkInOverlap(
               tx,
               shopId,
