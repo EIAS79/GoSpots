@@ -108,11 +108,31 @@ export function GameBillingEditDialog({
         })
       : (item.collectsPartySize ?? false);
 
-  const windowErr = useMemo(
-    () =>
-      isWalkIn ? null : validateBookingWindow(date, startTime, endTime),
-    [isWalkIn, date, startTime, endTime],
-  );
+  const startChanged =
+    date !== startParts.date || startTime !== startParts.time;
+  const endChanged =
+    date !== endParts.date || endTime !== endParts.time;
+
+  const windowErr = useMemo(() => {
+    if (isWalkIn) return null;
+    const basic = validateBookingWindow(date, startTime, endTime);
+    if (basic) return basic;
+
+    const now = Date.now();
+    if (
+      startChanged &&
+      combineDateAndTime(date, startTime).getTime() < now
+    ) {
+      return "Start time cannot be in the past.";
+    }
+    if (
+      endChanged &&
+      combineDateAndTime(date, endTime).getTime() <= now
+    ) {
+      return "End time cannot be in the past.";
+    }
+    return null;
+  }, [isWalkIn, date, startTime, endTime, startChanged, endChanged]);
 
   const parsedDiscount = Math.min(
     100,
@@ -170,8 +190,8 @@ export function GameBillingEditDialog({
           partySize: showPartyField
             ? Math.max(1, parseInt(partySize, 10) || 1)
             : 1,
-          startsAt,
-          endsAt,
+          startsAt: startChanged ? startsAt : undefined,
+          endsAt: endChanged ? endsAt : undefined,
           notes: notes.trim() || null,
           baseAmount: revertToRates ? null : baseNum,
           discountPercent: parsedDiscount,
