@@ -31,6 +31,7 @@ import {
   classifyWalkInBillingRow,
   computePlayBillingAmount,
 } from '../../common/play-billing.util';
+import { assertWithinOpeningHours } from '../../common/opening-hours.util';
 import { requireShopId } from '../../common/tenant';
 import { PrismaService } from '../../prisma/prisma.service';
 import { AuditService } from '../audit/audit.service';
@@ -905,6 +906,12 @@ export class PlayBillingService {
 
     const startsAt = dto.startsAt ? new Date(dto.startsAt) : existing.startsAt;
     const endsAt = dto.endsAt ? new Date(dto.endsAt) : existing.endsAt;
+    if (dto.startsAt != null && startsAt < now) {
+      throw new BadRequestException('Start time cannot be in the past.');
+    }
+    if (dto.endsAt != null && endsAt <= now) {
+      throw new BadRequestException('End time cannot be in the past.');
+    }
     const resourceId =
       dto.resourceId !== undefined ? dto.resourceId : existing.resourceId;
 
@@ -927,6 +934,13 @@ export class PlayBillingService {
       where: { id: resourceId, shopId },
     });
     if (!resource) throw new NotFoundException('Resource not found.');
+
+    await assertWithinOpeningHours(
+      this.prisma,
+      shopId,
+      startsAt,
+      endsAt,
+    );
 
     await this.assertPlayBillingNoOverlap(
       shopId,

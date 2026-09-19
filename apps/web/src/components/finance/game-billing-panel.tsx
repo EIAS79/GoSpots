@@ -25,6 +25,7 @@ import {
   defaultPlayBillingRange,
   fetchPlayBilling,
   markGameBillingPaid,
+  updatePlayBilling,
   updateWalkIn,
   type PlayBillingItem,
   type PlayBillingResponse,
@@ -386,6 +387,31 @@ export function GameBillingPanel({ canWrite }: { canWrite: boolean }) {
       setTab("awaiting_payment");
     } catch (e) {
       setError(e instanceof Error ? e.message : t("finance.playEndFailed"));
+    } finally {
+      setBusyId(null);
+    }
+  }
+
+  async function onExtend(item: PlayBillingItem, minutes: number) {
+    if (!canWrite || item.bucket !== "in_progress") return;
+    setBusyId(item.id);
+    setError(null);
+    try {
+      if (item.source === "walk_in") {
+        await updateWalkIn(item.id, {
+          durationMinutes: Math.max(1, item.durationMinutes + minutes),
+        });
+      } else {
+        const nextEnd = new Date(
+          new Date(item.endsAt).getTime() + minutes * 60_000,
+        ).toISOString();
+        await updatePlayBilling(item.id, { endsAt: nextEnd });
+      }
+      publishLiveEvent({ section: "finance" });
+      publishLiveEvent({ section: "reservation" });
+      await load({ silent: true });
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Could not extend the session.");
     } finally {
       setBusyId(null);
     }
@@ -773,6 +799,7 @@ export function GameBillingPanel({ canWrite }: { canWrite: boolean }) {
                 onMarkPaid={() => void onMarkPaid(item)}
                 onEdit={() => void openEdit(item)}
                 onEndWalkIn={() => void onEndWalkIn(item)}
+                onExtend={(minutes) => void onExtend(item, minutes)}
               />
             ))}
           </ul>
@@ -867,6 +894,7 @@ function BillingRow({
   onMarkPaid,
   onEdit,
   onEndWalkIn,
+  onExtend,
 }: {
   item: PlayBillingItem;
   canWrite: boolean;
@@ -877,10 +905,23 @@ function BillingRow({
   onMarkPaid: () => void;
   onEdit: () => void;
   onEndWalkIn: () => void;
+  onExtend: (minutes: number) => void;
 }) {
   const amount = item.isPaid
     ? (item.billedAmount ?? item.amountDue)
     : item.amountDue;
+  const remainingMinutes =
+    item.bucket === "in_progress"
+      ? Math.max(
+          0,
+          Math.ceil((new Date(item.endsAt).getTime() - Date.now()) / 60_000),
+        )
+      : null;
+  const showExtendPrompt =
+    canWrite &&
+    item.bucket === "in_progress" &&
+    remainingMinutes != null &&
+    remainingMinutes <= 15;
 
   return (
     <li
@@ -940,6 +981,31 @@ function BillingRow({
             ? ` ${t("finance.playDiscountOff", { n: item.discountPercent })}`
             : ""}
         </p>
+        {showExtendPrompt ? (
+          <div className="mt-2 flex flex-wrap items-center gap-2 rounded-lg border border-amber-400/20 bg-amber-500/5 px-2.5 py-2">
+            <span className="text-[11px] font-medium text-amber-200">
+              {remainingMinutes === 0
+                ? "Ending now — extend?"
+                : `Ends in ${remainingMinutes} min — extend?`}
+            </span>
+            <button
+              type="button"
+              disabled={busy}
+              onClick={() => onExtend(15)}
+              className="rounded-md border border-amber-400/30 px-2 py-1 text-[10px] font-medium text-amber-100 hover:bg-amber-500/10 disabled:opacity-50"
+            >
+              +15 min
+            </button>
+            <button
+              type="button"
+              disabled={busy}
+              onClick={() => onExtend(30)}
+              className="rounded-md border border-amber-400/30 px-2 py-1 text-[10px] font-medium text-amber-100 hover:bg-amber-500/10 disabled:opacity-50"
+            >
+              +30 min
+            </button>
+          </div>
+        ) : null}
       </div>
       <div className="flex shrink-0 flex-col items-end gap-2">
         <span

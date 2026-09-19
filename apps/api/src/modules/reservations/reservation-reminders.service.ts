@@ -50,6 +50,7 @@ export class ReservationRemindersService {
           await Promise.all([
             this.upcomingIn5Min(),
             this.startsNow(),
+            this.endingSoon(),
             this.autoNoShowSessions(),
             this.autoCompleteCheckedInSessions(),
           ]);
@@ -298,6 +299,36 @@ export class ReservationRemindersService {
 
     }
 
+  }
+
+
+
+  /** Checked-in gaming sessions ending in ~5 min — prompt staff to extend if needed. */
+  private async endingSoon() {
+    const now = Date.now();
+    const winStart = new Date(now + 4 * 60_000);
+    const winEnd = new Date(now + 6 * 60_000);
+
+    const rows = await this.prisma.reservation.findMany({
+      where: {
+        status: ReservationStatus.CHECKED_IN,
+        endsAt: { gte: winStart, lte: winEnd },
+        resourceId: { not: null },
+      },
+      include: { resource: { include: { category: true } } },
+      take: 200,
+    });
+
+    for (const r of rows) {
+      if (isDiningResourceType(r.resource?.type)) continue;
+      const unit = r.resource?.name ?? 'unit';
+      await this.notifications.recordReservationEvent(r.shopId, {
+        title: 'Session ends in 5 min',
+        body: `${r.guestName} · ${unit} — extend now if the guest wants more time.`,
+        href: reservationSessionsHref(r.startsAt, 'schedule'),
+        dedupeKey: `reservation_ending_soon:${r.id}:${r.endsAt.toISOString()}`,
+      });
+    }
   }
 
 

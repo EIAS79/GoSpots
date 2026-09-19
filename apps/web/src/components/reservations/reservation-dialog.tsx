@@ -8,7 +8,10 @@ import {
   ACTIVE_BOOKING_STATUSES,
   addMinutesToTime,
   combineDateAndTime,
+  localDateInput,
+  nextLocalMinuteInput,
   splitDateAndTime,
+  validateFutureBookingWindow,
 } from "@/lib/booking-time";
 import {
   holdEndFromLocal,
@@ -131,6 +134,9 @@ export function ReservationDialog({
     if (initial) return initialEnd.time || "15:00";
     return addMinutesToTime(initialParts.time || "14:00", 60);
   });
+
+  const today = localDateInput();
+  const minFutureTime = nextLocalMinuteInput();
 
   const selected = units.find((u) => u.id === resourceId);
   const selectedCategory = catalog.categories.find(
@@ -421,6 +427,32 @@ export function ReservationDialog({
                 setFeedback({ variant: "error", message: overlapHint });
                 return;
               }
+              const timingChanged =
+                !initial ||
+                date !== initialParts.date ||
+                startTime !== initialParts.time ||
+                (!isDining && endTime !== initialEnd.time);
+              if (timingChanged) {
+                if (isDining) {
+                  if (combineDateAndTime(date, startTime).getTime() < Date.now()) {
+                    setFeedback({
+                      variant: "error",
+                      message: "Start time cannot be in the past.",
+                    });
+                    return;
+                  }
+                } else {
+                  const futureErr = validateFutureBookingWindow(
+                    date,
+                    startTime,
+                    endTime,
+                  );
+                  if (futureErr) {
+                    setFeedback({ variant: "error", message: futureErr });
+                    return;
+                  }
+                }
+              }
               const startsAt = combineDateAndTime(date, startTime).toISOString();
               const endsAt = isDining
                 ? holdEndFromLocal(date, startTime, noShowMinutes)
@@ -537,6 +569,7 @@ export function ReservationDialog({
               <input
                 type="date"
                 required
+                min={!initial ? today : undefined}
                 value={date}
                 onChange={(e) => setDate(e.target.value)}
                 className="mt-1 w-full rounded-lg border border-white/10 bg-zinc-900 px-3 py-2 text-sm text-white"
@@ -564,6 +597,7 @@ export function ReservationDialog({
               <input
                 type="time"
                 required
+                min={!initial && date === today ? minFutureTime : undefined}
                 value={startTime}
                 onChange={(e) => applyStartTime(e.target.value)}
                 className="mt-1 w-full rounded-lg border border-white/10 bg-zinc-900 px-2 py-2 text-sm text-white"
@@ -576,6 +610,11 @@ export function ReservationDialog({
                   <input
                     type="time"
                     required
+                    min={
+                      !initial && date === today
+                        ? (startTime > minFutureTime ? startTime : minFutureTime)
+                        : undefined
+                    }
                     value={endTime}
                     onChange={(e) => setEndTime(e.target.value)}
                     className="mt-1 w-full rounded-lg border border-white/10 bg-zinc-900 px-2 py-2 text-sm text-white"
