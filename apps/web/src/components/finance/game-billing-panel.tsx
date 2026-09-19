@@ -1053,6 +1053,10 @@ function BillingRow({
                 ? t("finance.playPrepaid")
                 : t("finance.playPaid")}
             </span>
+          ) : item.bucket === "in_progress" ? (
+            <span className="text-[10px] text-sky-400/80">
+              {t("finance.playPlaying")}
+            </span>
           ) : canWrite ? (
             <button
               type="button"
@@ -1066,10 +1070,6 @@ function BillingRow({
                 t("finance.playMarkPaid")
               )}
             </button>
-          ) : item.bucket === "in_progress" ? (
-            <span className="text-[10px] text-sky-400/80">
-              {t("finance.playPlaying")}
-            </span>
           ) : (
             <span className="text-[10px] text-zinc-600">
               {t("finance.playUnpaid")}
