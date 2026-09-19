@@ -10,6 +10,7 @@ describe('PlaySessionLifecycleService', () => {
       label: string | null;
       startedAt: Date;
       durationMinutes: number | null;
+      completedAt: Date | null;
       resource: { name: string } | null;
     }>;
     claimCount?: number;
@@ -50,6 +51,7 @@ describe('PlaySessionLifecycleService', () => {
           label: 'Sandy',
           startedAt,
           durationMinutes: 60,
+          completedAt: null,
           resource: { name: 'Table 01' },
         },
       ],
@@ -87,6 +89,7 @@ describe('PlaySessionLifecycleService', () => {
           label: 'Marco',
           startedAt: new Date('2026-09-19T09:05:00.000Z'),
           durationMinutes: 60,
+          completedAt: null,
           resource: { name: 'Table 02' },
         },
       ],
@@ -118,6 +121,7 @@ describe('PlaySessionLifecycleService', () => {
           label: 'Lana',
           startedAt: new Date('2026-09-19T09:05:00.000Z'),
           durationMinutes: 60,
+          completedAt: null,
           resource: null,
         },
       ],
