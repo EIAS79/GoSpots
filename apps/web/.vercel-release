@@ -1,4 +1,4 @@
 phase=17
-source_main=5489433333ce578f57d13a502ab1f880f0819cf4
-release_reason=checkout-session-finalization-consistency
-release_date=2026-09-16
+source_main=87fab6b830d0d97cfddf0a92536e3e029aa89f69
+release_reason=session-lifecycle-auto-end-and-time-validation
+release_date=2026-09-19
