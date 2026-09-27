@@ -7,7 +7,6 @@ services:
     plan: free
     rootDir: .
     buildCommand: >-
-      npm install -g pnpm@10.12.1 &&
       pnpm install --frozen-lockfile &&
       pnpm --filter @gospots/api exec prisma generate &&
       pnpm --filter @gospots/api run build &&
