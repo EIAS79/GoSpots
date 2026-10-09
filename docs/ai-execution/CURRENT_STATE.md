@@ -22,7 +22,13 @@ Current ticket: T-002 — manual-card boundary
 - Regression tests added for blocked direct calls, missing capture and amount mismatch.
 
 ## Proof level
-- Code change prepared; no local Node 24/pnpm repository install because this session's sandbox cannot clone GitHub (DNS restriction).
+- Phase 4 focused Gate P4 suite, migration assertions and API build passed at first branch SHA ff51896d4eaf700261f703810319662795b54bb5. Full CI reported two controller test failures because a synchronous exception was asserted as an async promise; regression assertion corrected in next branch commit. Final exact-head CI still pending; no local Node 24/pnpm repository install because sandbox cannot clone GitHub (DNS restriction).
 - Do NOT call T-002 SOFTWARE_DONE until focused GitHub CI passes on the exact new SHA and integrated provider flow is confirmed.
 - Physical capture/refund/fiscal/Edge pilot remains EXTERNAL_BLOCKED; no live payment operations performed.
 - No production deploy, main merge, migration or Edulytics environment access authorized/performed.
+
+## October 9 verification / release blocker
+- First full API Jest: 480/482 tests passed, exactly two newly added controller assertions failed due to expect(...).rejects used on synchronous throw (not production execution). Corrected test semantics; re-run required.
+- Phase 17 security audit detected 2 critical and 4 high production dependency advisories, including Next.js, proxy-addr, sharp and source-map-js; release remains NO-GO pending independent security remediation and re-audit.
+- GoSpots Vercel project identified under eias79s-projects; branch Git push registered a CANCELED deployment attempt (no build/READY), proving branch build suppression but not eliminating deployment records.
+- This is NOT proof of a certified card capture or general production readiness.

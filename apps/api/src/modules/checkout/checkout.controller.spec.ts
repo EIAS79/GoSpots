@@ -130,11 +130,11 @@ describe('CheckoutController settlement idempotency', () => {
 
   it.each(['OWNER', 'CASHIER'] as const)(
     'rejects direct MANUAL_CARD requests for %s before even creating an idempotency receipt',
-    async (shopRole) => {
+    (shopRole) => {
       const payments = { createPayment: jest.fn() } as unknown as CheckoutPaymentService;
       const controller = makeController({} as CommercialSettlementService, payments);
       const actor = { ...owner, shopRole };
-      await expect(
+      expect(() =>
         controller.createPayment(
           actor,
           'settlement-1',
@@ -147,7 +147,7 @@ describe('CheckoutController settlement idempotency', () => {
           'forged-card-123',
           req,
         ),
-      ).rejects.toThrow(/verified provider capture/);
+      ).toThrow(/verified provider capture/);
       expect(payments.createPayment).not.toHaveBeenCalled();
     },
   );
