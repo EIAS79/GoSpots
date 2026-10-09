@@ -1,4 +1,5 @@
 import type { PrismaService } from '../../prisma/prisma.service';
+import { CheckoutPaymentMethod } from '@prisma/client';
 import { clearIdempotencyMemoryCache } from '../../common/idempotency.util';
 import { CheckoutController } from './checkout.controller';
 import type { CheckoutPaymentService } from './checkout-payment.service';
@@ -126,6 +127,30 @@ describe('CheckoutController settlement idempotency', () => {
     ).rejects.toThrow('Idempotency-Key header is required');
     expect(commercial.createSettlement).not.toHaveBeenCalled();
   });
+
+  it.each(['OWNER', 'CASHIER'] as const)(
+    'rejects direct MANUAL_CARD requests for %s before even creating an idempotency receipt',
+    async (shopRole) => {
+      const payments = { createPayment: jest.fn() } as unknown as CheckoutPaymentService;
+      const controller = makeController({} as CommercialSettlementService, payments);
+      const actor = { ...owner, shopRole };
+      await expect(
+        controller.createPayment(
+          actor,
+          'settlement-1',
+          {
+            expectedCheckVersion: 1,
+            method: CheckoutPaymentMethod.MANUAL_CARD,
+            allocationKind: 'REMAINING',
+            allocations: [{ snapshotId: 'line-1', amount: '10.0000' }],
+          } as any,
+          'forged-card-123',
+          req,
+        ),
+      ).rejects.toThrow(/verified provider capture/);
+      expect(payments.createPayment).not.toHaveBeenCalled();
+    },
+  );
 
   it('replays a repeated allocation request instead of recording a second payment', async () => {
     const commercial = {} as CommercialSettlementService;

@@ -8,6 +8,7 @@ import {
 import {
   CheckoutPaymentMethod,
   CheckoutPaymentStatus,
+  PaymentOperationState,
   Prisma,
 } from '@prisma/client';
 import { ApiDomainErrorCode } from '../../common/api-error.codes';
@@ -293,6 +294,46 @@ export class CheckoutPaymentService {
     dto: CreateCheckoutPaymentDto,
     correlationId?: string,
   ) {
+    if (dto.method === CheckoutPaymentMethod.MANUAL_CARD) {
+      throw new ForbiddenException(
+        'Manual card entries are prohibited without verified provider capture.',
+      );
+    }
+    return this.recordPayment(actor, settlementId, dto, correlationId);
+  }
+
+  // Internal capture finalization only. Never expose this as a generic controller action.
+  async recordCapturedProviderPayment(
+    actor: JwtAccessPayload,
+    settlementId: string,
+    dto: CreateCheckoutPaymentDto,
+    operationId: string,
+  ) {
+    if (
+      dto.method !== CheckoutPaymentMethod.MANUAL_CARD ||
+      !operationId?.trim()
+    ) {
+      throw new BadRequestException('A captured provider operation is required.');
+    }
+    return this.recordPayment(
+      actor,
+      settlementId,
+      dto,
+      `provider-operation:${operationId}`,
+      operationId,
+    );
+  }
+
+  private async recordPayment(
+    actor: JwtAccessPayload,
+    settlementId: string,
+    dto: CreateCheckoutPaymentDto,
+    correlationId?: string,
+    capturedOperationId?: string,
+  ) {
+    if (dto.method === CheckoutPaymentMethod.MANUAL_CARD && !capturedOperationId) {
+      throw new ForbiddenException('Unverified card payment is forbidden.');
+    }
     this.assertPermission(actor, PERMISSIONS.CHECKOUT_WRITE);
     const shopId = requireShopId(actor);
     await this.requireChunk04(shopId);
@@ -378,6 +419,32 @@ export class CheckoutPaymentService {
       }
       if (paymentAmount.gt(settlement.amountDue)) {
         throw new BadRequestException('Payment exceeds settlement amount due');
+      }
+
+      if (capturedOperationId) {
+        const captured = await tx.paymentOperation.findFirst({
+          where: {
+            id: capturedOperationId,
+            shopId,
+            settlementId,
+            state: PaymentOperationState.CAPTURED,
+          },
+          select: {
+            amount: true,
+            currency: true,
+            checkoutPaymentId: true,
+          },
+        });
+        if (
+          !captured ||
+          captured.checkoutPaymentId ||
+          captured.currency !== settlement.currency ||
+          !roundMoneyDecimal(captured.amount, 4).eq(paymentAmount)
+        ) {
+          throw new ConflictException(
+            'A matching, unallocated captured provider payment is required.',
+          );
+        }
       }
 
       const newAmountDue = roundMoneyDecimal(

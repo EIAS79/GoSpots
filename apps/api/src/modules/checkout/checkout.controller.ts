@@ -1,6 +1,7 @@
 import {
   Body,
   Controller,
+  ForbiddenException,
   Get,
   Headers,
   Param,
@@ -9,6 +10,7 @@ import {
   UseGuards,
 } from '@nestjs/common';
 import { ApiTags } from '@nestjs/swagger';
+import { CheckoutPaymentMethod } from '@prisma/client';
 import {
   hashIdempotencyRequest,
   IDEMPOTENCY_SCOPES,
@@ -159,6 +161,11 @@ export class CheckoutController {
     @Headers('idempotency-key') idempotencyKey: string | undefined,
     @Req() req: RequestWithCorrelation,
   ) {
+    if (dto.method === CheckoutPaymentMethod.MANUAL_CARD) {
+      throw new ForbiddenException(
+        'Card payments require verified provider capture, not the generic checkout endpoint.',
+      );
+    }
     const shopId = requireShopId(user);
     return withClientIdempotency(
       this.prisma,

@@ -390,7 +390,7 @@ export class ProviderCheckoutPaymentService {
     }
 
     try {
-      const paymentState = await this.checkoutPayments.createPayment(
+      const paymentState = await this.checkoutPayments.recordCapturedProviderPayment(
         actor,
         operation.settlementId,
         {
@@ -400,7 +400,7 @@ export class ProviderCheckoutPaymentService {
           allocations: input.allocations,
           note: input.note,
         },
-        correlationId,
+        operation.id,
       );
       const checkoutPayment = await this.prisma.payment.findFirst({
         where: {
