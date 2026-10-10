@@ -226,9 +226,9 @@ export async function endedPlaySession(
 export async function settleAndSplit(
   page: Page,
   checkId: string,
-  methods: ['CASH' | 'MANUAL_CARD' | 'OTHER', 'CASH' | 'MANUAL_CARD' | 'OTHER'] = [
+  methods: ['CASH' | 'OTHER', 'CASH' | 'OTHER'] = [
     'CASH',
-    'MANUAL_CARD',
+    'OTHER',
   ],
 ) {
   const preview = await api<any>(page, 'POST', `/checkout/checks/${checkId}/preview`, {

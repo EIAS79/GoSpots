@@ -490,6 +490,27 @@ export class CheckoutPaymentService {
         },
       });
 
+      if (capturedOperationId) {
+        const claimed = await tx.paymentOperation.updateMany({
+          where: {
+            id: capturedOperationId,
+            shopId,
+            settlementId,
+            state: PaymentOperationState.CAPTURED,
+            checkoutPaymentId: null,
+          },
+          data: {
+            checkoutPaymentId: payment.id,
+            reconciliationRequired: false,
+            errorCode: null,
+            errorMessage: null,
+          },
+        });
+        if (claimed.count !== 1) {
+          throw new ConflictException('Captured payment was already allocated.');
+        }
+      }
+
       const cashMovement =
         dto.method === CheckoutPaymentMethod.CASH
           ? await this.cash.recordCashSale(tx, {

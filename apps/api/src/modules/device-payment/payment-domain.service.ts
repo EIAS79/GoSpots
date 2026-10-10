@@ -133,6 +133,16 @@ export class PaymentDomainService {
     if (amount.lte(0)) throw new BadRequestException('Payment amount must be greater than zero');
     const currency = String(input.currency ?? '').trim().toUpperCase();
     if (!currency) throw new BadRequestException('Payment currency is required');
+    if (input.settlementId) {
+      const settlement = await this.prisma.checkSettlement.findFirst({
+        where: { id: input.settlementId, shopId },
+        select: { currency: true },
+      });
+      if (!settlement) throw new NotFoundException('Settlement not found');
+      if (settlement.currency !== currency) {
+        throw new BadRequestException('Payment currency differs from settlement currency');
+      }
+    }
     const requestHash = hashIdempotencyRequest({
       provider,
       settlementId: input.settlementId ?? null,

@@ -21,3 +21,13 @@ Wave: W0/W1; active task: T-002 (checkout manual-card boundary)
 
 ## Last action
 Prepared the small T-002 API/service/test change as one batch with initial state tracking. Check resulting branch SHA and CI before claiming software completion.
+
+
+## W1 checkpoint handoff — 2026-10-10
+
+Current wave W1; draft PR #103; branch `agent/gospots-payment-integrity-20261009`; parent `72ee6dc1791d0280426bad98dbdeedeb3d8b74cd`. The commit containing this text is the new source checkpoint; retrieve exact SHA from PR #103 HEAD. Never use Edulytics infrastructure.
+24 files in this checkpoint (source, browser, tests, docs) documented in `W1_2026-10-09_CHECKPOINT_NOTES.md`. Preserve main and `apps/web/.vercel-release`.
+Do not assume status COMPLETE: T-002/T-003 pending exact-head Jest, API build, web tests, Playwright and provider reconciliation; T-006 only partial tenant negatives.
+Parent CI: API Jest 482/482 and Phase4 success; six browser E2E failures on direct MANUAL_CARD; Phase17 audit high/critical failure. Local-only checks pass, but not a complete repository build.
+Exact next action: inspect GitHub Actions for this new checkpoint SHA and categorize jobs. Check six browser paths, provider captured/duplicate/declined/UNKNOWN states, tenant foreign read/write/cancel/refund and reservation DST/email/date behavior. Diagnose any failure without diluting card capture enforcement. Then continue T-006 matrix and Phase17 dependency advisories. No merges or production release without separate approval.
+Next three: (1) exact-head acceptance, (2) expanded T-006 + T-003 integration, (3) dependency audit remediation.

@@ -175,6 +175,7 @@ function makeHarness() {
   const prisma: any = {
     paymentOperation,
     paymentTerminal: { findFirst: jest.fn().mockResolvedValue(null) },
+    checkSettlement: { findFirst: jest.fn().mockResolvedValue(null) },
     refund,
     paymentWebhookEvent,
     $transaction: jest.fn(async (fn: any) => fn(tx)),
@@ -321,4 +322,64 @@ describe('PaymentDomainService', () => {
       /not found/i,
     );
   });
+
+  it('rejects cross-tenant settlement references before creating a provider operation', async () => {
+    const h = makeHarness();
+    await expect(h.service.startPayment(actor('shop-2'), {
+      provider: 'fake', settlementId: 'shop-1-settlement', amount: '10', currency: 'PLN',
+    }, 'foreign-settlement')).rejects.toThrow('Settlement not found');
+    expect(h.prisma.checkSettlement.findFirst).toHaveBeenCalledWith({
+      where: { id: 'shop-1-settlement', shopId: 'shop-2' },
+      select: { currency: true },
+    });
+    expect(h.prisma.paymentOperation.create).not.toHaveBeenCalled();
+  });
+
+  it('rejects provider operations with a settlement currency mismatch', async () => {
+    const h = makeHarness();
+    h.prisma.checkSettlement.findFirst.mockResolvedValueOnce({ currency: 'PLN' });
+    await expect(h.service.startPayment(actor(), {
+      provider: 'fake', settlementId: 'our-settlement', amount: '10', currency: 'EUR',
+    }, 'wrong-currency')).rejects.toThrow('Payment currency differs from settlement currency');
+    expect(h.prisma.paymentOperation.create).not.toHaveBeenCalled();
+  });
+
+  it('preserves correctly scoped provider checkout settlement references', async () => {
+    const h = makeHarness();
+    h.prisma.checkSettlement.findFirst.mockResolvedValueOnce({ currency: 'PLN' });
+    const payment = await h.service.startPayment(actor(), {
+      provider: 'fake', settlementId: 'our-settlement', amount: '10', currency: 'PLN',
+    }, 'our-settlement-key');
+    expect(payment.state).toBe(PaymentOperationState.CAPTURED);
+    expect(h.prisma.paymentOperation.create).toHaveBeenCalledTimes(1);
+  });
+
+  it('denies another shop operation reconciliation, cancellation and refund', async () => {
+    const h = makeHarness();
+    const payment = await h.service.startPayment(actor('shop-1'), {
+      provider: 'fake', amount: '10', currency: 'PLN',
+    }, 'shop-a-payment');
+    await expect(h.service.reconcile(actor('shop-2'), payment.id))
+      .rejects.toThrow('Payment operation not found');
+    await expect(h.service.cancel(actor('shop-2'), payment.id))
+      .rejects.toThrow('Payment operation not found');
+    await expect(h.service.createRefund(actor('shop-2'), payment.id, {
+      amount: '5', allocations: [{ snapshotId: 'foreign-snapshot', amount: '5' }],
+    }, 'foreign-refund')).rejects.toThrow('Payment operation not found');
+    expect(h.prisma.paymentOperation.create).toHaveBeenCalledTimes(1);
+    expect(h.prisma.refund.create).not.toHaveBeenCalled();
+  });
+
+  it('denies provider payment start without checkout.write before reading a terminal', async () => {
+    const h = makeHarness();
+    const reader = {
+      sub: 'reader', shopId: 'shop-1', shopRole: 'CASHIER', perms: 'checkout.read',
+    } as JwtAccessPayload;
+    await expect(h.service.startPayment(reader, {
+      provider: 'fake', amount: '10', currency: 'PLN',
+    }, 'reader-denied')).rejects.toThrow('Missing checkout.write');
+    expect(h.prisma.paymentTerminal.findFirst).not.toHaveBeenCalled();
+    expect(h.prisma.paymentOperation.create).not.toHaveBeenCalled();
+  });
+
 });

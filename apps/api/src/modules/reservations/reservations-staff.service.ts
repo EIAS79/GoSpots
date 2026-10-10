@@ -50,6 +50,8 @@ import {
 import { toMoneyNumber } from '../../common/money.util';
 import { loadShopCurrency } from '../../common/currency-stamp.util';
 import { postReservationBilled } from '../../common/ledger-post.util';
+import { loadShopVenueTimeContext } from '../../common/shop-venue-time.util';
+import { formatReservationWindow } from '../../common/reservation-display.util';
 
 /**
  * Staff reservation CRUD API surface.
@@ -68,23 +70,6 @@ export class ReservationsStaffService {
     private readonly mail: MailService,
     private readonly config: ConfigService,
   ) {}
-
-  private formatWindow(startsAt: Date, endsAt: Date) {
-    const date = startsAt.toLocaleDateString('en-US', {
-      weekday: 'short',
-      month: 'short',
-      day: 'numeric',
-    });
-    const start = startsAt.toLocaleTimeString('en-US', {
-      hour: 'numeric',
-      minute: '2-digit',
-    });
-    const end = endsAt.toLocaleTimeString('en-US', {
-      hour: 'numeric',
-      minute: '2-digit',
-    });
-    return `${date} · ${start}–${end}`;
-  }
 
   private async logBooking(
     actor: JwtAccessPayload,
@@ -106,13 +91,14 @@ export class ReservationsStaffService {
     title: string,
     body: string,
     startsAt: Date,
-    tab: ReservationNotificationTab = 'schedule',
+    tab: ReservationNotificationTab,
+    timeZone: string,
   ) {
     if (!staffAlert) return;
     await this.notifications.recordReservationEvent(shopId, {
       title,
       body,
-      href: reservationSessionsHref(startsAt, tab),
+      href: reservationSessionsHref(startsAt, tab, timeZone),
     });
   }
 
@@ -293,8 +279,9 @@ export class ReservationsStaffService {
           },
           include: { resource: { include: { category: true } } },
         });
+    const { resolvedTimeZone } = await loadShopVenueTimeContext(this.prisma, shopId);
     const unitLabel = row.resource?.name ?? 'unassigned unit';
-    const window = this.formatWindow(row.startsAt, row.endsAt);
+    const window = formatReservationWindow(row.startsAt, row.endsAt, resolvedTimeZone);
     await this.logBooking(
       actor,
       'reservation.create',
@@ -317,6 +304,7 @@ export class ReservationsStaffService {
       `${row.guestName} · ${unitLabel} · ${window}`,
       row.startsAt,
       notifyTab,
+      resolvedTimeZone,
     );
 
     // Raw token once (hash-only in DB). Staff/clients that previously read
@@ -528,8 +516,9 @@ export class ReservationsStaffService {
         });
       }
     }
+    const { resolvedTimeZone } = await loadShopVenueTimeContext(this.prisma, shopId);
     const unitLabel = row.resource?.name ?? 'unassigned unit';
-    const window = this.formatWindow(row.startsAt, row.endsAt);
+    const window = formatReservationWindow(row.startsAt, row.endsAt, resolvedTimeZone);
     const canceled =
       dto.status === ReservationStatus.CANCELED &&
       existing.status !== ReservationStatus.CANCELED;
@@ -575,6 +564,7 @@ export class ReservationsStaffService {
         `${row.guestName} · ${categoryName} · ${unitLabel} · ${window}`,
         row.startsAt,
         notifyTab,
+        resolvedTimeZone,
       );
     }
 
@@ -585,21 +575,21 @@ export class ReservationsStaffService {
         await this.notifications.recordReservationEvent(shopId, {
           title: dining ? 'Guest checked in at table' : 'Guest checked in',
           body: `${row.guestName} · ${unitLabel}`,
-          href: reservationSessionsHref(row.startsAt, notifyTab),
+          href: reservationSessionsHref(row.startsAt, notifyTab, resolvedTimeZone),
           dedupeKey: `checkin:${row.id}`,
         });
       } else if (dto.status === ReservationStatus.COMPLETED) {
         await this.notifications.recordReservationEvent(shopId, {
           title: dining ? 'Guest left table' : 'Guest left session',
           body: `${row.guestName} · ${unitLabel} · awaiting payment if not paid`,
-          href: reservationSessionsHref(row.startsAt, notifyTab),
+          href: reservationSessionsHref(row.startsAt, notifyTab, resolvedTimeZone),
           dedupeKey: `guest_left:${row.id}`,
         });
       } else if (dto.status === ReservationStatus.NO_SHOW) {
         await this.notifications.recordReservationEvent(shopId, {
           title: dining ? 'Table no-show' : 'Booking no-show',
           body: `${row.guestName} · ${unitLabel}`,
-          href: reservationSessionsHref(row.startsAt, notifyTab),
+          href: reservationSessionsHref(row.startsAt, notifyTab, resolvedTimeZone),
           dedupeKey: `no_show:${row.id}`,
         });
       }
@@ -638,6 +628,7 @@ export class ReservationsStaffService {
             unitName: unitLabel,
             startsAt: row.startsAt,
             endsAt: row.endsAt,
+            timeZone: resolvedTimeZone,
             status: row.status,
             notes: row.notes,
             statusPath,
@@ -665,8 +656,9 @@ export class ReservationsStaffService {
       aggregateId: id,
     });
 
+    const { resolvedTimeZone } = await loadShopVenueTimeContext(this.prisma, shopId);
     const unitLabel = existing.resource?.name ?? 'unassigned unit';
-    const window = this.formatWindow(existing.startsAt, existing.endsAt);
+    const window = formatReservationWindow(existing.startsAt, existing.endsAt, resolvedTimeZone);
 
     if (
       (existing.guestTokenHash || existing.guestToken) &&
@@ -694,6 +686,7 @@ export class ReservationsStaffService {
             unitName: unitLabel,
             startsAt: existing.startsAt,
             endsAt: existing.endsAt,
+            timeZone: resolvedTimeZone,
             status: ReservationStatus.CANCELED,
             notes: existing.notes,
             statusPath,
@@ -745,6 +738,7 @@ export class ReservationsStaffService {
         `${existing.guestName} · ${unitLabel} · ${window}`,
         existing.startsAt,
         notifyTab,
+        resolvedTimeZone,
       );
     }
 
@@ -770,6 +764,7 @@ export class ReservationsStaffService {
       startsAt: Date;
       endsAt: Date;
       status: string;
+      timeZone?: string;
       notes?: string | null;
       statusPath?: string | null;
       isDining?: boolean;
@@ -786,6 +781,7 @@ export class ReservationsStaffService {
       startsAt: input.startsAt,
       endsAt: input.endsAt,
       status: input.status,
+      timeZone: input.timeZone,
       statusUrl,
       notes: input.notes,
       isDining: input.isDining,

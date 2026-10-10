@@ -1,4 +1,5 @@
 import type { Prisma } from '@prisma/client';
+import { reservationVenueDateKey } from './reservation-display.util';
 
 export type ReservationNotificationTab = 'dining' | 'schedule' | 'events';
 
@@ -93,10 +94,10 @@ export function guestVenueStatusPath(
 export function reservationSessionsHref(
   startsAt: Date,
   tab: ReservationNotificationTab,
+  timeZone = 'UTC',
 ): string {
   if (tab === 'events') return '/sessions?tab=events';
-  const pad = (n: number) => String(n).padStart(2, '0');
-  const date = `${startsAt.getFullYear()}-${pad(startsAt.getMonth() + 1)}-${pad(startsAt.getDate())}`;
+  const date = reservationVenueDateKey(startsAt, timeZone);
   return sanitizeAppRelativeHref(`/sessions?tab=${tab}&date=${date}`);
 }
 

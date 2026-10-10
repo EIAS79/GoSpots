@@ -32,3 +32,17 @@ Current ticket: T-002 — manual-card boundary
 - Phase 17 security audit detected 2 critical and 4 high production dependency advisories, including Next.js, proxy-addr, sharp and source-map-js; release remains NO-GO pending independent security remediation and re-audit.
 - GoSpots Vercel project identified under eias79s-projects; branch Git push registered a CANCELED deployment attempt (no build/READY), proving branch build suppression but not eliminating deployment records.
 - This is NOT proof of a certified card capture or general production readiness.
+
+
+## W1 consolidated checkpoint — 2026-10-10 (commit represented by this file)
+
+Branch: `agent/gospots-payment-integrity-20261009`, draft PR #103.
+Parent SHA: `72ee6dc1791d0280426bad98dbdeedeb3d8b74cd`.
+New checkpoint commit SHA: see `git rev-parse HEAD` / GitHub PR #103 head (cannot self-reference a SHA in the commit contents).
+Current wave: W1; T-002 IMPLEMENTED/CI_PENDING; T-003 IMPLEMENTED/CI_PENDING; T-006 PARTIAL/CI_PENDING.
+Remote update is authorized only for this one consolidated checkpoint. Never merge or deploy without separate approval.
+Changed sources/tests and exact local evidence in `W1_2026-10-09_CHECKPOINT_NOTES.md`.
+Local: archive checksum PASS, synthetic 24-file transform PASS, four time-zone checks PASS under three host zones, proposed TS fragments parse PASS. Complete repo lint, Jest, build, browser E2E: NOT RUN locally.
+Earlier SHA: API 104/104 suites, 482/482 tests PASS; Phase 4 PASS; general CI and Phase17 browser E2E FAIL six manual-card test scenarios; Phase17 dependency audit FAIL (two critical, four high, ten moderate, three low).
+Status cannot advance to ACCEPTED until exact-new-head green tests. No production Adyen, fiscal or database work performed.
+Next: (1) exact-head CI/provider/regression and browser tests, (2) T-003/T-006 deeper matrix, (3) Phase17 dependency remediation.

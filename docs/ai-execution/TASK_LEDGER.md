@@ -23,3 +23,15 @@ Source: 2026-10-09 continuation kit T-001–T-017 and live main `b3e444e4deed5b9
 | T-017 | W3/W4 | NOT_STARTED | Per-vertical/geography/provider/hardware support evidence matrix |
 
 **Required discipline:** All T statuses must be rechecked against exact-HEAD source and tests; NOT_STARTED means no accepted new ticket work recorded in this continuation, not proof the underlying feature is absent.
+
+
+## W1 consolidated checkpoint — 2026-10-10
+
+| Ticket | Wave | Status | Evidence / remaining gate |
+| --- | --- | --- | --- |
+| T-002 | W1 | IMPLEMENTED / CI_PENDING / NOT ACCEPTED | HTTP 403 on generic MANUAL_CARD, atomic provider capture linkage, browser fixture correction, role and payment-invariant regressions; verify exact SHA API + six browser tests and provider recovery |
+| T-003 | W1 | IMPLEMENTED / CI_PENDING / NOT ACCEPTED | staff/public/email/href venue TZ rendering, UTC midnight, DST spring/fall; verify live integration and PR #95 scope separately |
+| T-006 | W1 | PARTIAL / CI_PENDING | checkout/provider shopId/currency and permission-negative cases added; broader RLS/IDOR/worker/roles matrix outstanding |
+| T-010/P17 | Later wave | BLOCKED | high/critical pnpm production advisories; independent dependency remediation and green release gate required |
+
+Branch `agent/gospots-payment-integrity-20261009` parent `72ee6dc1791d0280426bad98dbdeedeb3d8b74cd`. New SHA is the HEAD containing this ledger. Browser tests, full build and deployment certification are not claimed from standalone tests.

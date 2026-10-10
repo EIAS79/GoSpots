@@ -104,7 +104,7 @@ test('E2E-07 cash shift reconciles sales movements count variance and approval',
 
   const check = await createGuestCheckFromUi(page, E2E.venues.cash, 'E2E Cash Check');
   await completeLegacyOrder(page, check.id, 'e2e-item-cash', 'E2E Cash Order');
-  const { state } = await settleAndSplit(page, check.id, ['CASH', 'MANUAL_CARD']);
+  const { state } = await settleAndSplit(page, check.id, ['CASH', 'OTHER']);
   await closePaidCheck(page, check.id);
   const cashPayment = state.payments.find((payment: any) => payment.method === 'CASH');
   expect(cashPayment).toBeTruthy();
