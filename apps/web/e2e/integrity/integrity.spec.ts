@@ -38,7 +38,22 @@ test('E2E-06 payment UNKNOWN reconciles the same provider transaction', async ({
   await loginOwner(page);
   await bindVenue(page, E2E.venues.payment);
 
+  // A deliberate forged double-submit header must still be rejected.
+  const csrfDenied = await page.request.post('/api/v1/devices', {
+    data: {
+      label: 'Must Not Create: Bad CSRF',
+      type: 'PAYMENT_TERMINAL',
+      provider: 'fake',
+      externalTerminalId: 'e2e-csrf-invalid-must-not-create',
+    },
+    headers: { 'x-csrf-token': 'invalid-e2e-csrf-token' },
+    failOnStatusCode: false,
+  });
+  expect(csrfDenied.status()).toBe(403);
+  expect((await csrfDenied.json()).code).toBe('CSRF_INVALID');
+
   const devices = await api<{ devices: Array<any> }>(page, 'GET', '/devices');
+  expect(devices.devices.some((device) => device.label === 'Must Not Create: Bad CSRF')).toBe(false);
   let terminal = devices.devices.find(
     (device) => device.type === 'PAYMENT_TERMINAL' && device.provider === 'fake',
   )?.terminal;
@@ -55,7 +70,7 @@ test('E2E-06 payment UNKNOWN reconciles the same provider transaction', async ({
   }
   expect(terminal?.id).toBeTruthy();
 
-  const key = 'e2e-payment-timeout-captured';
+  const key = `e2e-payment-timeout-captured-${crypto.randomUUID()}`;
   const request = {
     provider: 'fake',
     terminalId: terminal.id,

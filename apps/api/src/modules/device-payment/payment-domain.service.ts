@@ -12,9 +12,7 @@ import {
   Prisma,
 } from '@prisma/client';
 import type { PaymentOperation } from '@prisma/client';
-import {
-  hashIdempotencyRequest,
-} from '../../common/idempotency.util';
+import { hashIdempotencyRequest } from '../../common/idempotency.util';
 import { hasPermission, PERMISSIONS } from '../../common/permissions';
 import {
   roundMoneyDecimal,
@@ -58,7 +56,8 @@ export type CreateProviderRefundInput = {
 
 function isUniqueViolation(error: unknown): boolean {
   return (
-    error instanceof Prisma.PrismaClientKnownRequestError && error.code === 'P2002'
+    error instanceof Prisma.PrismaClientKnownRequestError &&
+    error.code === 'P2002'
   );
 }
 
@@ -66,7 +65,9 @@ function requiredKey(raw: string | undefined | null): string {
   const key = String(raw ?? '').trim();
   if (!key) throw new BadRequestException('Idempotency-Key header is required');
   if (key.length > 128) {
-    throw new BadRequestException('Idempotency-Key must be at most 128 characters');
+    throw new BadRequestException(
+      'Idempotency-Key must be at most 128 characters',
+    );
   }
   return key;
 }
@@ -89,12 +90,16 @@ export class PaymentDomainService {
 
   private async requirePayments(shopId: string) {
     if (!(await this.flags.isFeatureEnabled(shopId, 'payments_v1'))) {
-      throw new ForbiddenException('Provider payments are not enabled for this venue');
+      throw new ForbiddenException(
+        'Provider payments are not enabled for this venue',
+      );
     }
   }
 
-  private paymentStateFromConnector(result: ConnectorPaymentResult): PaymentOperationState {
-    return result.state as PaymentOperationState;
+  private paymentStateFromConnector(
+    result: ConnectorPaymentResult,
+  ): PaymentOperationState {
+    return result.state;
   }
 
   private serializeOperation<T extends PaymentOperation>(operation: T) {
@@ -112,7 +117,12 @@ export class PaymentDomainService {
     await this.requirePayments(shopId);
     const operation = await this.prisma.paymentOperation.findFirst({
       where: { id, shopId },
-      include: { refunds: { include: { allocations: true }, orderBy: { createdAt: 'asc' } } },
+      include: {
+        refunds: {
+          include: { allocations: true },
+          orderBy: { createdAt: 'asc' },
+        },
+      },
     });
     if (!operation) throw new NotFoundException('Payment operation not found');
     return this.serializeOperation(operation);
@@ -130,9 +140,13 @@ export class PaymentDomainService {
     const connector = this.connectors.resolve(provider);
     const idempotencyKey = requiredKey(idempotencyKeyRaw);
     const amount = roundMoneyDecimal(input.amount, 4);
-    if (amount.lte(0)) throw new BadRequestException('Payment amount must be greater than zero');
-    const currency = String(input.currency ?? '').trim().toUpperCase();
-    if (!currency) throw new BadRequestException('Payment currency is required');
+    if (amount.lte(0))
+      throw new BadRequestException('Payment amount must be greater than zero');
+    const currency = String(input.currency ?? '')
+      .trim()
+      .toUpperCase();
+    if (!currency)
+      throw new BadRequestException('Payment currency is required');
     if (input.settlementId) {
       const settlement = await this.prisma.checkSettlement.findFirst({
         where: { id: input.settlementId, shopId },
@@ -140,7 +154,9 @@ export class PaymentDomainService {
       });
       if (!settlement) throw new NotFoundException('Settlement not found');
       if (settlement.currency !== currency) {
-        throw new BadRequestException('Payment currency differs from settlement currency');
+        throw new BadRequestException(
+          'Payment currency differs from settlement currency',
+        );
       }
     }
     const requestHash = hashIdempotencyRequest({
@@ -155,10 +171,14 @@ export class PaymentDomainService {
     const uniqueWhere = {
       shopId_provider_idempotencyKey: { shopId, provider, idempotencyKey },
     } as const;
-    const existing = await this.prisma.paymentOperation.findUnique({ where: uniqueWhere });
+    const existing = await this.prisma.paymentOperation.findUnique({
+      where: uniqueWhere,
+    });
     if (existing) {
       if (existing.requestHash !== requestHash) {
-        throw new ConflictException('Idempotency-Key reused with a different payment request');
+        throw new ConflictException(
+          'Idempotency-Key reused with a different payment request',
+        );
       }
       return this.serializeOperation(existing);
     }
@@ -175,7 +195,8 @@ export class PaymentDomainService {
         },
         select: { externalTerminalId: true },
       });
-      if (!terminal) throw new NotFoundException('Active payment terminal not found');
+      if (!terminal)
+        throw new NotFoundException('Active payment terminal not found');
       terminalExternalId = terminal.externalTerminalId;
     }
 
@@ -197,15 +218,22 @@ export class PaymentDomainService {
       });
     } catch (error) {
       if (!isUniqueViolation(error)) throw error;
-      const replay = await this.prisma.paymentOperation.findUnique({ where: uniqueWhere });
+      const replay = await this.prisma.paymentOperation.findUnique({
+        where: uniqueWhere,
+      });
       if (!replay) throw error;
       if (replay.requestHash !== requestHash) {
-        throw new ConflictException('Idempotency-Key reused with a different payment request');
+        throw new ConflictException(
+          'Idempotency-Key reused with a different payment request',
+        );
       }
       return this.serializeOperation(replay);
     }
 
-    this.states.assertTransition(operation.state, PaymentOperationState.PROCESSING);
+    this.states.assertTransition(
+      operation.state,
+      PaymentOperationState.PROCESSING,
+    );
     operation = await this.prisma.paymentOperation.update({
       where: { id: operation.id },
       data: { state: PaymentOperationState.PROCESSING },
@@ -223,10 +251,14 @@ export class PaymentDomainService {
       });
     } catch (error) {
       result = {
-        providerPaymentId: operation.providerPaymentId ?? `unknown:${operation.id}`,
+        providerPaymentId:
+          operation.providerPaymentId ?? `unknown:${operation.id}`,
         state: 'UNKNOWN',
         errorCode: 'CONNECTOR_UNCERTAIN',
-        errorMessage: error instanceof Error ? error.message : 'Connector outcome is unknown',
+        errorMessage:
+          error instanceof Error
+            ? error.message
+            : 'Connector outcome is unknown',
       };
     }
 
@@ -239,7 +271,9 @@ export class PaymentDomainService {
         providerPaymentId: result.providerPaymentId,
         state: nextState,
         reconciliationRequired: this.states.reconciliationRequired(nextState),
-        providerPayload: (result.providerPayload ?? undefined) as Prisma.InputJsonValue | undefined,
+        providerPayload: (result.providerPayload ?? undefined) as
+          | Prisma.InputJsonValue
+          | undefined,
         errorCode: result.errorCode ?? null,
         errorMessage: result.errorMessage ?? null,
         capturedAt: nextState === PaymentOperationState.CAPTURED ? now : null,
@@ -254,13 +288,19 @@ export class PaymentDomainService {
     this.assertPermission(actor, PERMISSIONS.CHECKOUT_WRITE);
     const shopId = requireShopId(actor);
     await this.requirePayments(shopId);
-    const operation = await this.prisma.paymentOperation.findFirst({ where: { id, shopId } });
+    const operation = await this.prisma.paymentOperation.findFirst({
+      where: { id, shopId },
+    });
     if (!operation) throw new NotFoundException('Payment operation not found');
     if (operation.state !== PaymentOperationState.UNKNOWN) {
-      throw new ConflictException('Only UNKNOWN payment operations require reconciliation');
+      throw new ConflictException(
+        'Only UNKNOWN payment operations require reconciliation',
+      );
     }
     if (!operation.providerPaymentId) {
-      throw new ConflictException('Provider payment identifier is unavailable for reconciliation');
+      throw new ConflictException(
+        'Provider payment identifier is unavailable for reconciliation',
+      );
     }
     const connector = this.connectors.resolve(operation.provider);
     const result = await connector.getPayment({
@@ -268,20 +308,31 @@ export class PaymentDomainService {
       operationId: operation.id,
     });
     const nextState = this.paymentStateFromConnector(result);
-    this.states.assertTransition(operation.state, nextState, { reconciliation: true });
+    this.states.assertTransition(operation.state, nextState, {
+      reconciliation: true,
+    });
     const now = new Date();
     const updated = await this.prisma.paymentOperation.update({
       where: { id: operation.id },
       data: {
         state: nextState,
         reconciliationRequired: this.states.reconciliationRequired(nextState),
-        providerPayload: (result.providerPayload ?? undefined) as Prisma.InputJsonValue | undefined,
+        providerPayload: (result.providerPayload ?? undefined) as
+          | Prisma.InputJsonValue
+          | undefined,
         errorCode: result.errorCode ?? null,
         errorMessage: result.errorMessage ?? null,
         lastReconciledAt: now,
-        capturedAt: nextState === PaymentOperationState.CAPTURED ? now : operation.capturedAt,
-        failedAt: nextState === PaymentOperationState.FAILED ? now : operation.failedAt,
-        canceledAt: nextState === PaymentOperationState.CANCELED ? now : operation.canceledAt,
+        capturedAt:
+          nextState === PaymentOperationState.CAPTURED
+            ? now
+            : operation.capturedAt,
+        failedAt:
+          nextState === PaymentOperationState.FAILED ? now : operation.failedAt,
+        canceledAt:
+          nextState === PaymentOperationState.CANCELED
+            ? now
+            : operation.canceledAt,
       },
     });
     return this.serializeOperation(updated);
@@ -291,14 +342,22 @@ export class PaymentDomainService {
     this.assertPermission(actor, PERMISSIONS.CHECKOUT_WRITE);
     const shopId = requireShopId(actor);
     await this.requirePayments(shopId);
-    const operation = await this.prisma.paymentOperation.findFirst({ where: { id, shopId } });
-    if (!operation) throw new NotFoundException('Payment operation not found');
-    if (!operation.providerPaymentId) throw new ConflictException('Provider payment has not been created');
-    this.states.assertTransition(operation.state, PaymentOperationState.CANCELED);
-    const result = await this.connectors.resolve(operation.provider).cancelPayment({
-      providerPaymentId: operation.providerPaymentId,
-      operationId: operation.id,
+    const operation = await this.prisma.paymentOperation.findFirst({
+      where: { id, shopId },
     });
+    if (!operation) throw new NotFoundException('Payment operation not found');
+    if (!operation.providerPaymentId)
+      throw new ConflictException('Provider payment has not been created');
+    this.states.assertTransition(
+      operation.state,
+      PaymentOperationState.CANCELED,
+    );
+    const result = await this.connectors
+      .resolve(operation.provider)
+      .cancelPayment({
+        providerPaymentId: operation.providerPaymentId,
+        operationId: operation.id,
+      });
     const nextState = this.paymentStateFromConnector(result);
     this.states.assertTransition(operation.state, nextState);
     const updated = await this.prisma.paymentOperation.update({
@@ -306,8 +365,11 @@ export class PaymentDomainService {
       data: {
         state: nextState,
         reconciliationRequired: this.states.reconciliationRequired(nextState),
-        providerPayload: (result.providerPayload ?? undefined) as Prisma.InputJsonValue | undefined,
-        canceledAt: nextState === PaymentOperationState.CANCELED ? new Date() : null,
+        providerPayload: (result.providerPayload ?? undefined) as
+          | Prisma.InputJsonValue
+          | undefined,
+        canceledAt:
+          nextState === PaymentOperationState.CANCELED ? new Date() : null,
       },
     });
     return this.serializeOperation(updated);
@@ -325,37 +387,43 @@ export class PaymentDomainService {
     const idempotencyKey = requiredKey(idempotencyKeyRaw);
     const operation = await this.prisma.paymentOperation.findFirst({
       where: { id: paymentOperationId, shopId },
-      include: { refunds: { where: { state: RefundState.SUCCEEDED }, select: { amount: true } } },
+      include: {
+        refunds: {
+          where: { state: RefundState.SUCCEEDED },
+          select: { amount: true },
+        },
+      },
     });
     if (!operation) throw new NotFoundException('Payment operation not found');
-    if (
-      operation.state !== PaymentOperationState.CAPTURED &&
-      operation.state !== PaymentOperationState.PARTIALLY_REFUNDED
-    ) {
-      throw new ConflictException('Only captured payments can be refunded');
-    }
-    if (!operation.providerPaymentId) throw new ConflictException('Provider payment identifier is missing');
+    if (!operation.providerPaymentId)
+      throw new ConflictException('Provider payment identifier is missing');
 
     const amount = roundMoneyDecimal(input.amount, 4);
-    if (amount.lte(0)) throw new BadRequestException('Refund amount must be greater than zero');
-    if (!input.allocations.length) throw new BadRequestException('Refund allocations are required');
+    if (amount.lte(0))
+      throw new BadRequestException('Refund amount must be greater than zero');
+    if (!input.allocations.length)
+      throw new BadRequestException('Refund allocations are required');
     const normalizedAllocations = input.allocations.map((allocation) => {
       if (!allocation.paymentAllocationId && !allocation.snapshotId) {
-        throw new BadRequestException('Each refund allocation needs paymentAllocationId or snapshotId');
+        throw new BadRequestException(
+          'Each refund allocation needs paymentAllocationId or snapshotId',
+        );
       }
       const allocationAmount = roundMoneyDecimal(allocation.amount, 4);
-      if (allocationAmount.lte(0)) throw new BadRequestException('Refund allocation amount must be greater than zero');
+      if (allocationAmount.lte(0))
+        throw new BadRequestException(
+          'Refund allocation amount must be greater than zero',
+        );
       return { ...allocation, amount: allocationAmount };
     });
-    const allocationTotal = sumMoneyDecimal(...normalizedAllocations.map((row) => row.amount));
+    const allocationTotal = sumMoneyDecimal(
+      ...normalizedAllocations.map((row) => row.amount),
+    );
     if (!allocationTotal.eq(amount)) {
-      throw new BadRequestException('Refund allocation total must equal refund amount');
+      throw new BadRequestException(
+        'Refund allocation total must equal refund amount',
+      );
     }
-    const alreadyRefunded = sumMoneyDecimal(...operation.refunds.map((refund) => refund.amount));
-    if (alreadyRefunded.add(amount).gt(operation.amount)) {
-      throw new BadRequestException('Refund exceeds captured payment amount');
-    }
-
     const requestHash = hashIdempotencyRequest({
       paymentOperationId,
       amount: serializeMoney(amount),
@@ -379,12 +447,71 @@ export class PaymentDomainService {
     });
     if (existing) {
       if (existing.requestHash !== requestHash) {
-        throw new ConflictException('Idempotency-Key reused with a different refund request');
+        throw new ConflictException(
+          'Idempotency-Key reused with a different refund request',
+        );
       }
       return existing;
     }
 
-    const refund = await this.prisma.$transaction(async (tx) => {
+    const reservation = await this.prisma.$transaction(async (tx) => {
+      // Serialize refund reservations for this captured provider operation.
+      // Counting pending/UNKNOWN as reserved prevents different-key operators
+      // from initiating two full refunds while provider callbacks are in flight.
+      const locked = await tx.$queryRaw<Array<{ id: string }>>`
+        SELECT "id" FROM "PaymentOperation"
+        WHERE "id" = ${paymentOperationId} AND "shopId" = ${shopId}
+        FOR UPDATE
+      `;
+      if (locked.length !== 1)
+        throw new NotFoundException('Payment operation not found');
+
+      // Repeat the same-key lookup AFTER the row lock: simultaneous callers
+      // must share the first durable reservation and must not call Adyen twice.
+      const existingLocked = await tx.refund.findUnique({
+        where: uniqueWhere,
+        include: { allocations: true },
+      });
+      if (existingLocked) {
+        if (existingLocked.requestHash !== requestHash) {
+          throw new ConflictException(
+            'Idempotency-Key reused with a different refund request',
+          );
+        }
+        return { refund: existingLocked, replay: true } as const;
+      }
+      const current = await tx.paymentOperation.findFirst({
+        where: { id: paymentOperationId, shopId },
+        select: { state: true },
+      });
+      if (
+        !current ||
+        (current.state !== PaymentOperationState.CAPTURED &&
+          current.state !== PaymentOperationState.PARTIALLY_REFUNDED)
+      ) {
+        throw new ConflictException('Only captured payments can be refunded');
+      }
+      const reserved = await tx.refund.aggregate({
+        where: {
+          shopId,
+          paymentOperationId,
+          state: {
+            in: [
+              RefundState.CREATED,
+              RefundState.PROCESSING,
+              RefundState.UNKNOWN,
+              RefundState.SUCCEEDED,
+            ],
+          },
+        },
+        _sum: { amount: true },
+      });
+      const alreadyReserved = reserved._sum.amount ?? new Prisma.Decimal(0);
+      if (alreadyReserved.add(amount).gt(operation.amount)) {
+        throw new ConflictException(
+          'Refund exceeds the remaining captured amount including pending refunds',
+        );
+      }
       const created = await tx.refund.create({
         data: {
           shopId,
@@ -407,9 +534,12 @@ export class PaymentDomainService {
           amount: allocation.amount,
         })),
       });
-      return created;
+      return { refund: created, replay: false } as const;
     });
+    if (reservation.replay) return reservation.refund;
+    const refund = reservation.refund;
 
+    // Provider I/O is intentionally OUTSIDE the locked database transaction.
     let result: ConnectorRefundResult;
     try {
       result = await this.connectors.resolve(operation.provider).refundPayment({
@@ -425,38 +555,80 @@ export class PaymentDomainService {
         providerRefundId: `unknown:${refund.id}`,
         state: 'UNKNOWN',
         errorCode: 'CONNECTOR_UNCERTAIN',
-        errorMessage: error instanceof Error ? error.message : 'Refund outcome is unknown',
+        errorMessage:
+          error instanceof Error ? error.message : 'Refund outcome is unknown',
       };
     }
 
-    const refundState = result.state as RefundState;
+    const refundState = result.state;
     const now = new Date();
-    const updated = await this.prisma.refund.update({
-      where: { id: refund.id },
-      data: {
-        providerRefundId: result.providerRefundId,
-        state: refundState,
-        providerPayload: (result.providerPayload ?? undefined) as Prisma.InputJsonValue | undefined,
-        errorCode: result.errorCode ?? null,
-        errorMessage: result.errorMessage ?? null,
-        succeededAt: refundState === RefundState.SUCCEEDED ? now : null,
-        failedAt: refundState === RefundState.FAILED ? now : null,
-      },
-      include: { allocations: true },
-    });
-
-    if (refundState === RefundState.SUCCEEDED) {
-      const refundedAfter = alreadyRefunded.add(amount);
-      const nextState = refundedAfter.eq(operation.amount)
-        ? PaymentOperationState.REFUNDED
-        : PaymentOperationState.PARTIALLY_REFUNDED;
-      this.states.assertTransition(operation.state, nextState);
-      await this.prisma.paymentOperation.update({
-        where: { id: operation.id },
-        data: { state: nextState },
+    // The provider call has finished: only NOW take the short-lived database
+    // lock, atomically recording its outcome and recalculating the operation
+    // from every confirmed refund (never from a stale pre-call snapshot).
+    return this.prisma.$transaction(async (tx) => {
+      const locked = await tx.$queryRaw<Array<{ id: string }>>`
+        SELECT "id" FROM "PaymentOperation"
+        WHERE "id" = ${paymentOperationId} AND "shopId" = ${shopId}
+        FOR UPDATE
+      `;
+      if (locked.length !== 1) {
+        throw new NotFoundException('Payment operation not found');
+      }
+      const latest = await tx.refund.findUnique({
+        where: { id: refund.id },
+        include: { allocations: true },
       });
-    }
-    return updated;
+      if (!latest) throw new NotFoundException('Refund not found');
+      // A signed provider callback may already have confirmed the refund.
+      // A late UNKNOWN/FAILED transport response must never undo it.
+      if (latest.state === RefundState.SUCCEEDED) return latest;
+      const updated = await tx.refund.update({
+        where: { id: refund.id },
+        data: {
+          providerRefundId: result.providerRefundId,
+          state: refundState,
+          providerPayload: (result.providerPayload ?? undefined) as
+            | Prisma.InputJsonValue
+            | undefined,
+          errorCode: result.errorCode ?? null,
+          errorMessage: result.errorMessage ?? null,
+          succeededAt: refundState === RefundState.SUCCEEDED ? now : null,
+          failedAt: refundState === RefundState.FAILED ? now : null,
+        },
+        include: { allocations: true },
+      });
+      if (refundState === RefundState.SUCCEEDED) {
+        const totals = await tx.refund.aggregate({
+          where: {
+            shopId,
+            paymentOperationId,
+            state: RefundState.SUCCEEDED,
+          },
+          _sum: { amount: true },
+        });
+        const refundedTotal = totals._sum.amount ?? new Prisma.Decimal(0);
+        if (refundedTotal.gt(operation.amount)) {
+          throw new ConflictException(
+            'Confirmed refunds exceed captured amount',
+          );
+        }
+        const nextState = refundedTotal.eq(operation.amount)
+          ? PaymentOperationState.REFUNDED
+          : PaymentOperationState.PARTIALLY_REFUNDED;
+        const current = await tx.paymentOperation.findFirst({
+          where: { id: operation.id, shopId },
+          select: { state: true },
+        });
+        if (!current)
+          throw new NotFoundException('Payment operation not found');
+        this.states.assertTransition(current.state, nextState);
+        await tx.paymentOperation.update({
+          where: { id: operation.id },
+          data: { state: nextState },
+        });
+      }
+      return updated;
+    });
   }
 
   async ingestNormalizedWebhook(input: {
@@ -476,7 +648,9 @@ export class PaymentDomainService {
         eventId: input.eventId,
       },
     } as const;
-    const existing = await this.prisma.paymentWebhookEvent.findUnique({ where: uniqueWhere });
+    const existing = await this.prisma.paymentWebhookEvent.findUnique({
+      where: uniqueWhere,
+    });
     if (existing) return { duplicate: true, event: existing };
 
     const operation = await this.prisma.paymentOperation.findFirst({
@@ -505,9 +679,13 @@ export class PaymentDomainService {
           where: { id: operation.id },
           data: {
             state: input.state,
-            reconciliationRequired: this.states.reconciliationRequired(input.state),
+            reconciliationRequired: this.states.reconciliationRequired(
+              input.state,
+            ),
             lastReconciledAt:
-              operation.state === PaymentOperationState.UNKNOWN ? new Date() : operation.lastReconciledAt,
+              operation.state === PaymentOperationState.UNKNOWN
+                ? new Date()
+                : operation.lastReconciledAt,
           },
         });
         return created;
@@ -515,7 +693,9 @@ export class PaymentDomainService {
       return { duplicate: false, event };
     } catch (error) {
       if (!isUniqueViolation(error)) throw error;
-      const duplicate = await this.prisma.paymentWebhookEvent.findUnique({ where: uniqueWhere });
+      const duplicate = await this.prisma.paymentWebhookEvent.findUnique({
+        where: uniqueWhere,
+      });
       return { duplicate: true, event: duplicate };
     }
   }

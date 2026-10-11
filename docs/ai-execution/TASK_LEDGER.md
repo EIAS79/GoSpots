@@ -46,3 +46,40 @@ Branch `agent/gospots-payment-integrity-20261009` parent `72ee6dc1791d0280426bad
 | Phase17 security | CRITICAL/HIGH LOCALLY RESOLVED / REMOTE PENDING | pnpm frozen lockfile + audit high pass; web and API builds PASS | Exact new SHA Linux CI Phase17 gate; 5 moderate + 2 low separately unresolved |
 
 Branch: `agent/gospots-payment-integrity-20261009`. Parent commit: `cfd703e6e9e964e913abcc09583f218d93b84fd1`. No remote writes this session. No ticket marked fully COMPLETE or release-certified.
+
+## W1 acceptance trace — 2026-10-11 (unpublished working tree)
+| Ticket | Local implementation | Evidence status | Release blocker |
+| --- | --- | --- | --- |
+| T-002 | Fake-provider checkout capture+cash split+refund E2E, DB conservation, refund replay/list scope | Existing 5009e baseline 516 Jest & 21 browser tests green; NEW PG test NOT_RUN | Exact-new-SHA PG17, signed Adyen provider/device independently |
+| T-003 | Strict venue wall → UTC, DST gap/overlap fail-closed, staff/public dialog, venue dining hold | 5/5 local converter tests and web typecheck PASS; NEW browser scenario NOT_RUN | External/browser parity of email/calendar/staff confirmation |
+| T-006 | Cross-shop REST negative + explicit unprivileged PG17 RLS matrix / tenant context reset | NEW PG17 test NOT_RUN; existing actor/outbox tests pass | Full RLS, worker, export/role matrix + review; stays PARTIAL |
+| Phase17 audit | No dependency changes this wave | Last remote high/critical=0, remaining moderate=5 low=2 | Track lower-severity advisories separately |
+Documentation import: exactly 23 original workstream files from `0a063496...`, uncommitted. No acceptance signoff; crosswalk in `W1_2026-10-11_ACCEPTANCE_EVIDENCE_DRAFT.md`.
+
+## Wave1 browser blockers — evidence update 2026-10-11 (local only)
+| Ticket | Verification | Remaining gate |
+| --- | --- | --- |
+| T-002 | Real PG17 provider capture/split/refund browser case PASS; 28 independent-connection refund concurrency assertions PASS, full API 521/521; E2E-06 UNKNOWN reconciliation 3/3 repeated PASS and invalid-CSRF denial asserted | Full 24 browser cases in production build on fresh seeded DB; canonical DB assertions at next SHA; exact-new-SHA CI, live provider/device certification separately |
+| T-003 | 5/5 IANA/DST tests; staff/public venue timezone conversion; traveling-user browser PASS; earlier email/notification API cases retained | Production suite and PR95 viewer parity reconciliation; exact-new-SHA CI, visual/email end-to-end signoff |
+| T-006 | Cross-shop POST/read/refund browser negative PASS; PG17 11-table unprivileged RLS plus outbox forged insertion, denied update, context-reset PASS | Complete roles/exports/workers authorization matrix, RLS default-off rollout decision, exact-new-SHA remote security CI |
+| E2E-04 | Original offline refresh, IndexedDB durability and exactly-once replay browser test PASS 1/1 against production frontend; dev-mode 24-suite earlier failure 1/1 | Fresh production 24 browser suite rerun; full-suite non-flakiness |
+| E2E-06 | Venue-gate CSRF rotation race prevented in test helper; forged-CSRF 403/no device; unique cross-run key; repeat 3/3 PASS | Full 24 production CI regression |
+No T-002/T-003/T-006 COMPLETE claims. No audit-bypass or remote write. Seven moderate/low advisories remain separately open.
+
+## 2026-10-11 FINAL LOCAL ACCEPTANCE EVIDENCE — checkpoint request pending
+| Key | Local evidence at unpushed worktree | Acceptance |
+| --- | --- | --- |
+| E2E permanent browser | 24 PASS / 0 FAIL production Next 16.3.8, 3.6m, PG17, --fail-on-flaky-tests | LOCAL VERIFIED, exact SHA CI pending |
+| E2E-04 offline lite | Pass in full suite, separate pass 1/1 in independent production build/local gateway; IndexedDB refresh + exactly-one replay assertions unchanged | LOCAL VERIFIED; device/offline hardware separate |
+| E2E-06 UNKNOWN | Pass full suite; 3/3 repeat separately; forged CSRF 403 and no device writes; successful UNKNOWN reconciliation | LOCAL VERIFIED; real terminal separate |
+| T-002 | Checkout provider split/card/cash/refund browser PASS, canonical PG17 persistence PASS, independent refund concurrency 28/28 PASS, full API 521/521 PASS | NOT COMPLETE: remote CI, real Adyen and payout proof |
+| T-003 | strict venue ISO UTC time, public/staff/traveling UI, 5/5 DST cases and E2E travel PASS; existing notification tests API suite pass | NOT COMPLETE: end-to-end email/calendar confirmation/evidence |
+| T-006 | cross-venue browser PASS, RLS PG17 11 tables, forged outbox INSERT, foreign update/read and reset PASS | PARTIAL/OPEN: expanded worker/roles/export checks, default-off security decision and review |
+| Local builds/migrations | API build, web prod build/typecheck, 115 PG17 migration apply and seed PASS | LOCAL only |
+| Lint | Required CI changed-API-production lint scope tracked; manual direct full web 6 errors/6 warnings, API test mocks 121 errors/2 warnings, E2E helpers 31 errors; full API lint debt step continue-on-error | Non-gating lint debt OPEN, not suppressions |
+GitHub draft PR #103 untouched; 23 source-exact plans imported locally; no production changes; 7 moderate/low advisories separate.
+
+## Final checkpoint pre-approval verification (local only; 2026-10-11)
+- REQUIRED changed API production-source lint (payment-domain.service.ts and provider-checkout-refund.service.ts) `pnpm ... eslint`: **PASS / exit 0**. Web `tsc --noEmit`: PASS / exit 0. Direct optional/manual whole-file eslint debt remains separately OPEN (test mocks and pre-existing React effect-state patterns); no policy suppressed.
+- Confirmed exact local/remote parent `5009e114aa4a408b9488934f611e0e1172425f55`. Exactly **15 tracked modified + 32 new = 47** paths. Exactly **23/23** original Markdown plans, **zero SHA differences and zero extra/duplicate files**. `pnpm-lock.yaml` and `apps/web/.vercel-release` unchanged. `git diff --check` PASS, simple new-code secret-pattern scan zero hits; no claim that scan replaces GitHub SAST.
+- Local functional evidence: full production Chromium **24/24 PASS**, canonical PostgreSQL persisted assertions PASS, independent-connection refund **28/28**, 11-table tenant-RLS PASS, API Jest prior **521/521**, web production build/typecheck PASS and 115 migrations PASS. External certification and exact-head GitHub CI still missing. Only request authorization for ONE consolidated development branch push; do not merge, deploy production, or push additional checkpoints.

@@ -218,6 +218,14 @@ jobs:
         run: npx playwright test --fail-on-flaky-tests
       - name: Assert persisted canonical results
         run: pnpm --dir apps/api exec tsx prisma/e2e-assert.ts
+      - name: Assert independent PostgreSQL refund concurrency and idempotency
+        env:
+          GOSPOTS_DISPOSABLE_E2E_DB: I_UNDERSTAND_DELETE_AND_ROLES
+        run: pnpm --dir apps/api exec tsx prisma/e2e-refund-concurrency.ts
+      - name: Assert PostgreSQL RLS financial tenant boundaries (disposable CI database)
+        env:
+          GOSPOTS_DISPOSABLE_E2E_DB: I_UNDERSTAND_DELETE_AND_ROLES
+        run: pnpm --dir apps/api exec tsx prisma/e2e-tenant-assert.ts
       - name: Upload pilot diagnostics
         if: ${{ always() }}
         uses: actions/upload-artifact@v4

@@ -1,22 +1,14 @@
 "use client";
 
 import { Loader2, X } from "lucide-react";
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { FeedbackBanner } from "@/components/ui/feedback-banner";
 import { ModalPortal } from "@/components/ui/modal-portal";
 import {
   ACTIVE_BOOKING_STATUSES,
   addMinutesToTime,
-  combineDateAndTime,
-  localDateInput,
-  nextLocalMinuteInput,
-  splitDateAndTime,
-  validateFutureBookingWindow,
 } from "@/lib/booking-time";
-import {
-  holdEndFromLocal,
-  parseNoShowMinutes,
-} from "@/lib/dining-reservation";
+import { parseNoShowMinutes } from "@/lib/dining-reservation";
 import { BowlingModePicker } from "@/components/gaming/bowling-mode-picker";
 import {
   buildBowlingNotes,
@@ -42,6 +34,8 @@ import type { Reservation, ReservationStatus } from "@/lib/reservations-client";
 import type { ResourceCatalog } from "@/lib/resources-client";
 import { RESOURCE_TYPE_LABELS } from "@/lib/resource-types";
 import { useVenueSettingsOptional } from "@/lib/venue-settings-context";
+import { resolveVenueTimeZone, venueDayKey } from "@/lib/venue-timezone";
+import { venueWallToUtcIso, venueHoldEndUtcIso, utcIsoToVenueWall } from "@/lib/venue-booking-datetime";
 
 export function ReservationDialog({
   catalog,
@@ -89,6 +83,29 @@ export function ReservationDialog({
   const vs = useVenueSettingsOptional();
   const formatMoney = vs?.formatMoney ?? ((n: number) => n.toFixed(2));
   const t = vs?.t ?? ((k: string) => k);
+  const venueZone = resolveVenueTimeZone({ timezone: vs?.shop?.timezone, locale: vs?.shop?.locale });
+  const combineDateAndTime = useCallback(
+    (date: string, time: string): Date =>
+      new Date(venueWallToUtcIso(date, time, venueZone) ?? Number.NaN),
+    [venueZone],
+  );
+  const splitDateAndTime = useCallback(
+    (iso: string) => utcIsoToVenueWall(iso, venueZone),
+    [venueZone],
+  );
+  const holdEndFromLocal = useCallback(
+    (date: string, time: string, minutes: number): string =>
+      venueHoldEndUtcIso(date, time, venueZone, minutes) ?? "",
+    [venueZone],
+  );
+  const validateFutureBookingWindow = (date: string, startTime: string, endTime: string): string | null => {
+    const start = combineDateAndTime(date, startTime);
+    const end = combineDateAndTime(date, endTime);
+    if (!Number.isFinite(start.getTime()) || !Number.isFinite(end.getTime())) return "Invalid or ambiguous venue time.";
+    if (end <= start) return "End time must be after start time.";
+    if (start.getTime() < Date.now()) return "Start time cannot be in the past.";
+    return null;
+  };
   const units = catalog.categories.flatMap((c) =>
     c.resources.map((r) => ({
       ...r,
@@ -135,8 +152,8 @@ export function ReservationDialog({
     return addMinutesToTime(initialParts.time || "14:00", 60);
   });
 
-  const today = localDateInput();
-  const minFutureTime = nextLocalMinuteInput();
+  const today = venueDayKey(venueZone);
+  const minFutureTime = utcIsoToVenueWall(new Date(Date.now() + 60_000).toISOString(), venueZone).time;
 
   const selected = units.find((u) => u.id === resourceId);
   const selectedCategory = catalog.categories.find(
@@ -249,6 +266,7 @@ export function ReservationDialog({
     date,
     startTime,
     endTime,
+    combineDateAndTime,
   ]);
 
   const estimatedPrice = useMemo(() => {
@@ -323,6 +341,8 @@ export function ReservationDialog({
     isDining,
     noShowMinutes,
     t,
+    combineDateAndTime,
+    holdEndFromLocal,
   ]);
 
   function applyStartTime(next: string) {
@@ -453,10 +473,20 @@ export function ReservationDialog({
                   }
                 }
               }
-              const startsAt = combineDateAndTime(date, startTime).toISOString();
-              const endsAt = isDining
-                ? holdEndFromLocal(date, startTime, noShowMinutes)
-                : combineDateAndTime(date, endTime).toISOString();
+              const checkedStart = !timingChanged && initial
+                ? initial.startsAt
+                : venueWallToUtcIso(date, startTime, venueZone);
+              const checkedEnd = !timingChanged && initial
+                ? initial.endsAt
+                : isDining
+                  ? venueHoldEndUtcIso(date, startTime, venueZone, noShowMinutes)
+                  : venueWallToUtcIso(date, endTime, venueZone);
+              if (!checkedStart || !checkedEnd) {
+                setFeedback({ variant: "error", message: "Invalid or ambiguous venue time." });
+                return;
+              }
+              const startsAt = checkedStart;
+              const endsAt = checkedEnd;
               if (!isDining) {
                 const startMs = combineDateAndTime(date, startTime).getTime();
                 const endMs = combineDateAndTime(date, endTime).getTime();

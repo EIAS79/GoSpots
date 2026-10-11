@@ -33,7 +33,6 @@ import {
   countActiveBookings,
   isLiveBooking,
   isSessionBlockingBooking,
-  localDateInput,
   resolveSessionBookingPhase,
 } from "@/lib/booking-time";
 import type {
@@ -52,6 +51,7 @@ import { UnitGridPager } from "@/components/reservations/unit-grid-pager";
 import { getFloorMapVisualType } from "@/lib/gaming-floor-visual";
 import type { ResourceType } from "@/lib/resource-types";
 import { useVenueSettingsOptional } from "@/lib/venue-settings-context";
+import { resolveVenueTimeZone, venueDayKey } from "@/lib/venue-timezone";
 import {
   staffBoardThemeLabels,
   staffBowlingChromeLabels,
@@ -107,8 +107,9 @@ function useCompactFloorView() {
   return compact;
 }
 
-function formatTime(iso: string) {
+function formatTime(iso: string, zone: string) {
   return new Date(iso).toLocaleTimeString(undefined, {
+    timeZone: zone,
     hour: "2-digit",
     minute: "2-digit",
   });
@@ -193,11 +194,15 @@ export function GameBookingSchedule({
   onCategoryChange?: (categoryId: string) => void;
   variant?: ReservationBoardVariant;
 }) {
-  const isToday = schedule.date === localDateInput();
+  const vs = useVenueSettingsOptional();
+  const venueTimeZone = resolveVenueTimeZone({
+    timezone: vs?.shop?.timezone,
+    locale: vs?.shop?.locale,
+  });
+  const isToday = schedule.date === venueDayKey(venueTimeZone);
   const nowMs = useNowMs(10_000);
   const compactFloor = useCompactFloorView();
   const selectedChip = BOARD_THEME_CHIP[variant];
-  const vs = useVenueSettingsOptional();
   const t = useMemo(
     () => vs?.t ?? staffFloorT(vs?.locale),
     [vs?.t, vs?.locale],
@@ -732,6 +737,8 @@ function FocusRow({
   actionLabels: StaffScheduleActionLabels;
   onFocus?: () => void;
 }) {
+  const vs = useVenueSettingsOptional();
+  const zone = resolveVenueTimeZone({ timezone: vs?.shop?.timezone, locale: vs?.shop?.locale });
   const sessionPhase = resolveSessionBookingPhase(
     focus.status,
     focus.startsAt,
@@ -759,7 +766,7 @@ function FocusRow({
         )}
       >
         <CalendarClock size={10} className="shrink-0" aria-hidden />
-        {formatTime(focus.startsAt)}
+        {formatTime(focus.startsAt, zone)}
         {sessionPhase === "waiting" ? (
           <span className="text-amber-300/90"> · waiting</span>
         ) : focus.status === "CHECKED_IN" ? (
@@ -886,6 +893,8 @@ function UnitRow({
   onGuestLeftBooking?: (b: ScheduleBooking) => Promise<void> | void;
   onToggleNotWorking?: () => void;
 }) {
+  const vs = useVenueSettingsOptional();
+  const zone = resolveVenueTimeZone({ timezone: vs?.shop?.timezone, locale: vs?.shop?.locale });
   const sessionPhase =
     focus != null
       ? resolveSessionBookingPhase(
@@ -917,7 +926,7 @@ function UnitRow({
           {statusLabels[status]}
           {focus ? (
             <span className="ml-1.5 text-zinc-500">
-              · {focus.guestName} {formatTime(focus.startsAt)}
+              · {focus.guestName} {formatTime(focus.startsAt, zone)}
             </span>
           ) : null}
           {bookingCount > (focus ? 1 : 0) ? (
