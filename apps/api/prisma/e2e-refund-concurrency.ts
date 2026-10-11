@@ -92,7 +92,7 @@ const connector = new DeferredFakeConnector();
 const registry = new PaymentConnectorRegistry();
 registry.register(connector);
 const flags = {
-  isFeatureEnabled: async () => true,
+  isFeatureEnabled: () => Promise.resolve(true),
 } as unknown as FeatureFlagService;
 const services = clients.map(
   (db) =>
