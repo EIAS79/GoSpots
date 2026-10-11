@@ -46,3 +46,12 @@ Local: archive checksum PASS, synthetic 24-file transform PASS, four time-zone c
 Earlier SHA: API 104/104 suites, 482/482 tests PASS; Phase 4 PASS; general CI and Phase17 browser E2E FAIL six manual-card test scenarios; Phase17 dependency audit FAIL (two critical, four high, ten moderate, three low).
 Status cannot advance to ACCEPTED until exact-new-head green tests. No production Adyen, fiscal or database work performed.
 Next: (1) exact-head CI/provider/regression and browser tests, (2) T-003/T-006 deeper matrix, (3) Phase17 dependency remediation.
+
+## W1 security and acceptance recovery — local unpushed checkpoint, 2026-10-10
+
+Repository: EIAS79/GoSpots; development branch: `agent/gospots-payment-integrity-20261009`; verified GitHub parent: `cfd703e6e9e964e913abcc09583f218d93b84fd1`; draft PR #103. The new commit SHA is not yet assigned; after the authorized push, obtain it from GitHub HEAD.
+Current wave W1. T-002 = IMPLEMENTED, LOCAL-VERIFIED / REMOTE-PENDING, NOT ACCEPTED; T-003 = IMPLEMENTED, LOCAL-VERIFIED / REMOTE-PENDING, NOT ACCEPTED; T-006 = PARTIAL / REMOTE-PENDING. Phase17 critical/high dependency remediation = LOCAL-VERIFIED / REMOTE-PENDING.
+Local pnpm 10.12.1 frozen-lockfile installation PASS. Exact patched versions: next and eslint-config-next 16.3.8, sharp 0.35.5, proxy-addr 2.0.8, source-map-js 1.2.2. pnpm audit --prod --audit-level high PASS: zero critical/high, 5 moderate and 2 low remain; full no-threshold audit fails on those lower findings.
+API changed production lint PASS; API full Jest pre-commit rerun 109 suites / 516 tests PASS, plus later 3 focused integration suites / 13 tests PASS; previous focused payment/provider/mail/DST suite 6 suites / 38 tests PASS. API build and Prisma schema validate PASS. Web typecheck, checkout UI 20 tests, offline 10 tests, Next.js 16.3.8 production build PASS with build-only API target. Sharp 0.35.5 in-memory PNG PASS.
+Local Docker unavailable: PostgreSQL migration rehearsal and full Playwright/browser integration remain remote CI gates, not certified here. No real payments, refunds, fiscal transactions, production DB or Vercel deployments performed.
+Next three: exact-new-SHA GitHub Actions and provider/booking proof; expanded T-006 RLS/tenant/background matrix; assess moderate/low production advisories and pilot readiness. Do not merge or deploy; require fresh push authorization.

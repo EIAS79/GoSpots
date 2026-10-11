@@ -84,4 +84,34 @@ describe('DomainEventOutboxService', () => {
       }),
     ).rejects.toThrow('lower-case');
   });
+  it('rejects a background event carrying another tenant in its payload', async () => {
+    const create = jest.fn();
+    const tx = { domainEventOutbox: { create } } as unknown as Prisma.TransactionClient;
+    await expect(new DomainEventOutboxService().enqueue(tx, {
+      shopId: 'shop-a',
+      aggregateType: 'check_settlement',
+      aggregateId: 'settlement-a',
+      eventType: 'settlement.payment-recorded',
+      payload: { shopId: 'shop-b', paymentId: 'payment-from-b' },
+    })).rejects.toThrow('payload shopId must match event tenant');
+    expect(create).not.toHaveBeenCalled();
+  });
+
+  it('preserves a matching tenant for background financial events', async () => {
+    const create = jest.fn().mockResolvedValue({ id: 'event-a' });
+    const tx = { domainEventOutbox: { create } } as unknown as Prisma.TransactionClient;
+    await new DomainEventOutboxService().enqueue(tx, {
+      shopId: 'shop-a',
+      aggregateType: 'check_settlement',
+      aggregateId: 'settlement-a',
+      eventType: 'settlement.payment-recorded',
+      payload: { shopId: 'shop-a', paymentId: 'payment-a' },
+    });
+    expect(create).toHaveBeenCalledWith(expect.objectContaining({
+      data: expect.objectContaining({
+        shopId: 'shop-a',
+        payload: expect.objectContaining({ shopId: 'shop-a', paymentId: 'payment-a' }),
+      }),
+    }));
+  });
 });

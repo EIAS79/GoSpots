@@ -17,3 +17,12 @@ D-004: Claim `PaymentOperation.checkoutPaymentId` and reset reconciliation/error
 D-005: Shop-resolved IANA time zone is authoritative for reservation notification bodies, calendar href dates and email display. UTC date instants remain unchanged; DST-overlap output includes both offset labels. Public cancel messages retain original booking end.
 D-006: At the generic low-level provider payment entry point, check a linked settlement belongs to the authenticated shop and currency matches before recording any provider operation. Add foreign-tenant and read-only role regressions.
 D-007: This checkpoint does NOT certify production. Existing Phase17 production dependency high/critical advisories must be fixed in a separate, reviewed dependency change. PR #95 viewer-timezone work requires separate review. Feature branch Vercel may record CANCELED attempt; production release marker untouched.
+
+## 2026-10-10 — security patch and tenant event decisions
+
+D-008: Apply exact prepared `charCodeAt` control-character scan in `isSafeAppRelativeHref`, replacing lint-prohibited regex without weakening C0/DEL, traversal, protocol-relative, URL-origin and backslash rejection. Add direct unsafe-link regressions.
+D-009: Security dependency changes use patched, verified npm versions and lockfile resolution through pinned pnpm 10.12.1: Next.js + eslint-config-next 16.3.8, Sharp 0.35.5, proxy-addr 2.0.8, source-map-js 1.2.2. No audit suppression, no force install. Existing moderate/low advisories are recorded and deferred to separate risk-managed work.
+D-010: Provider checkout reconciliation must demonstrate captured finalization, decline/UNKNOWN safety, idempotent replay, amount mismatch, and reconciliation-required recovery; new Jest tests are separate from live Adyen terminal certification.
+D-011: Reservation timezone acceptance covers actual staff/public services invoking venue-aware notification href/body and guest email rendering; DST repeated/skipped wall times must remain unambiguous.
+D-012: Domain event outbox tenant identity is authoritative in envelope; reject any payload.shopId that contradicts it before enqueue, with positive and negative background boundary tests.
+D-013: Local build uses an invalid-example host as API_PROXY_TARGET and dummy localhost DATABASE_URL for build/schema validation only. No external database/network payment actions. Docker absent, so migration and real integration remain blocked to GitHub Actions. Preserve production release marker and PR draft state; new GitHub push requires distinct approval.

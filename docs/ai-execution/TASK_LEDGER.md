@@ -35,3 +35,14 @@ Source: 2026-10-09 continuation kit T-001–T-017 and live main `b3e444e4deed5b9
 | T-010/P17 | Later wave | BLOCKED | high/critical pnpm production advisories; independent dependency remediation and green release gate required |
 
 Branch `agent/gospots-payment-integrity-20261009` parent `72ee6dc1791d0280426bad98dbdeedeb3d8b74cd`. New SHA is the HEAD containing this ledger. Browser tests, full build and deployment certification are not claimed from standalone tests.
+
+## W1 local remediation status — 2026-10-10 (uncommitted)
+
+| Ticket | Status | Local acceptance evidence | Still required |
+| --- | --- | --- | --- |
+| T-002 | IMPLEMENTED / LOCAL TESTS PASS / NOT ACCEPTED | Provider captured/duplicate/declined/UNKNOWN/mismatch/finalization-failure unit tests PASS, checkout Jest PASS, prior exact-parent browser 21/21 PASS | New exact-SHA API+E2E with full provider capture lineage and integration |
+| T-003 | IMPLEMENTED / LOCAL TESTS PASS / NOT ACCEPTED | New mail text/HTML DST cases, staff/public notification service wiring, URL safe input + Warsaw/New York date tests PASS | New SHA CI, live integration and timezone browser verification |
+| T-006 | PARTIAL / LOCAL TESTS PASS | Prior foreign-settlement/denied actor/cancel/refund tests PASS; new outbox rejects conflicting payload shopId and preserves matching tenant | Full RLS/IDOR/worker/role negative matrix and database-backed isolation |
+| Phase17 security | CRITICAL/HIGH LOCALLY RESOLVED / REMOTE PENDING | pnpm frozen lockfile + audit high pass; web and API builds PASS | Exact new SHA Linux CI Phase17 gate; 5 moderate + 2 low separately unresolved |
+
+Branch: `agent/gospots-payment-integrity-20261009`. Parent commit: `cfd703e6e9e964e913abcc09583f218d93b84fd1`. No remote writes this session. No ticket marked fully COMPLETE or release-certified.

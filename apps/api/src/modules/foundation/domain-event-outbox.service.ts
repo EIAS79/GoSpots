@@ -75,6 +75,16 @@ export class DomainEventOutboxService {
       throw new BadRequestException('Domain event tenant and aggregate are required');
     }
 
+    // Background consumers trust the outbox envelope as tenant authority.
+    // Reject contradictory tenant identity inside untrusted event payloads.
+    const payloadShopId =
+      typeof event.payload === 'object' && event.payload !== null && !Array.isArray(event.payload)
+        ? (event.payload as Prisma.InputJsonObject).shopId
+        : undefined;
+    if (payloadShopId !== undefined && payloadShopId !== event.shopId) {
+      throw new BadRequestException('Domain event payload shopId must match event tenant');
+    }
+
     const eventSchemaVersion =
       event.eventSchemaVersion ?? CURRENT_DOMAIN_EVENT_SCHEMA_VERSION;
     if (
