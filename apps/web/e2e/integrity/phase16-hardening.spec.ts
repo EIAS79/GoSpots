@@ -99,6 +99,11 @@ test('@smoke P16 operator shell supports keyboard focus and narrow screens', asy
 
   await page.setViewportSize({ width: 390, height: 844 });
   await page.goto(`/dashboard/${E2E.venues.mixed}`);
+  // Body visibility also succeeds for the loading spinner. Wait for a link that
+  // is rendered only after the authenticated overview data has finished loading
+  // before asserting keyboard reachability; do not programmatically set focus.
+  await expect(page.locator('a[href*="finance?tab=reports"]').first()).toBeVisible();
+
   await expect(page.locator('body')).toBeVisible();
 
   const overflow = await page.evaluate(() =>
