@@ -86,3 +86,13 @@ Base SHA: `17e1403dfa39b4e5ed86193b935ec091967cb108`; branch `agent/gospots-paym
 - **T-008**: KSeF v2 venue-specific TEST/DEMO/PRD endpoint policy rejects unsupported profile modes, unsafe URLs, cross-environment official gateways and unapproved proxy hosts. Existing KSeF service now uses this resolver; official TEST host only for sandbox unless separately approved. No live KSeF submission, fiscal device operation or production configuration change; sandbox venue profile/token and accountant/fiscal specialist certification still required.
 
 Do not confuse focused Jest with GitHub CI or signed software acceptance; formal W1 acceptance remains pending evidence-owner signoff. The 23 engineering plans are preserved and no release marker, production infra or main branch is modified. Check `git diff --check`, focused ESLint, production typecheck, API build and complete Jest before requesting a **separate** dev-branch push authorization.
+
+## 2026-10-14 — W1 local engineering decisions (NOT PUBLISHED)
+- D-029: Notifications mutators markRead, markUnread, markAllRead and archive require notifications.read permission just as list/export/SSE do; preserve owner access. For single-ID updates, include recipient OR restriction with the already-existing shopId filter atomically.
+- D-030: Add true database integration for RLS transaction context: explicit disposable localhost-only guard, separate unprivileged role, two tenants, concurrent/nested operations, privilege and rollback denials, pool reset. Installed local DB is PostgreSQL 18.6; never label it 17. Existing CI PG17 matrix covers different domain tables; do not enable production RLS.
+- D-031: GoSpots mail delivery is Resend HTTP, not SMTP. Use fake credential and loopback HTTP sink for deterministic transport, failure-outbox and Warsaw DST serialization proof. No real delivery or calendar-client verification is implied.
+- D-032: Read-only Vercel alias SHA and Render live SHA mismatch is verified, but API_PROXY_TARGET and backend-to-Neon and Adyen identities remain unknown. Do not infer matching runtime identities; do not change deployment or credentials in W1.
+
+### 2026-10-14 — D-033 supervisor authorization closure
+- `unarchive()` must enforce `notifications.read` *before* all database mutations and no-op returns. Preserve `updateMany` atomic shop/recipient/archived predicates, permissioned owner/staff behavior, owner-only destructive removal and reservation badge role exceptions.
+- No CI workflow additions: new standalone 22-check RLS fixture remains explicitly NOT CI-WIRED under the exact nine-path publication authorization. Existing PG17 11-table matrix is a separate integration and must not be misrepresented as executing the new fixture.

@@ -117,3 +117,16 @@ Owner authorizes one consolidated follow-up development commit only. No signed W
 - Existing parent CI `17e140...` is green (13/13 workflows, 21/21 checks); previous refund 28-assertion PG17 and 11-table RLS evidence retained without unnecessary payment reruns.
 - **NOT SOFTWARE ACCEPTED YET** without owner/security signoff: remaining T-003 real SMTP+calendar client evidence, T-006 role/IDOR/export/SSE/cache/pool cross-tenant pen-test matrix and RLS rollout decision, T-002 payment finance acceptance attestation. Wave2 T-004 fingerprint collection from actual Render runtimes; T-007 physical Adyen TEST-terminal and webhook certification; T-008 official KSeF sandbox/physical fiscal/accountant signoff.
 - The test logs are within this sandbox at `/tmp/gospots_w2_{full_jest,final_lint,prod_tsc,api_build,identity_cli}.log`; the consolidated binary patch is saved outside Git at `/vercel/gospots_wave2_20261013_unpushed.patch` (hash recorded in next session after generation). A new checkpoint push is **NOT AUTHORIZED**.
+
+## 2026-10-14 — W1 local pre-push delta at published SHA 7663a7f (UNCOMMITTED)
+| Ticket | IMPLEMENTED / TESTED | VERIFIED | ACCEPTED / EXTERNAL BLOCKER |
+| --- | --- | --- | --- |
+| T-006 | Notification mutator RBAC and atomic actor restrictions; 2 new Jest tests; 22 assertions on disposable PostgreSQL 18.6 with 2 shops and unprivileged role | Focused 7 suites / 33 tests; historical PG17 11-table matrix | NOT ACCEPTED: new fixture not yet run on PG17; independent full endpoint/role/export/stream/worker review and RLS rollout soak pending; production default off |
+| T-003 | New fake-credential loopback Resend HTTP sink; three booking states plus 503/outbox retry 4/4; previous DST/staff/public/reminder tests | Focused tests green | NOT ACCEPTED: real email deliverability, actual calendar-client checks and stakeholder signoff external |
+| T-002 | Finance-owner signoff checklist; no financial code modification | Historical exact-SHA 28 PG17 refund assertions, 24+24 browser, 565 API Jest | Software implementation verified; finance-owner acceptance pending. Physical terminal/payout W2 |
+| T-004 | Read-only Vercel aliases, Render live commit, Neon primary branch and env metadata | Vercel frontend 8f07715a, Render Frankfurt b3e444e, Neon br-lucky-wave-aln8lhk8 ready | NOT ACCEPTED: actual frontend API proxy, Render database and Adyen identities unknown |
+- No GitHub writes or exact-new-SHA CI. Await authorization for one development-branch commit/push after local validation.
+
+### 2026-10-14 — Supervisor security follow-up before publication
+- T-006 `unarchive()`: **IMPLEMENTED + TESTED**, missing notification permission now checked before zero-result return or mutation; staff denied on ids, allMatching and no-op, authorized owner/staff shop/recipient/archived predicates verified. Notification-boundary suite 8/8, seven focused suites 35/35 total; PG18 22/22.
+- New standalone PG18 integration **NOT CI-WIRED**: existing `.github/workflows/phase17-validation.yml` invokes the distinct PG17 `prisma/e2e-tenant-assert.ts`. Adding a workflow path would exceed approved nine-file scope. PG17 parity of new script is **NOT VERIFIED**. Preserve distinction after publication.
