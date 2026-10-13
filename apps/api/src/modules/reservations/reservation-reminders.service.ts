@@ -10,6 +10,7 @@ import {
 import { guestTokenRevokeFields } from '../../common/guest-token.util';
 import { withReservationRemindersCronLock } from '../../common/pg-advisory-lock.util';
 import { reservationSessionsHref } from '../../common/reservation-notification-href';
+import { loadShopVenueTimeContext } from '../../common/shop-venue-time.util';
 import { PrismaService } from '../../prisma/prisma.service';
 import { AuditService } from '../audit/audit.service';
 import { NotificationsService } from '../notifications/notifications.service';
@@ -40,6 +41,19 @@ export class ReservationRemindersService {
     private readonly notifications: NotificationsService,
     private readonly audit: AuditService,
   ) {}
+
+  private async venueTimeZonesFor(
+    rows: readonly { shopId: string }[],
+  ): Promise<Map<string, string>> {
+    const shopIds = [...new Set(rows.map((row) => row.shopId))];
+    const pairs = await Promise.all(
+      shopIds.map(async (shopId) => {
+        const context = await loadShopVenueTimeContext(this.prisma, shopId);
+        return [shopId, context.resolvedTimeZone] as const;
+      }),
+    );
+    return new Map(pairs);
+  }
 
   @Cron(CronExpression.EVERY_MINUTE)
   async tick() {
@@ -73,11 +87,11 @@ export class ReservationRemindersService {
         }
         return;
       }
-      this.logger.warn(`Reservation reminder tick failed: ${message.split('\n')[0]}`);
+      this.logger.warn(
+        `Reservation reminder tick failed: ${message.split('\n')[0]}`,
+      );
     }
   }
-
-
 
   /**
    * Guest did not arrive within the grace window after reservation time.
@@ -114,6 +128,7 @@ export class ReservationRemindersService {
     });
 
     if (rows.length === 0) return;
+    const venueZones = await this.venueTimeZonesFor(rows);
 
     let marked = 0;
     for (const r of rows) {
@@ -171,7 +186,11 @@ export class ReservationRemindersService {
       await this.notifications.recordReservationEvent(r.shopId, {
         title: tab === 'dining' ? 'Table no-show' : 'Guest no-show',
         body: `${r.guestName} · ${unitLabel}`,
-        href: reservationSessionsHref(r.startsAt, tab),
+        href: reservationSessionsHref(
+          r.startsAt,
+          tab,
+          venueZones.get(r.shopId) ?? 'UTC',
+        ),
         dedupeKey: `auto_no_show:${r.id}`,
       });
     }
@@ -179,129 +198,97 @@ export class ReservationRemindersService {
     this.logger.debug(`Marked ${marked} reservation(s) as no-show`);
   }
 
-
-
   /** Bookings starting in ~5 min (window: 4–6 min from now). */
 
   private async upcomingIn5Min() {
-
     const now = Date.now();
 
     const winStart = new Date(now + 4 * 60_000);
 
     const winEnd = new Date(now + 6 * 60_000);
 
-
-
     const rows = await this.prisma.reservation.findMany({
-
       where: {
-
         status: { in: ACTIVE_RESERVATION },
 
         startsAt: { gte: winStart, lte: winEnd },
-
       },
 
       include: { resource: { include: { category: true } } },
 
       take: 200,
-
     });
 
-
-
+    const venueZones = await this.venueTimeZonesFor(rows);
     for (const r of rows) {
-
       const dedupeKey = `res_rem5_${r.id}`;
 
       const unit = r.resource?.name ?? 'Unassigned unit';
 
       const startsIn = Math.max(
-
         1,
 
         Math.round((r.startsAt.getTime() - now) / 60_000),
-
       );
 
       await this.notifications.recordReservationEvent(r.shopId, {
-
         dedupeKey,
 
         title: `Booking starts in ${startsIn} min`,
 
-        body: `${r.guestName} · ${unit} · ${this.fmtTime(r.startsAt)}`,
+        body: `${r.guestName} · ${unit} · ${this.fmtTime(r.startsAt, venueZones.get(r.shopId) ?? 'UTC')}`,
 
         href: reservationSessionsHref(
           r.startsAt,
           isDiningResourceType(r.resource?.type) ? 'dining' : 'schedule',
+          venueZones.get(r.shopId) ?? 'UTC',
         ),
-
       });
-
     }
-
   }
-
-
 
   /** Bookings whose start time is within the last 60s. */
 
   private async startsNow() {
-
     const now = Date.now();
 
     const winStart = new Date(now - 60_000);
 
     const winEnd = new Date(now + 30_000);
 
-
-
     const rows = await this.prisma.reservation.findMany({
-
       where: {
-
         status: { in: ACTIVE_RESERVATION },
 
         startsAt: { gte: winStart, lte: winEnd },
-
       },
 
       include: { resource: { include: { category: true } } },
 
       take: 200,
-
     });
 
-
-
+    const venueZones = await this.venueTimeZonesFor(rows);
     for (const r of rows) {
-
       const dedupeKey = `res_start_${r.id}`;
 
       const unit = r.resource?.name ?? 'Unassigned unit';
 
       await this.notifications.recordReservationEvent(r.shopId, {
-
         dedupeKey,
 
         title: 'Booking is starting now',
 
-        body: `${r.guestName} · ${unit} · ${this.fmtTime(r.startsAt)}`,
+        body: `${r.guestName} · ${unit} · ${this.fmtTime(r.startsAt, venueZones.get(r.shopId) ?? 'UTC')}`,
 
         href: reservationSessionsHref(
           r.startsAt,
           isDiningResourceType(r.resource?.type) ? 'dining' : 'schedule',
+          venueZones.get(r.shopId) ?? 'UTC',
         ),
-
       });
-
     }
-
   }
-
-
 
   /** Checked-in gaming sessions ending in ~5 min — prompt staff to extend if needed. */
   private async endingSoon() {
@@ -319,19 +306,22 @@ export class ReservationRemindersService {
       take: 200,
     });
 
+    const venueZones = await this.venueTimeZonesFor(rows);
     for (const r of rows) {
       if (isDiningResourceType(r.resource?.type)) continue;
       const unit = r.resource?.name ?? 'unit';
       await this.notifications.recordReservationEvent(r.shopId, {
         title: 'Session ends in 5 min',
         body: `${r.guestName} · ${unit} — extend now if the guest wants more time.`,
-        href: reservationSessionsHref(r.startsAt, 'schedule'),
+        href: reservationSessionsHref(
+          r.startsAt,
+          'schedule',
+          venueZones.get(r.shopId) ?? 'UTC',
+        ),
         dedupeKey: `reservation_ending_soon:${r.id}:${r.endsAt.toISOString()}`,
       });
     }
   }
-
-
 
   /**
 
@@ -342,19 +332,15 @@ export class ReservationRemindersService {
    */
 
   private async autoCompleteCheckedInSessions() {
-
     const now = new Date();
 
     const passed = await this.prisma.reservation.findMany({
-
       where: {
-
         status: ReservationStatus.CHECKED_IN,
 
         endsAt: { lte: now },
 
         resourceId: { not: null },
-
       },
 
       select: {
@@ -367,69 +353,51 @@ export class ReservationRemindersService {
       },
 
       take: 500,
-
     });
 
     if (passed.length === 0) return;
 
-
-
+    const venueZones = await this.venueTimeZonesFor(passed);
     for (const r of passed) {
-
       const result = await this.prisma.reservation.updateMany({
-
         where: {
-
           id: r.id,
 
           status: ReservationStatus.CHECKED_IN,
-
         },
 
-        data: { status: ReservationStatus.COMPLETED, version: { increment: 1 } },
-
+        data: {
+          status: ReservationStatus.COMPLETED,
+          version: { increment: 1 },
+        },
       });
 
       if (result.count === 0) continue;
 
-
-
       if (!r.resourceId) continue;
 
-
-
       const stillBusy = await this.prisma.reservation.findFirst({
-
         where: {
-
           shopId: r.shopId,
 
           resourceId: r.resourceId,
 
           status: { in: ACTIVE_RESERVATION },
-
         },
 
         select: { id: true },
-
       });
 
       if (stillBusy) continue;
 
-
-
       await this.prisma.resource.updateMany({
-
         where: {
-
           id: r.resourceId,
 
           status: { not: ResourceStatus.MAINTENANCE },
-
         },
 
         data: { status: ResourceStatus.AVAILABLE },
-
       });
 
       const unitLabel = r.resource?.name ?? 'unit';
@@ -445,26 +413,28 @@ export class ReservationRemindersService {
       await this.notifications.recordReservationEvent(r.shopId, {
         title: 'Session auto-completed',
         body: `${r.guestName} · ${unitLabel} · end of day cleanup`,
-        href: reservationSessionsHref(r.startsAt, tab),
+        href: reservationSessionsHref(
+          r.startsAt,
+          tab,
+          venueZones.get(r.shopId) ?? 'UTC',
+        ),
         dedupeKey: `auto_complete:${r.id}`,
       });
-
     }
 
-
-
     this.logger.debug(`Auto-completed ${passed.length} checked-in session(s)`);
-
   }
 
-
-
-  private fmtTime(d: Date) {
-    const pad = (n: number) => String(n).padStart(2, '0');
-    return `${pad(d.getHours())}:${pad(d.getMinutes())}`;
+  private fmtTime(d: Date, timeZone: string) {
+    const localWithOffset = new Intl.DateTimeFormat('en-GB', {
+      timeZone,
+      hour: '2-digit',
+      minute: '2-digit',
+      hourCycle: 'h23',
+      timeZoneName: 'shortOffset',
+    }).format(d);
+    return `${localWithOffset} (${timeZone})`;
   }
 }
-
-
 
 export { ReservationStatus };
