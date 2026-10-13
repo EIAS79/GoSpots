@@ -1,11 +1,9 @@
 import { X509Certificate } from 'crypto';
-import {
-  Injectable,
-  ServiceUnavailableException,
-} from '@nestjs/common';
+import { Injectable, ServiceUnavailableException } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { ComplianceProfileService } from '../compliance-profile.service';
 import { KsefCryptoService } from './ksef-crypto.service';
+import { resolveKsefEndpoint } from './ksef-endpoint-policy';
 
 export type KsefSubmissionResult =
   | {
@@ -35,12 +33,6 @@ type PublicKeyRecord = {
   validFrom: string;
   validTo: string;
   usage: string[];
-};
-
-const ENV_BASE: Record<string, string> = {
-  TEST: 'https://api-test.ksef.mf.gov.pl/v2',
-  DEMO: 'https://api-demo.ksef.mf.gov.pl/v2',
-  PRD: 'https://api.ksef.mf.gov.pl/v2',
 };
 
 function tokenValue(value: unknown): string | null {
@@ -91,14 +83,19 @@ export class KsefClientService {
   ) {}
 
   isEnabled(): boolean {
-    return this.config.get<string>('KSEF_ENABLED')?.trim().toLowerCase() === 'true';
+    return (
+      this.config.get<string>('KSEF_ENABLED')?.trim().toLowerCase() === 'true'
+    );
   }
 
   private async context(shopId: string) {
     const { profile, ksefToken } = await this.profiles.getKsefContext(shopId);
-    const env = profile.ksefEnvironment.trim().toUpperCase();
-    const override = this.config.get<string>(`KSEF_API_URL_${env}`)?.trim();
-    const baseUrl = (override || ENV_BASE[env] || ENV_BASE.TEST).replace(/\/$/, '');
+    const { env, baseUrl } = resolveKsefEndpoint(
+      profile.ksefEnvironment,
+      this.config.get<string>(
+        `KSEF_API_URL_${profile.ksefEnvironment.trim().toUpperCase()}`,
+      ),
+    );
     return { profile, ksefToken, env, baseUrl };
   }
 
@@ -124,7 +121,9 @@ export class KsefClientService {
   private async json<T>(response: Response, label: string): Promise<T> {
     if (!response.ok) {
       const detail = await response.text().catch(() => '');
-      throw new Error(`${label} failed (${response.status})${detail ? `: ${detail.slice(0, 300)}` : ''}`);
+      throw new Error(
+        `${label} failed (${response.status})${detail ? `: ${detail.slice(0, 300)}` : ''}`,
+      );
     }
     return response.json() as Promise<T>;
   }
@@ -133,18 +132,31 @@ export class KsefClientService {
     baseUrl: string,
     usage: 'KsefTokenEncryption' | 'SymmetricKeyEncryption',
   ) {
-    const response = await this.raw(baseUrl, '/security/public-key-certificates', {
-      method: 'GET',
-    });
-    const records = await this.json<PublicKeyRecord[]>(response, 'KSeF public-key retrieval');
+    const response = await this.raw(
+      baseUrl,
+      '/security/public-key-certificates',
+      {
+        method: 'GET',
+      },
+    );
+    const records = await this.json<PublicKeyRecord[]>(
+      response,
+      'KSeF public-key retrieval',
+    );
     const now = Date.now();
     const candidates = records
       .filter((record) => record.usage?.includes(usage))
-      .filter((record) => Date.parse(record.validFrom) <= now && Date.parse(record.validTo) > now)
+      .filter(
+        (record) =>
+          Date.parse(record.validFrom) <= now &&
+          Date.parse(record.validTo) > now,
+      )
       .sort((a, b) => Date.parse(b.validFrom) - Date.parse(a.validFrom));
     const selected = candidates[0];
     if (!selected) {
-      throw new ServiceUnavailableException(`KSeF published no currently valid ${usage} key.`);
+      throw new ServiceUnavailableException(
+        `KSeF published no currently valid ${usage} key.`,
+      );
     }
     return {
       pem: certificatePem(selected.certificate),
@@ -152,8 +164,12 @@ export class KsefClientService {
     };
   }
 
-  private async refresh(shopId: string, cached: CachedAuth): Promise<CachedAuth | null> {
-    if (!cached.refreshToken || cached.refreshExpiresAt <= Date.now() + 30_000) return null;
+  private async refresh(
+    shopId: string,
+    cached: CachedAuth,
+  ): Promise<CachedAuth | null> {
+    if (!cached.refreshToken || cached.refreshExpiresAt <= Date.now() + 30_000)
+      return null;
     const { baseUrl } = await this.context(shopId);
     try {
       const response = await this.raw(
@@ -162,7 +178,10 @@ export class KsefClientService {
         { method: 'POST' },
         cached.refreshToken,
       );
-      const body = await this.json<Record<string, unknown>>(response, 'KSeF access-token refresh');
+      const body = await this.json<Record<string, unknown>>(
+        response,
+        'KSeF access-token refresh',
+      );
       const accessToken = tokenValue(body.accessToken);
       if (!accessToken) return null;
       const next: CachedAuth = {
@@ -198,26 +217,36 @@ export class KsefClientService {
 
     const { profile, ksefToken, baseUrl } = await this.context(shopId);
     if (!ksefToken) {
-      throw new ServiceUnavailableException('KSeF token is not configured for this venue.');
+      throw new ServiceUnavailableException(
+        'KSeF token is not configured for this venue.',
+      );
     }
 
-    const challengeResponse = await this.raw(baseUrl, '/auth/challenge', { method: 'POST' });
+    const challengeResponse = await this.raw(baseUrl, '/auth/challenge', {
+      method: 'POST',
+    });
     const challenge = await this.json<{
       challenge?: string;
       timestamp?: string;
       timestampMs?: number;
     }>(challengeResponse, 'KSeF auth challenge');
-    if (!challenge.challenge) throw new Error('KSeF challenge response has no challenge.');
+    if (!challenge.challenge)
+      throw new Error('KSeF challenge response has no challenge.');
     const timestampMs =
       typeof challenge.timestampMs === 'number'
         ? challenge.timestampMs
         : challenge.timestamp
           ? Date.parse(challenge.timestamp)
           : NaN;
-    if (!Number.isFinite(timestampMs)) throw new Error('KSeF challenge response has no valid timestamp.');
+    if (!Number.isFinite(timestampMs))
+      throw new Error('KSeF challenge response has no valid timestamp.');
 
     const tokenKey = await this.publicKey(baseUrl, 'KsefTokenEncryption');
-    const encryptedToken = this.crypto.encryptKsefToken(tokenKey.pem, ksefToken, timestampMs);
+    const encryptedToken = this.crypto.encryptKsefToken(
+      tokenKey.pem,
+      ksefToken,
+      timestampMs,
+    );
     const authResponse = await this.raw(baseUrl, '/auth/ksef-token', {
       method: 'POST',
       body: JSON.stringify({
@@ -227,8 +256,12 @@ export class KsefClientService {
         publicKeyId: tokenKey.publicKeyId,
       }),
     });
-    const auth = await this.json<Record<string, unknown>>(authResponse, 'KSeF token authentication');
-    const referenceNumber = typeof auth.referenceNumber === 'string' ? auth.referenceNumber : null;
+    const auth = await this.json<Record<string, unknown>>(
+      authResponse,
+      'KSeF token authentication',
+    );
+    const referenceNumber =
+      typeof auth.referenceNumber === 'string' ? auth.referenceNumber : null;
     const authenticationToken = tokenValue(auth.authenticationToken);
     if (!referenceNumber || !authenticationToken) {
       throw new Error('KSeF authentication response is incomplete.');
@@ -243,10 +276,14 @@ export class KsefClientService {
         { method: 'GET' },
         authenticationToken,
       );
-      const status = await this.json<Record<string, unknown>>(statusResponse, 'KSeF authentication status');
-      const statusInfo = status.status && typeof status.status === 'object'
-        ? (status.status as Record<string, unknown>)
-        : {};
+      const status = await this.json<Record<string, unknown>>(
+        statusResponse,
+        'KSeF authentication status',
+      );
+      const statusInfo =
+        status.status && typeof status.status === 'object'
+          ? (status.status as Record<string, unknown>)
+          : {};
       const code = typeof statusInfo.code === 'number' ? statusInfo.code : null;
       if (code === 200) {
         authenticated = true;
@@ -256,7 +293,10 @@ export class KsefClientService {
         throw new Error(`KSeF authentication rejected (${code}).`);
       }
     }
-    if (!authenticated) throw new Error('KSeF authentication did not complete within the polling window.');
+    if (!authenticated)
+      throw new Error(
+        'KSeF authentication did not complete within the polling window.',
+      );
 
     const redeemResponse = await this.raw(
       baseUrl,
@@ -264,21 +304,32 @@ export class KsefClientService {
       { method: 'POST' },
       authenticationToken,
     );
-    const redeemed = await this.json<Record<string, unknown>>(redeemResponse, 'KSeF token redeem');
+    const redeemed = await this.json<Record<string, unknown>>(
+      redeemResponse,
+      'KSeF token redeem',
+    );
     const accessToken = tokenValue(redeemed.accessToken);
     const refreshToken = tokenValue(redeemed.refreshToken);
-    if (!accessToken) throw new Error('KSeF token redeem returned no accessToken.');
+    if (!accessToken)
+      throw new Error('KSeF token redeem returned no accessToken.');
     const next: CachedAuth = {
       accessToken,
       accessExpiresAt: tokenExpiry(redeemed.accessToken, 10 * 60_000),
       refreshToken,
-      refreshExpiresAt: tokenExpiry(redeemed.refreshToken, 6 * 24 * 60 * 60_000),
+      refreshExpiresAt: tokenExpiry(
+        redeemed.refreshToken,
+        6 * 24 * 60 * 60_000,
+      ),
     };
     this.authCache.set(shopId, next);
     return next;
   }
 
-  private async request(shopId: string, path: string, init: RequestInit = {}): Promise<Response> {
+  private async request(
+    shopId: string,
+    path: string,
+    init: RequestInit = {},
+  ): Promise<Response> {
     const { baseUrl } = await this.context(shopId);
     const auth = await this.authenticate(shopId);
     const response = await this.raw(baseUrl, path, init, auth.accessToken);
@@ -296,11 +347,20 @@ export class KsefClientService {
     };
   }
 
-  async submitOnlineInvoice(shopId: string, xml: string): Promise<KsefSubmissionResult> {
+  async submitOnlineInvoice(
+    shopId: string,
+    xml: string,
+  ): Promise<KsefSubmissionResult> {
     if (!this.isEnabled()) throw new Error('KSeF live submission is disabled');
     const { baseUrl } = await this.context(shopId);
-    const symmetricKey = await this.publicKey(baseUrl, 'SymmetricKeyEncryption');
-    const material = this.crypto.createSessionMaterial(symmetricKey.pem, symmetricKey.publicKeyId);
+    const symmetricKey = await this.publicKey(
+      baseUrl,
+      'SymmetricKeyEncryption',
+    );
+    const material = this.crypto.createSessionMaterial(
+      symmetricKey.pem,
+      symmetricKey.publicKeyId,
+    );
     let sessionReference: string | undefined;
     let invoiceReference: string | undefined;
     try {
@@ -316,11 +376,18 @@ export class KsefClientService {
           },
         }),
       });
-      const openBody = await this.json<{ referenceNumber?: string }>(open, 'KSeF open session');
+      const openBody = await this.json<{ referenceNumber?: string }>(
+        open,
+        'KSeF open session',
+      );
       sessionReference = openBody.referenceNumber;
-      if (!sessionReference) throw new Error('KSeF session response has no referenceNumber');
+      if (!sessionReference)
+        throw new Error('KSeF session response has no referenceNumber');
 
-      const encoded = this.crypto.encryptInvoice(Buffer.from(xml, 'utf8'), material);
+      const encoded = this.crypto.encryptInvoice(
+        Buffer.from(xml, 'utf8'),
+        material,
+      );
       const sent = await this.request(
         shopId,
         `/sessions/online/${encodeURIComponent(sessionReference)}/invoices`,
@@ -336,22 +403,36 @@ export class KsefClientService {
           }),
         },
       );
-      const sentBody = await this.json<{ referenceNumber?: string }>(sent, 'KSeF invoice send');
+      const sentBody = await this.json<{ referenceNumber?: string }>(
+        sent,
+        'KSeF invoice send',
+      );
       invoiceReference = sentBody.referenceNumber;
-      if (!invoiceReference) throw new Error('KSeF invoice response has no referenceNumber');
-      return { state: 'SUBMITTED', sessionReference, invoiceReference, response: sentBody };
+      if (!invoiceReference)
+        throw new Error('KSeF invoice response has no referenceNumber');
+      return {
+        state: 'SUBMITTED',
+        sessionReference,
+        invoiceReference,
+        response: sentBody,
+      };
     } catch (error) {
       return {
         state: 'UNKNOWN',
         ...(sessionReference ? { sessionReference } : {}),
         ...(invoiceReference ? { invoiceReference } : {}),
         errorCode: 'KSEF_OUTCOME_UNKNOWN',
-        errorMessage: error instanceof Error ? error.message : 'KSeF request failed',
+        errorMessage:
+          error instanceof Error ? error.message : 'KSeF request failed',
       };
     }
   }
 
-  async getInvoiceStatus(shopId: string, sessionReference: string, invoiceReference: string): Promise<unknown> {
+  async getInvoiceStatus(
+    shopId: string,
+    sessionReference: string,
+    invoiceReference: string,
+  ): Promise<unknown> {
     const response = await this.request(
       shopId,
       `/sessions/${encodeURIComponent(sessionReference)}/invoices/${encodeURIComponent(invoiceReference)}`,
@@ -360,22 +441,31 @@ export class KsefClientService {
     return this.json(response, 'KSeF invoice status');
   }
 
-  async getInvoiceUpo(shopId: string, sessionReference: string, invoiceReference: string): Promise<string> {
+  async getInvoiceUpo(
+    shopId: string,
+    sessionReference: string,
+    invoiceReference: string,
+  ): Promise<string> {
     const response = await this.request(
       shopId,
       `/sessions/${encodeURIComponent(sessionReference)}/invoices/${encodeURIComponent(invoiceReference)}/upo`,
       { method: 'GET', headers: { Accept: 'application/xml' } },
     );
-    if (!response.ok) throw new Error(`KSeF UPO retrieval failed (${response.status})`);
+    if (!response.ok)
+      throw new Error(`KSeF UPO retrieval failed (${response.status})`);
     return response.text();
   }
 
-  async closeOnlineSession(shopId: string, sessionReference: string): Promise<void> {
+  async closeOnlineSession(
+    shopId: string,
+    sessionReference: string,
+  ): Promise<void> {
     const response = await this.request(
       shopId,
       `/sessions/online/${encodeURIComponent(sessionReference)}/close`,
       { method: 'POST' },
     );
-    if (!response.ok) throw new Error(`KSeF close session failed (${response.status})`);
+    if (!response.ok)
+      throw new Error(`KSeF close session failed (${response.status})`);
   }
 }

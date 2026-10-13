@@ -5,13 +5,13 @@ Source: 2026-10-09 continuation kit T-001–T-017 and live main `b3e444e4deed5b9
 | Ticket | Wave | Status | Current evidence / next gate |
 |---|---|---|---|
 | T-001 | W0 | IN_PROGRESS | Main protection disabled; exact RC release manifest pending administrator action |
-| T-002 | W1 | IN_PROGRESS | Direct MANUAL_CARD route isolated; focused CI and real provider regression remain |
-| T-003 | W1 | NOT_STARTED | Format booking times in Shop.timezone; reconcile PR #95; DST tests |
-| T-004 | W0/W2 | BLOCKED_EXTERNAL | GoSpots Vercel/Render/Neon/Adyen account and deployment IDs not accessible here |
+| T-002 | W1 | SOFTWARE_VERIFIED_SIGNOFF_PENDING | 28 PG17 refund assertions and strict E2E verified at parent; Adyen hardware, payout and signed acceptance external |
+| T-003 | W1 | SOFTWARE_INTEGRATION_IN_PROGRESS | Public/staff outbound-mail boundary tests pass with mocked transport across host timezones and DST; real SMTP/calendar signoff pending |
+| T-004 | W0/W2 | READ_ONLY_MAPPING_IN_PROGRESS | Render, Neon and Vercel IDs known; fingerprint tool built; actual service/database/merchant links unverified |
 | T-005 | W0 | IN_PROGRESS | Open PR #7/#92/#95/#100 disposition, dev.db review, lockfile policy pending |
-| T-006 | W1 | NOT_STARTED | Tenant/IDOR, background worker and RLS negative-test campaign pending |
-| T-007 | W2 | BLOCKED_EXTERNAL | Physical Adyen device/capture/recovery/refund certification pending |
-| T-008 | W2 | BLOCKED_EXTERNAL | Poland fiscal device, official KSeF and expert legal signoff pending |
+| T-006 | W1 | SECURITY_IN_PROGRESS | 11 PG17 tenant tables verified at parent, new background concurrency tests pass; full role/cache/SSE/export/IDOR soak and independent review open |
+| T-007 | W2 | TEST_PREFLIGHT_VERIFIED | Offline Adyen test-terminal readiness tested, physical device/webhook/provider acceptance pending |
+| T-008 | W2 | SANDBOX_ENDPOINT_GUARD_VERIFIED | KSeF official TEST/DEMO/PRD host routing tested, live sandbox token/fiscal and accountant approval pending |
 | T-009 | W2 | BLOCKED_EXTERNAL | Edge/KDS/printer physical outage drills pending |
 | T-010 | W2/W3 | NOT_STARTED | Current RC DR/performance/security full campaign and pilot evidence pending |
 | T-011 | W2/W4 | NOT_STARTED | Unmatched capture reconciliation first; bank/payout feature depth later |
@@ -110,3 +110,10 @@ Owner authorizes one consolidated follow-up development commit only. No signed W
 - Disposable LOCAL PostgreSQL **18.6**: fail-closed SQL candidate verified missing-context deny, shop A/B isolation, unprivileged system/bypass denial, rollback/reset. Actual Prisma `withTenantRls` nested transaction integration verified matching context, concurrent cross-tenant/mode rejection before SQL, pool reset and exception rollback. This is NOT 17.x CI validation. RLS production setting unchanged and default off; both candidate SQL documents are **not migrations**.
 - T-003, T-006 updated software paths are locally implemented and verified by Jest plus sandbox PostgreSQL, but **NOT exact-new-SHA GitHub CI** and **NOT signed software accepted**. T-002 application code unchanged; previous published SHA provider/refund/28-assertion evidence stands. T-004 GoSpots Render services identified with Vercel/Neon metadata; deployed database and Adyen merchant identities remain unproven without non-secret runtime fingerprint / external identity review. Keep formal ticket acceptance pending.
 - Existing 7 nonproduction Prisma TypeScript errors are documented legacy debt, not fixed or suppressed as part of this restricted 12-file batch. No financial transactions, infrastructure config changes or production data access occurred.
+
+### 2026-10-13 — LOCAL CHECKPOINT FINAL VALIDATION (UNPUSHED)
+- Verified complete clean-at-parent Git worktree `/vercel/GoSpots-wave2`; HEAD remains `17e1403dfa39b4e5ed86193b935ec091967cb108`. Exactly 15 paths locally changed; all 23 existing engineering plan files preserved. No source push/merge/deploy or release-marker modification.
+- Complete API Jest **118/118 suites, 565/565 tests PASS**. Changed-source/test ESLint **PASS**, production typecheck `tsc --noEmit -p tsconfig.build.json` **PASS**, API build **PASS**; read-only runtime fingerprint CLI **PASS**. Added targeted tests: 4 outbound mail transport, 3 concurrent tenant worker/ALS, 3 runtime fingerprint, 8 Adyen TEST preflight, 11 KSeF sandbox routing assertions. Do not claim exact-new-SHA GitHub CI for this local-only batch.
+- Existing parent CI `17e140...` is green (13/13 workflows, 21/21 checks); previous refund 28-assertion PG17 and 11-table RLS evidence retained without unnecessary payment reruns.
+- **NOT SOFTWARE ACCEPTED YET** without owner/security signoff: remaining T-003 real SMTP+calendar client evidence, T-006 role/IDOR/export/SSE/cache/pool cross-tenant pen-test matrix and RLS rollout decision, T-002 payment finance acceptance attestation. Wave2 T-004 fingerprint collection from actual Render runtimes; T-007 physical Adyen TEST-terminal and webhook certification; T-008 official KSeF sandbox/physical fiscal/accountant signoff.
+- The test logs are within this sandbox at `/tmp/gospots_w2_{full_jest,final_lint,prod_tsc,api_build,identity_cli}.log`; the consolidated binary patch is saved outside Git at `/vercel/gospots_wave2_20261013_unpushed.patch` (hash recorded in next session after generation). A new checkpoint push is **NOT AUTHORIZED**.
