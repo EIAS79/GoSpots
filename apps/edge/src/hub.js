@@ -5,7 +5,7 @@ import { decryptSecret, encryptSecret, generateCloudKeyPair, loadOrCreateMasterK
 import { EdgeStore } from './store.js';
 import { CloudClient } from './cloud-client.js';
 import { cloudConnectivityStatus } from './status-health.js';
-import { executePrintJob } from './printer.js';
+import { executePrintJob, validatePrintJob, PrinterPreflightError } from './printer.js';
 import { ContinuityEngine } from './continuity.js';
 import { OFFLINE_POLICY } from './offline-policy.js';
 import { PrintContinuityStore } from './print-continuity.js';
@@ -181,6 +181,30 @@ export class EdgeHub {
         return { processed: 0, manualReviewRequired: true, jobId: job.id, reason: 'PHYSICAL_PRINT_OUTCOME_UNKNOWN' };
       }
 
+      // Only typed preflight validation by the built-in adapter can prove that
+      // no physical I/O occurred; executor error strings are never proof.
+      if (this.printExecutor === executePrintJob) {
+        try {
+          validatePrintJob(job);
+        } catch (error) {
+          if (!(error instanceof PrinterPreflightError)) {
+            return { processed: 0, manualReviewRequired: true, jobId: job.id, reason: 'PRINT_PREFLIGHT_OUTCOME_UNKNOWN' };
+          }
+          const message = error.message;
+          this.printContinuity.markFailed(job.id, message);
+          try {
+            await this.cloud.completePrintJob(job.id, {
+              status: 'FAILED', errorCode: 'UNSUPPORTED_PRINTER_ADAPTER',
+              error: message.slice(0, 1000),
+            });
+            this.printContinuity.markAcknowledged(job.id);
+          } catch (completionError) {
+            return { processed: 0, failed: 1, pendingAck: true, jobId: job.id, error: message, ackError: completionError?.message ?? String(completionError) };
+          }
+          return { processed: 0, failed: 1, jobId: job.id, error: message };
+        }
+      }
+
       // Claim was already persisted locally. Failure to update cloud to PRINTING must
       // not force a duplicate physical print after connectivity returns.
       try { await this.cloud.markPrintJobPrinting(job.id); } catch { /* durable local claim is authoritative for physical execution */ }
@@ -192,23 +216,9 @@ export class EdgeHub {
         physicalResult = await this.printExecutor(job);
       } catch (error) {
         const message = error?.message ?? String(error);
-        // Network/printer failures can occur AFTER bytes reached the device.
-        // Only a known pre-dispatch adapter rejection is safe to report FAILED.
-        if (!/UNSUPPORTED/i.test(message)) {
-          return { processed: 1, manualReviewRequired: true, jobId: job.id, reason: 'PHYSICAL_PRINT_OUTCOME_UNKNOWN', error: message };
-        }
-        this.printContinuity.markFailed(job.id, message);
-        try {
-          await this.cloud.completePrintJob(job.id, {
-            status: 'FAILED',
-            errorCode: /UNSUPPORTED/i.test(message) ? 'UNSUPPORTED_PRINTER_ADAPTER' : 'EDGE_PRINT_FAILED',
-            error: String(message).slice(0, 1000),
-          });
-          this.printContinuity.markAcknowledged(job.id);
-        } catch (completionError) {
-          return { processed: 1, failed: 1, pendingAck: true, jobId: job.id, error: message, ackError: completionError?.message ?? String(completionError) };
-        }
-        return { processed: 1, failed: 1, jobId: job.id, error: message };
+        // Byte transmission may have begun, even if the message says UNSUPPORTED.
+        // Never authorize a replay from a post-dispatch error.
+        return { processed: 1, manualReviewRequired: true, jobId: job.id, reason: 'PHYSICAL_PRINT_OUTCOME_UNKNOWN', error: message };
       }
       // A persistence failure after the physical executor returns must NEVER
       // report FAILED to the cloud: the printer may already have printed.

@@ -89,7 +89,7 @@ test('Edge print worker reports printer failures for cloud retry semantics', asy
   const hub = Object.create(EdgeHub.prototype);
   hub.printWorkerRunning = false;
   hub.printContinuity = memoryPrintContinuity();
-  hub.printExecutor = async () => { throw new Error('UNSUPPORTED: printer adapter missing'); };
+  hub.printExecutor = executePrintJob; // Typed preflight rejection; no printer I/O.
   hub.cloud = {
     registeredDeviceId: 'edge-1',
     claimPrintJob: async () => ({ job: { id: 'job-2', payload: {}, printer: { adapter: 'missing' } } }),
@@ -310,4 +310,81 @@ test('pre-dispatch SQLite marker failure prevents any physical printer I/O', asy
   assert.equal(printCount, 0);
   assert.equal(cloudAckCount, 0);
   assert.equal(hub.printWorkerRunning, false);
+});
+
+test('post-I/O UNSUPPORTED-worded error remains uncertain with no FAILED ack or replay', async () => {
+  const physicalWrites = [];
+  const cloudCompletions = [];
+  const hub = Object.create(EdgeHub.prototype);
+  hub.printWorkerRunning = false;
+  hub.printContinuity = memoryPrintContinuity();
+  hub.printExecutor = async (job) => {
+    physicalWrites.push(job.id);
+    throw new Error('UNSUPPORTED: socket closed after output bytes');
+  };
+  hub.cloud = {
+    registeredDeviceId: 'edge-A',
+    claimPrintJob: async () => ({ job: { id: 'post-io-unsupported', payload: { text: 'Receipt' }, printer: { adapter: 'test' } } }),
+    markPrintJobPrinting: async () => {},
+    completePrintJob: async (...args) => { cloudCompletions.push(args); },
+  };
+  const first = await hub.processPrintQueue();
+  assert.equal(first.manualReviewRequired, true);
+  assert.equal(first.reason, 'PHYSICAL_PRINT_OUTCOME_UNKNOWN');
+  assert.equal(hub.printContinuity.next().state, 'DISPATCH_UNCERTAIN');
+  const second = await hub.processPrintQueue();
+  assert.equal(second.manualReviewRequired, true);
+  assert.deepEqual(physicalWrites, ['post-io-unsupported']);
+  assert.deepEqual(cloudCompletions, []);
+});
+
+test('Edge A and Edge B use independent SQLite journals: backend quarantine denies duplicate while safe queued work proceeds', async () => {
+  const dir = mkdtempSync(join(tmpdir(), 'gospots-two-edge-journals-'));
+  const aPath = join(dir, 'edge-a.db');
+  const bPath = join(dir, 'edge-b.db');
+  let storeA;
+  let storeB;
+  try {
+    storeA = new EdgeStore(aPath);
+    const a = new PrintContinuityStore(storeA);
+    const receipt = { id: 'shared-job', payload: { text: 'one receipt' }, printer: { adapter: 'test' } };
+    a.stage(receipt);
+    a.markDispatchUncertain(receipt.id);
+    let printed = 1; // Simulate receipt already emitted on Edge A before cloud acknowledgement.
+    storeA.close();
+    storeA = null;
+
+    storeB = new EdgeStore(bPath);
+    const b = new PrintContinuityStore(storeB);
+    assert.equal(b.next(), null); // Fresh Edge has no knowledge of Edge A.
+    const offered = [null, { id: 'safe-next', payload: { text: 'unrelated' }, printer: { adapter: 'test' } }];
+    const completions = [];
+    const hub = Object.create(EdgeHub.prototype);
+    hub.printWorkerRunning = false;
+    hub.printContinuity = b;
+    hub.printExecutor = async (job) => { printed += 1; return { id: job.id, bytes: 10 }; };
+    hub.cloud = {
+      registeredDeviceId: 'edge-B',
+      claimPrintJob: async () => ({ job: offered.shift() ?? null }),
+      markPrintJobPrinting: async () => {},
+      completePrintJob: async (id, data) => { completions.push([id, data.status]); },
+    };
+    assert.equal((await hub.processPrintQueue()).processed, 0);
+    const unrelated = await hub.processPrintQueue();
+    assert.equal(unrelated.succeeded, 1);
+    assert.equal(unrelated.jobId, 'safe-next');
+    assert.equal(printed, 2);
+    assert.deepEqual(completions, [['safe-next', 'SUCCEEDED']]);
+    assert.equal(b.next(), null);
+    storeB.close(); storeB = null;
+
+    storeA = new EdgeStore(aPath);
+    const recoveredA = new PrintContinuityStore(storeA);
+    assert.equal(recoveredA.next().state, 'DISPATCH_UNCERTAIN');
+    assert.equal(recoveredA.next().jobId, 'shared-job');
+  } finally {
+    storeA?.close();
+    storeB?.close();
+    rmSync(dir, { recursive: true, force: true });
+  }
 });

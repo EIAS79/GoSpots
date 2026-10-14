@@ -157,3 +157,10 @@ Owner authorizes one consolidated follow-up development commit only. No signed W
 | T-004/T-007/T-008 | No source reopen or external calls | Runtime fingerprint; Adyen TEST terminal/webhook/statement; KSeF official TEST session/status/UPO/accountant |
 | T-002/T-003/T-006 | Published W1 software evidence unchanged | Finance, communications, independent security owner signatures UNSIGNED |
 - **2026-10-14 supervisor-gate update (LOCAL, not CI-certified):** T-009 additional queue-progress and cloud-reclaimed duplicate-ID handling implemented within already approved Edge paths; manual review/physical certification still pending. T-011 mocked rollback durability and idempotent existing-correlation case covered; pre-transaction financial reads are not serializable/snapshot-certified. No T-010 new release evidence claimed, no external signoff or hardware activity.
+
+### 2026-10-14 — T-009 cross-device safety checkpoint, LOCAL/NO PUSH
+| Ticket | Current disposition | Remaining acceptance |
+| --- | --- | --- |
+| T-009 W2 | **DEMONSTRATED CROSS-DEVICE DUPLICATE PRINT DEFECT; LOCAL FAIL-CLOSED FIX + TARGETED REGRESSIONS.** Expired CLAIMED/PRINTING no longer QUEUED; typed pre-I/O unsupported only; ambiguous post-I/O and FAILED callbacks quarantined; legacy uncertain retry blocked; unrelated queued work proceeds. Published parent c6c3455 unchanged | Physical Edge/KDS/printer/WAN test, owner-authorized audited resolution/reprint interface, independent security/operator signoff |
+| T-011 W2/W4 | Published atomic run/issues/finalization **VERIFIED IN CI**; no new T-011 code | Snapshot consistency not established; payout/statement/bank match and finance-owner signoff EXTERNAL |
+| T-002/T-003/T-004/T-006/T-007/T-008/T-010 | Software evidence carried forward unchanged | Existing finance, communications, runtime fingerprint, security, Adyen TEST, KSeF TEST/UPO and production resilience owners still pending |

@@ -236,8 +236,18 @@ export class HardwareService {
     if (job.status !== PrintJobStatus.FAILED) {
       throw new ConflictException('Only failed print jobs can be retried');
     }
-    return this.prisma.printJob.update({
-      where: { id },
+    // Older recovery versions could clear a claimedAt value when the lease
+    // expired. Neither those legacy failures nor any claimed physical output
+    // may be manually recycled without an audited resolution workflow.
+    if (job.claimedAt || ['EDGE_PRINT_LEASE_EXPIRED', 'EDGE_PRINT_OUTCOME_UNKNOWN'].includes(job.lastErrorCode ?? '')) {
+      throw new ConflictException('Physical print outcome may be unknown; supervisor resolution required before any reprint');
+    }
+    const result = await this.prisma.printJob.updateMany({
+      where: {
+        id, shopId, status: PrintJobStatus.FAILED,
+        claimedAt: null,
+        lastErrorCode: job.lastErrorCode,
+      },
       data: {
         status: PrintJobStatus.QUEUED,
         claimedByEdgeDeviceId: null,
@@ -247,6 +257,8 @@ export class HardwareService {
         lastError: null,
       },
     });
+    if (result.count !== 1) throw new ConflictException('Print retry state changed; refresh before retry');
+    return this.prisma.printJob.findUnique({ where: { id } });
   }
 
   async edgeClaim(
@@ -350,26 +362,43 @@ export class HardwareService {
       },
     });
     if (!job) throw new ConflictException('Print job is not active on this Edge Hub');
-    const terminalFailure = dto.status === PrintJobStatus.FAILED && job.attemptCount >= job.maxAttempts;
-    const nextStatus =
-      dto.status === PrintJobStatus.SUCCEEDED
-        ? PrintJobStatus.SUCCEEDED
-        : terminalFailure
-          ? PrintJobStatus.FAILED
-          : PrintJobStatus.QUEUED;
-    await this.prisma.printJob.update({
-      where: { id: job.id },
+    // Failure after physical I/O might be a successfully printed receipt.
+    // Only the Edge's typed pre-I/O adapter validation can be terminal FAILED.
+    // Neither an ambiguous failure nor an expired lease may auto-requeue.
+    const safePreflightFailure =
+      dto.status === PrintJobStatus.FAILED &&
+      dto.errorCode === 'UNSUPPORTED_PRINTER_ADAPTER' &&
+      job.status === PrintJobStatus.CLAIMED;
+    const ambiguousFailure =
+      dto.status === PrintJobStatus.FAILED && !safePreflightFailure;
+    const nextStatus = dto.status === PrintJobStatus.SUCCEEDED
+      ? PrintJobStatus.SUCCEEDED
+      : safePreflightFailure ? PrintJobStatus.FAILED : job.status;
+    const updated = await this.prisma.printJob.updateMany({
+      // Atomic compare-and-set prevents a late failure or duplicate callback
+      // from overwriting an already recorded SUCCESS or terminal rejection.
+      where: {
+        id: job.id, shopId: device.shopId,
+        claimedByEdgeDeviceId: device.id,
+        claimedAt: job.claimedAt,
+        status: job.status,
+      },
       data: {
         status: nextStatus,
         printedAt: dto.status === PrintJobStatus.SUCCEEDED ? new Date() : null,
-        claimedByEdgeDeviceId: nextStatus === PrintJobStatus.QUEUED ? null : device.id,
-        claimedAt: nextStatus === PrintJobStatus.QUEUED ? null : job.claimedAt,
-        printingAt: null,
-        lastErrorCode: dto.status === PrintJobStatus.FAILED ? dto.errorCode?.trim() || 'PRINT_FAILED' : null,
-        lastError: dto.status === PrintJobStatus.FAILED ? dto.error?.trim().slice(0, 1000) || 'Printer reported failure' : null,
+        claimedByEdgeDeviceId: device.id,
+        claimedAt: job.claimedAt,
+        printingAt: ambiguousFailure ? job.printingAt : null,
+        lastErrorCode: ambiguousFailure
+          ? 'EDGE_PRINT_OUTCOME_UNKNOWN'
+          : safePreflightFailure ? 'UNSUPPORTED_PRINTER_ADAPTER' : null,
+        lastError: ambiguousFailure
+          ? 'Printer failure after claim; physical output cannot be ruled out. Operator review required.'
+          : safePreflightFailure ? dto.error?.trim().slice(0, 1000) || 'Printer adapter preflight rejected' : null,
       },
     });
-    return { ok: true, status: nextStatus };
+    if (updated.count !== 1) throw new ConflictException('Print completion raced with another state transition');
+    return { ok: true, status: nextStatus, ...(ambiguousFailure ? { manualReviewRequired: true } : {}) };
   }
 
   async bindCustomerDisplay(actor: JwtAccessPayload, dto: BindCustomerDisplayDto) {
