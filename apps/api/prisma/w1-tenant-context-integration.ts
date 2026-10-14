@@ -7,6 +7,7 @@
  *      pnpm --dir apps/api exec tsx prisma/w1-tenant-context-integration.ts
  */
 import assert from 'node:assert/strict';
+import { randomBytes } from 'node:crypto';
 import { PrismaClient } from '@prisma/client';
 import {
   applyTenantRlsSession,
@@ -27,12 +28,12 @@ if (
 const root = new PrismaClient();
 const role = 'gospots_w1_probe_reader';
 const table = 'w1_rls_probe';
-const suffix = '?schema=public';
 const actorUrl = new URL(url.toString());
 actorUrl.username = role;
-actorUrl.password = '';
+const testRolePassword = randomBytes(32).toString('hex');
+actorUrl.password = testRolePassword;
 const actor = new PrismaClient({
-  datasources: { db: { url: actorUrl.toString().replace(suffix, '') } },
+  datasources: { db: { url: actorUrl.toString() } },
 });
 const wrapped = wrapPrismaWithTenantRls(actor);
 const shopA = 'shop-w1-a';
@@ -51,8 +52,30 @@ async function rows(shopId: string): Promise<string[]> {
   });
 }
 async function main() {
-  await root.$executeRawUnsafe(`CREATE ROLE ${role} LOGIN`);
+  let roleCreated = false;
   try {
+    const versionRows = await root.$queryRaw<
+      Array<{ serverVersion: string }>
+    >`SELECT current_setting('server_version') AS "serverVersion"`;
+    const postgresMajor = Number(versionRows[0]?.serverVersion.split('.')[0]);
+    assert.ok(
+      Number.isInteger(postgresMajor) && postgresMajor >= 17,
+      'PostgreSQL version must be identifiable',
+    );
+    const expectedMajor = process.env.GOSPOTS_W1_EXPECT_PG_MAJOR;
+    if (expectedMajor) {
+      assert.equal(
+        postgresMajor,
+        Number(expectedMajor),
+        'Connected database is not the expected PostgreSQL major version',
+      );
+      assertions += 1;
+    }
+    // Random test-only SCRAM credential: never write it to logs.
+    await root.$executeRawUnsafe(
+      `CREATE ROLE ${role} LOGIN PASSWORD '${testRolePassword}'`,
+    );
+    roleCreated = true;
     await root.$executeRawUnsafe(
       `CREATE TABLE ${table} (id text PRIMARY KEY, shop_id text NOT NULL, description text)`,
     );
@@ -78,6 +101,11 @@ async function main() {
     await root.$executeRawUnsafe(
       `GRANT SELECT,INSERT,UPDATE,DELETE ON ${table} TO ${role}`,
     );
+    // Disposable-only fault injection verifies role/table cleanup if an
+    // assertion fails after setup; never skips any security assertion in CI.
+    if (process.env.GOSPOTS_W1_FORCE_FAILURE_AFTER_SETUP === 'true') {
+      throw new Error('W1 deliberate cleanup-check failure after setup');
+    }
     eq(await rows(shopA), ['a1']);
     eq(await rows(shopB), ['b1']);
     eq(await Promise.all([rows(shopA), rows(shopB)]), [['a1'], ['b1']]);
@@ -136,21 +164,23 @@ async function main() {
       );
       eq(await rows(i % 2 ? shopB : shopA), [i % 2 ? 'b1' : 'a1']);
     }
-    await withTenantRls(
-      wrapped,
-      { shopId: shopA, mode: 'tenant' },
-      async (tx) => {
+    await assert.rejects(
+      withTenantRls(wrapped, { shopId: shopA, mode: 'tenant' }, async (tx) => {
         eq(
           await tx.$executeRaw`UPDATE w1_rls_probe SET description='safe' WHERE id='b1'`,
           0,
         );
-        await assert.rejects(
-          tx.$executeRaw`INSERT INTO w1_rls_probe(id,shop_id) VALUES ('forged',${shopB})`,
-        );
-        assertions += 1;
-      },
-    ).catch(() => undefined); // PG aborts transaction after rejected cross-tenant INSERT.
+        // Fail the test if a forbidden INSERT unexpectedly succeeds.
+        await tx.$executeRaw`INSERT INTO w1_rls_probe(id,shop_id) VALUES ('forged',${shopB})`;
+      }),
+      /row-level security policy|42501/,
+    );
+    assertions += 1;
     eq(await rows(shopB), ['b1']);
+    eq(
+      await actor.$queryRaw<Array<{ id: string }>>`SELECT id FROM w1_rls_probe`,
+      [],
+    );
     await assert.rejects(
       withTenantRls(wrapped, { shopId: shopA, mode: 'tenant' }, async (tx) => {
         await tx.$executeRaw`INSERT INTO w1_rls_probe(id,shop_id) VALUES ('rollback',${shopA})`;
@@ -160,6 +190,10 @@ async function main() {
     );
     assertions += 1;
     eq(await rows(shopA), ['a1']);
+    eq(
+      await actor.$queryRaw<Array<{ id: string }>>`SELECT id FROM w1_rls_probe`,
+      [],
+    );
     eq(await Promise.all([rows(shopA), rows(shopB), rows(shopA)]), [
       ['a1'],
       ['b1'],
@@ -170,6 +204,7 @@ async function main() {
         success: true,
         assertions,
         postgres: 'DISPOSABLE',
+        postgresMajor,
         positiveShops: 2,
         context: 'SET LOCAL',
         poolReset: true,
@@ -177,10 +212,21 @@ async function main() {
       }),
     );
   } finally {
-    await actor.$disconnect();
-    await root.$executeRawUnsafe(`DROP TABLE IF EXISTS ${table}`);
-    await root.$executeRawUnsafe(`DROP ROLE IF EXISTS ${role}`);
-    await root.$disconnect();
+    try {
+      await actor.$disconnect();
+    } finally {
+      try {
+        await root.$executeRawUnsafe(`DROP TABLE IF EXISTS ${table}`);
+      } finally {
+        try {
+          if (roleCreated) {
+            await root.$executeRawUnsafe(`DROP ROLE IF EXISTS ${role}`);
+          }
+        } finally {
+          await root.$disconnect();
+        }
+      }
+    }
   }
 }
 main().catch((error: unknown) => {

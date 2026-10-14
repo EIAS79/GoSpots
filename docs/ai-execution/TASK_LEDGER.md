@@ -130,3 +130,13 @@ Owner authorizes one consolidated follow-up development commit only. No signed W
 ### 2026-10-14 — Supervisor security follow-up before publication
 - T-006 `unarchive()`: **IMPLEMENTED + TESTED**, missing notification permission now checked before zero-result return or mutation; staff denied on ids, allMatching and no-op, authorized owner/staff shop/recipient/archived predicates verified. Notification-boundary suite 8/8, seven focused suites 35/35 total; PG18 22/22.
 - New standalone PG18 integration **NOT CI-WIRED**: existing `.github/workflows/phase17-validation.yml` invokes the distinct PG17 `prisma/e2e-tenant-assert.ts`. Adding a workflow path would exceed approved nine-file scope. PG17 parity of new script is **NOT VERIFIED**. Preserve distinction after publication.
+
+### 2026-10-14 — Local T-006 PostgreSQL 17 workflow certification readiness
+| Ticket | IMPLEMENTED / TESTED | VERIFIED | ACCEPTED / EXTERNAL BLOCKER |
+| --- | --- | --- | --- |
+| T-006 | One gated Phase17 PostgreSQL17 isolated DB step; fail-closed standalone Prisma tenant fixture with 24 local assertions, SCRAM credential, success/failure cleanup. Notification code reviewed unchanged. | PG18.6 SCRAM 24 PASS, intentional failure NONZERO with role/table absent; static CI YAML & shell validation; PG17 CI NOT RUN | NOT ACCEPTED: one authorized push to obtain PG17 CI evidence; independent security owner review/RLS rollout separate |
+| T-004 | Read-only alias/deploy/branch comparison; existing nonsecret runtime fingerprint utility inspected | Frontend deployment, Render LIVE SHA and Neon primary branch metadata only | UNVERIFIED: actual API_PROXY_TARGET, Render database host/branch, deployed Adyen environment/merchant |
+| T-002 | Updated finance acceptance packet (no payment code edit) | SHA 3191946b exact-SHA 573 Jest/48 browser, 28 PG17 refund, 11-table RLS already green | Finance approver name/date/decision/exceptions pending; TEST terminal and payout W2 |
+| T-003 | Test-recipient Resend/mailbox/calendar runbook (no transport code edit) | Published local HTTP sink DST/error/outbox regression only | Provider delivery, bounce/retry and manual Apple/Google/Outlook interpretation remain EXTERNAL |
+- NO remote push, no new exact-SHA CI, no release or live change in this preparation batch.
+- **Final local fixture (version pinned):** PG18.6 SCRAM 25/25 assertions PASS with `postgresMajor=18`, deliberately wrong expected major 17 NONZERO, setup fault NONZERO and cleanup checked. Existing Phase17 step pins expected PG major 17 and is gating; PG17 outcome NOT RUN.
