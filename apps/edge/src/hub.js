@@ -103,6 +103,8 @@ export class EdgeHub {
       lastSequence: diagnostics.events.lastSequence,
       printWorkerRunning: this.printWorkerRunning,
       printPendingAck: printing.printedPendingAck + printing.failedPendingAck,
+      printDispatchUncertain: printing.dispatchUncertain,
+      printManualReviewRequired: printing.claimed + printing.dispatchUncertain,
     };
   }
 
@@ -151,33 +153,50 @@ export class EdgeHub {
     if (!this.cloud.registeredDeviceId || this.printWorkerRunning) return { processed: 0, skipped: true };
     this.printWorkerRunning = true;
     try {
-      let staged = this.printContinuity.next();
-      if (staged && staged.state !== 'CLAIMED') return await this.#ackStagedPrint(staged);
+      // Drain safe cloud acknowledgements first. Quarantined uncertain jobs
+      // remain in SQLite for manual review, without starving unrelated work.
+      let staged = this.printContinuity.nextAcknowledgement();
+      if (staged) return await this.#ackStagedPrint(staged);
 
-      if (!staged) {
-        const claimed = await this.cloud.claimPrintJob();
-        const job = claimed?.job;
-        if (!job) return { processed: 0 };
-        staged = this.printContinuity.stage(job);
+      const claimed = await this.cloud.claimPrintJob();
+      const claimedJob = claimed?.job;
+      if (!claimedJob) {
+        const unresolved = this.printContinuity.next();
+        if (unresolved && ['CLAIMED', 'DISPATCH_UNCERTAIN'].includes(unresolved.state)) {
+          return { processed: 0, manualReviewRequired: true, jobId: unresolved.job.id, reason: 'PHYSICAL_PRINT_OUTCOME_UNKNOWN' };
+        }
+        return { processed: 0 };
       }
+      staged = this.printContinuity.stage(claimedJob);
       const job = staged.job;
+      if (!staged.freshlyStaged) {
+        // A cloud claim of a known ID is NOT permission for another physical
+        // effect, even if the local record was already ACKNOWLEDGED.
+        if (['PRINTED_PENDING_ACK', 'FAILED_PENDING_ACK'].includes(staged.state)) {
+          return await this.#ackStagedPrint(staged);
+        }
+        if (staged.state === 'ACKNOWLEDGED') {
+          return { processed: 0, duplicate: true, jobId: job.id };
+        }
+        return { processed: 0, manualReviewRequired: true, jobId: job.id, reason: 'PHYSICAL_PRINT_OUTCOME_UNKNOWN' };
+      }
 
       // Claim was already persisted locally. Failure to update cloud to PRINTING must
       // not force a duplicate physical print after connectivity returns.
       try { await this.cloud.markPrintJobPrinting(job.id); } catch { /* durable local claim is authoritative for physical execution */ }
 
+      // Durable fail-closed marker precedes any physical output attempt.
+      this.printContinuity.markDispatchUncertain(job.id);
+      let physicalResult;
       try {
-        const result = await this.printExecutor(job);
-        this.printContinuity.markPrinted(job.id, result);
-        try {
-          await this.cloud.completePrintJob(job.id, { status: 'SUCCEEDED' });
-          this.printContinuity.markAcknowledged(job.id);
-          return { processed: 1, succeeded: 1, jobId: job.id, result };
-        } catch (error) {
-          return { processed: 1, succeeded: 1, pendingAck: true, jobId: job.id, result, ackError: error?.message ?? String(error) };
-        }
+        physicalResult = await this.printExecutor(job);
       } catch (error) {
         const message = error?.message ?? String(error);
+        // Network/printer failures can occur AFTER bytes reached the device.
+        // Only a known pre-dispatch adapter rejection is safe to report FAILED.
+        if (!/UNSUPPORTED/i.test(message)) {
+          return { processed: 1, manualReviewRequired: true, jobId: job.id, reason: 'PHYSICAL_PRINT_OUTCOME_UNKNOWN', error: message };
+        }
         this.printContinuity.markFailed(job.id, message);
         try {
           await this.cloud.completePrintJob(job.id, {
@@ -190,6 +209,21 @@ export class EdgeHub {
           return { processed: 1, failed: 1, pendingAck: true, jobId: job.id, error: message, ackError: completionError?.message ?? String(completionError) };
         }
         return { processed: 1, failed: 1, jobId: job.id, error: message };
+      }
+      // A persistence failure after the physical executor returns must NEVER
+      // report FAILED to the cloud: the printer may already have printed.
+      try {
+        this.printContinuity.markPrinted(job.id, physicalResult);
+      } catch (error) {
+        return { processed: 1, manualReviewRequired: true, jobId: job.id, reason: 'PHYSICAL_PRINT_OUTCOME_UNKNOWN', persistenceError: error?.message ?? String(error) };
+      }
+      const result = physicalResult;
+      try {
+          await this.cloud.completePrintJob(job.id, { status: 'SUCCEEDED' });
+          this.printContinuity.markAcknowledged(job.id);
+          return { processed: 1, succeeded: 1, jobId: job.id, result };
+      } catch (error) {
+        return { processed: 1, succeeded: 1, pendingAck: true, jobId: job.id, result, ackError: error?.message ?? String(error) };
       }
     } finally {
       this.printWorkerRunning = false;
