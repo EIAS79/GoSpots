@@ -410,6 +410,10 @@ export class KsefClientService {
       invoiceReference = sentBody.referenceNumber;
       if (!invoiceReference)
         throw new Error('KSeF invoice response has no referenceNumber');
+      // KSeF online sessions must be closed after the last invoice to initiate
+      // session-level UPO generation. An ambiguous close is UNKNOWN, never an
+      // invitation to submit the same invoice a second time.
+      await this.closeOnlineSession(shopId, sessionReference);
       return {
         state: 'SUBMITTED',
         sessionReference,

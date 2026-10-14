@@ -137,3 +137,17 @@ Read-only public health probes timed out; this is inconclusive about routing/ava
 - Authorized operations owner must run the existing nonsecret `prisma/inspect-runtime-identity.ts` helper independently inside the active Vercel and Render processes (or expose equivalent attested host/merchant digests), compare host fingerprints with the intended Neon project/branch endpoint, match backend SHA and webhook route, and sign an access-limited provenance report. No raw URL, key, merchant name or secret may appear. No connector has established this evidence here.
 - T-004 remains **PARTIALLY VERIFIED / EXTERNAL BLOCKER**; T-006 PG17 step will become VERIFIED only after the next authorized exact-SHA GitHub run.
 - **Final revision of local evidence:** fixture now includes version attestation; the Phase17 job explicitly expects PostgreSQL major **17**. Local disposable PostgreSQL **18.6** with expected major **18** passed **25 actual assertions**, emitted only nonsecret `postgresMajor:18`, and rejected an intentionally wrong PG17 expectation. Forced post-setup failure also exited nonzero; scratch role/table removed. This later test supersedes the earlier 24-assertion local count. Actual PG17 fixture still NOT EXECUTED until authorized GitHub CI.
+
+## 2026-10-14 — SUPERSEDING PUBLISHED W1 ACCEPTANCE EVIDENCE (no owner signature implied)
+Previous LOCAL PG17-not-run statements are retained as chronological preparation evidence. Subsequent development SHA **f7acffd6060c568e34f75164894a6be0ab975688** integrated and executed the standalone W1 fixture on real disposable PG17: **Phase17 run 38490169615, release-integrity job 115613226953, 25/25 assertions PASS** with major version 17. Exact-new-SHA CI: **13/13 workflows, 20/20 jobs SUCCESS; Jest 119/573; general + strict browser 24/24 each; 28 PG17 refunds, existing 11-table PG17 financial RLS, payment reconciliation/migrations/security/DR PASS.** Production RLS disabled. T-006 automation VERIFIED, broader independent security **NOT ACCEPTED**.
+
+| Independent acceptance owner | Required evidence | Name | Date | Decision and exceptions |
+| --- | --- | --- | --- | --- |
+| T-002 Finance owner | reviewed accepted SHA, capture-before-allocation, idempotency, caps, UNKNOWN, two-connection refund/rollback, ledger reconciliation | [UNSIGNED] | [UNSIGNED] | [UNSIGNED] |
+| T-003 Communications owner | authorized Resend TEST mailbox/receipt, bounce/retry, staff/public parity and Apple/Google/Outlook displayed timezone | [UNSIGNED] | [UNSIGNED] | [UNSIGNED] |
+| T-006 Independent security reviewer | tenant roles/IDOR/export/SSE/cache/jobs/SET LOCAL, exception paths and rollback, independent decision | [UNSIGNED] | [UNSIGNED] | [UNSIGNED] |
+
+**Release rule:** automatic CI success is NOT finance-owner, communications-owner, independent security, provider certification or commercial go-live approval. See `W2_2026-10-14_INTEGRATION_READINESS.md` for W2 external acceptance preparation.
+- **Separate W2 clarification, NOT a W1 regression claim:** the next local stage identified and fixed KSeF online session-close omission after invoice send. Local-only T-008 correction/test is documented in `W2_2026-10-14_INTEGRATION_READINESS.md`; it is NOT part of published f7acffd W1 CI and provides no real fiscal acceptance.
+
+- W2 pre-publication regression refinement: four mock-only KSeF session-close tests now cover asynchronous completion and timeout in addition to success and HTTP failure. This is not an external KSeF approval.
