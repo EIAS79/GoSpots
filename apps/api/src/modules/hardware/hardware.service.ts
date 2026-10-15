@@ -44,6 +44,62 @@ function canonicalJson(value: unknown): string {
     .join(',')}}`;
 }
 
+const INCIDENT_LIMIT = 100;
+const PRINT_INCIDENT_SELECT = {
+  id: true,
+  shopId: true,
+  type: true,
+  status: true,
+  sourceType: true,
+  sourceId: true,
+  printerDeviceId: true,
+  claimedByEdgeDeviceId: true,
+  claimedAt: true,
+  printingAt: true,
+  printedAt: true,
+  lastErrorCode: true,
+  lastError: true,
+  attemptCount: true,
+  createdAt: true,
+  updatedAt: true,
+} satisfies Prisma.PrintJobSelect;
+
+type IncidentCursor = { shopId: string; createdAt: string; id: string };
+
+function parseIncidentCursor(
+  raw: string | undefined,
+  shopId: string,
+): IncidentCursor | null {
+  if (raw === undefined) return null;
+  try {
+    if (!raw || raw.length > 1024 || !/^[A-Za-z0-9_-]+$/.test(raw))
+      throw new Error();
+    const decoded: unknown = JSON.parse(
+      Buffer.from(raw, 'base64url').toString('utf8'),
+    );
+    if (!decoded || typeof decoded !== 'object' || Array.isArray(decoded))
+      throw new Error();
+    const value = decoded as Record<string, unknown>;
+    if (
+      value.v !== 1 ||
+      value.shopId !== shopId ||
+      typeof value.id !== 'string' ||
+      !/^[A-Za-z0-9_-]{1,128}$/.test(value.id) ||
+      typeof value.createdAt !== 'string'
+    )
+      throw new Error();
+    const createdAt = new Date(value.createdAt);
+    if (
+      !Number.isFinite(createdAt.valueOf()) ||
+      createdAt.toISOString() !== value.createdAt
+    )
+      throw new Error();
+    return { shopId, id: value.id, createdAt: value.createdAt };
+  } catch {
+    throw new BadRequestException('Invalid print incident cursor');
+  }
+}
+
 @Injectable()
 export class HardwareService {
   constructor(
@@ -96,6 +152,62 @@ export class HardwareService {
       this.prisma.barcodeAlias.count({ where: { shopId } }),
     ]);
     return { printers, routes, recentJobs, displays, barcodeAliasCount: barcodes };
+  }
+
+  async listPrintIncidents(
+    actor: JwtAccessPayload,
+    takeRaw?: string,
+    cursorRaw?: string,
+  ) {
+    const shopId = requireShopId(actor);
+    await this.requireRegistry(shopId);
+    const take = takeRaw === undefined ? 25 : Number(takeRaw);
+    if (!Number.isInteger(take) || take < 1 || take > INCIDENT_LIMIT) {
+      throw new BadRequestException('Invalid print incident page size');
+    }
+    const after = parseIncidentCursor(cursorRaw, shopId);
+    const where: Prisma.PrintJobWhereInput = {
+      shopId,
+      status: {
+        in: [
+          PrintJobStatus.CLAIMED,
+          PrintJobStatus.PRINTING,
+          PrintJobStatus.FAILED,
+        ],
+      },
+      lastErrorCode: {
+        in: ['EDGE_PRINT_OUTCOME_UNKNOWN', 'EDGE_PRINT_LEASE_EXPIRED'],
+      },
+      ...(after
+        ? {
+            OR: [
+              { createdAt: { gt: new Date(after.createdAt) } },
+              { createdAt: new Date(after.createdAt), id: { gt: after.id } },
+            ],
+          }
+        : {}),
+    };
+    const rows = await this.prisma.printJob.findMany({
+      where,
+      select: PRINT_INCIDENT_SELECT,
+      orderBy: [{ createdAt: 'asc' }, { id: 'asc' }],
+      take: take + 1,
+    });
+    const items = rows.slice(0, take);
+    const hasMore = rows.length > take;
+    const last = items[items.length - 1];
+    const nextCursor =
+      hasMore && last
+        ? Buffer.from(
+            JSON.stringify({
+              v: 1,
+              shopId,
+              createdAt: last.createdAt.toISOString(),
+              id: last.id,
+            }),
+          ).toString('base64url')
+        : null;
+    return { items, hasMore, nextCursor };
   }
 
   async configurePrinter(actor: JwtAccessPayload, dto: ConfigurePrinterDto) {
