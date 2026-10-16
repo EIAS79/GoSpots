@@ -13,9 +13,13 @@ function payloadText(payload) {
   return JSON.stringify(payload ?? {}, null, 2);
 }
 
+export class PrinterPreflightError extends Error {
+  constructor(message) { super(message); this.name = 'PrinterPreflightError'; }
+}
+
 export function renderEscPos(payload) {
   const text = Buffer.from(payloadText(payload), 'utf8');
-  if (text.length > MAX_TEXT_BYTES) throw new Error('UNSUPPORTED: print payload exceeds 128 KiB');
+  if (text.length > MAX_TEXT_BYTES) throw new PrinterPreflightError('UNSUPPORTED: print payload exceeds 128 KiB');
   const initialize = Buffer.from([ESC, 0x40]);
   const newline = text.length && text[text.length - 1] === 0x0a ? Buffer.alloc(0) : Buffer.from('\n');
   const cut = payload && typeof payload === 'object' && payload.cut === false
@@ -36,24 +40,31 @@ function writeTcp(host, port, bytes, timeoutMs = 8_000) {
   });
 }
 
-export async function executePrintJob(job, { tcpWriter = writeTcp } = {}) {
+export function validatePrintJob(job) {
   const printer = job?.printer ?? {};
   const adapter = String(printer.adapter ?? '').trim().toLowerCase();
   const bytes = renderEscPos(job?.payload ?? {});
 
   if (adapter === 'test' || adapter === 'memory') {
-    return { adapter, bytes: bytes.length };
+    return { adapter, bytes };
   }
 
   if (adapter === 'tcp-escpos' || adapter === 'escpos-tcp') {
     const host = String(printer.host ?? '').trim();
     const port = Number(printer.port ?? 9100);
     if (!host || !Number.isInteger(port) || port < 1 || port > 65535) {
-      throw new Error('UNSUPPORTED: TCP ESC/POS printer requires a valid host and port');
+      throw new PrinterPreflightError('UNSUPPORTED: TCP ESC/POS printer requires a valid host and port');
     }
-    const result = await tcpWriter(host, port, bytes);
-    return { adapter: 'tcp-escpos', ...result };
+    return { adapter: 'tcp-escpos', host, port, bytes };
   }
 
-  throw new Error(`UNSUPPORTED: printer adapter ${adapter || '(missing)'} is not installed on this Edge Hub`);
+  throw new PrinterPreflightError(`UNSUPPORTED: printer adapter ${adapter || '(missing)'} is not installed on this Edge Hub`);
+}
+
+export async function executePrintJob(job, { tcpWriter = writeTcp } = {}) {
+  const plan = validatePrintJob(job);
+  if (plan.adapter === 'test' || plan.adapter === 'memory')
+    return { adapter: plan.adapter, bytes: plan.bytes.length };
+  const result = await tcpWriter(plan.host, plan.port, plan.bytes);
+  return { adapter: 'tcp-escpos', ...result };
 }

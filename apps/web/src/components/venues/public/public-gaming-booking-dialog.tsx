@@ -5,11 +5,8 @@ import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
 import { ModalPortal } from "@/components/ui/modal-portal";
 import { FeedbackBanner } from "@/components/ui/feedback-banner";
-import { splitDateAndTime, addMinutesToTime } from "@/lib/booking-time";
-import {
-  holdEndFromLocal,
-  parseNoShowMinutes,
-} from "@/lib/dining-reservation";
+import { addMinutesToTime } from "@/lib/booking-time";
+import { parseNoShowMinutes } from "@/lib/dining-reservation";
 import { BowlingModePicker } from "@/components/gaming/bowling-mode-picker";
 import {
   buildBowlingNotes,
@@ -40,7 +37,7 @@ import {
 } from "@/lib/public-captcha";
 import { safeStatusPathHref } from "@/lib/safe-app-href";
 import { usePublicPrefs } from "@/lib/public-prefs-context";
-import { combineLocalDateTime } from "@/lib/seating-event-datetime";
+import { venueWallToUtcIso, utcIsoToVenueWall, venueHoldEndUtcIso } from "@/lib/venue-booking-datetime";
 import {
   resolveVenueTimeZone,
   venueDayKey,
@@ -83,11 +80,9 @@ function outageCopyKey(
   }
 }
 
-function defaultStartTime() {
-  const d = new Date();
-  d.setMinutes(Math.ceil(d.getMinutes() / 15) * 15, 0, 0);
-  const pad = (n: number) => String(n).padStart(2, "0");
-  return `${pad(d.getHours())}:${pad(d.getMinutes())}`;
+function defaultStartTime(venueTimeZone: string) {
+  const d = new Date(Math.ceil(Date.now() / (15 * 60_000)) * 15 * 60_000);
+  return utcIsoToVenueWall(d.toISOString(), venueTimeZone).time;
 }
 
 export function PublicGamingBookingDialog({
@@ -203,11 +198,11 @@ export function PublicGamingBookingDialog({
     () => String(initialPartySize ?? 1),
   );
   const [startTime, setStartTime] = useState(
-    () => initialStartTime ?? defaultStartTime(),
+    () => initialStartTime ?? defaultStartTime(venueTimeZone),
   );
   const [endTime, setEndTime] = useState(() => {
     if (initialEndTime) return initialEndTime;
-    const start = initialStartTime ?? defaultStartTime();
+    const start = initialStartTime ?? defaultStartTime(venueTimeZone);
     return addMinutesToTime(start, slotMinutes);
   });
   const [gameCount, setGameCount] = useState(
@@ -265,15 +260,15 @@ export function PublicGamingBookingDialog({
   }
 
   const startsAt = useMemo(
-    () => combineLocalDateTime(date, startTime),
-    [date, startTime],
+    () => venueWallToUtcIso(date, startTime, venueTimeZone),
+    [date, startTime, venueTimeZone],
   );
   const endsAt = useMemo(() => {
     if (isDining) {
-      return holdEndFromLocal(date, startTime, noShowMinutes);
+      return venueHoldEndUtcIso(date, startTime, venueTimeZone, noShowMinutes);
     }
-    return combineLocalDateTime(date, endTime);
-  }, [isDining, date, startTime, endTime, noShowMinutes]);
+    return venueWallToUtcIso(date, endTime, venueTimeZone);
+  }, [isDining, date, startTime, endTime, noShowMinutes, venueTimeZone]);
 
   const estimatedDurationMinutes = useMemo(() => {
     if (isDining) return effectiveSlotMinutes;
@@ -368,8 +363,9 @@ export function PublicGamingBookingDialog({
     }
 
     const overlapEndTime = isDining
-      ? splitDateAndTime(
-          holdEndFromLocal(date, startTime, noShowMinutes),
+      ? utcIsoToVenueWall(
+          venueHoldEndUtcIso(date, startTime, venueTimeZone, noShowMinutes) ?? "",
+          venueTimeZone,
         ).time
       : endTime;
 
@@ -423,8 +419,8 @@ export function PublicGamingBookingDialog({
         : notes.trim() || undefined;
 
     const resolvedEndsAt = isDining
-      ? holdEndFromLocal(date, startTime, noShowMinutes)
-      : (endsAt ?? combineLocalDateTime(date, endTime));
+      ? venueHoldEndUtcIso(date, startTime, venueTimeZone, noShowMinutes)
+      : (endsAt ?? venueWallToUtcIso(date, endTime, venueTimeZone));
     if (!resolvedEndsAt) {
       setError(t("venuePage.booking.invalidTime"));
       return;

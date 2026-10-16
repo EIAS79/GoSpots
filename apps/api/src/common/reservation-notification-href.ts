@@ -1,4 +1,5 @@
 import type { Prisma } from '@prisma/client';
+import { reservationVenueDateKey } from './reservation-display.util';
 
 export type ReservationNotificationTab = 'dining' | 'schedule' | 'events';
 
@@ -14,7 +15,10 @@ export function isSafeAppRelativeHref(href: string): boolean {
   if (!trimmed.startsWith('/') || trimmed.startsWith('//')) return false;
   if (trimmed.includes('\\') || trimmed.includes('\0')) return false;
   if (trimmed.includes('..')) return false;
-  if (/[\u0000-\u001F\u007F]/.test(trimmed)) return false;
+  for (let i = 0; i < trimmed.length; i += 1) {
+    const codePoint = trimmed.charCodeAt(i);
+    if (codePoint <= 0x1f || codePoint === 0x7f) return false;
+  }
 
   let parsed: URL;
   try {
@@ -93,10 +97,10 @@ export function guestVenueStatusPath(
 export function reservationSessionsHref(
   startsAt: Date,
   tab: ReservationNotificationTab,
+  timeZone = 'UTC',
 ): string {
   if (tab === 'events') return '/sessions?tab=events';
-  const pad = (n: number) => String(n).padStart(2, '0');
-  const date = `${startsAt.getFullYear()}-${pad(startsAt.getMonth() + 1)}-${pad(startsAt.getDate())}`;
+  const date = reservationVenueDateKey(startsAt, timeZone);
   return sanitizeAppRelativeHref(`/sessions?tab=${tab}&date=${date}`);
 }
 

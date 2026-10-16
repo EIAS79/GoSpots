@@ -47,7 +47,7 @@ test('@smoke Phase 3 does not accept a second payment after a settlement is full
   state = await api<any>(page, 'POST', `/checkout/settlements/${settlement.id}/payments`, {
     data: {
       expectedCheckVersion: state.guestCheckVersion,
-      method: 'MANUAL_CARD',
+      method: 'OTHER',
       allocationKind: 'REMAINING',
       allocations,
     },
@@ -60,7 +60,7 @@ test('@smoke Phase 3 does not accept a second payment after a settlement is full
   await api(page, 'POST', `/checkout/settlements/${settlement.id}/payments`, {
     data: {
       expectedCheckVersion: state.guestCheckVersion,
-      method: 'MANUAL_CARD',
+      method: 'OTHER',
       allocationKind: 'REMAINING',
       allocations,
     },
@@ -70,4 +70,35 @@ test('@smoke Phase 3 does not accept a second payment after a settlement is full
   const after = await api<any>(page, 'GET', `/checkout/settlements/${settlement.id}/payment-state`);
   expect(after.state).toBe('PAID');
   expect(after.payments).toHaveLength(1);
+});
+
+test('@smoke direct manual-card request cannot assert a successful checkout payment', async ({ page }) => {
+  await loginOwner(page);
+  await bindVenue(page, E2E.venues.cash);
+  const check = await createGuestCheckFromUi(page, E2E.venues.cash, `Forged Card ${Date.now()}`);
+  await completeLegacyOrder(page, check.id, 'e2e-item-cash', `Forged Card Order ${Date.now()}`);
+  const preview = await api<any>(page, 'POST', `/checkout/checks/${check.id}/preview`, { data: {} });
+  const settlement = await api<any>(page, 'POST', `/checkout/checks/${check.id}/settlements`, {
+    data: { expectedVersion: preview.checkVersion },
+    idempotencyKey: `${check.id}-forged-card-settlement`,
+  });
+  const before = await api<any>(page, 'GET', `/checkout/settlements/${settlement.id}/payment-state`);
+  const denial = await api<any>(page, 'POST', `/checkout/settlements/${settlement.id}/payments`, {
+    data: {
+      expectedCheckVersion: before.guestCheckVersion,
+      method: 'MANUAL_CARD',
+      allocationKind: 'REMAINING',
+      allocations: settlement.snapshots.map((line: any) => ({
+        snapshotId: line.id, amount: line.finalAmount,
+      })),
+    },
+    idempotencyKey: `${check.id}-forged-card-denied`,
+    expectedStatus: 403,
+  });
+  expect(denial.code).toBe('FORBIDDEN');
+  const after = await api<any>(page, 'GET', `/checkout/settlements/${settlement.id}/payment-state`);
+  expect(after.guestCheckVersion).toBe(before.guestCheckVersion);
+  expect(after.state).toBe(before.state);
+  expect(after.amountDue).toBe(before.amountDue);
+  expect(after.payments).toEqual(before.payments);
 });

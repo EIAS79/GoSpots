@@ -53,7 +53,7 @@ test('@smoke E2E-01 gaming cashier golden path', async ({ page }) => {
     'E2E Gaming Drinks',
   );
 
-  const { settlement, state } = await settleAndSplit(page, check.id, ['CASH', 'MANUAL_CARD']);
+  const { settlement, state } = await settleAndSplit(page, check.id, ['CASH', 'OTHER']);
   expect(state.payments).toHaveLength(2);
 
   await page.goto(`/dashboard/${E2E.venues.gaming}/checkout`);

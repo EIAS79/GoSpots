@@ -52,6 +52,7 @@ import {
   verifyPresentedGuestToken,
 } from '../../common/guest-token.util';
 import { serializeMoneyOrNull } from '../../common/money.util';
+import { formatReservationWindow } from '../../common/reservation-display.util';
 
 @Injectable()
 export class ReservationsPublicService {
@@ -68,23 +69,6 @@ export class ReservationsPublicService {
   private static readonly SCHEDULE_FUTURE_DAYS = 366;
   /** Allow a short skew so "now" booking UIs aren't flaky. */
   private static readonly BOOKING_PAST_GRACE_MS = 5 * 60 * 1000;
-
-  private formatWindow(startsAt: Date, endsAt: Date) {
-    const date = startsAt.toLocaleDateString('en-US', {
-      weekday: 'short',
-      month: 'short',
-      day: 'numeric',
-    });
-    const start = startsAt.toLocaleTimeString('en-US', {
-      hour: 'numeric',
-      minute: '2-digit',
-    });
-    const end = endsAt.toLocaleTimeString('en-US', {
-      hour: 'numeric',
-      minute: '2-digit',
-    });
-    return `${date} · ${start}–${end}`;
-  }
 
   private isGamingResourceType(type: string | null | undefined) {
     return !!type && (FEATURED_GAME_TYPES as string[]).includes(type);
@@ -159,6 +143,7 @@ export class ReservationsPublicService {
       startsAt: Date;
       endsAt: Date;
       status: string;
+      timeZone?: string;
       notes?: string | null;
       statusPath?: string | null;
       isDining?: boolean;
@@ -175,6 +160,7 @@ export class ReservationsPublicService {
       startsAt: input.startsAt,
       endsAt: input.endsAt,
       status: input.status,
+      timeZone: input.timeZone,
       statusUrl,
       notes: input.notes,
       isDining: input.isDining,
@@ -326,7 +312,7 @@ export class ReservationsPublicService {
     const isDining = isDiningResourceType(resource.type);
     const unitLabel = row.resource?.name ?? 'station';
     const categoryName = row.resource?.category?.name ?? 'Gaming';
-    const window = this.formatWindow(row.startsAt, row.endsAt);
+    const window = formatReservationWindow(row.startsAt, row.endsAt, resolvedTimeZone);
     const contactBits = [
       row.guestEmail,
       row.guestPhone ? `tel ${row.guestPhone}` : null,
@@ -365,6 +351,7 @@ export class ReservationsPublicService {
       href: reservationSessionsHref(
         row.startsAt,
         isDining ? 'dining' : 'schedule',
+        resolvedTimeZone,
       ),
       dedupeKey: `public-reservation:${row.id}`,
     });
@@ -386,6 +373,7 @@ export class ReservationsPublicService {
           unitName: unitLabel,
           startsAt: row.startsAt,
           endsAt: row.endsAt,
+          timeZone: resolvedTimeZone,
           status: row.status,
           notes: row.notes,
           statusPath,
@@ -559,9 +547,10 @@ export class ReservationsPublicService {
       });
     }
 
+    const { resolvedTimeZone } = await loadShopVenueTimeContext(this.prisma, shop.id);
     const unitLabel = updated.resource?.name ?? 'station';
     const categoryName = updated.resource?.category?.name ?? 'Gaming';
-    const window = this.formatWindow(updated.startsAt, updated.endsAt);
+    const window = formatReservationWindow(row.startsAt, row.endsAt, resolvedTimeZone);
     const statusPath = this.guestStatusPath(
       shop.slug,
       token,
@@ -591,6 +580,7 @@ export class ReservationsPublicService {
       href: reservationSessionsHref(
         updated.startsAt,
         isDining ? 'dining' : 'schedule',
+        resolvedTimeZone,
       ),
       dedupeKey: `public-cancel:${updated.id}`,
     });
@@ -604,8 +594,9 @@ export class ReservationsPublicService {
           venueSlug: shop.slug,
           categoryName,
           unitName: unitLabel,
-          startsAt: updated.startsAt,
-          endsAt: updated.endsAt,
+          startsAt: row.startsAt,
+          endsAt: row.endsAt,
+          timeZone: resolvedTimeZone,
           status: updated.status,
           notes: updated.notes,
           statusPath,

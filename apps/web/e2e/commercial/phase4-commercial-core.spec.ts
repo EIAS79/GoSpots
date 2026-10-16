@@ -124,7 +124,7 @@ test('@smoke P4 commercial core exposes one controlled tab and settlement flow',
   expect(guard.allowed).toBe(true);
   expect(guard.managerOverrideAvailable).toBe(true);
 
-  const { settlement, state } = await settleAndSplit(page, check.id, ['MANUAL_CARD', 'OTHER']);
+  const { settlement, state } = await settleAndSplit(page, check.id, ['OTHER', 'OTHER']);
   const paid = state.payments.reduce((sum: number, payment: any) => sum + Number(payment.amount), 0);
   expect(paid).toBeCloseTo(Number(settlement.total), 4);
   await closePaidCheck(page, check.id);

@@ -38,6 +38,17 @@ export class HardwareController {
     return this.hardware.overview(user);
   }
 
+  @Get('print-incidents')
+  @UseGuards(JwtAuthGuard)
+  @RequirePermissions(PERMISSIONS.SHOP_MANAGE)
+  listPrintIncidents(
+    @CurrentUser() user: JwtAccessPayload,
+    @Query('take') takeRaw?: string,
+    @Query('cursor') cursor?: string,
+  ) {
+    return this.hardware.listPrintIncidents(user, takeRaw, cursor);
+  }
+
   @Post('printers/configure')
   @UseGuards(JwtAuthGuard)
   @RequirePermissions(PERMISSIONS.SHOP_MANAGE)

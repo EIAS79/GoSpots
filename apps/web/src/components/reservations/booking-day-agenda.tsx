@@ -31,11 +31,13 @@ import {
 import { useNowMs } from "@/lib/use-now-ms";
 import type { ScheduleAgendaItem } from "@/lib/reservations-client";
 import { useVenueSettingsOptional } from "@/lib/venue-settings-context";
+import { resolveVenueTimeZone } from "@/lib/venue-timezone";
 
 const PAGE_SIZE = 8;
 
-function formatTime(iso: string, locale?: string) {
+function formatTime(iso: string, locale: string | undefined, timeZone: string) {
   return new Date(iso).toLocaleTimeString(locale || undefined, {
+    timeZone,
     hour: "2-digit",
     minute: "2-digit",
   });
@@ -84,6 +86,10 @@ export function BookingDayAgenda({
   );
   const labels = useMemo(() => staffDayAgendaLabels(t), [t]);
   const locale = vs?.locale;
+  const venueTimeZone = resolveVenueTimeZone({
+    timezone: vs?.shop?.timezone,
+    locale: vs?.shop?.locale ?? vs?.locale,
+  });
 
   const itemIsLive = (item: ScheduleAgendaItem) => isLiveBooking(item, nowMs);
 
@@ -232,6 +238,7 @@ export function BookingDayAgenda({
               highlighted={item.resourceId === highlightUnitId}
               labels={labels}
               locale={locale}
+              timeZone={venueTimeZone}
               onEdit={onEdit}
               onCancel={onCancel}
               onRemove={onRemove}
@@ -305,6 +312,7 @@ function AgendaRow({
   highlighted,
   labels,
   locale,
+  timeZone,
   onEdit,
   onCancel,
   onRemove,
@@ -318,6 +326,7 @@ function AgendaRow({
   highlighted: boolean;
   labels: StaffDayAgendaLabels;
   locale?: string;
+  timeZone: string;
   onEdit: (item: ScheduleAgendaItem) => void;
   onCancel: (item: ScheduleAgendaItem) => void;
   onRemove: (item: ScheduleAgendaItem) => void;
@@ -347,14 +356,14 @@ function AgendaRow({
       )}
     >
       <div className="min-w-[4.5rem] shrink-0 text-sm font-medium text-emerald-300/90">
-        {formatTime(item.startsAt, locale)}
+        {formatTime(item.startsAt, locale, timeZone)}
         {item.status === "CHECKED_IN" ? (
           <span className="block text-[10px] font-normal text-zinc-500">
             {labels.openSession}
           </span>
         ) : sessionPhase === "waiting" ? (
           <span className="block text-[10px] font-normal text-zinc-500">
-            {labels.until(formatTime(item.endsAt, locale))}
+            {labels.until(formatTime(item.endsAt, locale, timeZone))}
           </span>
         ) : null}
       </div>

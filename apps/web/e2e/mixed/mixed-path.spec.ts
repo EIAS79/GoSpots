@@ -64,7 +64,7 @@ test('@smoke E2E-03 mixed visit conserves play food booking and split totals', a
   expect(sourceTypes.has('SHOP_ORDER')).toBeTruthy();
   expect(sourceTypes.has('RESERVATION')).toBeTruthy();
 
-  const { settlement, state } = await settleAndSplit(page, check.id, ['MANUAL_CARD', 'OTHER']);
+  const { settlement, state } = await settleAndSplit(page, check.id, ['OTHER', 'OTHER']);
   const paid = state.payments.reduce((sum: number, payment: any) => sum + Number(payment.amount), 0);
   expect(paid).toBeCloseTo(Number(settlement.total), 4);
   await closePaidCheck(page, check.id);
