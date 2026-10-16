@@ -115,7 +115,7 @@ describe('T-009 read-only cloud print incident review', () => {
     findMany.mockResolvedValueOnce([incident]);
     const result = await service.listPrintIncidents(actor('shop-A'));
     expect(result).toEqual({
-      items: [incident],
+      items: [expect.objectContaining(incident)],
       hasMore: false,
       nextCursor: null,
     });

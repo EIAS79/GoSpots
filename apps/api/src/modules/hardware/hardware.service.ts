@@ -14,6 +14,10 @@ import {
   PrintJobStatus,
 } from '@prisma/client';
 import { createHash, randomBytes } from 'crypto';
+import {
+  safePrintDiagnostic,
+  safePrinterDiagnostic,
+} from './hardware-response-safety';
 import { requireShopId } from '../../common/tenant';
 import { PrismaService } from '../../prisma/prisma.service';
 import { AuditService } from '../audit/audit.service';
@@ -43,6 +47,20 @@ function canonicalJson(value: unknown): string {
     .map((key) => `${JSON.stringify(key)}:${canonicalJson(object[key])}`)
     .join(',')}}`;
 }
+
+const PRINT_OVERVIEW_SELECT = {
+  id: true,
+  type: true,
+  sourceType: true,
+  sourceId: true,
+  status: true,
+  attemptCount: true,
+  maxAttempts: true,
+  claimedAt: true,
+  createdAt: true,
+  lastErrorCode: true,
+  lastError: true,
+} satisfies Prisma.PrintJobSelect;
 
 const INCIDENT_LIMIT = 100;
 const PRINT_INCIDENT_SELECT = {
@@ -131,27 +149,79 @@ export class HardwareService {
   async overview(actor: JwtAccessPayload) {
     const shopId = requireShopId(actor);
     await this.requireRegistry(shopId);
-    const [printers, routes, recentJobs, displays, barcodes] = await Promise.all([
-      this.prisma.printerDeviceConfiguration.findMany({
-        where: { shopId },
-        orderBy: { createdAt: 'asc' },
-      }),
-      this.prisma.printRoute.findMany({
-        where: { shopId },
-        orderBy: [{ jobType: 'asc' }, { priority: 'asc' }],
-      }),
-      this.prisma.printJob.findMany({
-        where: { shopId },
-        orderBy: { createdAt: 'desc' },
-        take: 50,
-      }),
-      this.prisma.customerDisplayBinding.findMany({
-        where: { shopId },
-        orderBy: { createdAt: 'asc' },
-      }),
-      this.prisma.barcodeAlias.count({ where: { shopId } }),
-    ]);
-    return { printers, routes, recentJobs, displays, barcodeAliasCount: barcodes };
+    const [printers, routes, recentJobs, displays, barcodes] =
+      await Promise.all([
+        this.prisma.printerDeviceConfiguration.findMany({
+          where: { shopId },
+          select: {
+            deviceId: true,
+            adapter: true,
+            host: true,
+            port: true,
+            paperWidthMm: true,
+            enabled: true,
+            lastError: true,
+          },
+          orderBy: { createdAt: 'asc' },
+        }),
+        this.prisma.printRoute.findMany({
+          where: { shopId },
+          select: {
+            id: true,
+            name: true,
+            jobType: true,
+            sourceKey: true,
+            printerDeviceId: true,
+            priority: true,
+            enabled: true,
+          },
+          orderBy: [{ jobType: 'asc' }, { priority: 'asc' }],
+        }),
+        this.prisma.printJob.findMany({
+          where: { shopId },
+          select: PRINT_OVERVIEW_SELECT,
+          orderBy: { createdAt: 'desc' },
+          take: 50,
+        }),
+        this.prisma.customerDisplayBinding.findMany({
+          where: { shopId },
+          select: {
+            id: true,
+            displayDeviceId: true,
+            posDeviceId: true,
+            status: true,
+            activeCheckId: true,
+          },
+          orderBy: { createdAt: 'asc' },
+        }),
+        this.prisma.barcodeAlias.count({ where: { shopId } }),
+      ]);
+    return {
+      printers: printers.map((printer) => ({
+        deviceId: printer.deviceId,
+        adapter: printer.adapter,
+        host: printer.host,
+        port: printer.port,
+        paperWidthMm: printer.paperWidthMm,
+        enabled: printer.enabled,
+        lastError: safePrinterDiagnostic(printer.lastError),
+      })),
+      routes,
+      recentJobs: recentJobs.map((job) => ({
+        id: job.id,
+        type: job.type,
+        sourceType: job.sourceType,
+        sourceId: job.sourceId,
+        status: job.status,
+        attemptCount: job.attemptCount,
+        maxAttempts: job.maxAttempts,
+        claimedAt: job.claimedAt,
+        createdAt: job.createdAt,
+        ...safePrintDiagnostic(job.lastErrorCode, job.lastError, job.claimedAt),
+      })),
+      displays,
+      barcodeAliasCount: barcodes,
+    };
   }
 
   async listPrintIncidents(
@@ -193,7 +263,23 @@ export class HardwareService {
       orderBy: [{ createdAt: 'asc' }, { id: 'asc' }],
       take: take + 1,
     });
-    const items = rows.slice(0, take);
+    const items = rows.slice(0, take).map((job) => ({
+      id: job.id,
+      shopId: job.shopId,
+      type: job.type,
+      status: job.status,
+      sourceType: job.sourceType,
+      sourceId: job.sourceId,
+      printerDeviceId: job.printerDeviceId,
+      claimedByEdgeDeviceId: job.claimedByEdgeDeviceId,
+      claimedAt: job.claimedAt,
+      printingAt: job.printingAt,
+      printedAt: job.printedAt,
+      attemptCount: job.attemptCount,
+      createdAt: job.createdAt,
+      updatedAt: job.updatedAt,
+      ...safePrintDiagnostic(job.lastErrorCode, job.lastError, job.claimedAt),
+    }));
     const hasMore = rows.length > take;
     const last = items[items.length - 1];
     const nextCursor =

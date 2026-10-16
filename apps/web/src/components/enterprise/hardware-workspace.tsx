@@ -13,6 +13,21 @@ type Overview = { printers: Printer[]; routes: PrintRoute[]; recentJobs: PrintJo
 
 const JOB_TYPES = ["KITCHEN", "BAR", "CUSTOMER_RECEIPT", "INVOICE", "SHIFT", "LABEL"];
 
+// Render only allowlisted operator diagnostics, even against a stale API release.
+function operatorReason(code: string | null, detail: string | null): string {
+  if (code === "EDGE_PRINT_OUTCOME_UNKNOWN" || code === "EDGE_PRINT_LEASE_EXPIRED")
+    return "Physical output is uncertain. Inspect the paper before any action.";
+  if (code === "UNSUPPORTED_PRINTER_ADAPTER")
+    return "Printer adapter is unsupported. Check the device configuration.";
+  return detail || code ? "Printer issue. Contact a hardware administrator." : "—";
+}
+
+function operatorCode(code: string | null): string {
+  return ["EDGE_PRINT_OUTCOME_UNKNOWN", "EDGE_PRINT_LEASE_EXPIRED", "UNSUPPORTED_PRINTER_ADAPTER"].includes(code ?? "")
+    ? code! : code ? "PRINT_ERROR_REVIEW" : "—";
+}
+
+
 export function HardwareWorkspace() {
   const [data, setData] = useState<Overview>({ printers: [], routes: [], recentJobs: [], displays: [], barcodeAliasCount: 0 });
   const [incidents, setIncidents] = useState<PrintIncident[]>([]);
@@ -45,8 +60,8 @@ export function HardwareWorkspace() {
       const [overview, page] = await Promise.all([api.get<Overview>("/hardware"), fetchIncidentPage()]);
       setData(overview); setIncidents(page.items); setIncidentCursor(page.nextCursor);
       setIncidentHasMore(page.hasMore); setIncidentError(null); setMessage(null);
-    } catch (error) {
-      const reason = error instanceof Error ? error.message : "Unable to retrieve print incidents";
+    } catch {
+      const reason = "Unable to retrieve hardware information. Check access or try again.";
       setIncidentError(reason); setMessage(reason);
     } finally { setIncidentLoading(false); }
   }, [fetchIncidentPage]);
@@ -59,8 +74,8 @@ export function HardwareWorkspace() {
         if (cancelled) return;
         setData(overview); setIncidents(page.items); setIncidentCursor(page.nextCursor);
         setIncidentHasMore(page.hasMore); setIncidentError(null);
-      } catch (error) {
-        if (!cancelled) setIncidentError(error instanceof Error ? error.message : "Unable to retrieve print incidents");
+      } catch {
+        if (!cancelled) setIncidentError("Unable to retrieve hardware information. Check access or try again.");
       } finally {
         if (!cancelled) setIncidentLoading(false);
       }
@@ -79,8 +94,8 @@ export function HardwareWorkspace() {
         return [...previous, ...page.items.filter((item) => !known.has(item.id))];
       });
       setIncidentCursor(page.nextCursor); setIncidentHasMore(page.hasMore); setIncidentError(null);
-    } catch (error) {
-      setIncidentError(error instanceof Error ? error.message : "Unable to retrieve more incidents");
+    } catch {
+      setIncidentError("Unable to retrieve more incidents. Try again.");
     } finally { setIncidentLoading(false); }
   }
 
@@ -93,7 +108,7 @@ export function HardwareWorkspace() {
         ...(port.trim() ? { port: Number(port) } : {}), paperWidthMm: 80,
       });
       setMessage("Printer configured."); setDeviceId(""); await load();
-    } catch (error) { setMessage(error instanceof Error ? error.message : "Could not configure printer."); }
+    } catch { setMessage("Could not configure printer. Verify settings and access."); }
     finally { setBusy(false); }
   }
 
@@ -102,14 +117,14 @@ export function HardwareWorkspace() {
     try {
       await api.post("/hardware/print-routes", { name: routeName.trim(), jobType: routeType, printerDeviceId: routePrinterId.trim() });
       setRouteName(""); setMessage("Print route created."); await load();
-    } catch (error) { setMessage(error instanceof Error ? error.message : "Could not create print route."); }
+    } catch { setMessage("Could not create print route. Verify settings and access."); }
     finally { setBusy(false); }
   }
 
   async function retryJob(id: string) {
     setBusy(true);
     try { await api.post(`/hardware/print-jobs/${id}/retry`); await load(); setMessage("Print job requeued."); }
-    catch (error) { setMessage(error instanceof Error ? error.message : "Could not retry print job."); }
+    catch { setMessage("Print retry was not authorized or did not succeed. Check whether the outcome is uncertain."); }
     finally { setBusy(false); }
   }
 
@@ -121,7 +136,7 @@ export function HardwareWorkspace() {
       });
       setDisplayToken(result.token); setDisplayId(""); setPosId(""); await load();
       setMessage("Customer display bound. Copy the display token now.");
-    } catch (error) { setMessage(error instanceof Error ? error.message : "Could not bind customer display."); }
+    } catch { setMessage("Could not bind customer display. Verify the device and access."); }
     finally { setBusy(false); }
   }
 
@@ -130,7 +145,7 @@ export function HardwareWorkspace() {
     try {
       await api.post("/hardware/barcodes", { barcode: barcode.trim(), entityType: entityType.trim(), entityId: entityId.trim() });
       setBarcode(""); setEntityId(""); await load(); setMessage("Barcode alias saved.");
-    } catch (error) { setMessage(error instanceof Error ? error.message : "Could not save barcode alias."); }
+    } catch { setMessage("Could not save barcode alias. Verify the item and access."); }
     finally { setBusy(false); }
   }
 
@@ -156,7 +171,7 @@ export function HardwareWorkspace() {
       <section className="rounded-xl border border-white/10 bg-white/[0.025] p-4">
         <h2 className="text-sm font-semibold text-zinc-100">Printers & routes</h2>
         <div className="mt-3 grid gap-3 lg:grid-cols-2">
-          {data.printers.map((printer) => <div key={printer.deviceId} className="rounded-lg border border-white/10 bg-zinc-950/40 p-3"><div className="text-sm font-medium text-zinc-100">{printer.deviceId}</div><div className="mt-1 text-xs text-zinc-500">{printer.adapter} · {printer.host ?? "local"}:{printer.port ?? "—"} · {printer.paperWidthMm} mm</div>{printer.lastError ? <div className="mt-1 text-xs text-rose-300">{printer.lastError}</div> : null}</div>)}
+          {data.printers.map((printer) => <div key={printer.deviceId} className="rounded-lg border border-white/10 bg-zinc-950/40 p-3"><div className="text-sm font-medium text-zinc-100">{printer.deviceId}</div><div className="mt-1 text-xs text-zinc-500">{printer.adapter} · {printer.host ?? "local"}:{printer.port ?? "—"} · {printer.paperWidthMm} mm</div>{printer.lastError ? <div className="mt-1 text-xs text-rose-300">Printer issue. Check device configuration.</div> : null}</div>)}
           {data.routes.map((route) => <div key={route.id} className="rounded-lg border border-white/10 bg-zinc-950/40 p-3"><div className="text-sm font-medium text-zinc-100">{route.name}</div><div className="mt-1 text-xs text-zinc-500">{route.jobType} → {route.printerDeviceId}</div></div>)}
         </div>
       </section>
@@ -164,7 +179,7 @@ export function HardwareWorkspace() {
       <section className="rounded-xl border border-white/10 bg-white/[0.025] p-4">
         <h2 className="text-sm font-semibold text-zinc-100">Print incidents requiring physical review · {incidents.length} loaded{incidentHasMore ? "+" : ""}</h2>
         <p className="mt-1 text-xs text-amber-200">Potentially printed; physically inspect before escalating. Do not reprint automatically. Fiscal or invoice output requires fiscal-owner review. Older incidents remain accessible through Load more. Uncertain is not a proven failure.</p>
-        <div className="mt-3 space-y-2">{incidents.map((incident) => <div key={incident.id} className="rounded border border-amber-500/20 p-2 text-xs text-zinc-300">{incident.id} · {incident.type} · {incident.status}<div>Venue {incident.shopId} · Source {incident.sourceType}:{incident.sourceId}</div><div>Original Edge {incident.claimedByEdgeDeviceId ?? "—"} · Target printer {incident.printerDeviceId}</div><div>Claimed {incident.claimedAt ?? "—"} · Dispatch {incident.printingAt ?? "—"}</div><div>Reason {incident.lastErrorCode}: {incident.lastError ?? "—"}</div></div>)}</div>
+        <div className="mt-3 space-y-2">{incidents.map((incident) => <div key={incident.id} className="rounded border border-amber-500/20 p-2 text-xs text-zinc-300">{incident.id} · {incident.type} · {incident.status}<div>Venue {incident.shopId} · Source {incident.sourceType}:{incident.sourceId}</div><div>Original Edge {incident.claimedByEdgeDeviceId ?? "—"} · Target printer {incident.printerDeviceId}</div><div>Claimed {incident.claimedAt ?? "—"} · Dispatch {incident.printingAt ?? "—"}</div><div>Reason {operatorCode(incident.lastErrorCode)}: {operatorReason(incident.lastErrorCode, incident.lastError)}</div></div>)}</div>
         {incidentLoading ? <p role="status" className="mt-2 text-xs text-zinc-400">Loading print incidents…</p> : null}
         {incidentError ? <p role="alert" className="mt-2 text-xs text-rose-300">Incident loading failed: {incidentError}</p> : null}
         {!incidentLoading && !incidentError && incidents.length === 0 ? <p className="mt-2 text-xs text-zinc-400">No unresolved physical print incidents.</p> : null}
@@ -173,7 +188,7 @@ export function HardwareWorkspace() {
       </section>
       <section className="rounded-xl border border-white/10 bg-white/[0.025] p-4">
         <h2 className="text-sm font-semibold text-zinc-100">Recent print jobs</h2>
-        <div className="mt-3 overflow-x-auto"><table className="w-full min-w-[720px] text-left text-xs"><thead className="text-zinc-500"><tr><th className="p-2">Type</th><th className="p-2">Source</th><th className="p-2">Status</th><th className="p-2">Attempts</th><th className="p-2">Error</th><th className="p-2"></th></tr></thead><tbody>{data.recentJobs.map((job) => <tr key={job.id} className="border-t border-white/10"><td className="p-2 text-zinc-200">{job.type}</td><td className="p-2 text-zinc-400">{job.sourceType}:{job.sourceId}</td><td className="p-2 text-zinc-300">{job.status}</td><td className="p-2 text-zinc-400">{job.attemptCount}/{job.maxAttempts}</td><td className="max-w-sm truncate p-2 text-zinc-500">{job.lastError ?? "—"}</td><td className="p-2">{job.status === "FAILED" && !job.claimedAt && !["EDGE_PRINT_OUTCOME_UNKNOWN", "EDGE_PRINT_LEASE_EXPIRED"].includes(job.lastErrorCode ?? "") ? <button className="rounded border border-white/10 px-2 py-1 text-zinc-200" onClick={() => void retryJob(job.id)} disabled={busy}>Retry</button> : null}</td></tr>)}</tbody></table></div>
+        <div className="mt-3 overflow-x-auto"><table className="w-full min-w-[720px] text-left text-xs"><thead className="text-zinc-500"><tr><th className="p-2">Type</th><th className="p-2">Source</th><th className="p-2">Status</th><th className="p-2">Attempts</th><th className="p-2">Error</th><th className="p-2"></th></tr></thead><tbody>{data.recentJobs.map((job) => <tr key={job.id} className="border-t border-white/10"><td className="p-2 text-zinc-200">{job.type}</td><td className="p-2 text-zinc-400">{job.sourceType}:{job.sourceId}</td><td className="p-2 text-zinc-300">{job.status}</td><td className="p-2 text-zinc-400">{job.attemptCount}/{job.maxAttempts}</td><td className="max-w-sm truncate p-2 text-zinc-500">{operatorReason(job.lastErrorCode, job.lastError)}</td><td className="p-2">{job.status === "FAILED" && !job.claimedAt && !["EDGE_PRINT_OUTCOME_UNKNOWN", "EDGE_PRINT_LEASE_EXPIRED"].includes(job.lastErrorCode ?? "") ? <button className="rounded border border-white/10 px-2 py-1 text-zinc-200" onClick={() => void retryJob(job.id)} disabled={busy}>Retry</button> : null}</td></tr>)}</tbody></table></div>
       </section>
 
       <section className="grid gap-4 xl:grid-cols-2">
