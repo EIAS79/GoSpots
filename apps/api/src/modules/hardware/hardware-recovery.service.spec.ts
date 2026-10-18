@@ -1,5 +1,6 @@
 import { PrintJobStatus } from '@prisma/client';
 import { HardwareRecoveryService } from './hardware-recovery.service';
+import { attachPrintIncidentTransactionMock } from './print-incident-transaction.mock';
 
 describe('HardwareRecoveryService', () => {
   it('quarantines an expired Edge CLAIMED lease without requeue or device reassignment', async () => {
@@ -13,6 +14,7 @@ describe('HardwareRecoveryService', () => {
         updateMany: jest.fn().mockResolvedValue({ count: 1 }),
       },
     };
+    attachPrintIncidentTransactionMock(prisma);
     const service = new HardwareRecoveryService(prisma);
     await expect(service.recoverStaleClaims()).resolves.toEqual({ scanned: 1, requeued: 0, failed: 0, quarantined: 1 });
     expect(prisma.printJob.updateMany).toHaveBeenCalledWith(expect.objectContaining({
@@ -31,6 +33,7 @@ describe('HardwareRecoveryService', () => {
         updateMany: jest.fn().mockResolvedValue({ count: 1 }),
       },
     };
+    attachPrintIncidentTransactionMock(prisma);
     const service = new HardwareRecoveryService(prisma);
     const result = await service.recoverStaleClaims();
     expect(result).toEqual({ scanned: 1, requeued: 0, failed: 0, quarantined: 1 });
@@ -57,6 +60,7 @@ describe('HardwareRecoveryService', () => {
         }),
       },
     };
+    attachPrintIncidentTransactionMock(prisma);
     const service = new HardwareRecoveryService(prisma);
     const [a, b] = await Promise.all([service.recoverStaleClaims(), service.recoverStaleClaims()]);
     expect(a.quarantined + b.quarantined).toBe(1);

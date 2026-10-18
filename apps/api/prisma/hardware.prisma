@@ -89,6 +89,9 @@ model PrintJob {
   @@unique([shopId, fiscalSemanticKey])
   @@index([shopId, status, createdAt])
   @@index([printerDeviceId, status, createdAt])
+  incidentCases PrintIncidentCase[]
+
+  @@unique([shopId, id])
   @@index([claimedByEdgeDeviceId, status])
 }
 
@@ -123,4 +126,63 @@ model BarcodeAlias {
 
   @@unique([shopId, barcode])
   @@index([shopId, entityType, entityId])
+}
+
+/// One historical investigation per original uncertain physical-output job.
+/// Resolution never changes or requeues the original PrintJob.
+enum PrintIncidentOutcome {
+  CONFIRMED_PRINTED
+  CONFIRMED_NOT_PRINTED
+  UNDETERMINED
+}
+
+enum PrintIncidentState {
+  OPEN
+  INVESTIGATING
+  RESOLVED
+  CONFLICT
+}
+
+model PrintIncidentCase {
+  id                 String @id @default(cuid())
+  shopId             String
+  originalPrintJobId String
+  originalPrintJob   PrintJob @relation(fields: [shopId, originalPrintJobId], references: [shopId, id], onDelete: Restrict)
+  state              PrintIncidentState @default(OPEN)
+  physicalOutcome    PrintIncidentOutcome?
+  version            Int @default(1)
+  openedById         String?
+  decidedById        String?
+  reason             String?
+  resolvedAt         DateTime?
+  createdAt          DateTime @default(now())
+  updatedAt          DateTime @updatedAt
+  events             PrintIncidentEvent[]
+
+  @@unique([shopId, originalPrintJobId])
+  @@unique([shopId, id])
+  @@unique([shopId, id, originalPrintJobId])
+  @@index([shopId, state, createdAt])
+}
+
+model PrintIncidentEvent {
+  id                 String @id @default(cuid())
+  shopId             String
+  caseId             String
+  incidentCase       PrintIncidentCase @relation(fields: [shopId, caseId, originalPrintJobId], references: [shopId, id, originalPrintJobId], onDelete: Restrict)
+  originalPrintJobId String
+  kind               String
+  actorUserId        String?
+  actorMembershipId  String?
+  reason             String
+  evidence           Json?
+  physicalOutcome    PrintIncidentOutcome?
+  correlationId      String?
+  idempotencyKey     String?
+  requestHash        String?
+  occurredAt         DateTime @default(now())
+
+  @@unique([shopId, caseId, idempotencyKey])
+  @@index([shopId, originalPrintJobId, occurredAt])
+  @@index([shopId, caseId, occurredAt])
 }

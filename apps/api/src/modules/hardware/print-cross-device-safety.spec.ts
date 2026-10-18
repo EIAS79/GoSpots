@@ -5,6 +5,7 @@ import { EdgeHubService } from '../edge-hub/edge-hub.service';
 import { PrintJobStatus } from '@prisma/client';
 import { HardwareRecoveryService } from './hardware-recovery.service';
 import { HardwareService } from './hardware.service';
+import { attachPrintIncidentTransactionMock } from './print-incident-transaction.mock';
 
 const EMPTY_HEADERS = {} as Record<string, string | string[] | undefined>;
 
@@ -78,6 +79,7 @@ describe('W2 cross-device print-lease safety (isolated backend and simulated pri
           paperWidthMm: 80, capabilities: null,
         })),
       } };
+      attachPrintIncidentTransactionMock(prisma);
       const edge = {
         authenticateSignedRequest: jest.fn(() => ({
           device: { id: activeDevice, shopId: activeShop },

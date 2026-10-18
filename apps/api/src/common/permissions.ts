@@ -6,6 +6,9 @@ export const PERMISSIONS = {
   VENUE_READ: 'venue.read',
   VENUE_WRITE: 'venue.write',
   SHOP_MANAGE: 'shop.manage',
+  PRINT_INCIDENT_READ: 'hardware.print_incident.read',
+  PRINT_INCIDENT_INVESTIGATE: 'hardware.print_incident.investigate',
+  PRINT_INCIDENT_RESOLVE: 'hardware.print_incident.resolve',
   MENU_READ: 'menu.read',
   MENU_WRITE: 'menu.write',
   RESOURCE_READ: 'resource.read',
@@ -95,6 +98,8 @@ export const HIGH_RISK_PERMISSIONS = [
   PERMISSIONS.MEMBERSHIP_BALANCE_CORRECTION,
   PERMISSIONS.FISCAL_RETRY,
   PERMISSIONS.FISCAL_OVERRIDE,
+  PERMISSIONS.PRINT_INCIDENT_INVESTIGATE,
+  PERMISSIONS.PRINT_INCIDENT_RESOLVE,
 ] as const satisfies readonly PermissionKey[];
 
 export const VENUE_STAFF_ROLES = [
@@ -183,12 +188,19 @@ export const MANAGER_CORE_PERMISSIONS: PermissionKey[] = (
   (p) =>
     p !== PERMISSIONS.AUDIT_READ &&
     p !== PERMISSIONS.SHOP_MANAGE &&
+    p !== PERMISSIONS.PRINT_INCIDENT_READ &&
+    p !== PERMISSIONS.PRINT_INCIDENT_INVESTIGATE &&
+    p !== PERMISSIONS.PRINT_INCIDENT_RESOLVE &&
     p !== PERMISSIONS.SUBSCRIPTION_MANAGE,
 );
 
 export const MANAGER_OPTIONAL_PERMISSIONS: PermissionKey[] = [
   PERMISSIONS.SHOP_MANAGE,
   PERMISSIONS.SUBSCRIPTION_MANAGE,
+  // Explicit owner grants; never included in MANAGER_CORE_PERMISSIONS.
+  PERMISSIONS.PRINT_INCIDENT_READ,
+  PERMISSIONS.PRINT_INCIDENT_INVESTIGATE,
+  PERMISSIONS.PRINT_INCIDENT_RESOLVE,
 ];
 
 export function resolveRoleDefaultPermissions(role: string): PermissionKey[] {

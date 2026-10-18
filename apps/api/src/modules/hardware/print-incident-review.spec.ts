@@ -9,7 +9,7 @@ import { HardwareController } from './hardware.controller';
 import { HardwareService } from './hardware.service';
 
 describe('T-009 read-only cloud print incident review', () => {
-  const actor = (shopId: string) => ({ shopId }) as JwtAccessPayload;
+  const actor = (shopId: string, shopRole = 'OWNER', perms = '*') => ({ shopId, shopRole, perms, sub: 'test-owner' }) as JwtAccessPayload;
   function setup() {
     const findMany = jest
       .fn<Promise<unknown[]>, [Prisma.PrintJobFindManyArgs]>()
@@ -51,13 +51,17 @@ describe('T-009 read-only cloud print incident review', () => {
     expect(findMany).toHaveBeenCalledTimes(1);
   });
 
-  it('requires shop.manage on the read-only endpoint', () => {
+  it('preserves legacy shop.manage OR explicit read in matching list and case decorators', () => {
     const handler = Object.getOwnPropertyDescriptor(
       HardwareController.prototype,
       'listPrintIncidents',
     )?.value as (...args: never[]) => unknown;
     expect(Reflect.getMetadata(PERMS_KEY, handler)).toEqual([
-      PERMISSIONS.SHOP_MANAGE,
+      PERMISSIONS.SHOP_MANAGE, PERMISSIONS.PRINT_INCIDENT_READ,
+    ]);
+    const detail = Object.getOwnPropertyDescriptor(HardwareController.prototype, 'inspectIncident')?.value as (...args: never[]) => unknown;
+    expect(Reflect.getMetadata(PERMS_KEY, detail)).toEqual([
+      PERMISSIONS.SHOP_MANAGE, PERMISSIONS.PRINT_INCIDENT_READ,
     ]);
     const context = (perms: string) =>
       ({
@@ -72,6 +76,19 @@ describe('T-009 read-only cloud print incident review', () => {
     expect(() =>
       guard.canActivate(context(PERMISSIONS.TRANSACTION_READ)),
     ).toThrow();
+  });
+
+  it('rejects staff with shop.manage and ungranted managers in the service, regardless of RolesGuard OR', async () => {
+    const { service, findMany } = setup();
+    await expect(service.listPrintIncidents(actor('shop-A', 'STAFF', PERMISSIONS.SHOP_MANAGE)))
+      .rejects.toThrow(ForbiddenException);
+    await expect(service.listPrintIncidents(actor('shop-A', 'MANAGER', PERMISSIONS.TRANSACTION_READ)))
+      .rejects.toThrow(ForbiddenException);
+    expect(findMany).not.toHaveBeenCalled();
+    await service.listPrintIncidents(actor('shop-A', 'MANAGER', PERMISSIONS.SHOP_MANAGE));
+    await service.listPrintIncidents(actor('shop-A', 'SUPERVISOR', PERMISSIONS.PRINT_INCIDENT_READ));
+    expect(findMany).toHaveBeenCalledTimes(2);
+    expect(findMany.mock.calls.every(([query]) => query.where?.shopId === 'shop-A')).toBe(true);
   });
 
   it('excludes successful work and ordinary preflight failures from review', async () => {

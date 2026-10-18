@@ -5,11 +5,12 @@ import { FoundationModule } from '../foundation/foundation.module';
 import { HardwareController } from './hardware.controller';
 import { HardwareRecoveryService } from './hardware-recovery.service';
 import { HardwareService } from './hardware.service';
+import { PrintIncidentResolutionService } from './print-incident-resolution.service';
 
 @Module({
   imports: [FoundationModule, AuditModule, EdgeHubModule],
   controllers: [HardwareController],
-  providers: [HardwareService, HardwareRecoveryService],
+  providers: [HardwareService, HardwareRecoveryService, PrintIncidentResolutionService],
   exports: [HardwareService],
 })
 export class HardwareModule {}

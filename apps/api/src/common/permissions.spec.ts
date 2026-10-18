@@ -4,6 +4,7 @@ import {
   ROLE_PERMISSION_TEMPLATES,
   assertKnownPermissions,
   resolveRoleDefaultPermissions,
+  resolveManagerPermissions,
 } from './permissions';
 
 describe('machine-readable Phase 1 permission catalog', () => {
@@ -29,6 +30,25 @@ describe('machine-readable Phase 1 permission catalog', () => {
         PERMISSIONS.FISCAL_OVERRIDE,
       ]),
     );
+  });
+
+  it('does not automatically grant new sensitive incident privileges to managers or supervisors', () => {
+    for (const permission of [
+      PERMISSIONS.PRINT_INCIDENT_READ,
+      PERMISSIONS.PRINT_INCIDENT_INVESTIGATE,
+      PERMISSIONS.PRINT_INCIDENT_RESOLVE,
+    ]) {
+      expect(resolveRoleDefaultPermissions('MANAGER')).not.toContain(permission);
+      expect(resolveRoleDefaultPermissions('SUPERVISOR')).not.toContain(permission);
+      expect(resolveManagerPermissions().split(',')).not.toContain(permission);
+    }
+    const ownerGranted = resolveManagerPermissions([
+      PERMISSIONS.PRINT_INCIDENT_READ,
+      PERMISSIONS.PRINT_INCIDENT_INVESTIGATE,
+      PERMISSIONS.PRINT_INCIDENT_RESOLVE,
+    ]);
+    expect(ownerGranted).toContain(PERMISSIONS.PRINT_INCIDENT_RESOLVE);
+    expect(HIGH_RISK_PERMISSIONS).toContain(PERMISSIONS.PRINT_INCIDENT_RESOLVE);
   });
 
   it('defines safe templates for every venue staff role', () => {

@@ -1,6 +1,7 @@
 import { Injectable } from '@nestjs/common';
 import { Interval } from '@nestjs/schedule';
-import { PrintJobStatus } from '@prisma/client';
+import { Prisma, PrintJobStatus } from '@prisma/client';
+import { PrintIncidentResolutionService } from './print-incident-resolution.service';
 import { PrismaService } from '../../prisma/prisma.service';
 
 const PRINT_LEASE_MS = 10 * 60_000;
@@ -23,6 +24,7 @@ export class HardwareRecoveryService {
       },
       select: {
         id: true,
+        shopId: true,
         status: true,
         claimedAt: true,
         claimedByEdgeDeviceId: true,
@@ -34,7 +36,8 @@ export class HardwareRecoveryService {
 
     let quarantined = 0;
     for (const job of stale) {
-      const result = await this.prisma.printJob.updateMany({
+      const result = await this.prisma.$transaction(async (tx) => {
+      const result = await tx.printJob.updateMany({
         where: {
           id: job.id,
           status: job.status,
@@ -54,6 +57,13 @@ export class HardwareRecoveryService {
           lastError: 'Edge print lease expired; physical output is unknown. Operator review required; automatic reassignment blocked.',
         },
       });
+        if (result.count === 1) {
+          await PrintIncidentResolutionService.recordTransition(
+            tx, job, 'UNCERTAINTY_DETECTED', 'Original Edge print claim expired; physical outcome not verified',
+          );
+        }
+        return result;
+      }, { isolationLevel: Prisma.TransactionIsolationLevel.Serializable });
       if (result.count === 1) quarantined += 1;
     }
     return { scanned: stale.length, requeued: 0, failed: 0, quarantined };

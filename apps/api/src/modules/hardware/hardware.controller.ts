@@ -25,11 +25,18 @@ import {
   UpsertBarcodeAliasDto,
 } from './dto/hardware.dto';
 import { HardwareService } from './hardware.service';
+import { PrintIncidentResolutionService } from './print-incident-resolution.service';
+import {
+  IncidentMutationDto, IncidentEvidenceDto, IncidentDecisionDto,
+} from './dto/print-incident-resolution.dto';
 
 @ApiTags('hardware')
 @Controller('hardware')
 export class HardwareController {
-  constructor(private readonly hardware: HardwareService) {}
+  constructor(
+    private readonly hardware: HardwareService,
+    private readonly incidentResolution: PrintIncidentResolutionService,
+  ) {}
 
   @Get()
   @UseGuards(JwtAuthGuard)
@@ -40,13 +47,41 @@ export class HardwareController {
 
   @Get('print-incidents')
   @UseGuards(JwtAuthGuard)
-  @RequirePermissions(PERMISSIONS.SHOP_MANAGE)
+  @RequirePermissions(PERMISSIONS.SHOP_MANAGE, PERMISSIONS.PRINT_INCIDENT_READ)
   listPrintIncidents(
     @CurrentUser() user: JwtAccessPayload,
     @Query('take') takeRaw?: string,
     @Query('cursor') cursor?: string,
   ) {
     return this.hardware.listPrintIncidents(user, takeRaw, cursor);
+  }
+
+  @Get('print-incidents/:id/case')
+  @UseGuards(JwtAuthGuard)
+  @RequirePermissions(PERMISSIONS.SHOP_MANAGE, PERMISSIONS.PRINT_INCIDENT_READ)
+  inspectIncident(@CurrentUser() actor: JwtAccessPayload, @Param('id') id: string) {
+    return this.incidentResolution.read(actor, id);
+  }
+
+  @Post('print-incidents/:id/investigate')
+  @UseGuards(JwtAuthGuard)
+  @RequirePermissions(PERMISSIONS.PRINT_INCIDENT_INVESTIGATE)
+  investigateIncident(@CurrentUser() actor: JwtAccessPayload, @Param('id') id: string, @Body() dto: IncidentMutationDto) {
+    return this.incidentResolution.investigate(actor, id, dto);
+  }
+
+  @Post('print-incidents/:id/evidence')
+  @UseGuards(JwtAuthGuard)
+  @RequirePermissions(PERMISSIONS.PRINT_INCIDENT_INVESTIGATE)
+  submitIncidentEvidence(@CurrentUser() actor: JwtAccessPayload, @Param('id') id: string, @Body() dto: IncidentEvidenceDto) {
+    return this.incidentResolution.addEvidence(actor, id, dto);
+  }
+
+  @Post('print-incidents/:id/decision')
+  @UseGuards(JwtAuthGuard)
+  @RequirePermissions(PERMISSIONS.PRINT_INCIDENT_RESOLVE)
+  decideIncident(@CurrentUser() actor: JwtAccessPayload, @Param('id') id: string, @Body() dto: IncidentDecisionDto) {
+    return this.incidentResolution.decide(actor, id, dto);
   }
 
   @Post('printers/configure')

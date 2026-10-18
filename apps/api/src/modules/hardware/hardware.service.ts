@@ -18,6 +18,7 @@ import {
   safePrintDiagnostic,
   safePrinterDiagnostic,
 } from './hardware-response-safety';
+import { PrintIncidentResolutionService, assertPrintIncidentRead } from './print-incident-resolution.service';
 import { requireShopId } from '../../common/tenant';
 import { PrismaService } from '../../prisma/prisma.service';
 import { AuditService } from '../audit/audit.service';
@@ -229,6 +230,9 @@ export class HardwareService {
     takeRaw?: string,
     cursorRaw?: string,
   ) {
+    // RolesGuard checks an OR of permissions. Enforce the same role + grant
+    // policy as case detail here, independently of controller metadata.
+    assertPrintIncidentRead(actor);
     const shopId = requireShopId(actor);
     await this.requireRegistry(shopId);
     const take = takeRaw === undefined ? 25 : Number(takeRaw);
@@ -551,52 +555,66 @@ export class HardwareService {
     if (![PrintJobStatus.SUCCEEDED, PrintJobStatus.FAILED].includes(dto.status)) {
       throw new BadRequestException('Edge may only complete a print as SUCCEEDED or FAILED');
     }
-    const job = await this.prisma.printJob.findFirst({
-      where: {
-        id: jobId,
-        shopId: device.shopId,
-        claimedByEdgeDeviceId: device.id,
-        status: { in: [PrintJobStatus.CLAIMED, PrintJobStatus.PRINTING] },
-      },
-    });
-    if (!job) throw new ConflictException('Print job is not active on this Edge Hub');
-    // Failure after physical I/O might be a successfully printed receipt.
-    // Only the Edge's typed pre-I/O adapter validation can be terminal FAILED.
-    // Neither an ambiguous failure nor an expired lease may auto-requeue.
-    const safePreflightFailure =
-      dto.status === PrintJobStatus.FAILED &&
-      dto.errorCode === 'UNSUPPORTED_PRINTER_ADAPTER' &&
-      job.status === PrintJobStatus.CLAIMED;
-    const ambiguousFailure =
-      dto.status === PrintJobStatus.FAILED && !safePreflightFailure;
-    const nextStatus = dto.status === PrintJobStatus.SUCCEEDED
-      ? PrintJobStatus.SUCCEEDED
-      : safePreflightFailure ? PrintJobStatus.FAILED : job.status;
-    const updated = await this.prisma.printJob.updateMany({
-      // Atomic compare-and-set prevents a late failure or duplicate callback
-      // from overwriting an already recorded SUCCESS or terminal rejection.
-      where: {
-        id: job.id, shopId: device.shopId,
-        claimedByEdgeDeviceId: device.id,
-        claimedAt: job.claimedAt,
-        status: job.status,
-      },
-      data: {
-        status: nextStatus,
-        printedAt: dto.status === PrintJobStatus.SUCCEEDED ? new Date() : null,
-        claimedByEdgeDeviceId: device.id,
-        claimedAt: job.claimedAt,
-        printingAt: ambiguousFailure ? job.printingAt : null,
-        lastErrorCode: ambiguousFailure
-          ? 'EDGE_PRINT_OUTCOME_UNKNOWN'
-          : safePreflightFailure ? 'UNSUPPORTED_PRINTER_ADAPTER' : null,
-        lastError: ambiguousFailure
-          ? 'Printer failure after claim; physical output cannot be ruled out. Operator review required.'
-          : safePreflightFailure ? dto.error?.trim().slice(0, 1000) || 'Printer adapter preflight rejected' : null,
-      },
-    });
-    if (updated.count !== 1) throw new ConflictException('Print completion raced with another state transition');
-    return { ok: true, status: nextStatus, ...(ambiguousFailure ? { manualReviewRequired: true } : {}) };
+    return this.prisma.$transaction(async (tx) => {
+      const job = await tx.printJob.findFirst({
+        where: {
+          id: jobId,
+          shopId: device.shopId,
+          claimedByEdgeDeviceId: device.id,
+          status: { in: [PrintJobStatus.CLAIMED, PrintJobStatus.PRINTING] },
+        },
+      });
+      if (!job) throw new ConflictException('Print job is not active on this Edge Hub');
+      const safePreflightFailure =
+        dto.status === PrintJobStatus.FAILED &&
+        dto.errorCode === 'UNSUPPORTED_PRINTER_ADAPTER' &&
+        job.status === PrintJobStatus.CLAIMED;
+      const ambiguousFailure =
+        dto.status === PrintJobStatus.FAILED && !safePreflightFailure;
+      const nextStatus = dto.status === PrintJobStatus.SUCCEEDED
+        ? PrintJobStatus.SUCCEEDED
+        : safePreflightFailure ? PrintJobStatus.FAILED : job.status;
+      const updated = await tx.printJob.updateMany({
+        where: {
+          id: job.id, shopId: device.shopId,
+          claimedByEdgeDeviceId: device.id,
+          claimedAt: job.claimedAt, status: job.status,
+        },
+        data: {
+          status: nextStatus,
+          printedAt: dto.status === PrintJobStatus.SUCCEEDED ? new Date() : null,
+          claimedByEdgeDeviceId: device.id,
+          claimedAt: job.claimedAt,
+          printingAt: ambiguousFailure ? job.printingAt : null,
+          lastErrorCode: ambiguousFailure
+            ? 'EDGE_PRINT_OUTCOME_UNKNOWN'
+            : safePreflightFailure ? 'UNSUPPORTED_PRINTER_ADAPTER' : null,
+          lastError: ambiguousFailure
+            ? 'Printer failure after claim; physical output cannot be ruled out. Operator review required.'
+            : safePreflightFailure ? dto.error?.trim().slice(0, 1000) || 'Printer adapter preflight rejected' : null,
+        },
+      });
+      if (updated.count !== 1) throw new ConflictException('Print completion raced with another state transition');
+      if (ambiguousFailure) {
+        await PrintIncidentResolutionService.recordTransition(
+          tx, job, 'UNCERTAINTY_DETECTED', 'Edge reported ambiguous physical output after printer claim',
+        );
+      }
+      if (dto.status === PrintJobStatus.SUCCEEDED) {
+        const existing = await tx.printIncidentCase.findUnique({
+          where: { shopId_originalPrintJobId: {
+            shopId: job.shopId, originalPrintJobId: job.id,
+          } },
+        });
+        if (existing || ['EDGE_PRINT_OUTCOME_UNKNOWN', 'EDGE_PRINT_LEASE_EXPIRED'].includes(job.lastErrorCode ?? '')) {
+          await PrintIncidentResolutionService.recordTransition(
+            tx, job, 'LATE_EDGE_SUCCESS', 'Original Edge acknowledged physical output after investigation/uncertainty',
+          );
+        }
+      }
+      return { ok: true, status: nextStatus,
+        ...(ambiguousFailure ? { manualReviewRequired: true } : {}) };
+    }, { isolationLevel: Prisma.TransactionIsolationLevel.Serializable });
   }
 
   async bindCustomerDisplay(actor: JwtAccessPayload, dto: BindCustomerDisplayDto) {

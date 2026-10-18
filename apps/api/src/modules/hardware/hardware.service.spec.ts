@@ -1,6 +1,7 @@
 import { BadRequestException, ConflictException } from '@nestjs/common';
 import { PrintJobStatus } from '@prisma/client';
 import { HardwareService } from './hardware.service';
+import { attachPrintIncidentTransactionMock } from './print-incident-transaction.mock';
 
 describe('HardwareService print relay', () => {
   const headers = {} as Record<string, string | string[] | undefined>;
@@ -15,6 +16,7 @@ describe('HardwareService print relay', () => {
       },
       printerDeviceConfiguration: { findUnique: jest.fn() },
     };
+    attachPrintIncidentTransactionMock(prisma);
     const flags = { isFeatureEnabled: jest.fn().mockResolvedValue(true) } as any;
     const audit = { record: jest.fn() } as any;
     const edge = {
