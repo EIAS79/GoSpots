@@ -146,6 +146,56 @@ jobs:
       - name: Phase 2 venue schema assertions
         run: pnpm exec tsx prisma/phase2-venue-assert.ts
 
+  t009-pg17-incident-pagination:
+    name: T-009 incident pagination (disposable PostgreSQL 17)
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    defaults:
+      run:
+        working-directory: apps/api
+    services:
+      postgres:
+        image: postgres:17
+        env:
+          POSTGRES_USER: t009_ci
+          POSTGRES_PASSWORD: t009_ci_ephemeral_only
+          POSTGRES_DB: gospots_t009_ci
+        ports:
+          - '127.0.0.1:55447:5432'
+        options: >-
+          --health-cmd "pg_isready -U t009_ci -d gospots_t009_ci"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+    env:
+      GOSPOTS_T009_DISPOSABLE_DB: 'YES'
+      DATABASE_URL: postgresql://t009_ci:t009_ci_ephemeral_only@127.0.0.1:55447/gospots_t009_ci?schema=public
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 10.12.1
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+          cache: pnpm
+          cache-dependency-path: pnpm-lock.yaml
+      - name: Install dependencies
+        working-directory: .
+        run: pnpm install --frozen-lockfile
+      - name: Prisma generate
+        run: pnpm exec prisma generate
+      - name: Assert isolated PG17 incident pagination
+        shell: bash
+        run: |
+          set -euo pipefail
+          pnpm exec ts-node --transpile-only prisma/t009-incident-pagination.integration.ts | tee /tmp/t009-pg17-results.log
+          grep -Fx 'T009_PG17_ASSERTIONS 49 PASS' /tmp/t009-pg17-results.log
+          grep -Fx 'T009_FIXTURE_DISCONNECT_COMPLETE' /tmp/t009-pg17-results.log
+
   api-migrate-upgrade:
     name: API migration upgrade (representative prior data)
     runs-on: ubuntu-latest
