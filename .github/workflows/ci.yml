@@ -196,6 +196,78 @@ jobs:
           grep -Fx 'T009_PG17_ASSERTIONS 49 PASS' /tmp/t009-pg17-results.log
           grep -Fx 'T009_FIXTURE_DISCONNECT_COMPLETE' /tmp/t009-pg17-results.log
 
+  t009-change-a-pg17-incident-resolution:
+    name: T-009 Change A incident resolution (disposable PostgreSQL 17)
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    defaults:
+      run:
+        working-directory: apps/api
+    services:
+      postgres:
+        image: postgres:17
+        env:
+          POSTGRES_USER: t009_changea_ci
+          POSTGRES_PASSWORD: t009_changea_ci_ephemeral_only
+          POSTGRES_DB: gospots_t009_change_a_review
+        ports:
+          - '127.0.0.1:55448:5432'
+        options: >-
+          --health-cmd "pg_isready -U t009_changea_ci -d gospots_t009_change_a_review"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+    env:
+      GOSPOTS_T009_CHANGE_A_DISPOSABLE: 'YES'
+      DATABASE_URL: postgresql://t009_changea_ci:t009_changea_ci_ephemeral_only@127.0.0.1:55448/gospots_t009_change_a_review?schema=public
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 10.12.1
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+          cache: pnpm
+          cache-dependency-path: pnpm-lock.yaml
+      - name: Install dependencies
+        working-directory: .
+        run: pnpm install --frozen-lockfile
+      - name: Prisma generate
+        run: pnpm exec prisma generate
+      - name: Apply full migration chain to disposable PostgreSQL 17
+        run: pnpm exec prisma migrate deploy
+      - name: Verify migration status
+        run: pnpm exec prisma migrate status
+      - name: Assert isolated PG17 Change A incident resolution
+        shell: bash
+        run: |
+          set -euo pipefail
+          pnpm exec ts-node --transpile-only prisma/t009-change-a.integration.ts | tee /tmp/t009-change-a-pg17-results.log
+          grep -Fx 'T009_CHANGE_A_PG17_ASSERTIONS 42 PASS' /tmp/t009-change-a-pg17-results.log
+          grep -Fx 'T009_CHANGE_A_PG17_DISCONNECT_COMPLETE' /tmp/t009-change-a-pg17-results.log
+      - name: Drop disposable PostgreSQL database (always)
+        if: ${{ always() }}
+        working-directory: .
+        shell: bash
+        env:
+          POSTGRES_SERVICE_ID: ${{ job.services.postgres.id }}
+        run: |
+          set -euo pipefail
+          # The service is runner-owned and is also removed automatically after this job.
+          # Drop only this job's disposable database; never connect to external databases.
+          docker exec "$POSTGRES_SERVICE_ID" psql -v ON_ERROR_STOP=1 \
+            -U t009_changea_ci -d postgres \
+            -c 'DROP DATABASE IF EXISTS gospots_t009_change_a_review WITH (FORCE);'
+          count="$(docker exec "$POSTGRES_SERVICE_ID" psql -v ON_ERROR_STOP=1 -At \
+            -U t009_changea_ci -d postgres \
+            -c "SELECT count(*) FROM pg_database WHERE datname = 'gospots_t009_change_a_review';")"
+          test "$count" = '0'
+          echo 'T009_CHANGE_A_PG17_DISPOSABLE_DATABASE_REMOVED'
+
   api-migrate-upgrade:
     name: API migration upgrade (representative prior data)
     runs-on: ubuntu-latest
