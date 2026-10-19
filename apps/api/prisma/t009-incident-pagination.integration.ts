@@ -25,7 +25,13 @@ if (
 const prisma = new PrismaClient();
 const shopA = 't009-integration-shop-A';
 const shopB = 't009-integration-shop-B';
-const actor = (shopId: string) => ({ shopId }) as JwtAccessPayload;
+const actor = (shopId: string): JwtAccessPayload =>
+  ({
+    shopId,
+    shopRole: 'MANAGER',
+    perms: 'hardware.print_incident.read',
+    sub: 't009-pagination-synthetic-manager',
+  }) as JwtAccessPayload;
 const service = new HardwareService(
   prisma as never,
   { isFeatureEnabled: () => Promise.resolve(true) } as never,

@@ -4,6 +4,7 @@ import { PERMS_KEY } from '../auth/decorators/roles.decorator';
 import { RolesGuard } from '../auth/guards/roles.guard';
 import { HardwareController } from './hardware.controller';
 import { HardwareService } from './hardware.service';
+import { PrintIncidentResolutionService } from './print-incident-resolution.service';
 import {
   safePrintDiagnostic,
   safePrinterDiagnostic,
@@ -13,6 +14,17 @@ import type { JwtAccessPayload } from '../auth/auth.service';
 
 describe('T-009 P0 hardware response safety', () => {
   const actor = (shopId: string) => ({ shopId }) as JwtAccessPayload;
+  const incidentActor = (
+    shopId: string,
+    shopRole = 'MANAGER',
+    perms: string = PERMISSIONS.PRINT_INCIDENT_READ,
+  ) =>
+    ({
+      shopId,
+      shopRole,
+      perms,
+      sub: 't009-metadata-synthetic-manager',
+    }) as JwtAccessPayload;
 
   function setup() {
     const prisma = {
@@ -243,7 +255,7 @@ describe('T-009 P0 hardware response safety', () => {
         fiscalSemanticKey: 'private-fiscal',
       },
     ]);
-    const result = await service.listPrintIncidents(actor('shop-A'));
+    const result = await service.listPrintIncidents(incidentActor('shop-A'));
     expect(result.items).toHaveLength(1);
     expect(result.items[0]).toMatchObject({
       id: 'job-2',
@@ -263,29 +275,98 @@ describe('T-009 P0 hardware response safety', () => {
     expect(Object.keys(prisma.printJob)).toEqual(['findMany']);
   });
 
-  it('retains shop.manage for both overview and incidents and denies lesser roles', () => {
+  it('allows shop.manage for overview and either approved grant for incident listing, but rejects unrelated grants', () => {
     const guard = new RolesGuard(new Reflector());
-    for (const method of ['overview', 'listPrintIncidents'] as const) {
-      const handler = Object.getOwnPropertyDescriptor(
-        HardwareController.prototype,
-        method,
-      )?.value as (...args: never[]) => unknown;
-      expect(Reflect.getMetadata(PERMS_KEY, handler)).toEqual([
-        PERMISSIONS.SHOP_MANAGE,
-      ]);
-      const context = (perms: string) =>
-        ({
-          getHandler: () => handler,
-          getClass: () => HardwareController,
-          switchToHttp: () => ({
-            getRequest: () => ({ user: { shopId: 'shop-A', perms } }),
+    const overview = Object.getOwnPropertyDescriptor(
+      HardwareController.prototype,
+      'overview',
+    )?.value as (...args: never[]) => unknown;
+    const incidents = Object.getOwnPropertyDescriptor(
+      HardwareController.prototype,
+      'listPrintIncidents',
+    )?.value as (...args: never[]) => unknown;
+    expect(Reflect.getMetadata(PERMS_KEY, overview)).toEqual([
+      PERMISSIONS.SHOP_MANAGE,
+    ]);
+    expect(Reflect.getMetadata(PERMS_KEY, incidents)).toEqual([
+      PERMISSIONS.SHOP_MANAGE,
+      PERMISSIONS.PRINT_INCIDENT_READ,
+    ]);
+    const context = (handler: (...args: never[]) => unknown, perms: string) =>
+      ({
+        getHandler: () => handler,
+        getClass: () => HardwareController,
+        switchToHttp: () => ({
+          getRequest: () => ({
+            user: incidentActor('shop-A', 'MANAGER', perms),
           }),
-        }) as never;
-      expect(guard.canActivate(context(PERMISSIONS.SHOP_MANAGE))).toBe(true);
+        }),
+      }) as never;
+    expect(guard.canActivate(context(overview, PERMISSIONS.SHOP_MANAGE))).toBe(
+      true,
+    );
+    expect(() =>
+      guard.canActivate(context(overview, PERMISSIONS.PRINT_INCIDENT_READ)),
+    ).toThrow();
+    expect(guard.canActivate(context(incidents, PERMISSIONS.SHOP_MANAGE))).toBe(
+      true,
+    );
+    expect(
+      guard.canActivate(context(incidents, PERMISSIONS.PRINT_INCIDENT_READ)),
+    ).toBe(true);
+    for (const handler of [overview, incidents]) {
       expect(() =>
-        guard.canActivate(context(PERMISSIONS.TRANSACTION_READ)),
+        guard.canActivate(context(handler, PERMISSIONS.TRANSACTION_READ)),
       ).toThrow();
     }
+  });
+
+  it('enforces privileged role, actual grants and venue identity within incident services even if controller OR guard permits a staff token', async () => {
+    const { service, prisma } = setup();
+    const cases = new PrintIncidentResolutionService(prisma as never);
+
+    const staffWithRead = incidentActor(
+      'shop-A',
+      'STAFF',
+      PERMISSIONS.PRINT_INCIDENT_READ,
+    );
+    const ungrantedManager = incidentActor(
+      'shop-A',
+      'MANAGER',
+      PERMISSIONS.TRANSACTION_READ,
+    );
+    const managerWithoutVenue = incidentActor('');
+    const privilegedReader = incidentActor('shop-A');
+
+    const guard = new RolesGuard(new Reflector());
+    const handler = Object.getOwnPropertyDescriptor(
+      HardwareController.prototype,
+      'listPrintIncidents',
+    )?.value as (...args: never[]) => unknown;
+    const context = {
+      getHandler: () => handler,
+      getClass: () => HardwareController,
+      switchToHttp: () => ({
+        getRequest: () => ({ user: staffWithRead }),
+      }),
+    } as never;
+    // The controller checks any-of permissions. The service independently
+    // enforces role AND grant: a STAFF token must still be denied.
+    expect(guard.canActivate(context)).toBe(true);
+
+    for (const denied of [
+      staffWithRead,
+      ungrantedManager,
+      managerWithoutVenue,
+    ]) {
+      await expect(service.listPrintIncidents(denied)).rejects.toThrow();
+      await expect(cases.read(denied, 'original-print-job')).rejects.toThrow();
+    }
+    expect(prisma.printJob.findMany).not.toHaveBeenCalled();
+    await service.listPrintIncidents(privilegedReader);
+    expect(prisma.printJob.findMany.mock.calls[0][0].where).toMatchObject({
+      shopId: 'shop-A',
+    });
   });
 
   it('does not alter authorization or mutation behavior', async () => {
