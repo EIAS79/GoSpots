@@ -1,3 +1,5 @@
+import { PrismaService } from '../../prisma/prisma.service';
+import { PaymentConnectorRegistry } from './connectors/payment-connector.registry';
 import { ForbiddenException } from '@nestjs/common';
 import { OfflinePaymentMinimumRole, PaymentOperationState, Prisma } from '@prisma/client';
 import { PERMISSIONS } from '../../common/permissions';
@@ -119,5 +121,156 @@ describe('MoneyOperationsService', () => {
       '20.00',
     );
     expect(result).toEqual({ allowed: false, reason: 'OFFLINE_ROLE_NOT_ALLOWED' });
+  });
+});
+
+describe('financial exception reconciliation atomicity (fake Prisma transaction)', () => {
+  function fixture(issueWriteFails = false) {
+    const decimal = (v: string) => new Prisma.Decimal(v);
+    const tx = {
+      financialReconciliationRun: {
+        create: jest.fn().mockResolvedValue({ id: 'run-1' }),
+        update: jest.fn().mockResolvedValue({
+          id: 'run-1',
+          shopId: 'shop-1',
+          status: 'MISMATCH',
+          mismatchCount: 1,
+          totals: {},
+          issues: [{ id: 'issue-1' }],
+        }),
+      },
+      financialReconciliationIssue: {
+        createMany: issueWriteFails
+          ? jest
+              .fn()
+              .mockRejectedValue(new Error('simulated issue insert failure'))
+          : jest.fn().mockResolvedValue({ count: 1 }),
+      },
+    };
+    // Simulated commit-on-success store. Callback writes are staged by the
+    // fake transaction; an exception must leave no durable RUNNING entry.
+    const committed = { runIds: [] as string[], issueIds: [] as string[] };
+    const prisma = {
+      financialReconciliationRun: {
+        findUnique: jest.fn().mockResolvedValue(null),
+      },
+      checkSettlement: {
+        aggregate: jest
+          .fn()
+          .mockResolvedValue({ _sum: { total: decimal('100') } }),
+      },
+      payment: {
+        aggregate: jest
+          .fn()
+          .mockResolvedValue({ _sum: { amount: decimal('100') } }),
+      },
+      ledgerEntry: {
+        aggregate: jest
+          .fn()
+          .mockResolvedValueOnce({ _sum: { amount: decimal('100') } })
+          .mockResolvedValueOnce({ _sum: { amount: decimal('0') } }),
+      },
+      refund: {
+        aggregate: jest
+          .fn()
+          .mockResolvedValue({ _sum: { amount: decimal('0') } }),
+      },
+      cashSession: { findMany: jest.fn().mockResolvedValue([]) },
+      paymentOperation: {
+        findMany: jest.fn().mockResolvedValue([
+          {
+            id: 'unknown-operation',
+            amount: decimal('10'),
+            state: PaymentOperationState.UNKNOWN,
+            provider: 'adyen',
+            providerPaymentId: null,
+          },
+        ]),
+      },
+      complianceRequest: { findMany: jest.fn().mockResolvedValue([]) },
+      $transaction: jest.fn(async (cb: (tx: typeof tx) => Promise<unknown>) => {
+        const result = await cb(tx);
+        committed.runIds.push('run-1');
+        if (tx.financialReconciliationIssue.createMany.mock.calls.length) {
+          committed.issueIds.push('issue-1');
+        }
+        return result;
+      }),
+    };
+    const service = new MoneyOperationsService(prisma as unknown as PrismaService, {} as unknown as PaymentConnectorRegistry);
+    const dto = {
+      fromInclusive: '2026-10-13T00:00:00Z',
+      toExclusive: '2026-10-14T00:00:00Z',
+      businessDate: '2026-10-13',
+      correlationId: 'reconciliation-local-1',
+      currency: 'PLN',
+    };
+    return { prisma, tx, service, dto, committed };
+  }
+
+  it('creates run, unresolved-provider issue, and final status inside one transaction', async () => {
+    const h = fixture();
+    await h.service.runFinancialReconciliation(actor('OWNER'), h.dto);
+    expect(h.prisma.$transaction).toHaveBeenCalledTimes(1);
+    expect(h.tx.financialReconciliationRun.create).toHaveBeenCalledTimes(1);
+    expect(h.tx.financialReconciliationIssue.createMany).toHaveBeenCalledWith({
+      data: [
+        expect.objectContaining({
+          shopId: 'shop-1',
+          currency: 'PLN',
+          runId: 'run-1',
+          type: 'PAYMENT_REQUIRES_RECONCILIATION',
+          entityId: 'unknown-operation',
+        }),
+      ],
+    });
+    expect(h.tx.financialReconciliationRun.update).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: { id: 'run-1' },
+        data: { status: 'MISMATCH', mismatchCount: 1, completedAt: expect.any(Date) as unknown },
+      }),
+    );
+    expect('create' in h.prisma.financialReconciliationRun).toBe(false);
+    expect(h.committed).toEqual({ runIds: ['run-1'], issueIds: ['issue-1'] });
+  });
+
+  it('returns an existing tenant-scoped correlation run without duplicate writes', async () => {
+    const h = fixture();
+    h.prisma.financialReconciliationRun.findUnique.mockResolvedValue({
+      id: 'prior-run',
+      shopId: 'shop-1',
+      currency: 'PLN',
+      status: 'CLEAR',
+      mismatchCount: 0,
+      issues: [],
+    });
+    const existing = await h.service.runFinancialReconciliation(actor('OWNER'), h.dto);
+    expect(existing).toMatchObject({ id: 'prior-run', status: 'CLEAR', mismatchCount: 0 });
+    expect(h.prisma.financialReconciliationRun.findUnique).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: { shopId_businessDate_currency_correlationId: {
+          shopId: 'shop-1',
+          businessDate: new Date('2026-10-13'),
+          currency: 'PLN',
+          correlationId: 'reconciliation-local-1',
+        } },
+      }),
+    );
+    expect(h.prisma.$transaction).not.toHaveBeenCalled();
+    expect(h.committed).toEqual({ runIds: [], issueIds: [] });
+  });
+
+  it('rejects on issue insertion failure inside transaction without finalizing RUNNING', async () => {
+    const h = fixture(true);
+    await expect(
+      h.service.runFinancialReconciliation(actor('OWNER'), h.dto),
+    ).rejects.toThrow('simulated issue insert failure');
+    expect(h.prisma.$transaction).toHaveBeenCalledTimes(1);
+    expect(h.tx.financialReconciliationRun.create).toHaveBeenCalledTimes(1);
+    expect(h.tx.financialReconciliationIssue.createMany).toHaveBeenCalledTimes(
+      1,
+    );
+    expect(h.tx.financialReconciliationRun.update).not.toHaveBeenCalled();
+    expect(h.committed).toEqual({ runIds: [], issueIds: [] });
   });
 });

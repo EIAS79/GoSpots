@@ -1,3 +1,4 @@
+import { formatReservationEmailWhen } from '../../common/reservation-display.util';
 import {
   GUEST_GAMING_PHASE_LABELS,
   resolveGuestGamingPhase,
@@ -10,6 +11,7 @@ export type GamingReservationMailDetails = {
   unitName: string;
   startsAt: Date;
   endsAt: Date;
+  timeZone?: string;
   status: string;
   /** Present when the raw guest token is known (create / cancel with URL token). */
   statusUrl?: string | null;
@@ -19,24 +21,6 @@ export type GamingReservationMailDetails = {
 
 function bookingLabel(details: GamingReservationMailDetails) {
   return details.isDining ? 'table reservation' : 'gaming booking';
-}
-
-function formatWhen(startsAt: Date, endsAt: Date) {
-  const date = startsAt.toLocaleDateString('en-US', {
-    weekday: 'long',
-    month: 'long',
-    day: 'numeric',
-    year: 'numeric',
-  });
-  const start = startsAt.toLocaleTimeString('en-US', {
-    hour: 'numeric',
-    minute: '2-digit',
-  });
-  const end = endsAt.toLocaleTimeString('en-US', {
-    hour: 'numeric',
-    minute: '2-digit',
-  });
-  return { date, start, end, range: `${start} – ${end}` };
 }
 
 function guestStatusLabel(details: GamingReservationMailDetails) {
@@ -87,7 +71,9 @@ export function buildGamingReservationEmail(
   details: GamingReservationMailDetails,
   kind: 'created' | 'confirmed' | 'canceled' | 'updated',
 ) {
-  const when = formatWhen(details.startsAt, details.endsAt);
+  const when = formatReservationEmailWhen(
+    details.startsAt, details.endsAt, details.timeZone ?? 'UTC',
+  );
   const statusLabel =
     kind === 'canceled'
       ? GUEST_GAMING_PHASE_LABELS.canceled

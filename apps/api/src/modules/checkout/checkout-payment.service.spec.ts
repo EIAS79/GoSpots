@@ -14,7 +14,39 @@ function d(value: string | number) {
 }
 
 describe('CheckoutPaymentService', () => {
-  it('supports partial cash then manual-card remainder, links cash movement, and does not duplicate finance revenue', async () => {
+  it.each(['OWNER', 'CASHIER'] as const)(
+    'rejects unauthenticated-by-provider MANUAL_CARD for %s before any DB write',
+    async (shopRole) => {
+      const prisma: any = { $transaction: jest.fn() };
+      const flags: any = { isFeatureEnabled: jest.fn() };
+      const service = new CheckoutPaymentService(
+        prisma,
+        flags,
+        new PaymentAllocationService(),
+        new SettlementStateService(),
+        { enqueue: jest.fn() } as any,
+        { record: jest.fn() } as any,
+        { requireSessionForCashPayment: jest.fn() } as any,
+      );
+      const actor = {
+        sub: 'operator-1',
+        shopId: 'shop-1',
+        shopRole,
+        perms: '*',
+      } as JwtAccessPayload;
+      await expect(
+        service.createPayment(actor, 'settlement-1', {
+          expectedCheckVersion: 1,
+          method: CheckoutPaymentMethod.MANUAL_CARD,
+          allocationKind: PaymentAllocationKind.REMAINING,
+          allocations: [{ snapshotId: 'line-1', amount: '10.0000' }],
+        }),
+      ).rejects.toThrow(/prohibited without verified provider capture/);
+      expect(prisma.$transaction).not.toHaveBeenCalled();
+      expect(flags.isFeatureEnabled).not.toHaveBeenCalled();
+    },
+  );
+  it('supports partial cash then verified captured-provider remainder without duplicating revenue', async () => {
     const settlement: any = {
       id: 'settlement-1',
       shopId: 'shop-1',
@@ -80,6 +112,14 @@ describe('CheckoutPaymentService', () => {
           settlement.guestCheck.version += 1;
           return { count: 1 };
         }),
+      },
+      paymentOperation: {
+        findFirst: jest.fn().mockResolvedValue({
+          amount: d(60),
+          currency: 'PLN',
+          checkoutPaymentId: null,
+        }),
+        updateMany: jest.fn().mockResolvedValue({ count: 1 }),
       },
       payment: {
         create: jest.fn(async ({ data }: any) => {
@@ -171,12 +211,69 @@ describe('CheckoutPaymentService', () => {
       '40.0000',
     );
 
-    const complete = await service.createPayment(actor, settlement.id, {
+    const capturedDto = {
       expectedCheckVersion: 8,
       method: CheckoutPaymentMethod.MANUAL_CARD,
       allocationKind: PaymentAllocationKind.REMAINING,
       allocations: [{ snapshotId: 'line-2', amount: '60.0000' }],
-    });
+    };
+
+    // Neither a missing capture nor a mismatched amount may create financial facts.
+    tx.paymentOperation.findFirst.mockResolvedValueOnce(null);
+    await expect(
+      service.recordCapturedProviderPayment(
+        actor,
+        settlement.id,
+        capturedDto,
+        'captured-operation-1',
+      ),
+    ).rejects.toThrow(/matching, unallocated captured/);
+    await expect(
+      service.recordCapturedProviderPayment(
+        actor,
+        settlement.id,
+        {
+          ...capturedDto,
+          allocations: [{ snapshotId: 'line-2', amount: '30.0000' }],
+        },
+        'captured-operation-1',
+      ),
+    ).rejects.toThrow(/matching, unallocated captured/);
+    expect(tx.payment.create).toHaveBeenCalledTimes(1);
+    expect(settlement.amountDue.toFixed(4)).toBe('60.0000');
+
+    const complete = await service.recordCapturedProviderPayment(
+      actor,
+      settlement.id,
+      capturedDto,
+      'captured-operation-1',
+    );
+    expect(tx.paymentOperation.updateMany).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: expect.objectContaining({
+          shopId: 'shop-1',
+          settlementId: settlement.id,
+          checkoutPaymentId: null,
+          state: 'CAPTURED',
+        }),
+        data: {
+          checkoutPaymentId: 'payment-2',
+          reconciliationRequired: false,
+          errorCode: null,
+          errorMessage: null,
+        },
+      }),
+    );
+    expect(tx.paymentOperation.findFirst).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: expect.objectContaining({
+          id: 'captured-operation-1',
+          shopId: 'shop-1',
+          settlementId: settlement.id,
+          state: 'CAPTURED',
+        }),
+      }),
+    );
     expect(complete.state).toBe('PAID');
     expect(complete.amountDue).toBe('0.0000');
     expect(complete.paidAmount).toBe('100.0000');
@@ -262,4 +359,91 @@ describe('CheckoutPaymentService', () => {
     ).rejects.toThrow(/Duplicate allocation/i);
     expect(cash.recordCashSale).not.toHaveBeenCalled();
   });
+
+  it.each([
+    { shopRole: 'CASHIER', perms: '', shopId: 'shop-1' },
+    { shopRole: 'STAFF', perms: 'checkout.read', shopId: 'shop-1' },
+    { shopRole: 'OWNER', perms: '*', shopId: null },
+  ])('denies unauthorized payment writes before database changes (%j)', async (principal) => {
+    const prisma: any = { $transaction: jest.fn() };
+    const flags: any = { isFeatureEnabled: jest.fn() };
+    const service = new CheckoutPaymentService(
+      prisma, flags,
+      new PaymentAllocationService(), new SettlementStateService(),
+      { enqueue: jest.fn() } as any, { record: jest.fn() } as any,
+      { recordCashSale: jest.fn() } as any,
+    );
+    const actor = {
+      sub: 'unauthorized-user', shopRole: principal.shopRole,
+      shopId: principal.shopId, perms: principal.perms,
+    } as JwtAccessPayload;
+    await expect(service.createPayment(actor, 'settlement-1', {
+      expectedCheckVersion: 1,
+      method: CheckoutPaymentMethod.OTHER,
+      allocationKind: PaymentAllocationKind.REMAINING,
+      allocations: [{ snapshotId: 'line-1', amount: '10.0000' }],
+    })).rejects.toThrow();
+    expect(prisma.$transaction).not.toHaveBeenCalled();
+    expect(flags.isFeatureEnabled).not.toHaveBeenCalled();
+  });
+
+  it('does not expose a foreign venue settlement from either payment read surface', async () => {
+    const prisma: any = {
+      checkSettlement: { findFirst: jest.fn().mockResolvedValue(null) },
+    };
+    const service = new CheckoutPaymentService(
+      prisma,
+      { isFeatureEnabled: jest.fn().mockResolvedValue(true) } as any,
+      new PaymentAllocationService(),
+      new SettlementStateService(),
+      { enqueue: jest.fn() } as any,
+      { record: jest.fn() } as any,
+      {} as any,
+    );
+    const foreignActor = {
+      sub: 'owner-other', shopId: 'shop-b', shopRole: 'OWNER', perms: '*',
+    } as JwtAccessPayload;
+    await expect(service.getPaymentState(foreignActor, 'shop-a-settlement'))
+      .rejects.toThrow('Settlement not found');
+    await expect(service.previewGroups(foreignActor, 'shop-a-settlement', {
+      mode: PaymentAllocationKind.REMAINING,
+    })).rejects.toThrow('Settlement not found');
+    expect(prisma.checkSettlement.findFirst).toHaveBeenCalledTimes(2);
+    for (const call of prisma.checkSettlement.findFirst.mock.calls) {
+      expect(call[0].where).toEqual({ id: 'shop-a-settlement', shopId: 'shop-b' });
+    }
+  });
+
+  it('does not post payment allocations to foreign venue settlements', async () => {
+    const tx: any = {
+      $queryRaw: jest.fn().mockResolvedValue([]),
+      checkSettlement: { findFirst: jest.fn().mockResolvedValue(null) },
+      payment: { create: jest.fn() },
+      guestCheck: { updateMany: jest.fn() },
+    };
+    const service = new CheckoutPaymentService(
+      { $transaction: (fn: any) => fn(tx) } as any,
+      { isFeatureEnabled: jest.fn().mockResolvedValue(true) } as any,
+      new PaymentAllocationService(),
+      new SettlementStateService(),
+      { enqueue: jest.fn() } as any,
+      { record: jest.fn() } as any,
+      {} as any,
+    );
+    const foreignActor = {
+      sub: 'owner-other', shopId: 'shop-b', shopRole: 'OWNER', perms: '*',
+    } as JwtAccessPayload;
+    await expect(service.createPayment(foreignActor, 'shop-a-settlement', {
+      expectedCheckVersion: 1,
+      method: CheckoutPaymentMethod.OTHER,
+      allocationKind: PaymentAllocationKind.REMAINING,
+      allocations: [{ snapshotId: 'foreign-line', amount: '10.0000' }],
+    })).rejects.toThrow('Settlement not found');
+    expect(tx.checkSettlement.findFirst).toHaveBeenCalledWith(
+      expect.objectContaining({ where: { id: 'shop-a-settlement', shopId: 'shop-b' } }),
+    );
+    expect(tx.payment.create).not.toHaveBeenCalled();
+    expect(tx.guestCheck.updateMany).not.toHaveBeenCalled();
+  });
+
 });

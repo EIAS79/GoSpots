@@ -11,7 +11,6 @@ import {
   type Prisma,
 } from '@prisma/client';
 import { interval, map, merge, Observable, of, startWith } from 'rxjs';
-import type { NotificationSection } from '../../common/notification.constants';
 import {
   reservationNotificationTabWhere,
   sanitizeAppRelativeHref,
@@ -128,30 +127,24 @@ export class NotificationsService {
 
     const heartbeat$ = interval(SSE_HEARTBEAT_MS).pipe(
       startWith(0),
-      map(
-        () =>
-          ({
-            type: 'heartbeat',
-            data: { ts: Date.now() },
-          }) as MessageEvent,
-      ),
+      map(() => ({
+        type: 'heartbeat',
+        data: { ts: Date.now() },
+      })),
     );
 
     const notifications$ = this.sseHub.forActor(shopId, actor.sub).pipe(
-      map(
-        (n) =>
-          ({
-            type: 'notification',
-            data: {
-              id: n.id,
-              section: n.section,
-              title: n.title,
-              body: n.body,
-              href: n.href,
-              createdAt: n.createdAt,
-            },
-          }) as MessageEvent,
-      ),
+      map((n) => ({
+        type: 'notification',
+        data: {
+          id: n.id,
+          section: n.section,
+          title: n.title,
+          body: n.body,
+          href: n.href,
+          createdAt: n.createdAt,
+        },
+      })),
     );
 
     return merge(ready$, heartbeat$, notifications$);
@@ -248,26 +241,35 @@ export class NotificationsService {
   }
 
   async markRead(actor: JwtAccessPayload, id: string) {
+    this.assertRead(actor);
     const shopId = requireShopId(actor);
     const row = await this.findAccessible(actor, id);
     const updated = await this.prisma.notification.update({
-      where: shopScopedWhere(row.id, shopId),
+      where: {
+        ...shopScopedWhere(row.id, shopId),
+        OR: [{ userId: null }, { userId: actor.sub }],
+      },
       data: { readAt: new Date() },
     });
     return this.serialize(updated);
   }
 
   async markUnread(actor: JwtAccessPayload, id: string) {
+    this.assertRead(actor);
     const shopId = requireShopId(actor);
     const row = await this.findAccessible(actor, id);
     const updated = await this.prisma.notification.update({
-      where: shopScopedWhere(row.id, shopId),
+      where: {
+        ...shopScopedWhere(row.id, shopId),
+        OR: [{ userId: null }, { userId: actor.sub }],
+      },
       data: { readAt: null },
     });
     return this.serialize(updated);
   }
 
   async markAllRead(actor: JwtAccessPayload) {
+    this.assertRead(actor);
     const result = await this.prisma.notification.updateMany({
       where: this.buildWhere(actor, { status: 'unread' }),
       data: { readAt: new Date() },
@@ -276,6 +278,7 @@ export class NotificationsService {
   }
 
   async archive(actor: JwtAccessPayload, dto: ArchiveNotificationsDto) {
+    this.assertRead(actor);
     const shopId = requireShopId(actor);
     const access: Prisma.NotificationWhereInput = {
       OR: [{ userId: null }, { userId: actor.sub }],
@@ -313,6 +316,7 @@ export class NotificationsService {
   }
 
   async unarchive(actor: JwtAccessPayload, dto: ArchiveNotificationsDto) {
+    this.assertRead(actor);
     const shopId = requireShopId(actor);
     const access: Prisma.NotificationWhereInput = {
       OR: [{ userId: null }, { userId: actor.sub }],
@@ -412,7 +416,7 @@ export class NotificationsService {
           from: dto.from,
           to: dto.to,
           section: dto.section,
-          status: (dto.status as NotificationQuery['status']) ?? 'all',
+          status: dto.status ?? 'all',
         }),
         ...access,
       };
@@ -805,7 +809,7 @@ export class NotificationsService {
   private async create(data: {
     shopId: string;
     userId: string | null;
-    section: NotificationSection | string;
+    section: string;
     type: NotificationType;
     title: string;
     body: string;

@@ -1,8 +1,4 @@
-import {
-  PaymentOperationState,
-  RefundState,
-  Prisma,
-} from '@prisma/client';
+import { PaymentOperationState, RefundState, Prisma } from '@prisma/client';
 import type { JwtAccessPayload } from '../auth/auth.service';
 import { FakePaymentConnector } from './connectors/fake-payment.connector';
 import { PaymentConnectorRegistry } from './connectors/payment-connector.registry';
@@ -96,19 +92,43 @@ function makeHarness() {
   };
 
   const refund = {
+    aggregate: jest.fn(async ({ where }: any) => {
+      const states = Array.isArray(where.state?.in)
+        ? where.state.in
+        : [where.state];
+      const reserved = refunds.filter(
+        (row) =>
+          row.shopId === where.shopId &&
+          row.paymentOperationId === where.paymentOperationId &&
+          states.includes(row.state),
+      );
+      return {
+        _sum: {
+          amount: reserved.reduce(
+            (total, row) => total.add(row.amount),
+            new Prisma.Decimal(0),
+          ),
+        },
+      };
+    }),
     findUnique: jest.fn(async ({ where, include }: any) => {
       const key = where.shopId_paymentOperationId_idempotencyKey;
-      const row = key
-        ? refunds.find(
-            (item) =>
-              item.shopId === key.shopId &&
-              item.paymentOperationId === key.paymentOperationId &&
-              item.idempotencyKey === key.idempotencyKey,
-          )
-        : null;
+      const row = where.id
+        ? refunds.find((item) => item.id === where.id)
+        : key
+          ? refunds.find(
+              (item) =>
+                item.shopId === key.shopId &&
+                item.paymentOperationId === key.paymentOperationId &&
+                item.idempotencyKey === key.idempotencyKey,
+            )
+          : null;
       if (!row) return null;
       return include?.allocations
-        ? { ...row, allocations: refundAllocations.filter((a) => a.refundId === row.id) }
+        ? {
+            ...row,
+            allocations: refundAllocations.filter((a) => a.refundId === row.id),
+          }
         : row;
     }),
     create: jest.fn(async ({ data }: any) => {
@@ -134,7 +154,10 @@ function makeHarness() {
       if (!row) throw new Error('refund missing');
       Object.assign(row, data);
       return include?.allocations
-        ? { ...row, allocations: refundAllocations.filter((a) => a.refundId === row.id) }
+        ? {
+            ...row,
+            allocations: refundAllocations.filter((a) => a.refundId === row.id),
+          }
         : row;
     }),
   };
@@ -153,18 +176,26 @@ function makeHarness() {
     }),
     create: jest.fn(async ({ data }: any) => {
       eventCounter += 1;
-      const row = { id: `event-${eventCounter}`, receivedAt: new Date(), ...data };
+      const row = {
+        id: `event-${eventCounter}`,
+        receivedAt: new Date(),
+        ...data,
+      };
       webhookEvents.push(row);
       return row;
     }),
   };
 
   const tx: any = {
+    $queryRaw: jest.fn(async () => [{ id: operations[0]?.id }]),
     refund,
     refundAllocation: {
       createMany: jest.fn(async ({ data }: any) => {
         for (const item of data) {
-          refundAllocations.push({ id: `ra-${refundAllocations.length + 1}`, ...item });
+          refundAllocations.push({
+            id: `ra-${refundAllocations.length + 1}`,
+            ...item,
+          });
         }
         return { count: data.length };
       }),
@@ -175,6 +206,7 @@ function makeHarness() {
   const prisma: any = {
     paymentOperation,
     paymentTerminal: { findFirst: jest.fn().mockResolvedValue(null) },
+    checkSettlement: { findFirst: jest.fn().mockResolvedValue(null) },
     refund,
     paymentWebhookEvent,
     $transaction: jest.fn(async (fn: any) => fn(tx)),
@@ -203,12 +235,22 @@ describe('PaymentDomainService', () => {
     const h = makeHarness();
     const first = await h.service.startPayment(
       actor(),
-      { provider: 'fake', amount: '100', currency: 'pln', metadata: { scenario: 'success' } },
+      {
+        provider: 'fake',
+        amount: '100',
+        currency: 'pln',
+        metadata: { scenario: 'success' },
+      },
       'same-key',
     );
     const replay = await h.service.startPayment(
       actor(),
-      { provider: 'FAKE', amount: '100.0000', currency: 'PLN', metadata: { scenario: 'success' } },
+      {
+        provider: 'FAKE',
+        amount: '100.0000',
+        currency: 'PLN',
+        metadata: { scenario: 'success' },
+      },
       'same-key',
     );
     expect(first.id).toBe(replay.id);
@@ -285,7 +327,40 @@ describe('PaymentDomainService', () => {
     expect(refunded.state).toBe(RefundState.SUCCEEDED);
     expect(refunded.allocations).toHaveLength(1);
     expect(refunded.allocations[0].snapshotId).toBe('snapshot-1');
-    expect(h.operations[0].state).toBe(PaymentOperationState.PARTIALLY_REFUNDED);
+    expect(h.operations[0].state).toBe(
+      PaymentOperationState.PARTIALLY_REFUNDED,
+    );
+  });
+
+  it('reserves pending refunds against the captured amount before another provider call', async () => {
+    const h = makeHarness();
+    const operation = await h.service.startPayment(
+      actor(),
+      { provider: 'fake', amount: '25', currency: 'PLN' },
+      'pending-refund-operation',
+    );
+    h.refunds.push({
+      id: 'already-processing-refund',
+      paymentOperationId: operation.id,
+      shopId: 'shop-1',
+      state: RefundState.PROCESSING,
+      amount: new Prisma.Decimal('25'),
+      idempotencyKey: 'first-operator',
+    });
+    await expect(
+      h.service.createRefund(
+        actor(),
+        operation.id,
+        {
+          amount: '25',
+          reason: 'second operator',
+          allocations: [{ snapshotId: 'snapshot-1', amount: '25' }],
+        },
+        'second-operator',
+      ),
+    ).rejects.toThrow(/including pending refunds/i);
+    expect(h.prisma.refund.create).not.toHaveBeenCalled();
+    expect(h.operations[0].state).toBe(PaymentOperationState.CAPTURED);
   });
 
   it('treats duplicate normalized webhook delivery as harmless', async () => {
@@ -317,8 +392,123 @@ describe('PaymentDomainService', () => {
       { provider: 'fake', amount: '10', currency: 'PLN' },
       'tenant-key',
     );
-    await expect(h.service.getOperation(actor('shop-2'), payment.id)).rejects.toThrow(
-      /not found/i,
+    await expect(
+      h.service.getOperation(actor('shop-2'), payment.id),
+    ).rejects.toThrow(/not found/i);
+  });
+
+  it('rejects cross-tenant settlement references before creating a provider operation', async () => {
+    const h = makeHarness();
+    await expect(
+      h.service.startPayment(
+        actor('shop-2'),
+        {
+          provider: 'fake',
+          settlementId: 'shop-1-settlement',
+          amount: '10',
+          currency: 'PLN',
+        },
+        'foreign-settlement',
+      ),
+    ).rejects.toThrow('Settlement not found');
+    expect(h.prisma.checkSettlement.findFirst).toHaveBeenCalledWith({
+      where: { id: 'shop-1-settlement', shopId: 'shop-2' },
+      select: { currency: true },
+    });
+    expect(h.prisma.paymentOperation.create).not.toHaveBeenCalled();
+  });
+
+  it('rejects provider operations with a settlement currency mismatch', async () => {
+    const h = makeHarness();
+    h.prisma.checkSettlement.findFirst.mockResolvedValueOnce({
+      currency: 'PLN',
+    });
+    await expect(
+      h.service.startPayment(
+        actor(),
+        {
+          provider: 'fake',
+          settlementId: 'our-settlement',
+          amount: '10',
+          currency: 'EUR',
+        },
+        'wrong-currency',
+      ),
+    ).rejects.toThrow('Payment currency differs from settlement currency');
+    expect(h.prisma.paymentOperation.create).not.toHaveBeenCalled();
+  });
+
+  it('preserves correctly scoped provider checkout settlement references', async () => {
+    const h = makeHarness();
+    h.prisma.checkSettlement.findFirst.mockResolvedValueOnce({
+      currency: 'PLN',
+    });
+    const payment = await h.service.startPayment(
+      actor(),
+      {
+        provider: 'fake',
+        settlementId: 'our-settlement',
+        amount: '10',
+        currency: 'PLN',
+      },
+      'our-settlement-key',
     );
+    expect(payment.state).toBe(PaymentOperationState.CAPTURED);
+    expect(h.prisma.paymentOperation.create).toHaveBeenCalledTimes(1);
+  });
+
+  it('denies another shop operation reconciliation, cancellation and refund', async () => {
+    const h = makeHarness();
+    const payment = await h.service.startPayment(
+      actor('shop-1'),
+      {
+        provider: 'fake',
+        amount: '10',
+        currency: 'PLN',
+      },
+      'shop-a-payment',
+    );
+    await expect(
+      h.service.reconcile(actor('shop-2'), payment.id),
+    ).rejects.toThrow('Payment operation not found');
+    await expect(h.service.cancel(actor('shop-2'), payment.id)).rejects.toThrow(
+      'Payment operation not found',
+    );
+    await expect(
+      h.service.createRefund(
+        actor('shop-2'),
+        payment.id,
+        {
+          amount: '5',
+          allocations: [{ snapshotId: 'foreign-snapshot', amount: '5' }],
+        },
+        'foreign-refund',
+      ),
+    ).rejects.toThrow('Payment operation not found');
+    expect(h.prisma.paymentOperation.create).toHaveBeenCalledTimes(1);
+    expect(h.prisma.refund.create).not.toHaveBeenCalled();
+  });
+
+  it('denies provider payment start without checkout.write before reading a terminal', async () => {
+    const h = makeHarness();
+    const reader = {
+      sub: 'reader',
+      shopId: 'shop-1',
+      shopRole: 'CASHIER',
+      perms: 'checkout.read',
+    } as JwtAccessPayload;
+    await expect(
+      h.service.startPayment(
+        reader,
+        {
+          provider: 'fake',
+          amount: '10',
+          currency: 'PLN',
+        },
+        'reader-denied',
+      ),
+    ).rejects.toThrow('Missing checkout.write');
+    expect(h.prisma.paymentTerminal.findFirst).not.toHaveBeenCalled();
+    expect(h.prisma.paymentOperation.create).not.toHaveBeenCalled();
   });
 });

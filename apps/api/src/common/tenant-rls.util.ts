@@ -13,11 +13,7 @@ import type { Prisma, PrismaClient } from '@prisma/client';
  * Neon deploy + default-off flag stay safe; enforcement applies once mode is set.
  */
 
-export type TenantRlsMode =
-  | 'tenant'
-  | 'public_insert'
-  | 'system'
-  | 'bypass';
+export type TenantRlsMode = 'tenant' | 'public_insert' | 'system' | 'bypass';
 
 export type TenantRlsSession = {
   shopId: string;
@@ -54,6 +50,17 @@ export async function applyTenantRlsSession(
   tx: RlsSqlClient,
   session: TenantRlsSession,
 ): Promise<void> {
+  // Even direct helper callers cannot change the SQL GUC while a sibling
+  // shares the current AsyncLocalStorage transaction. Guard before SQL.
+  const active = tenantRlsAls.getStore();
+  if (
+    active?.tx &&
+    (active.shopId !== session.shopId || active.mode !== session.mode)
+  ) {
+    throw new Error(
+      'Cannot change tenant or privilege mode within an active RLS transaction',
+    );
+  }
   await tx.$executeRaw`SELECT set_config('app.current_shop_id', ${session.shopId}, true)`;
   await tx.$executeRaw`SELECT set_config('app.rls_mode', ${session.mode}, true)`;
 }
@@ -66,6 +73,8 @@ export type WithTenantRlsOptions = {
 /**
  * Open (or reuse) a transaction, SET LOCAL tenant context, run `fn` on the tx.
  * Prefer TenantRlsInterceptor for HTTP; use this for cron/public/scripts.
+ * Privileged system/bypass operations must start in a separately authorized
+ * top-level transaction; nested mode changes (including downgrades) are forbidden.
  */
 export async function withTenantRls<T>(
   prisma: PrismaClient,
@@ -73,10 +82,29 @@ export async function withTenantRls<T>(
   fn: (tx: Prisma.TransactionClient) => Promise<T>,
   options?: WithTenantRlsOptions,
 ): Promise<T> {
+  if (!session.shopId || !session.shopId.trim()) {
+    throw new Error('Tenant RLS requires a nonempty trusted shopId');
+  }
+  if (
+    !(['tenant', 'public_insert', 'system', 'bypass'] as string[]).includes(
+      session.mode,
+    )
+  ) {
+    throw new Error('Tenant RLS mode is invalid');
+  }
+
   const existing = tenantRlsAls.getStore();
   if (existing?.tx) {
-    await applyTenantRlsSession(existing.tx, session);
-    return tenantRlsAls.run({ ...existing, ...session }, () => fn(existing.tx));
+    // The same interactive Prisma transaction may be shared by concurrent
+    // nested promises. SET LOCAL is transaction-wide, not AsyncLocalStorage-
+    // local: changing shopId/mode here could expose sibling reads even if the
+    // previous value were restored in finally. Enforce immutable context.
+    if (existing.shopId !== session.shopId || existing.mode !== session.mode) {
+      throw new Error(
+        'Cannot change tenant or privilege mode within an active RLS transaction',
+      );
+    }
+    return fn(existing.tx);
   }
 
   return prisma.$transaction(
@@ -140,12 +168,14 @@ export function wrapPrismaWithTenantRls<T extends PrismaClient>(client: T): T {
           prop in store.tx &&
           typeof (store.tx as Record<string, unknown>)[prop] === 'object'
         ) {
-          return Reflect.get(store.tx, prop, store.tx);
+          return Reflect.get(store.tx, prop, store.tx) as unknown;
         }
       }
 
-      const value = Reflect.get(target, prop, receiver);
-      return typeof value === 'function' ? value.bind(target) : value;
+      const value: unknown = Reflect.get(target, prop, receiver);
+      return typeof value === 'function'
+        ? (value as (...args: unknown[]) => unknown).bind(target)
+        : value;
     },
-  }) as T;
+  });
 }

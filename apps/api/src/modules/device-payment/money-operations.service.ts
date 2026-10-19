@@ -294,20 +294,11 @@ export class MoneyOperationsService {
       unresolvedComplianceRequestCount: complianceRequests.length,
     };
 
-    const run = await this.prisma.financialReconciliationRun.create({
-      data: {
-        shopId,
-        businessDate,
-        currency,
-        status: FinancialReconciliationStatus.RUNNING,
-        totals,
-        correlationId: dto.correlationId,
-        startedById: actor.sub,
-      },
-    });
-    const issues: Prisma.FinancialReconciliationIssueCreateManyInput[] = [];
+    // Run, issues and final status must commit atomically: a retry must not
+    // return a half-persisted RUNNING reconciliation after a worker crash.
+    const issues: IssueDraft[] = [];
     const addIssue = (issue: IssueDraft) => {
-      issues.push({ ...issue, runId: run.id, shopId, currency });
+      issues.push(issue);
     };
 
     if (!settlementTotal.eq(paymentTotal)) {
@@ -387,19 +378,30 @@ export class MoneyOperationsService {
       });
     }
 
-    if (issues.length) {
-      await this.prisma.financialReconciliationIssue.createMany({ data: issues });
-    }
-    const completed = await this.prisma.financialReconciliationRun.update({
-      where: { id: run.id },
-      data: {
-        status: issues.length
-          ? FinancialReconciliationStatus.MISMATCH
-          : FinancialReconciliationStatus.CLEAR,
-        mismatchCount: issues.length,
-        completedAt: new Date(),
-      },
-      include: { issues: { orderBy: [{ severity: 'desc' }, { firstSeenAt: 'asc' }] } },
+    const completed = await this.prisma.$transaction(async (tx) => {
+      const run = await tx.financialReconciliationRun.create({
+        data: {
+          shopId, businessDate, currency,
+          status: FinancialReconciliationStatus.RUNNING,
+          totals, correlationId: dto.correlationId, startedById: actor.sub,
+        },
+      });
+      if (issues.length) {
+        await tx.financialReconciliationIssue.createMany({
+          data: issues.map((issue) => ({ ...issue, runId: run.id, shopId, currency })),
+        });
+      }
+      return tx.financialReconciliationRun.update({
+        where: { id: run.id },
+        data: {
+          status: issues.length
+            ? FinancialReconciliationStatus.MISMATCH
+            : FinancialReconciliationStatus.CLEAR,
+          mismatchCount: issues.length,
+          completedAt: new Date(),
+        },
+        include: { issues: { orderBy: [{ severity: 'desc' }, { firstSeenAt: 'asc' }] } },
+      });
     });
     return this.serializeRun(completed);
   }

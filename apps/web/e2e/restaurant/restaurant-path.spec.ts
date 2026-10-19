@@ -107,9 +107,9 @@ test('@smoke E2E-02 restaurant order to KDS to checkout', async ({ page }) => {
   expect(preview.lines.some((line: any) => line.sourceType === 'VENUE_ORDER')).toBeTruthy();
   expect(preview.lines.some((line: any) => line.sourceType === 'SHOP_ORDER')).toBeFalsy();
 
-  const { state } = await settleAndSplit(page, check.id, ['MANUAL_CARD', 'OTHER']);
+  const { state } = await settleAndSplit(page, check.id, ['OTHER', 'OTHER']);
   expect(state.payments.map((payment: any) => payment.method)).toEqual([
-    'MANUAL_CARD',
+    'OTHER',
     'OTHER',
   ]);
   await closePaidCheck(page, check.id);

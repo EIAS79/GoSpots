@@ -14,6 +14,11 @@ import {
   PrintJobStatus,
 } from '@prisma/client';
 import { createHash, randomBytes } from 'crypto';
+import {
+  safePrintDiagnostic,
+  safePrinterDiagnostic,
+} from './hardware-response-safety';
+import { PrintIncidentResolutionService, assertPrintIncidentRead } from './print-incident-resolution.service';
 import { requireShopId } from '../../common/tenant';
 import { PrismaService } from '../../prisma/prisma.service';
 import { AuditService } from '../audit/audit.service';
@@ -42,6 +47,76 @@ function canonicalJson(value: unknown): string {
     .sort()
     .map((key) => `${JSON.stringify(key)}:${canonicalJson(object[key])}`)
     .join(',')}}`;
+}
+
+const PRINT_OVERVIEW_SELECT = {
+  id: true,
+  type: true,
+  sourceType: true,
+  sourceId: true,
+  status: true,
+  attemptCount: true,
+  maxAttempts: true,
+  claimedAt: true,
+  createdAt: true,
+  lastErrorCode: true,
+  lastError: true,
+} satisfies Prisma.PrintJobSelect;
+
+const INCIDENT_LIMIT = 100;
+const PRINT_INCIDENT_SELECT = {
+  id: true,
+  shopId: true,
+  type: true,
+  status: true,
+  sourceType: true,
+  sourceId: true,
+  printerDeviceId: true,
+  claimedByEdgeDeviceId: true,
+  claimedAt: true,
+  printingAt: true,
+  printedAt: true,
+  lastErrorCode: true,
+  lastError: true,
+  attemptCount: true,
+  createdAt: true,
+  updatedAt: true,
+} satisfies Prisma.PrintJobSelect;
+
+type IncidentCursor = { shopId: string; createdAt: string; id: string };
+
+function parseIncidentCursor(
+  raw: string | undefined,
+  shopId: string,
+): IncidentCursor | null {
+  if (raw === undefined) return null;
+  try {
+    if (!raw || raw.length > 1024 || !/^[A-Za-z0-9_-]+$/.test(raw))
+      throw new Error();
+    const decoded: unknown = JSON.parse(
+      Buffer.from(raw, 'base64url').toString('utf8'),
+    );
+    if (!decoded || typeof decoded !== 'object' || Array.isArray(decoded))
+      throw new Error();
+    const value = decoded as Record<string, unknown>;
+    if (
+      value.v !== 1 ||
+      value.shopId !== shopId ||
+      typeof value.id !== 'string' ||
+      !/^[A-Za-z0-9_-]{1,128}$/.test(value.id) ||
+      typeof value.createdAt !== 'string'
+    )
+      throw new Error();
+    const createdAt = new Date(value.createdAt);
+    if (
+      !Number.isFinite(createdAt.valueOf()) ||
+      createdAt.toISOString() !== value.createdAt
+    )
+      throw new Error();
+    return { shopId, id: value.id, createdAt: value.createdAt };
+  } catch {
+    throw new BadRequestException('Invalid print incident cursor');
+  }
 }
 
 @Injectable()
@@ -75,27 +150,154 @@ export class HardwareService {
   async overview(actor: JwtAccessPayload) {
     const shopId = requireShopId(actor);
     await this.requireRegistry(shopId);
-    const [printers, routes, recentJobs, displays, barcodes] = await Promise.all([
-      this.prisma.printerDeviceConfiguration.findMany({
-        where: { shopId },
-        orderBy: { createdAt: 'asc' },
-      }),
-      this.prisma.printRoute.findMany({
-        where: { shopId },
-        orderBy: [{ jobType: 'asc' }, { priority: 'asc' }],
-      }),
-      this.prisma.printJob.findMany({
-        where: { shopId },
-        orderBy: { createdAt: 'desc' },
-        take: 50,
-      }),
-      this.prisma.customerDisplayBinding.findMany({
-        where: { shopId },
-        orderBy: { createdAt: 'asc' },
-      }),
-      this.prisma.barcodeAlias.count({ where: { shopId } }),
-    ]);
-    return { printers, routes, recentJobs, displays, barcodeAliasCount: barcodes };
+    const [printers, routes, recentJobs, displays, barcodes] =
+      await Promise.all([
+        this.prisma.printerDeviceConfiguration.findMany({
+          where: { shopId },
+          select: {
+            deviceId: true,
+            adapter: true,
+            host: true,
+            port: true,
+            paperWidthMm: true,
+            enabled: true,
+            lastError: true,
+          },
+          orderBy: { createdAt: 'asc' },
+        }),
+        this.prisma.printRoute.findMany({
+          where: { shopId },
+          select: {
+            id: true,
+            name: true,
+            jobType: true,
+            sourceKey: true,
+            printerDeviceId: true,
+            priority: true,
+            enabled: true,
+          },
+          orderBy: [{ jobType: 'asc' }, { priority: 'asc' }],
+        }),
+        this.prisma.printJob.findMany({
+          where: { shopId },
+          select: PRINT_OVERVIEW_SELECT,
+          orderBy: { createdAt: 'desc' },
+          take: 50,
+        }),
+        this.prisma.customerDisplayBinding.findMany({
+          where: { shopId },
+          select: {
+            id: true,
+            displayDeviceId: true,
+            posDeviceId: true,
+            status: true,
+            activeCheckId: true,
+          },
+          orderBy: { createdAt: 'asc' },
+        }),
+        this.prisma.barcodeAlias.count({ where: { shopId } }),
+      ]);
+    return {
+      printers: printers.map((printer) => ({
+        deviceId: printer.deviceId,
+        adapter: printer.adapter,
+        host: printer.host,
+        port: printer.port,
+        paperWidthMm: printer.paperWidthMm,
+        enabled: printer.enabled,
+        lastError: safePrinterDiagnostic(printer.lastError),
+      })),
+      routes,
+      recentJobs: recentJobs.map((job) => ({
+        id: job.id,
+        type: job.type,
+        sourceType: job.sourceType,
+        sourceId: job.sourceId,
+        status: job.status,
+        attemptCount: job.attemptCount,
+        maxAttempts: job.maxAttempts,
+        claimedAt: job.claimedAt,
+        createdAt: job.createdAt,
+        ...safePrintDiagnostic(job.lastErrorCode, job.lastError, job.claimedAt),
+      })),
+      displays,
+      barcodeAliasCount: barcodes,
+    };
+  }
+
+  async listPrintIncidents(
+    actor: JwtAccessPayload,
+    takeRaw?: string,
+    cursorRaw?: string,
+  ) {
+    // RolesGuard checks an OR of permissions. Enforce the same role + grant
+    // policy as case detail here, independently of controller metadata.
+    assertPrintIncidentRead(actor);
+    const shopId = requireShopId(actor);
+    await this.requireRegistry(shopId);
+    const take = takeRaw === undefined ? 25 : Number(takeRaw);
+    if (!Number.isInteger(take) || take < 1 || take > INCIDENT_LIMIT) {
+      throw new BadRequestException('Invalid print incident page size');
+    }
+    const after = parseIncidentCursor(cursorRaw, shopId);
+    const where: Prisma.PrintJobWhereInput = {
+      shopId,
+      status: {
+        in: [
+          PrintJobStatus.CLAIMED,
+          PrintJobStatus.PRINTING,
+          PrintJobStatus.FAILED,
+        ],
+      },
+      lastErrorCode: {
+        in: ['EDGE_PRINT_OUTCOME_UNKNOWN', 'EDGE_PRINT_LEASE_EXPIRED'],
+      },
+      ...(after
+        ? {
+            OR: [
+              { createdAt: { gt: new Date(after.createdAt) } },
+              { createdAt: new Date(after.createdAt), id: { gt: after.id } },
+            ],
+          }
+        : {}),
+    };
+    const rows = await this.prisma.printJob.findMany({
+      where,
+      select: PRINT_INCIDENT_SELECT,
+      orderBy: [{ createdAt: 'asc' }, { id: 'asc' }],
+      take: take + 1,
+    });
+    const items = rows.slice(0, take).map((job) => ({
+      id: job.id,
+      shopId: job.shopId,
+      type: job.type,
+      status: job.status,
+      sourceType: job.sourceType,
+      sourceId: job.sourceId,
+      printerDeviceId: job.printerDeviceId,
+      claimedByEdgeDeviceId: job.claimedByEdgeDeviceId,
+      claimedAt: job.claimedAt,
+      printingAt: job.printingAt,
+      printedAt: job.printedAt,
+      attemptCount: job.attemptCount,
+      createdAt: job.createdAt,
+      updatedAt: job.updatedAt,
+      ...safePrintDiagnostic(job.lastErrorCode, job.lastError, job.claimedAt),
+    }));
+    const hasMore = rows.length > take;
+    const last = items[items.length - 1];
+    const nextCursor =
+      hasMore && last
+        ? Buffer.from(
+            JSON.stringify({
+              v: 1,
+              shopId,
+              createdAt: last.createdAt.toISOString(),
+              id: last.id,
+            }),
+          ).toString('base64url')
+        : null;
+    return { items, hasMore, nextCursor };
   }
 
   async configurePrinter(actor: JwtAccessPayload, dto: ConfigurePrinterDto) {
@@ -236,8 +438,18 @@ export class HardwareService {
     if (job.status !== PrintJobStatus.FAILED) {
       throw new ConflictException('Only failed print jobs can be retried');
     }
-    return this.prisma.printJob.update({
-      where: { id },
+    // Older recovery versions could clear a claimedAt value when the lease
+    // expired. Neither those legacy failures nor any claimed physical output
+    // may be manually recycled without an audited resolution workflow.
+    if (job.claimedAt || ['EDGE_PRINT_LEASE_EXPIRED', 'EDGE_PRINT_OUTCOME_UNKNOWN'].includes(job.lastErrorCode ?? '')) {
+      throw new ConflictException('Physical print outcome may be unknown; supervisor resolution required before any reprint');
+    }
+    const result = await this.prisma.printJob.updateMany({
+      where: {
+        id, shopId, status: PrintJobStatus.FAILED,
+        claimedAt: null,
+        lastErrorCode: job.lastErrorCode,
+      },
       data: {
         status: PrintJobStatus.QUEUED,
         claimedByEdgeDeviceId: null,
@@ -247,6 +459,8 @@ export class HardwareService {
         lastError: null,
       },
     });
+    if (result.count !== 1) throw new ConflictException('Print retry state changed; refresh before retry');
+    return this.prisma.printJob.findUnique({ where: { id } });
   }
 
   async edgeClaim(
@@ -341,35 +555,66 @@ export class HardwareService {
     if (![PrintJobStatus.SUCCEEDED, PrintJobStatus.FAILED].includes(dto.status)) {
       throw new BadRequestException('Edge may only complete a print as SUCCEEDED or FAILED');
     }
-    const job = await this.prisma.printJob.findFirst({
-      where: {
-        id: jobId,
-        shopId: device.shopId,
-        claimedByEdgeDeviceId: device.id,
-        status: { in: [PrintJobStatus.CLAIMED, PrintJobStatus.PRINTING] },
-      },
-    });
-    if (!job) throw new ConflictException('Print job is not active on this Edge Hub');
-    const terminalFailure = dto.status === PrintJobStatus.FAILED && job.attemptCount >= job.maxAttempts;
-    const nextStatus =
-      dto.status === PrintJobStatus.SUCCEEDED
+    return this.prisma.$transaction(async (tx) => {
+      const job = await tx.printJob.findFirst({
+        where: {
+          id: jobId,
+          shopId: device.shopId,
+          claimedByEdgeDeviceId: device.id,
+          status: { in: [PrintJobStatus.CLAIMED, PrintJobStatus.PRINTING] },
+        },
+      });
+      if (!job) throw new ConflictException('Print job is not active on this Edge Hub');
+      const safePreflightFailure =
+        dto.status === PrintJobStatus.FAILED &&
+        dto.errorCode === 'UNSUPPORTED_PRINTER_ADAPTER' &&
+        job.status === PrintJobStatus.CLAIMED;
+      const ambiguousFailure =
+        dto.status === PrintJobStatus.FAILED && !safePreflightFailure;
+      const nextStatus = dto.status === PrintJobStatus.SUCCEEDED
         ? PrintJobStatus.SUCCEEDED
-        : terminalFailure
-          ? PrintJobStatus.FAILED
-          : PrintJobStatus.QUEUED;
-    await this.prisma.printJob.update({
-      where: { id: job.id },
-      data: {
-        status: nextStatus,
-        printedAt: dto.status === PrintJobStatus.SUCCEEDED ? new Date() : null,
-        claimedByEdgeDeviceId: nextStatus === PrintJobStatus.QUEUED ? null : device.id,
-        claimedAt: nextStatus === PrintJobStatus.QUEUED ? null : job.claimedAt,
-        printingAt: null,
-        lastErrorCode: dto.status === PrintJobStatus.FAILED ? dto.errorCode?.trim() || 'PRINT_FAILED' : null,
-        lastError: dto.status === PrintJobStatus.FAILED ? dto.error?.trim().slice(0, 1000) || 'Printer reported failure' : null,
-      },
-    });
-    return { ok: true, status: nextStatus };
+        : safePreflightFailure ? PrintJobStatus.FAILED : job.status;
+      const updated = await tx.printJob.updateMany({
+        where: {
+          id: job.id, shopId: device.shopId,
+          claimedByEdgeDeviceId: device.id,
+          claimedAt: job.claimedAt, status: job.status,
+        },
+        data: {
+          status: nextStatus,
+          printedAt: dto.status === PrintJobStatus.SUCCEEDED ? new Date() : null,
+          claimedByEdgeDeviceId: device.id,
+          claimedAt: job.claimedAt,
+          printingAt: ambiguousFailure ? job.printingAt : null,
+          lastErrorCode: ambiguousFailure
+            ? 'EDGE_PRINT_OUTCOME_UNKNOWN'
+            : safePreflightFailure ? 'UNSUPPORTED_PRINTER_ADAPTER' : null,
+          lastError: ambiguousFailure
+            ? 'Printer failure after claim; physical output cannot be ruled out. Operator review required.'
+            : safePreflightFailure ? dto.error?.trim().slice(0, 1000) || 'Printer adapter preflight rejected' : null,
+        },
+      });
+      if (updated.count !== 1) throw new ConflictException('Print completion raced with another state transition');
+      if (ambiguousFailure) {
+        await PrintIncidentResolutionService.recordTransition(
+          tx, job, 'UNCERTAINTY_DETECTED', 'Edge reported ambiguous physical output after printer claim',
+        );
+      }
+      if (dto.status === PrintJobStatus.SUCCEEDED) {
+        const existing = await tx.printIncidentCase.findUnique({
+          where: { shopId_originalPrintJobId: {
+            shopId: job.shopId, originalPrintJobId: job.id,
+          } },
+        });
+        if (existing || ['EDGE_PRINT_OUTCOME_UNKNOWN', 'EDGE_PRINT_LEASE_EXPIRED'].includes(job.lastErrorCode ?? '')) {
+          await PrintIncidentResolutionService.recordTransition(
+            tx, job, 'LATE_EDGE_SUCCESS', 'Original Edge acknowledged physical output after investigation/uncertainty',
+          );
+        }
+      }
+      return { ok: true, status: nextStatus,
+        ...(ambiguousFailure ? { manualReviewRequired: true } : {}) };
+    }, { isolationLevel: Prisma.TransactionIsolationLevel.Serializable });
   }
 
   async bindCustomerDisplay(actor: JwtAccessPayload, dto: BindCustomerDisplayDto) {

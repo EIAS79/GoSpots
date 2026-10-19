@@ -276,7 +276,7 @@ export function createCheckoutPayment(
   settlementId: string,
   body: {
     expectedCheckVersion: number;
-    method: CheckoutPaymentMethod;
+    method: Exclude<CheckoutPaymentMethod, "MANUAL_CARD">;
     allocationKind: PaymentAllocationKind;
     allocations: Array<{ snapshotId: string; amount: string }>;
     note?: string;

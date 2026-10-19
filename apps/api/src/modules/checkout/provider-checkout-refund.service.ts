@@ -34,15 +34,23 @@ export class ProviderCheckoutRefundService {
 
   private requiredIdempotencyKey(raw: string | undefined) {
     const key = String(raw ?? '').trim();
-    if (!key) throw new BadRequestException('Idempotency-Key header is required');
+    if (!key)
+      throw new BadRequestException('Idempotency-Key header is required');
     if (key.length > 128) {
-      throw new BadRequestException('Idempotency-Key must be at most 128 characters');
+      throw new BadRequestException(
+        'Idempotency-Key must be at most 128 characters',
+      );
     }
     return key;
   }
 
   async list(actor: JwtAccessPayload, settlementId: string) {
     const shopId = requireShopId(actor);
+    const settlement = await this.prisma.checkSettlement.findFirst({
+      where: { id: settlementId, shopId },
+      select: { id: true },
+    });
+    if (!settlement) throw new NotFoundException('Settlement not found');
     const operations = await this.prisma.paymentOperation.findMany({
       where: {
         shopId,
@@ -96,8 +104,7 @@ export class ProviderCheckoutRefundService {
         refundedAmount: serializeMoney(refundedAmount),
         refundableAmount: serializeMoney(refundableAmount),
         pendingRefund,
-        canRefund:
-          refundableState && refundableAmount.gt(0) && !pendingRefund,
+        canRefund: refundableState && refundableAmount.gt(0) && !pendingRefund,
         refunds: operation.refunds.map((refund) => ({
           ...refund,
           amount: serializeMoney(refund.amount),
@@ -126,6 +133,32 @@ export class ProviderCheckoutRefundService {
       },
     });
     if (!operation) throw new NotFoundException('Payment operation not found');
+    // Same-key retries return the original refund even after the operation became
+    // fully refunded. Otherwise the remaining-allocation check would turn a
+    // successful response loss into a permanent 409 despite zero new writes.
+    const prior = operation.refunds.find(
+      (row) => row.idempotencyKey === idempotencyKey,
+    );
+    if (prior) {
+      const requestedReason = reason?.trim() || 'Checkout card refund';
+      if (prior.reason !== requestedReason) {
+        throw new ConflictException(
+          'Idempotency-Key reused with a different refund reason',
+        );
+      }
+      return {
+        id: prior.id,
+        paymentOperationId: prior.paymentOperationId,
+        providerRefundId: prior.providerRefundId,
+        state: prior.state,
+        amount: serializeMoney(prior.amount),
+        currency: prior.currency,
+        errorCode: prior.errorCode,
+        errorMessage: prior.errorMessage,
+        createdAt: prior.createdAt.toISOString(),
+        updatedAt: prior.updatedAt.toISOString(),
+      };
+    }
     if (!operation.settlementId || !operation.checkoutPaymentId) {
       throw new ConflictException(
         'Provider payment is not linked to a finalized checkout payment',
@@ -135,7 +168,9 @@ export class ProviderCheckoutRefundService {
       operation.state !== PaymentOperationState.CAPTURED &&
       operation.state !== PaymentOperationState.PARTIALLY_REFUNDED
     ) {
-      throw new ConflictException('Only captured card payments can be refunded');
+      throw new ConflictException(
+        'Only captured card payments can be refunded',
+      );
     }
     if (
       operation.refunds.some((refund) =>
@@ -164,13 +199,21 @@ export class ProviderCheckoutRefundService {
       );
     }
 
-    const refundedByAllocation = new Map<string, ReturnType<typeof roundMoneyDecimal>>();
-    const refundedBySnapshot = new Map<string, ReturnType<typeof roundMoneyDecimal>>();
+    const refundedByAllocation = new Map<
+      string,
+      ReturnType<typeof roundMoneyDecimal>
+    >();
+    const refundedBySnapshot = new Map<
+      string,
+      ReturnType<typeof roundMoneyDecimal>
+    >();
     for (const refund of operation.refunds) {
       if (refund.state !== RefundState.SUCCEEDED) continue;
       for (const allocation of refund.allocations) {
         if (allocation.paymentAllocationId) {
-          const current = refundedByAllocation.get(allocation.paymentAllocationId);
+          const current = refundedByAllocation.get(
+            allocation.paymentAllocationId,
+          );
           refundedByAllocation.set(
             allocation.paymentAllocationId,
             roundMoneyDecimal(
@@ -193,8 +236,11 @@ export class ProviderCheckoutRefundService {
 
     const remainingAllocations = payment.allocations.flatMap((allocation) => {
       const alreadyRefunded = roundMoneyDecimal(
-        (refundedByAllocation.get(allocation.id) ?? roundMoneyDecimal(0, 4)).add(
-          refundedBySnapshot.get(allocation.snapshotId) ?? roundMoneyDecimal(0, 4),
+        (
+          refundedByAllocation.get(allocation.id) ?? roundMoneyDecimal(0, 4)
+        ).add(
+          refundedBySnapshot.get(allocation.snapshotId) ??
+            roundMoneyDecimal(0, 4),
         ),
         4,
       );

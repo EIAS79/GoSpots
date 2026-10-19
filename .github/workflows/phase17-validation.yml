@@ -72,6 +72,25 @@ jobs:
           pnpm --dir apps/api exec prisma validate
           pnpm --dir apps/api exec prisma migrate deploy
           pnpm --dir apps/api exec prisma migrate status
+      - name: Certify W1 tenant isolation on disposable PostgreSQL 17
+        shell: bash
+        env:
+          GOSPOTS_DISPOSABLE_E2E_DB: I_UNDERSTAND_DELETE_AND_ROLES
+          GOSPOTS_W1_EXPECT_PG_MAJOR: '17'
+          DATABASE_URL: postgresql://ci:ci@127.0.0.1:5432/gospots_w1_p17_cert?schema=public
+        run: |
+          set -euo pipefail
+          pg_client=(docker run --rm --network host -e PGPASSWORD=ci postgres:17)
+          cleanup() {
+            local result=$?
+            trap - EXIT
+            "${pg_client[@]}" dropdb -h 127.0.0.1 -U ci --if-exists gospots_w1_p17_cert || result=1
+            "${pg_client[@]}" psql -h 127.0.0.1 -U ci -d postgres -v ON_ERROR_STOP=1 -c 'DROP ROLE IF EXISTS gospots_w1_probe_reader' || result=1
+            exit "$result"
+          }
+          trap cleanup EXIT
+          "${pg_client[@]}" createdb -h 127.0.0.1 -U ci gospots_w1_p17_cert
+          pnpm --dir apps/api exec tsx prisma/w1-tenant-context-integration.ts
       - name: Certify Adyen terminal payment and refund adapter semantics
         run: >-
           pnpm --dir apps/api exec jest --config jest.config.cjs --runInBand
@@ -218,6 +237,14 @@ jobs:
         run: npx playwright test --fail-on-flaky-tests
       - name: Assert persisted canonical results
         run: pnpm --dir apps/api exec tsx prisma/e2e-assert.ts
+      - name: Assert independent PostgreSQL refund concurrency and idempotency
+        env:
+          GOSPOTS_DISPOSABLE_E2E_DB: I_UNDERSTAND_DELETE_AND_ROLES
+        run: pnpm --dir apps/api exec tsx prisma/e2e-refund-concurrency.ts
+      - name: Assert PostgreSQL RLS financial tenant boundaries (disposable CI database)
+        env:
+          GOSPOTS_DISPOSABLE_E2E_DB: I_UNDERSTAND_DELETE_AND_ROLES
+        run: pnpm --dir apps/api exec tsx prisma/e2e-tenant-assert.ts
       - name: Upload pilot diagnostics
         if: ${{ always() }}
         uses: actions/upload-artifact@v4

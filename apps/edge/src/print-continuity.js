@@ -25,19 +25,37 @@ export class PrintContinuityStore {
     const existing = this.db.prepare('SELECT * FROM edge_print_jobs WHERE job_id=?').get(job.id);
     if (existing) {
       if (existing.payload_json !== payload) throw new Error('IDEMPOTENCY_CONFLICT: print job changed after it was staged');
-      return this.#row(existing);
+      return { ...this.#row(existing), freshlyStaged: false };
     }
     const now = nowIso();
     const row = this.db.prepare(`INSERT INTO edge_print_jobs(job_id,payload_json,state,staged_at,updated_at)
       VALUES(?,?,'CLAIMED',?,?) RETURNING *`).get(job.id, payload, now, now);
-    return this.#row(row);
+    return { ...this.#row(row), freshlyStaged: true };
   }
 
   next() {
     const row = this.db.prepare(`SELECT * FROM edge_print_jobs
-      WHERE state IN ('CLAIMED','PRINTED_PENDING_ACK','FAILED_PENDING_ACK')
+      WHERE state IN ('CLAIMED','DISPATCH_UNCERTAIN','PRINTED_PENDING_ACK','FAILED_PENDING_ACK')
       ORDER BY staged_at ASC LIMIT 1`).get();
     return row ? this.#row(row) : null;
+  }
+
+  // Only confirmed physical outcomes may be acknowledged automatically.
+  // Uncertain/stale CLAIMED jobs stay in the journal but cannot starve
+  // unrelated cloud work that is safe to claim and dispatch.
+  nextAcknowledgement() {
+    const row = this.db.prepare(`SELECT * FROM edge_print_jobs
+      WHERE state IN ('PRINTED_PENDING_ACK','FAILED_PENDING_ACK')
+      ORDER BY staged_at ASC LIMIT 1`).get();
+    return row ? this.#row(row) : null;
+  }
+
+  // Commit the physical-output uncertainty *before* invoking a printer.
+  // On restart we must not blindly execute a job that may have printed already.
+  markDispatchUncertain(jobId) {
+    const result = this.db.prepare("UPDATE edge_print_jobs SET state='DISPATCH_UNCERTAIN',updated_at=? WHERE job_id=? AND state='CLAIMED'")
+      .run(nowIso(), jobId);
+    if (result.changes !== 1) throw new Error('PRINT_DISPATCH_STATE_CONFLICT');
   }
 
   markPrinted(jobId, result) {
@@ -57,12 +75,14 @@ export class PrintContinuityStore {
   diagnostics() {
     const row = this.db.prepare(`SELECT COUNT(*) total,
       SUM(CASE WHEN state='CLAIMED' THEN 1 ELSE 0 END) claimed,
+      SUM(CASE WHEN state='DISPATCH_UNCERTAIN' THEN 1 ELSE 0 END) dispatch_uncertain,
       SUM(CASE WHEN state='PRINTED_PENDING_ACK' THEN 1 ELSE 0 END) printed_pending_ack,
       SUM(CASE WHEN state='FAILED_PENDING_ACK' THEN 1 ELSE 0 END) failed_pending_ack
       FROM edge_print_jobs`).get();
     return {
       total: Number(row.total ?? 0),
       claimed: Number(row.claimed ?? 0),
+      dispatchUncertain: Number(row.dispatch_uncertain ?? 0),
       printedPendingAck: Number(row.printed_pending_ack ?? 0),
       failedPendingAck: Number(row.failed_pending_ack ?? 0),
     };

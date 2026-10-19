@@ -141,8 +141,21 @@ export async function bindVenue(page: Page, venuePath: string) {
   await api(page, 'POST', `/auth/venue/${encodeURIComponent(venuePath)}/session`, {
     data: {},
   });
+  // The mounted VenueGate binds the session again and rotates the CSRF
+  // double-submit cookie. Wait for that response before the next mutation:
+  // navigating to the route alone does not mean the new cookie is settled.
+  const boundByGate = page.waitForResponse(
+    (response) =>
+      response.url().includes(
+        `/api/v1/auth/venue/${encodeURIComponent(venuePath)}/session`,
+      ) &&
+      response.request().method() === 'POST' &&
+      response.ok(),
+    { timeout: 20_000 },
+  );
   await page.goto(`/dashboard/${venuePath}`);
   await expect(page).toHaveURL(new RegExp(`/dashboard/${venuePath}(?:/|$)`));
+  await boundByGate;
 }
 
 export async function createGuestCheckFromUi(
@@ -226,9 +239,9 @@ export async function endedPlaySession(
 export async function settleAndSplit(
   page: Page,
   checkId: string,
-  methods: ['CASH' | 'MANUAL_CARD' | 'OTHER', 'CASH' | 'MANUAL_CARD' | 'OTHER'] = [
+  methods: ['CASH' | 'OTHER', 'CASH' | 'OTHER'] = [
     'CASH',
-    'MANUAL_CARD',
+    'OTHER',
   ],
 ) {
   const preview = await api<any>(page, 'POST', `/checkout/checks/${checkId}/preview`, {
