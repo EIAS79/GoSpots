@@ -1,0 +1,491 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://gospots.example.invalid/schemas/release-manifest.v1.json",
+  "title": "GoSpots release candidate evidence manifest (not a signed attestation)",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "source",
+    "candidate",
+    "github",
+    "artifacts",
+    "deployments",
+    "database",
+    "approvals",
+    "rollback",
+    "blockers",
+    "decision"
+  ],
+  "properties": {
+    "schema_version": {
+      "const": "1.0"
+    },
+    "source": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "repository",
+        "commit_sha",
+        "tree_sha"
+      ],
+      "properties": {
+        "repository": {
+          "const": "EIAS79/GoSpots"
+        },
+        "commit_sha": {
+          "$ref": "#/$defs/sha"
+        },
+        "tree_sha": {
+          "$ref": "#/$defs/sha"
+        }
+      }
+    },
+    "candidate": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "id",
+        "target_branch",
+        "environment",
+        "created_at_utc"
+      ],
+      "properties": {
+        "id": {
+          "type": "string",
+          "minLength": 1
+        },
+        "target_branch": {
+          "type": "string",
+          "minLength": 1
+        },
+        "environment": {
+          "type": "string",
+          "minLength": 1
+        },
+        "created_at_utc": {
+          "$ref": "#/$defs/nullableUtc"
+        }
+      }
+    },
+    "github": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "reviewed_head_sha",
+        "tested_merge_sha",
+        "required_checks",
+        "pr_author_user_id",
+        "current_head_review"
+      ],
+      "properties": {
+        "reviewed_head_sha": {
+          "$ref": "#/$defs/nullableSha"
+        },
+        "tested_merge_sha": {
+          "$ref": "#/$defs/nullableSha"
+        },
+        "required_checks": {
+          "type": "array",
+          "minItems": 1,
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "context",
+              "workflow_name",
+              "run_id",
+              "run_attempt",
+              "check_run_id",
+              "head_sha",
+              "tested_sha",
+              "conclusion",
+              "evidence_ref"
+            ],
+            "properties": {
+              "context": {
+                "type": "string",
+                "minLength": 1
+              },
+              "workflow_name": {
+                "type": "string",
+                "minLength": 1
+              },
+              "run_id": {
+                "$ref": "#/$defs/nullablePositiveInt"
+              },
+              "run_attempt": {
+                "$ref": "#/$defs/nullablePositiveInt"
+              },
+              "check_run_id": {
+                "$ref": "#/$defs/nullablePositiveInt"
+              },
+              "head_sha": {
+                "$ref": "#/$defs/nullableSha"
+              },
+              "tested_sha": {
+                "$ref": "#/$defs/nullableSha"
+              },
+              "conclusion": {
+                "$ref": "#/$defs/verification"
+              },
+              "evidence_ref": {
+                "$ref": "#/$defs/nullableString"
+              }
+            }
+          }
+        },
+        "pr_author_user_id": {
+          "$ref": "#/$defs/nullablePositiveInt"
+        },
+        "current_head_review": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "review_id",
+            "reviewer_user_id",
+            "approved_head_sha",
+            "state",
+            "evidence_ref",
+            "verification"
+          ],
+          "properties": {
+            "review_id": {
+              "$ref": "#/$defs/nullablePositiveInt"
+            },
+            "reviewer_user_id": {
+              "$ref": "#/$defs/nullablePositiveInt"
+            },
+            "approved_head_sha": {
+              "$ref": "#/$defs/nullableSha"
+            },
+            "state": {
+              "enum": [
+                "UNVERIFIED",
+                "APPROVED",
+                "DISMISSED",
+                "CHANGES_REQUESTED"
+              ]
+            },
+            "evidence_ref": {
+              "$ref": "#/$defs/nullableString"
+            },
+            "verification": {
+              "$ref": "#/$defs/verification"
+            }
+          }
+        }
+      }
+    },
+    "artifacts": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "name",
+          "sha256",
+          "source_ref",
+          "verification"
+        ],
+        "properties": {
+          "name": {
+            "type": "string",
+            "minLength": 1
+          },
+          "sha256": {
+            "$ref": "#/$defs/nullableSha256"
+          },
+          "source_ref": {
+            "$ref": "#/$defs/nullableString"
+          },
+          "verification": {
+            "$ref": "#/$defs/verification"
+          }
+        }
+      }
+    },
+    "deployments": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "provider",
+          "resource_id",
+          "deployment_id",
+          "environment",
+          "region",
+          "deployed_git_sha",
+          "artifact_sha256",
+          "evidence_ref",
+          "verification"
+        ],
+        "properties": {
+          "provider": {
+            "enum": [
+              "vercel",
+              "render",
+              "other"
+            ]
+          },
+          "resource_id": {
+            "$ref": "#/$defs/nullableString"
+          },
+          "deployment_id": {
+            "$ref": "#/$defs/nullableString"
+          },
+          "environment": {
+            "$ref": "#/$defs/nullableString"
+          },
+          "region": {
+            "$ref": "#/$defs/nullableString"
+          },
+          "deployed_git_sha": {
+            "$ref": "#/$defs/nullableSha"
+          },
+          "artifact_sha256": {
+            "$ref": "#/$defs/nullableSha256"
+          },
+          "evidence_ref": {
+            "$ref": "#/$defs/nullableString"
+          },
+          "verification": {
+            "$ref": "#/$defs/verification"
+          }
+        }
+      }
+    },
+    "database": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "project_id",
+        "branch_id",
+        "database_name",
+        "migration_revision",
+        "migration_compatibility",
+        "backup_restore_evidence_ref",
+        "evidence_ref",
+        "verification"
+      ],
+      "properties": {
+        "project_id": {
+          "$ref": "#/$defs/nullableString"
+        },
+        "branch_id": {
+          "$ref": "#/$defs/nullableString"
+        },
+        "database_name": {
+          "$ref": "#/$defs/nullableString"
+        },
+        "migration_revision": {
+          "$ref": "#/$defs/nullableString"
+        },
+        "migration_compatibility": {
+          "enum": [
+            "UNVERIFIED",
+            "COMPATIBLE",
+            "INCOMPATIBLE"
+          ]
+        },
+        "backup_restore_evidence_ref": {
+          "$ref": "#/$defs/nullableString"
+        },
+        "evidence_ref": {
+          "$ref": "#/$defs/nullableString"
+        },
+        "verification": {
+          "$ref": "#/$defs/verification"
+        }
+      }
+    },
+    "approvals": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "role",
+          "reviewer_identity",
+          "approved_commit_sha",
+          "approval_ref",
+          "verification"
+        ],
+        "properties": {
+          "role": {
+            "enum": [
+              "independent_code_review",
+              "release_owner",
+              "security",
+              "operations",
+              "compliance"
+            ]
+          },
+          "reviewer_identity": {
+            "$ref": "#/$defs/nullableString"
+          },
+          "approved_commit_sha": {
+            "$ref": "#/$defs/nullableSha"
+          },
+          "approval_ref": {
+            "$ref": "#/$defs/nullableString"
+          },
+          "verification": {
+            "$ref": "#/$defs/verification"
+          }
+        }
+      }
+    },
+    "rollback": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "previous_known_good_git_sha",
+        "previous_deployment_id",
+        "rollback_runbook_ref",
+        "schema_compatibility",
+        "reconciliation_ref",
+        "evidence_ref",
+        "verification"
+      ],
+      "properties": {
+        "previous_known_good_git_sha": {
+          "$ref": "#/$defs/nullableSha"
+        },
+        "previous_deployment_id": {
+          "$ref": "#/$defs/nullableString"
+        },
+        "rollback_runbook_ref": {
+          "$ref": "#/$defs/nullableString"
+        },
+        "schema_compatibility": {
+          "enum": [
+            "UNVERIFIED",
+            "COMPATIBLE",
+            "INCOMPATIBLE"
+          ]
+        },
+        "reconciliation_ref": {
+          "$ref": "#/$defs/nullableString"
+        },
+        "evidence_ref": {
+          "$ref": "#/$defs/nullableString"
+        },
+        "verification": {
+          "$ref": "#/$defs/verification"
+        }
+      }
+    },
+    "blockers": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "id",
+          "reason",
+          "status",
+          "closure_ref"
+        ],
+        "properties": {
+          "id": {
+            "type": "string",
+            "minLength": 1
+          },
+          "reason": {
+            "type": "string",
+            "minLength": 1
+          },
+          "status": {
+            "enum": [
+              "OPEN",
+              "RESOLVED",
+              "OUT_OF_SCOPE"
+            ]
+          },
+          "closure_ref": {
+            "$ref": "#/$defs/nullableString"
+          }
+        }
+      }
+    },
+    "decision": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "classification",
+        "decision_ref",
+        "release_owner",
+        "decided_at_utc"
+      ],
+      "properties": {
+        "classification": {
+          "enum": [
+            "NO_GO",
+            "GO"
+          ]
+        },
+        "decision_ref": {
+          "$ref": "#/$defs/nullableString"
+        },
+        "release_owner": {
+          "$ref": "#/$defs/nullableString"
+        },
+        "decided_at_utc": {
+          "$ref": "#/$defs/nullableUtc"
+        }
+      }
+    }
+  },
+  "$defs": {
+    "sha": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{40}$"
+    },
+    "nullableSha": {
+      "type": [
+        "string",
+        "null"
+      ],
+      "pattern": "^[0-9a-f]{40}$"
+    },
+    "nullableSha256": {
+      "type": [
+        "string",
+        "null"
+      ],
+      "pattern": "^[0-9a-f]{64}$"
+    },
+    "nullableString": {
+      "type": [
+        "string",
+        "null"
+      ],
+      "minLength": 1
+    },
+    "nullablePositiveInt": {
+      "type": [
+        "integer",
+        "null"
+      ],
+      "minimum": 1
+    },
+    "nullableUtc": {
+      "type": [
+        "string",
+        "null"
+      ],
+      "pattern": "^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}(?:\\.\\d+)?Z$"
+    },
+    "verification": {
+      "enum": [
+        "UNVERIFIED",
+        "VERIFIED_SUCCESS",
+        "VERIFIED_FAILURE"
+      ]
+    }
+  }
+}
