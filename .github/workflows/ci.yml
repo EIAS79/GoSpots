@@ -520,3 +520,76 @@ jobs:
             /tmp/gospots-api.log
             /tmp/gospots-web.log
             /tmp/e2e-seed.json
+
+  # Proposal only: validates local synthetic release-governance invariants.
+  # A passing result does NOT authenticate GitHub evidence, bind a trusted
+  # check publisher or activate branch-protection / production release gates.
+  release-governance-tests:
+    name: Release governance · schema · tests · NO_GO
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: read
+    steps:
+      - name: Checkout proposal source
+        uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+      - name: Check release-governance JavaScript syntax
+        shell: bash
+        run: |
+          set -euo pipefail
+          for file in scripts/release-governance/*.mjs; do
+            node --check "$file"
+          done
+      - name: Run release-governance regression tests
+        shell: bash
+        run: |
+          set -euo pipefail
+          node --test scripts/release-governance/*.test.mjs
+      - name: Validate example release-manifest shape
+        shell: bash
+        run: |
+          set -euo pipefail
+          node scripts/release-governance/validate-release-manifest.mjs --mode shape docs/release-governance/release-manifest.example.json
+      - name: Assert example remains NO_GO with missing independent review
+        shell: bash
+        run: |
+          set -euo pipefail
+          output="$(mktemp)"
+          stderr="$(mktemp)"
+          trap 'rm -f "$output" "$stderr"' EXIT
+          status=0
+          node scripts/release-governance/validate-release-manifest.mjs --mode release docs/release-governance/release-manifest.example.json >"$output" 2>"$stderr" || status=$?
+          if [ "$status" -ne 1 ]; then
+            echo "Expected release validation exit 1; got $status" >&2
+            cat "$output" "$stderr" >&2
+            exit 1
+          fi
+          node --input-type=module - "$output" <<'NODE'
+          import { readFileSync } from 'node:fs';
+          let report;
+          try {
+            report = JSON.parse(readFileSync(process.argv[2], 'utf8'));
+          } catch {
+            console.error('Release validation emitted missing or malformed JSON');
+            process.exit(1);
+          }
+          const errors = report.errors;
+          const expected = [
+            'decision: NO_GO or unset',
+            'github: independent authenticated current-head reviewer evidence missing or self-review',
+            'approvals: exactly one verified independent_code_review required'
+          ];
+          if (report.mode !== 'release' || report.valid !== false ||
+              !Array.isArray(errors) || errors.length === 0 ||
+              !expected.every((finding) => errors.includes(finding))) {
+            console.error('Expected valid=false, NO_GO and missing independent-review findings:', report);
+            process.exit(1);
+          }
+          console.log('Expected fail-closed NO_GO release validation: exit=1, valid=false, independent review missing');
+          NODE

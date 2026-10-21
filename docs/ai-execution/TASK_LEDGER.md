@@ -4,7 +4,7 @@ Source: 2026-10-09 continuation kit T-001–T-017 and live main `b3e444e4deed5b9
 
 | Ticket | Wave | Status | Current evidence / next gate |
 |---|---|---|---|
-| T-001 | W0 | IN_PROGRESS | Main protection disabled; exact RC release manifest pending administrator action |
+| T-001 | W0 | IN_PROGRESS | V6 local release-governance proposal published as draft PR #104 (commit 596677ab622ec4cd1f456a0790ea339f70ef7b02); separately approved two-file release-governance CI wiring submitted for draft-PR publication and GitHub CI verification; the new job is NOT a required or enforced check, and its GitHub result remains subject to exact-head verification; local PASS is synthetic, NOT authenticated GitHub evidence; independently trusted check publisher, owner/governance checks and actual RC evidence still pending; PRODUCTION NO_GO |
 | T-002 | W1 | SOFTWARE_VERIFIED_SIGNOFF_PENDING | 28 PG17 refund assertions and strict E2E verified at parent; Adyen hardware, payout and signed acceptance external |
 | T-003 | W1 | SOFTWARE_INTEGRATION_IN_PROGRESS | Public/staff outbound-mail boundary tests pass with mocked transport across host timezones and DST; real SMTP/calendar signoff pending |
 | T-004 | W0/W2 | READ_ONLY_MAPPING_IN_PROGRESS | Render, Neon and Vercel IDs known; fingerprint tool built; actual service/database/merchant links unverified |
