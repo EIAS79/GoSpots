@@ -1,0 +1,123 @@
+{
+  "schema_version": "1.0",
+  "status": "PROPOSAL_ONLY_NOT_ENFORCED",
+  "stable_context": "Release Governance / required-evidence",
+  "expected_check_source": "OWNER_APPROVED_GITHUB_APP_ID_PENDING",
+  "required_jobs": [
+    {
+      "key": "ci",
+      "context": "API changed-lint · test · build",
+      "paths": [
+        "**"
+      ],
+      "app_slug": "github-actions",
+      "app_id": 15368,
+      "workflow_id": 317852730,
+      "workflow_path": ".github/workflows/ci.yml",
+      "trigger": "always"
+    },
+    {
+      "key": "edge",
+      "context": "Edge Hub test · build",
+      "paths": [
+        "**"
+      ],
+      "app_slug": "github-actions",
+      "app_id": 15368,
+      "workflow_id": 317852730,
+      "workflow_path": ".github/workflows/ci.yml",
+      "trigger": "always"
+    },
+    {
+      "key": "release-integrity",
+      "context": "Phase 17 gate · security · migrations · reconciliation · DR",
+      "paths": [
+        ".github/workflows/phase17-validation.yml",
+        "docs/acceptance/phase-17-**",
+        "docs/program/phase17-**",
+        "docs/operations/PHASE17_**",
+        "apps/web/e2e/**",
+        "apps/edge/**",
+        "apps/api/src/modules/**",
+        "apps/api/prisma/**"
+      ],
+      "app_slug": "github-actions",
+      "app_id": 15368,
+      "workflow_id": 338007141,
+      "workflow_path": ".github/workflows/phase17-validation.yml",
+      "trigger": "paths"
+    },
+    {
+      "key": "browser",
+      "context": "Phase 17 gate · full permanent browser release suite",
+      "paths": [
+        ".github/workflows/phase17-validation.yml",
+        "docs/acceptance/phase-17-**",
+        "docs/program/phase17-**",
+        "docs/operations/PHASE17_**",
+        "apps/web/e2e/**",
+        "apps/edge/**",
+        "apps/api/src/modules/**",
+        "apps/api/prisma/**"
+      ],
+      "app_slug": "github-actions",
+      "app_id": 15368,
+      "workflow_id": 338007141,
+      "workflow_path": ".github/workflows/phase17-validation.yml",
+      "trigger": "paths"
+    },
+    {
+      "key": "release-contract",
+      "context": "Phase 17 gate · release policy completeness",
+      "paths": [
+        ".github/workflows/phase17-validation.yml",
+        "docs/acceptance/phase-17-**",
+        "docs/program/phase17-**",
+        "docs/operations/PHASE17_**",
+        "apps/web/e2e/**",
+        "apps/edge/**",
+        "apps/api/src/modules/**",
+        "apps/api/prisma/**"
+      ],
+      "app_slug": "github-actions",
+      "app_id": 15368,
+      "workflow_id": 338007141,
+      "workflow_path": ".github/workflows/phase17-validation.yml",
+      "trigger": "paths"
+    }
+  ],
+  "observed_against_sha": "e79a87b39a974bf98d746716895e255e1f6f202e",
+  "observed_workflow_identity_source": "GitHub Actions workflow metadata / check-runs, read-only 2026-10-19",
+  "merge_group_enabled": false,
+  "sensitive_codeowner_paths": [
+    ".github/**",
+    "docs/release-governance/**",
+    "scripts/release-governance/**",
+    "apps/api/src/modules/auth/**",
+    "apps/api/src/modules/device-payment/**",
+    "apps/api/src/modules/billing/**",
+    "apps/api/src/modules/checkout/**",
+    "apps/api/src/modules/payment/**",
+    "apps/api/src/modules/payments/**",
+    "apps/api/prisma/**",
+    "apps/api/src/prisma/**",
+    "apps/edge/**",
+    "apps/web/src/app/(auth)/**",
+    "apps/web/src/components/auth/**",
+    "apps/web/src/modules/auth/**",
+    "apps/web/src/components/checkout/**",
+    "apps/api/src/modules/reservations/**",
+    "apps/api/src/modules/cash/**",
+    "apps/api/src/modules/finance/**",
+    "apps/api/src/modules/guest-check/**",
+    "apps/api/src/common/money.util.ts",
+    "apps/api/src/common/ledger-post.util.ts",
+    "apps/api/src/modules/growth/phase9-**",
+    "apps/api/src/modules/growth/growth-deposit-**",
+    "apps/api/src/modules/growth/growth-public-deposit.service.ts",
+    "apps/api/src/modules/growth/reservation-stripe-webhook-routing.interceptor.ts",
+    "apps/api/src/modules/growth/reservation-growth.service.ts",
+    "apps/api/src/modules/growth/phase8-reservation.service.ts",
+    "apps/api/src/modules/growth/growth-pricing.service.ts"
+  ]
+}

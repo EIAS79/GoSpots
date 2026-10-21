@@ -1,0 +1,126 @@
+{
+  "schema_version": "1.0",
+  "source": {
+    "repository": "EIAS79/GoSpots",
+    "commit_sha": "e79a87b39a974bf98d746716895e255e1f6f202e",
+    "tree_sha": "c00c9a7bef6bcaa73e923e9a978cb3aca66797d8"
+  },
+  "candidate": {
+    "id": "t001-governance-proposal-not-a-release",
+    "target_branch": "main",
+    "environment": "UNSELECTED",
+    "created_at_utc": null
+  },
+  "github": {
+    "reviewed_head_sha": null,
+    "tested_merge_sha": null,
+    "required_checks": [
+      {
+        "context": "Release Governance / required-evidence",
+        "workflow_name": "release-governance-stable",
+        "run_id": null,
+        "run_attempt": null,
+        "check_run_id": null,
+        "head_sha": null,
+        "tested_sha": null,
+        "conclusion": "UNVERIFIED",
+        "evidence_ref": null
+      }
+    ],
+    "pr_author_user_id": null,
+    "current_head_review": {
+      "review_id": null,
+      "reviewer_user_id": null,
+      "approved_head_sha": null,
+      "state": "UNVERIFIED",
+      "evidence_ref": null,
+      "verification": "UNVERIFIED"
+    }
+  },
+  "artifacts": [],
+  "deployments": [
+    {
+      "provider": "vercel",
+      "resource_id": null,
+      "deployment_id": null,
+      "environment": null,
+      "region": null,
+      "deployed_git_sha": null,
+      "artifact_sha256": null,
+      "evidence_ref": null,
+      "verification": "UNVERIFIED"
+    },
+    {
+      "provider": "render",
+      "resource_id": null,
+      "deployment_id": null,
+      "environment": null,
+      "region": null,
+      "deployed_git_sha": null,
+      "artifact_sha256": null,
+      "evidence_ref": null,
+      "verification": "UNVERIFIED"
+    }
+  ],
+  "database": {
+    "project_id": null,
+    "branch_id": null,
+    "database_name": null,
+    "migration_revision": null,
+    "migration_compatibility": "UNVERIFIED",
+    "backup_restore_evidence_ref": null,
+    "evidence_ref": null,
+    "verification": "UNVERIFIED"
+  },
+  "approvals": [
+    {
+      "role": "independent_code_review",
+      "reviewer_identity": null,
+      "approved_commit_sha": null,
+      "approval_ref": null,
+      "verification": "UNVERIFIED"
+    },
+    {
+      "role": "release_owner",
+      "reviewer_identity": null,
+      "approved_commit_sha": null,
+      "approval_ref": null,
+      "verification": "UNVERIFIED"
+    }
+  ],
+  "rollback": {
+    "previous_known_good_git_sha": null,
+    "previous_deployment_id": null,
+    "rollback_runbook_ref": null,
+    "schema_compatibility": "UNVERIFIED",
+    "reconciliation_ref": null,
+    "evidence_ref": null,
+    "verification": "UNVERIFIED"
+  },
+  "blockers": [
+    {
+      "id": "T004",
+      "reason": "Runtime identity and owner decisions pending",
+      "status": "OPEN",
+      "closure_ref": null
+    },
+    {
+      "id": "T009_PHYSICAL",
+      "reason": "External owner hardware acceptance evidence pending",
+      "status": "OPEN",
+      "closure_ref": null
+    },
+    {
+      "id": "T001_ADMIN",
+      "reason": "GitHub branch protections and independent approval not enforced",
+      "status": "OPEN",
+      "closure_ref": null
+    }
+  ],
+  "decision": {
+    "classification": "NO_GO",
+    "decision_ref": null,
+    "release_owner": null,
+    "decided_at_utc": null
+  }
+}
